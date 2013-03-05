@@ -1,0 +1,83 @@
+Sample Id	Enterotype	Nationality	Clinical Status	Gender	Project	Clinical Status [filtered]	Nationality [filtered]	Gender [filtered]
+AM-AD-1-RITA	Unclassified-RITA	american-RITA	healthy-RITA	F-RITA	gill06-RITA	na-RITA	na-RITA	na-RITA
+AM-AD-2-RITA	Unclassified-RITA	american-RITA	healthy-RITA	M-RITA	gill06-RITA	na-RITA	na-RITA	na-RITA
+AM-F10-T1-RITA	Enterotype 3 - twin-RITA	american-RITA	obese-RITA	F-RITA	turnbaugh09-RITA	na-RITA	na-RITA	na-RITA
+AM-F10-T2-RITA	Enterotype 3-RITA	american-RITA	obese-RITA	F-RITA	turnbaugh09-RITA	obese-RITA	na-RITA	F-RITA
+DA-AD-1-RITA	Enterotype 2-RITA	danish-RITA	healthy-RITA	F-RITA	MetaHIT-RITA	healthy-RITA	danish-RITA	F-RITA
+DA-AD-1T-RITA	Enterotype 2 - 454-RITA	danish-RITA	healthy-RITA	F-RITA	MetaHIT-RITA	na-RITA	na-RITA	na-RITA
+DA-AD-2-RITA	Enterotype 3-RITA	danish-RITA	healthy-RITA	M-RITA	MetaHIT-RITA	healthy-RITA	danish-RITA	M-RITA
+DA-AD-3-RITA	Enterotype 3-RITA	danish-RITA	obese-RITA	F-RITA	MetaHIT-RITA	obese-RITA	danish-RITA	F-RITA
+DA-AD-3T-RITA	Enterotype 3 - 454-RITA	danish-RITA	obese-RITA	F-RITA	MetaHIT-RITA	na-RITA	na-RITA	na-RITA
+DA-AD-4-RITA	Enterotype 2-RITA	danish-RITA	obese-RITA	M-RITA	MetaHIT-RITA	obese-RITA	danish-RITA	M-RITA
+ES-AD-1-RITA	Enterotype 1-RITA	spanish-RITA	CD-RITA	F-RITA	MetaHIT-RITA	CD-RITA	spanish-RITA	F-RITA
+ES-AD-2-RITA	Enterotype 2-RITA	spanish-RITA	healthy-RITA	M-RITA	MetaHIT-RITA	healthy-RITA	spanish-RITA	M-RITA
+ES-AD-3-RITA	Enterotype 2-RITA	spanish-RITA	UC-RITA	F-RITA	MetaHIT-RITA	UC-RITA	spanish-RITA	F-RITA
+ES-AD-4-RITA	Enterotype 3-RITA	spanish-RITA	healthy-RITA	F-RITA	MetaHIT-RITA	healthy-RITA	spanish-RITA	F-RITA
+FR-AD-1-RITA	Enterotype 3-RITA	french-RITA	healthy-RITA	M-RITA	MicroObes-RITA	healthy-RITA	french-RITA	M-RITA
+FR-AD-2-RITA	Enterotype 3-RITA	french-RITA	healthy-RITA	M-RITA	MicroObes-RITA	healthy-RITA	french-RITA	M-RITA
+FR-AD-3-RITA	Enterotype 1-RITA	french-RITA	healthy-RITA	M-RITA	MicroObes-RITA	healthy-RITA	french-RITA	M-RITA
+FR-AD-4-RITA	Enterotype 3-RITA	french-RITA	healthy-RITA	M-RITA	MicroObes-RITA	healthy-RITA	french-RITA	M-RITA
+FR-AD-5-RITA	Enterotype 3-RITA	french-RITA	obese-RITA	M-RITA	MicroObes-RITA	obese-RITA	french-RITA	M-RITA
+FR-AD-6-RITA	Enterotype 2-RITA	french-RITA	obese-RITA	M-RITA	MicroObes-RITA	obese-RITA	french-RITA	M-RITA
+FR-AD-7-RITA	Enterotype 3-RITA	french-RITA	obese-RITA	M-RITA	MicroObes-RITA	obese-RITA	french-RITA	M-RITA
+FR-AD-8-RITA	Enterotype 3-RITA	french-RITA	obese-RITA	M-RITA	MicroObes-RITA	obese-RITA	french-RITA	M-RITA
+IT-AD-1-RITA	Enterotype 3-RITA	italian-RITA	elderly-RITA	F-RITA	MicroAge-RITA	elderly-RITA	italian-RITA	F-RITA
+IT-AD-2-RITA	Enterotype 3-RITA	italian-RITA	elderly-RITA	M-RITA	MicroAge-RITA	elderly-RITA	italian-RITA	M-RITA
+IT-AD-3-RITA	Enterotype 3-RITA	italian-RITA	elderly-RITA	F-RITA	MicroAge-RITA	elderly-RITA	italian-RITA	F-RITA
+IT-AD-4-RITA	Enterotype 2-RITA	italian-RITA	elderly-RITA	M-RITA	MicroAge-RITA	elderly-RITA	italian-RITA	M-RITA
+IT-AD-5-RITA	Enterotype 3-RITA	italian-RITA	elderly-RITA	M-RITA	MicroAge-RITA	elderly-RITA	italian-RITA	M-RITA
+IT-AD-6-RITA	Enterotype 3-RITA	italian-RITA	elderly-RITA	F-RITA	MicroAge-RITA	elderly-RITA	italian-RITA	F-RITA
+JP-AD-1-RITA	Enterotype 1-RITA	japanese-RITA	healthy-RITA	M-RITA	kurokawa07-RITA	healthy-RITA	japanese-RITA	M-RITA
+JP-AD-2-RITA	Enterotype 3-RITA	japanese-RITA	healthy-RITA	F-RITA	kurokawa07-RITA	healthy-RITA	japanese-RITA	F-RITA
+JP-AD-3-RITA	Enterotype 3-RITA	japanese-RITA	healthy-RITA	M-RITA	kurokawa07-RITA	healthy-RITA	japanese-RITA	M-RITA
+JP-AD-4-RITA	Enterotype 1-RITA	japanese-RITA	healthy-RITA	F-RITA	kurokawa07-RITA	healthy-RITA	japanese-RITA	F-RITA
+JP-AD-5-RITA	Enterotype 3-RITA	japanese-RITA	healthy-RITA	M-RITA	kurokawa07-RITA	healthy-RITA	japanese-RITA	M-RITA
+JP-AD-6-RITA	Enterotype 1-RITA	japanese-RITA	healthy-RITA	F-RITA	kurokawa07-RITA	healthy-RITA	japanese-RITA	F-RITA
+JP-AD-7-RITA	Enterotype 1-RITA	japanese-RITA	healthy-RITA	M-RITA	kurokawa07-RITA	healthy-RITA	japanese-RITA	M-RITA
+JP-AD-8-RITA	Enterotype 1-RITA	japanese-RITA	healthy-RITA	M-RITA	kurokawa07-RITA	healthy-RITA	japanese-RITA	M-RITA
+JP-AD-9-RITA	Enterotype 1-RITA	japanese-RITA	healthy-RITA	F-RITA	kurokawa07-RITA	healthy-RITA	japanese-RITA	F-RITA
+JP-IN-1-RITA	Infant-RITA	japanese-RITA	healthy-RITA	F-RITA	kurokawa07-RITA	na-RITA	na-RITA	na-RITA
+JP-IN-2-RITA	Infant-RITA	japanese-RITA	healthy-RITA	M-RITA	kurokawa07-RITA	na-RITA	na-RITA	na-RITA
+JP-IN-3-RITA	Infant-RITA	japanese-RITA	healthy-RITA	M-RITA	kurokawa07-RITA	na-RITA	na-RITA	na-RITA
+JP-IN-4-RITA	Infant-RITA	japanese-RITA	healthy-RITA	F-RITA	kurokawa07-RITA	na-RITA	na-RITA	na-RITA
+AM-AD-1-SMASH	Unclassified-SMASH	american-SMASH	healthy-SMASH	F-SMASH	gill06-SMASH	na-SMASH	na-SMASH	na-SMASH
+AM-AD-2-SMASH	Unclassified-SMASH	american-SMASH	healthy-SMASH	M-SMASH	gill06-SMASH	na-SMASH	na-SMASH	na-SMASH
+AM-F10-T1-SMASH	Enterotype 3 - twin-SMASH	american-SMASH	obese-SMASH	F-SMASH	turnbaugh09-SMASH	na-SMASH	na-SMASH	na-SMASH
+AM-F10-T2-SMASH	Enterotype 3-SMASH	american-SMASH	obese-SMASH	F-SMASH	turnbaugh09-SMASH	obese-SMASH	na-SMASH	F-SMASH
+DA-AD-1-SMASH	Enterotype 2-SMASH	danish-SMASH	healthy-SMASH	F-SMASH	MetaHIT-SMASH	healthy-SMASH	danish-SMASH	F-SMASH
+DA-AD-1T-SMASH	Enterotype 2 - 454-SMASH	danish-SMASH	healthy-SMASH	F-SMASH	MetaHIT-SMASH	na-SMASH	na-SMASH	na-SMASH
+DA-AD-2-SMASH	Enterotype 3-SMASH	danish-SMASH	healthy-SMASH	M-SMASH	MetaHIT-SMASH	healthy-SMASH	danish-SMASH	M-SMASH
+DA-AD-3-SMASH	Enterotype 3-SMASH	danish-SMASH	obese-SMASH	F-SMASH	MetaHIT-SMASH	obese-SMASH	danish-SMASH	F-SMASH
+DA-AD-3T-SMASH	Enterotype 3 - 454-SMASH	danish-SMASH	obese-SMASH	F-SMASH	MetaHIT-SMASH	na-SMASH	na-SMASH	na-SMASH
+DA-AD-4-SMASH	Enterotype 2-SMASH	danish-SMASH	obese-SMASH	M-SMASH	MetaHIT-SMASH	obese-SMASH	danish-SMASH	M-SMASH
+ES-AD-1-SMASH	Enterotype 1-SMASH	spanish-SMASH	CD-SMASH	F-SMASH	MetaHIT-SMASH	CD-SMASH	spanish-SMASH	F-SMASH
+ES-AD-2-SMASH	Enterotype 2-SMASH	spanish-SMASH	healthy-SMASH	M-SMASH	MetaHIT-SMASH	healthy-SMASH	spanish-SMASH	M-SMASH
+ES-AD-3-SMASH	Enterotype 2-SMASH	spanish-SMASH	UC-SMASH	F-SMASH	MetaHIT-SMASH	UC-SMASH	spanish-SMASH	F-SMASH
+ES-AD-4-SMASH	Enterotype 3-SMASH	spanish-SMASH	healthy-SMASH	F-SMASH	MetaHIT-SMASH	healthy-SMASH	spanish-SMASH	F-SMASH
+FR-AD-1-SMASH	Enterotype 3-SMASH	french-SMASH	healthy-SMASH	M-SMASH	MicroObes-SMASH	healthy-SMASH	french-SMASH	M-SMASH
+FR-AD-2-SMASH	Enterotype 3-SMASH	french-SMASH	healthy-SMASH	M-SMASH	MicroObes-SMASH	healthy-SMASH	french-SMASH	M-SMASH
+FR-AD-3-SMASH	Enterotype 1-SMASH	french-SMASH	healthy-SMASH	M-SMASH	MicroObes-SMASH	healthy-SMASH	french-SMASH	M-SMASH
+FR-AD-4-SMASH	Enterotype 3-SMASH	french-SMASH	healthy-SMASH	M-SMASH	MicroObes-SMASH	healthy-SMASH	french-SMASH	M-SMASH
+FR-AD-5-SMASH	Enterotype 3-SMASH	french-SMASH	obese-SMASH	M-SMASH	MicroObes-SMASH	obese-SMASH	french-SMASH	M-SMASH
+FR-AD-6-SMASH	Enterotype 2-SMASH	french-SMASH	obese-SMASH	M-SMASH	MicroObes-SMASH	obese-SMASH	french-SMASH	M-SMASH
+FR-AD-7-SMASH	Enterotype 3-SMASH	french-SMASH	obese-SMASH	M-SMASH	MicroObes-SMASH	obese-SMASH	french-SMASH	M-SMASH
+FR-AD-8-SMASH	Enterotype 3-SMASH	french-SMASH	obese-SMASH	M-SMASH	MicroObes-SMASH	obese-SMASH	french-SMASH	M-SMASH
+IT-AD-1-SMASH	Enterotype 3-SMASH	italian-SMASH	elderly-SMASH	F-SMASH	MicroAge-SMASH	elderly-SMASH	italian-SMASH	F-SMASH
+IT-AD-2-SMASH	Enterotype 3-SMASH	italian-SMASH	elderly-SMASH	M-SMASH	MicroAge-SMASH	elderly-SMASH	italian-SMASH	M-SMASH
+IT-AD-3-SMASH	Enterotype 3-SMASH	italian-SMASH	elderly-SMASH	F-SMASH	MicroAge-SMASH	elderly-SMASH	italian-SMASH	F-SMASH
+IT-AD-4-SMASH	Enterotype 2-SMASH	italian-SMASH	elderly-SMASH	M-SMASH	MicroAge-SMASH	elderly-SMASH	italian-SMASH	M-SMASH
+IT-AD-5-SMASH	Enterotype 3-SMASH	italian-SMASH	elderly-SMASH	M-SMASH	MicroAge-SMASH	elderly-SMASH	italian-SMASH	M-SMASH
+IT-AD-6-SMASH	Enterotype 3-SMASH	italian-SMASH	elderly-SMASH	F-SMASH	MicroAge-SMASH	elderly-SMASH	italian-SMASH	F-SMASH
+JP-AD-1-SMASH	Enterotype 1-SMASH	japanese-SMASH	healthy-SMASH	M-SMASH	kurokawa07-SMASH	healthy-SMASH	japanese-SMASH	M-SMASH
+JP-AD-2-SMASH	Enterotype 3-SMASH	japanese-SMASH	healthy-SMASH	F-SMASH	kurokawa07-SMASH	healthy-SMASH	japanese-SMASH	F-SMASH
+JP-AD-3-SMASH	Enterotype 3-SMASH	japanese-SMASH	healthy-SMASH	M-SMASH	kurokawa07-SMASH	healthy-SMASH	japanese-SMASH	M-SMASH
+JP-AD-4-SMASH	Enterotype 1-SMASH	japanese-SMASH	healthy-SMASH	F-SMASH	kurokawa07-SMASH	healthy-SMASH	japanese-SMASH	F-SMASH
+JP-AD-5-SMASH	Enterotype 3-SMASH	japanese-SMASH	healthy-SMASH	M-SMASH	kurokawa07-SMASH	healthy-SMASH	japanese-SMASH	M-SMASH
+JP-AD-6-SMASH	Enterotype 1-SMASH	japanese-SMASH	healthy-SMASH	F-SMASH	kurokawa07-SMASH	healthy-SMASH	japanese-SMASH	F-SMASH
+JP-AD-7-SMASH	Enterotype 1-SMASH	japanese-SMASH	healthy-SMASH	M-SMASH	kurokawa07-SMASH	healthy-SMASH	japanese-SMASH	M-SMASH
+JP-AD-8-SMASH	Enterotype 1-SMASH	japanese-SMASH	healthy-SMASH	M-SMASH	kurokawa07-SMASH	healthy-SMASH	japanese-SMASH	M-SMASH
+JP-AD-9-SMASH	Enterotype 1-SMASH	japanese-SMASH	healthy-SMASH	F-SMASH	kurokawa07-SMASH	healthy-SMASH	japanese-SMASH	F-SMASH
+JP-IN-1-SMASH	Infant-SMASH	japanese-SMASH	healthy-SMASH	F-SMASH	kurokawa07-SMASH	na-SMASH	na-SMASH	na-SMASH
+JP-IN-2-SMASH	Infant-SMASH	japanese-SMASH	healthy-SMASH	M-SMASH	kurokawa07-SMASH	na-SMASH	na-SMASH	na-SMASH
+JP-IN-3-SMASH	Infant-SMASH	japanese-SMASH	healthy-SMASH	M-SMASH	kurokawa07-SMASH	na-SMASH	na-SMASH	na-SMASH
+JP-IN-4-SMASH	Infant-SMASH	japanese-SMASH	healthy-SMASH	F-SMASH	kurokawa07-SMASH	na-SMASH	na-SMASH	na-SMASH
