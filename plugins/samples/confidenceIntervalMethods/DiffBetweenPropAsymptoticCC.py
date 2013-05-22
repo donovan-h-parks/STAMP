@@ -51,7 +51,6 @@ class DiffBetweenPropAsymptoticCC(AbstractSampleConfIntervMethod):
 			totalSeq2 = self.preferences['Pseudocount']
 			note = 'degenerate case: CI calculation used pseudocount'
 			
-			
 		R1 = float(seq1) / totalSeq1
 		R2 = float(seq2) / totalSeq2
 	

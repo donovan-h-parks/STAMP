@@ -296,8 +296,8 @@ class SampleStatsTests(object):
 		self.results = SampleStatTestResults(preferences)
 		 
 	def run(self, statTest, testType, confIntervMethod, coverage, profile, progress = None):
-		self.results.test = statTest.name	 
-		self.results.testType = testType	
+		self.results.test = statTest.name
+		self.results.testType = testType
 		self.results.alpha = 1.0 - coverage
 		self.results.confIntervMethod = confIntervMethod
 		self.results.profile = profile
@@ -317,9 +317,9 @@ class SampleStatsTests(object):
 
 				index += 1
 				progress.setValue(index)
-								
+
 			seq1, seq2, parentSeq1, parentSeq2 = profile.getTableData(feature)
-						
+
 			# Difference between proportions test
 			pValueOneSided, pValueTwoSided, note = statTest.hypothesisTest(seq1, seq2, parentSeq1, parentSeq2)
 			
@@ -330,7 +330,11 @@ class SampleStatsTests(object):
 			else:
 				print 'Error: Unknown test type.'
 			
-			# Confidence interval	 
+			# Confidence interval
+			if feature == 'Unclassified':
+				print '*'
+				print feature
+				print seq1, seq2, parentSeq1, parentSeq2
 			lowerCI, upperCI, effectSize, ciNote = confIntervMethod.run(seq1, seq2, parentSeq1, parentSeq2, coverage)
 			
 			if ciNote != '':

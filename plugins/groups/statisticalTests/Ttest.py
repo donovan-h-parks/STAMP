@@ -51,11 +51,19 @@ class Ttest(AbstractGroupStatsTestPlugin):
 			# calculate proportions
 			propGroup1 = []
 			for i in xrange(0, n1):
-				propGroup1.append(float(seqGroup1[i]) / parentSeqGroup1[i])
+				if parentSeqGroup1[i] > 0:
+					propGroup1.append(float(seqGroup1[i]) / parentSeqGroup1[i])
+				else:
+					propGroup1.append( 0.0 )
+					note = 'degenerate case: parent group had a count of zero'
 				
 			propGroup2 = []
 			for i in xrange(0, n2):
-				propGroup2.append(float(seqGroup2[i]) / parentSeqGroup2[i])
+				if parentSeqGroup2[i] > 0:
+					propGroup2.append(float(seqGroup2[i]) / parentSeqGroup2[i])
+				else:
+					propGroup2.append( 0.0 )
+					note = 'degenerate case: parent group had a count of zero'
 			
 			# calculate statistics
 			meanG1 = float(sum(propGroup1)) / n1

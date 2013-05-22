@@ -1024,8 +1024,8 @@ class MainWindow(QtGui.QMainWindow):
 			profileHeading = str(self.ui.cboProfileLevel.currentText())
 			
 			self.sampleProfile = self.profileTree.createSampleProfile(sampleName1, sampleName2, 
-																																	parentHeading, profileHeading, 
-																																	self.ui.cboUnclassified.currentText())
+																		parentHeading, profileHeading, 
+																		self.ui.cboUnclassified.currentText())
 			
 			# show progress of test
 			progress = QtGui.QProgressDialog('Running two-sample statistical test...', 'Cancel', 0, len(self.sampleProfile.getFeatures())+1, self)

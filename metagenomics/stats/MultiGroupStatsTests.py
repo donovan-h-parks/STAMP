@@ -289,7 +289,12 @@ class MultiGroupStatsTests(object):
 			for i in xrange(0, len(seqCount)):
 				propGroup = []
 				for j in xrange(0, len(seqCount[i])):
-					propGroup.append(seqCount[i][j] * 100.0 / parentCount[i][j])
+					sc = seqCount[i][j]
+					pc = parentCount[i][j]
+					if pc > 0:
+						propGroup.append( sc * 100.0 / pc)
+					else:
+						propGroup.append( 0.0 )
 					
 				meanGroup = mean(propGroup)
 				row.append(meanGroup)
@@ -297,9 +302,14 @@ class MultiGroupStatsTests(object):
 			
 			for i in xrange(0, len(seqCount)):
 				for j in xrange(0, len(seqCount[i])):
-					row.append(seqCount[i][j])
-					row.append(parentCount[i][j])
-					row.append(seqCount[i][j] * 100.0 / parentCount[i][j])
+					sc = seqCount[i][j]
+					pc = parentCount[i][j]
+					row.append(sc)
+					row.append(pc)
+					if pc > 0:
+						row.append(sc * 100.0 / pc)
+					else:
+						row.append( 0.0 )
 					
 			self.results.data.append(row)
 

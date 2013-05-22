@@ -183,13 +183,19 @@ class MultiGroupProfile:
 		
 	def getActiveFeatureProportions(self, feature):
 		profile = self.profileDict[feature]
-		
+
 		sampleData = []
 		index = 0
 		for i in xrange(0, len(self.activeSamplesInGroups)):
 			data = []
 			for j in xrange(0, len(self.activeSamplesInGroups[i])):
-				data.append(float(profile.featureCounts[self.activeColumns[index]])*100 / profile.parentCounts[self.activeColumns[index]])
+				fc = float(profile.featureCounts[self.activeColumns[index]])*100
+				pc = profile.parentCounts[self.activeColumns[index]]
+				if pc > 0:
+					data.append(fc*100 / pc)
+				else:
+					data.append(0.0)
+					
 				index += 1
 			sampleData.append(data)
 
@@ -219,6 +225,11 @@ class MultiGroupProfile:
 			data = self.profileDict[feature]
 			
 			for i in xrange(0, len(self.activeColumns)):
-				featureMatrix[i].append(float(data.featureCounts[self.activeColumns[i]]) / data.parentCounts[self.activeColumns[i]])
+				fc = float(data.featureCounts[self.activeColumns[i]])
+				pc = data.parentCounts[self.activeColumns[i]]
+				if pc > 0:
+					featureMatrix[i].append( fc / pc )
+				else:
+					featureMatrix[i].append( 0.0 )
 
 		return np.array(featureMatrix)

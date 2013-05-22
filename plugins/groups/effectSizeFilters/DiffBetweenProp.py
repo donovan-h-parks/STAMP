@@ -32,8 +32,16 @@ class DiffBetweenProp(AbstractGroupEffectSizePlugin):
 		self.bLogScale = False 
 
 	def run(self, propGroup1, propGroup2):
-		meanG1 = float(sum(propGroup1)) / len(propGroup1)
-		meanG2 = float(sum(propGroup2)) / len(propGroup2)
+		if len(propGroup1) > 0:
+			meanG1 = float(sum(propGroup1)) / len(propGroup1)
+		else:
+			meanG1 = 0
+			
+		if len(propGroup2) > 0:
+			meanG2 = float(sum(propGroup2)) / len(propGroup2)
+		else:
+			meanG2 = 0
+			
 		dp = meanG1 - meanG2
 		return dp
 	

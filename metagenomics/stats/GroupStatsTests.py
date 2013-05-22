@@ -374,11 +374,23 @@ class GroupStatsTests(object):
 		for i in xrange(0, len(features)):
 			propGroup1 = []
 			for j in xrange(0, len(seqsGroup1[i])):
-				propGroup1.append(seqsGroup1[i][j] * 100.0 / parentSeqsGroup1[i][j])
+				sg1 = seqsGroup1[i][j]
+				psg1 = parentSeqsGroup1[i][j]
+				
+				if psg1 > 0:
+					propGroup1.append( sg1 * 100.0 / psg1 )
+				else:
+					propGroup1.append( 0.0 )
 			
 			propGroup2 = []
 			for j in xrange(0, len(seqsGroup2[i])):
-				propGroup2.append(seqsGroup2[i][j] * 100.0 / parentSeqsGroup2[i][j])
+				sg2 = seqsGroup2[i][j]
+				psg2 = parentSeqsGroup2[i][j]
+				
+				if psg2 > 0:
+					propGroup2.append( sg2 * 100.0 / psg2 )
+				else:
+					propGroup2.append( 0.0 )
 			
 			meanGroup1 = mean(propGroup1)
 			meanGroup2 = mean(propGroup2)
@@ -389,12 +401,18 @@ class GroupStatsTests(object):
 			for j in xrange(0, len(seqsGroup1[i])):
 				row.append(seqsGroup1[i][j])
 				row.append(parentSeqsGroup1[i][j])
-				row.append(seqsGroup1[i][j] * 100.0 / parentSeqsGroup1[i][j])
+				if parentSeqsGroup1[i][j] > 0:
+					row.append(seqsGroup1[i][j] * 100.0 / parentSeqsGroup1[i][j])
+				else:
+					row.append(0.0)
 				
 			for j in xrange(0, len(seqsGroup2[i])):
 				row.append(seqsGroup2[i][j])
 				row.append(parentSeqsGroup2[i][j])
-				row.append(seqsGroup2[i][j] * 100.0 / parentSeqsGroup2[i][j])
+				if parentSeqsGroup2[i][j] > 0:
+					row.append(seqsGroup2[i][j] * 100.0 / parentSeqsGroup2[i][j])
+				else:
+					row.append(0.0)
 																
 			self.results.data.append(row)
 																

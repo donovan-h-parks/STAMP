@@ -554,7 +554,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 		# Alan Dadney and John Storey (http://cran.r-project.org/web/packages/qvalue/)
 		pass
 		
-class VerifyOther(unittest.TestCase):	
+class VerifyOther(unittest.TestCase):
 	def testNormalDist(self):
 		"""Verify computation of normal distribution methods"""
 		from metagenomics.stats.distributions.NormalDist import standardNormalCDF, zScore

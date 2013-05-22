@@ -111,12 +111,22 @@ class GroupProfile:
 
 		data1 = []
 		for i in xrange(0, len(self.samplesInGroup1)):
-			data1.append(float(profile.featureCounts[i])*100 / profile.parentCounts[i])
+			fc = float(profile.featureCounts[i])
+			pc = profile.parentCounts[i]
+			if pc > 0:
+				data1.append(fc*100 / pc)
+			else:
+				data1.append(0.0)
 			
 		data2 = []
 		for i in xrange(len(self.samplesInGroup1), len(profile.featureCounts)):
-			data2.append(float(profile.featureCounts[i])*100 / profile.parentCounts[i])
-		
+			fc = float(profile.featureCounts[i])
+			pc = profile.parentCounts[i]
+			if pc > 0:
+				data2.append(fc*100 / pc)
+			else:
+				data2.append(0.0)
+
 		return data1, data2
 		
 	def getFeatureProportionsAll(self):
@@ -140,6 +150,9 @@ class GroupProfile:
 			data = self.profileDict[feature]
 			
 			for i in xrange(0, len(samples)):
-				featureMatrix[i].append(float(data.featureCounts[i]) / data.parentCounts[i])
+				if data.parentCounts[i] > 0:
+					featureMatrix[i].append(float(data.featureCounts[i]) / data.parentCounts[i])
+				else:
+					featureMatrix[i].append(0.0)
 
 		return np.array(featureMatrix)
