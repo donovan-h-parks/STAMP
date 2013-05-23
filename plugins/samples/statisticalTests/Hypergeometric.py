@@ -53,7 +53,7 @@ class Hypergeometric(AbstractSampleStatsTestPlugin):
 	
 	def hypergeometricCDF(self, a,b,c,d):
 		cdf = 0
-		for i in xrange(0, a+1):
+		for i in xrange(0, int(a)+1):
 			cdf += self.hypergeometricPDF(i,b+(a-i),c+(a-i),d-(a-i))
 			
 		if cdf > 1.0:

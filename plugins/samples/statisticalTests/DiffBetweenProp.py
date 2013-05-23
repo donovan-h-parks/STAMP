@@ -35,16 +35,16 @@ class DiffBetweenProp(AbstractSampleStatsTestPlugin):
 		self.name = 'Difference between proportions'
 	
 	def hypothesisTest(self, seq1, seq2, totalSeq1, totalSeq2):
-		R1 = float(seq1) / totalSeq1
-		R2 = float(seq2) / totalSeq2
-		diff = R1 - R2
-		P = float(seq1 + seq2) / (totalSeq1 + totalSeq2)
-		Q = 1.0 - P
-		
 		if (seq1 == 0 and seq2 == 0) or (seq1 == totalSeq1 and seq2 == totalSeq2):
 			D = 0
 			note = 'degenerate case: suspect p-value'
-		else:		
+		else:
+			R1 = float(seq1) / totalSeq1
+			R2 = float(seq2) / totalSeq2
+			diff = R1 - R2
+			P = float(seq1 + seq2) / (totalSeq1 + totalSeq2)
+			Q = 1.0 - P
+		
 			D = diff / math.sqrt(P*Q*((1.0/totalSeq1) + (1.0/totalSeq2)))
 			note = ''
 		

@@ -65,7 +65,7 @@ mpl_data_files = mpl.get_py2exe_datafiles()
 # setup configuration
 setup(
 	name = "STAMP",
-	version = "2.0.0 (release candidate 5)",
+	version = "2.0.0 (release candidate 6)",
 	description = "Statistical analysis of metagenomic profiles",
 	author = "Donovan Parks",
 	windows=[{"script":"STAMP.py", "icon_resources": [(1, "icons/programIcon.ico")]}],

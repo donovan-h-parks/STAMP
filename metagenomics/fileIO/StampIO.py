@@ -64,6 +64,15 @@ class StampIO(object):
 				categories = lineSplit[0:profileTree.numHierarchicalLevels()]
 				countData = [float(count) for count in lineSplit[profileTree.numHierarchicalLevels():]]
 				
+				# check for unclassified categories
+				taxa = ''
+				for i in xrange(0, len(categories)):
+					if categories[i].lower() == 'unclassified':
+						categories[i] = 'Unclassified ' + taxa
+						categories[i] = categories[i].rstrip()
+					else:
+						taxa = categories[i]
+				
 				# add all hierarchical levels
 				curNode = profileTree.root
 				for category in categories:

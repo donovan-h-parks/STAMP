@@ -27,49 +27,55 @@ from plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTes
 from numpy.random import binomial
 
 class Bootstrap(AbstractSampleStatsTestPlugin):
-  '''
-  Perform bootstrap test.
-  '''
-  
-  def __init__(self, preferences):
-    AbstractSampleStatsTestPlugin.__init__(self, preferences)
-    self.name = 'Bootstrap'
-  
-  def hypothesisTest(self, seq1, seq2, totalSeq1, totalSeq2):
-    replicates = self.preferences['Replicates']
-    
-    # create null distribution
-    pooledN = totalSeq1 + totalSeq2
-    pooledP = float(seq1 + seq2) / pooledN
-    
-    diff = []
-    for dummy in xrange(0, replicates):
-      c1 = binomial(totalSeq1, pooledP)         
-      c2 = binomial(totalSeq2, pooledP)  
-            
-      diff.append(float(c1) / totalSeq1 - float(c2) / totalSeq2) 
-      
-    # determine number of replicates w/ an effect size more extreme than the observed data
-    obsDiff = float(seq1) / totalSeq1 - float(seq2) / totalSeq2
+	'''
+	Perform bootstrap test.
+	'''
 
-    leftCount = 0
-    rightCount = 0
-    twoSidedCount = 0
-    for value in diff:
-      if value <= obsDiff:
-        leftCount += 1
-      if value >= obsDiff:
-        rightCount += 1
-      if abs(value) >= abs(obsDiff):
-        twoSidedCount += 1
-        
-    oneSidedCount = leftCount
-    if rightCount < oneSidedCount:
-      oneSidedCount = rightCount
-    
-    return float(oneSidedCount) / replicates, float(twoSidedCount) / replicates, ''
+	def __init__(self, preferences):
+		AbstractSampleStatsTestPlugin.__init__(self, preferences)
+		self.name = 'Bootstrap'
+
+	def hypothesisTest(self, seq1, seq2, totalSeq1, totalSeq2):
+		replicates = self.preferences['Replicates']
+
+		# create null distribution
+		if totalSeq1 != 0 and totalSeq2 != 0:
+			pooledN = totalSeq1 + totalSeq2
+			pooledP = float(seq1 + seq2) / pooledN
+
+			diff = []
+			for dummy in xrange(0, replicates):
+				c1 = binomial(totalSeq1, pooledP)
+				c2 = binomial(totalSeq2, pooledP)
+					
+				diff.append(float(c1) / totalSeq1 - float(c2) / totalSeq2) 
+
+			# determine number of replicates w/ an effect size more extreme than the observed data
+			obsDiff = float(seq1) / totalSeq1 - float(seq2) / totalSeq2
+
+			leftCount = 0
+			rightCount = 0
+			twoSidedCount = 0
+			for value in diff:
+				if value <= obsDiff:
+					leftCount += 1
+				if value >= obsDiff:
+					rightCount += 1
+				if abs(value) >= abs(obsDiff):
+					twoSidedCount += 1
+				
+			oneSidedCount = leftCount
+			if rightCount < oneSidedCount:
+				oneSidedCount = rightCount
+			note = ''
+		else:
+			oneSidedCount = replicates
+			twoSidedCount = replicates
+			note = 'degenerate case: parent has a count of zero'
+
+		return float(oneSidedCount) / replicates, float(twoSidedCount) / replicates, ''
  
 if __name__ == "__main__": 
-  bootstrap = Bootstrap()
-  pValueOneSided, pValueTwoSided = bootstrap.hypothesisTest(20, 1, 50, 50)
-  print pValueOneSided, pValueTwoSided
+	bootstrap = Bootstrap()
+	pValueOneSided, pValueTwoSided = bootstrap.hypothesisTest(20, 1, 50, 50)
+	print pValueOneSided, pValueTwoSided

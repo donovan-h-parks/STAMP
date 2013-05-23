@@ -207,16 +207,9 @@ class ProfileTree:
 					if sequences == None:
 						sequences = [0, 0]
 						parentSeqDict[curNode.name] = sequences
-						
-					print '**'
-					print name
-					print curNode.name
-					print sequences
-						
+
 					sequences[0] += leaf.countData[sampleName1]
 					sequences[1] += leaf.countData[sampleName2]
-					
-					print sequences
 						
 					if not bRemoveUnclassified:
 						profileEntry.parentCounts = sequences

@@ -207,8 +207,8 @@ class SampleStatTestResults(object):
 		
 		self.activeData = []
 
-		for row in self.data:					
-			feature = row[self.dataHeadings['Features']]	 
+		for row in self.data:
+			feature = row[self.dataHeadings['Features']]
 			pValue = row[self.dataHeadings['pValuesCorrected']]
 			seq1, seq2, parentSeq1, parentSeq2 = self.profile.getTableData(feature)
 			
@@ -228,7 +228,7 @@ class SampleStatTestResults(object):
 			elif seqFilter == 'independent':
 				bPassSeqFilter = (seq1 >= sample1Filter and seq2 >= sample2Filter)
 			else:
-				bPassSeqFilter = True					 # sequence filter is disabled
+				bPassSeqFilter = True # sequence filter is disabled
 				
 			if not bPassSeqFilter:
 				continue
@@ -241,12 +241,12 @@ class SampleStatTestResults(object):
 			elif parentSeqFilter == 'independent':
 				bPassParentSeqFilter = (parentSeq1 >= parentSample1Filter and parentSeq2 >= parentSample2Filter)
 			else:
-				bPassParentSeqFilter = True						# parent sequence filter is disabled
+				bPassParentSeqFilter = True	# parent sequence filter is disabled
 				
 			if not bPassParentSeqFilter:
 				continue
 			
-			# effect size filters	
+			# effect size filters
 			if effectSizeMeasure1 != None:
 				effectSizeA = effectSizeMeasure1.run(seq1, seq2, parentSeq1, parentSeq2)
 				effectSizeB = effectSizeMeasure1.run(seq2, seq1, parentSeq2, parentSeq1)
