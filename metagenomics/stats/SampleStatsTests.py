@@ -331,10 +331,6 @@ class SampleStatsTests(object):
 				print 'Error: Unknown test type.'
 			
 			# Confidence interval
-			if feature == 'Unclassified':
-				print '*'
-				print feature
-				print seq1, seq2, parentSeq1, parentSeq2
 			lowerCI, upperCI, effectSize, ciNote = confIntervMethod.run(seq1, seq2, parentSeq1, parentSeq2, coverage)
 			
 			if ciNote != '':

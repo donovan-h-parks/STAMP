@@ -171,7 +171,7 @@ class ProfileTree:
 				
 				# add profile level information
 				if curDepth == profileDepth:
-					if curNode.name.lower() == 'unclassified':
+					if 'unclassified' in curNode.name.lower():
 						if unclassifiedTreatment == 'Remove unclassified reads':
 							bRemoveUnclassified = True
 							break
@@ -276,7 +276,7 @@ class ProfileTree:
 				
 				# add profile level information
 				if curDepth == profileDepth:
-					if curNode.name.lower() == 'unclassified':
+					if 'unclassified' in curNode.name.lower():
 						if unclassifiedTreatment == 'Remove unclassified reads':
 							bRemoveUnclassified = True
 							break
@@ -379,7 +379,7 @@ class ProfileTree:
 				
 				# add profile level information
 				if curDepth == profileDepth:
-					if curNode.name.lower() == 'unclassified':
+					if 'unclassified' in curNode.name.lower():
 						if unclassifiedTreatment == 'Remove unclassified reads':
 							bRemoveUnclassified = True
 							break
