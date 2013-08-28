@@ -66,12 +66,12 @@ class StampIO(object):
 				
 				# check for unclassified categories
 				taxa = ''
-				for i in xrange(0, len(categories)):
-					if categories[i].lower() == 'unclassified':
-						categories[i] = 'Unclassified ' + taxa
-						categories[i] = categories[i].rstrip()
+				for j in xrange(0, len(categories)):
+					if categories[j].lower() == 'unclassified':
+						categories[j] = 'Unclassified ' + taxa
+						categories[j] = categories[j].rstrip()
 					else:
-						taxa = categories[i]
+						taxa = categories[j]
 				
 				# add all hierarchical levels
 				curNode = profileTree.root

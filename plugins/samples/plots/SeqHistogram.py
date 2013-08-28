@@ -110,7 +110,7 @@ class SeqHistogram(AbstractSamplePlotPlugin):
 			bins.append(binEnd)
 			binEnd += self.binWidth
 		bins.append(binEnd)
- 
+
 		n, b, patches = axesHist.hist([seqs1, seqs2], bins=bins, log=self.yAxisLogScale)
 		for patch in patches[0]:
 			patch.set_facecolor(profile1Colour)
