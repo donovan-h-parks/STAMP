@@ -276,8 +276,12 @@ class pcaPlot(AbstractGroupPlotPlugin):
 		xData = [pc1]
 		yData = [pc2]
 		if (bPlot2D == False) and self.bShowPC3vsPC2:
-			axesScatter2.scatter(pc3[0:numGroup1Samples], pc2[0:numGroup1Samples], s=self.markerSize, zorder=5, c=colours[0:numGroup1Samples], marker = markers[0])
-			axesScatter2.scatter(pc3[numGroup1Samples:], pc2[numGroup1Samples:], s=self.markerSize, zorder=5, c=colours[numGroup1Samples:], marker = markers[1])
+			try:
+				axesScatter2.scatter(pc3[0:numGroup1Samples], pc2[0:numGroup1Samples], s=self.markerSize, zorder=5, c=colours[0:numGroup1Samples], marker = markers[0])
+				axesScatter2.scatter(pc3[numGroup1Samples:], pc2[numGroup1Samples:], s=self.markerSize, zorder=5, c=colours[numGroup1Samples:], marker = markers[1])
+			except:
+				# failed to plot PC3, but continue on since the plot of PC1 vs. PC2 can be informative
+				pass
 			
 			xOffset = (max(pc3) - min(pc3))*axesExpandPercentage
 			axesScatter2.set_xlim([min(pc3)-xOffset, max(pc3)+xOffset])
@@ -295,8 +299,12 @@ class pcaPlot(AbstractGroupPlotPlugin):
 			yData.append(pc2)
 			
 		if (bPlot2D == False) and self.bShowPC1vsPC3:
-			axesScatter3.scatter(pc1[0:numGroup1Samples], pc3[0:numGroup1Samples], s=self.markerSize, zorder=5, c=colours[0:numGroup1Samples], marker = markers[0])
-			axesScatter3.scatter(pc1[numGroup1Samples:], pc3[numGroup1Samples:], s=self.markerSize, zorder=5, c=colours[numGroup1Samples:], marker = markers[1])
+			try:
+				axesScatter3.scatter(pc1[0:numGroup1Samples], pc3[0:numGroup1Samples], s=self.markerSize, zorder=5, c=colours[0:numGroup1Samples], marker = markers[0])
+				axesScatter3.scatter(pc1[numGroup1Samples:], pc3[numGroup1Samples:], s=self.markerSize, zorder=5, c=colours[numGroup1Samples:], marker = markers[1])
+			except:
+				# failed to plot PC3, but continue on since the plot of PC1 vs. PC2 can be informative
+				pass
 			
 			xOffset = (max(pc1) - min(pc1))*axesExpandPercentage
 			axesScatter3.set_xlim([min(pc1)-xOffset, max(pc1)+xOffset])
@@ -314,7 +322,6 @@ class pcaPlot(AbstractGroupPlotPlugin):
 		else:
 			axesScatter1.set_xlabel('PC1 (' + '%.1f' % (capturedVar[0]*100) + '%)')
 			
-
 		# plot x=0 and y=0 lines
 		for axes in scatterPlotAxes:
 			axes.axhline(color=axesColour, linestyle='dashed', zorder = 1)

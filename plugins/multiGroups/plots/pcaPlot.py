@@ -264,7 +264,14 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		for i in xrange(0, len(profile.activeSamplesInGroups)):
 			samplesInGroup = len(profile.activeSamplesInGroups[i])
 			end = start + samplesInGroup
-			axesScatter1.scatter(pc1[start:end], pc2[start:end], s=self.markerSize, zorder=5, c=colours[start:end], marker=markers[i % len(markers)])
+			try:
+				axesScatter1.scatter(pc1[start:end], pc2[start:end], s=self.markerSize, zorder=5, c=colours[start:end], marker=markers[i % len(markers)])
+			except LinAlgError:
+				self.emptyAxis('Linear algebra error likely due to a singular matrix (i.e., degenerate data).\nTry plotting at a different level in the hierarchy.')
+				return
+			except:
+				self.emptyAxis('Unknown error when performing PCA analysis.')
+				return
 			start = end
 
 		xOffset = (max(pc1) - min(pc1))*axesExpandPercentage
@@ -282,7 +289,11 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 			for i in xrange(0, len(profile.activeSamplesInGroups)):
 				samplesInGroup = len(profile.activeSamplesInGroups[i])
 				end = start + samplesInGroup
-				axesScatter2.scatter(pc3[start:end], pc2[start:end], s=self.markerSize, zorder=5, c=colours[start:end], marker=markers[i % len(markers)])
+				try:
+					axesScatter2.scatter(pc3[start:end], pc2[start:end], s=self.markerSize, zorder=5, c=colours[start:end], marker=markers[i % len(markers)])
+				except:
+					# failed to plot PC3, but continue on since the plot of PC1 vs. PC2 can be informative
+					pass
 				start = end
 			
 			xOffset = (max(pc3) - min(pc3))*axesExpandPercentage
@@ -306,7 +317,12 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 			for i in xrange(0, len(profile.activeSamplesInGroups)):
 				samplesInGroup = len(profile.activeSamplesInGroups[i])
 				end = start + samplesInGroup
-				axesScatter3.scatter(pc1[start:end], pc3[start:end], s=self.markerSize, zorder=5, c=colours[start:end], marker=markers[i % len(markers)])
+				try:
+					axesScatter3.scatter(pc1[start:end], pc3[start:end], s=self.markerSize, zorder=5, c=colours[start:end], marker=markers[i % len(markers)])
+				except:
+					# failed to plot PC3, but continue on since the plot of PC1 vs. PC2 can be informative
+					pass
+					
 				start = end
 			
 			xOffset = (max(pc1) - min(pc1))*axesExpandPercentage
