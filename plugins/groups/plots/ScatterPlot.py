@@ -30,14 +30,9 @@ from plugins.groups.plots.configGUI.scatterPlotUI import Ui_ScatterPlotDialog
 
 from plugins.PlotEventHandler import PlotEventHandler
 
-from matplotlib.lines import Line2D
 from matplotlib.ticker import NullFormatter
-from matplotlib import collections
 
-from metagenomics.MathHelper import mean, stdDev
-
-from matplotlib.artist import setp
-
+from numpy import mean, std
 from scipy.stats import linregress
 from scipy.stats.mstats import mquantiles
 
@@ -48,7 +43,7 @@ class ScatterPlot(AbstractGroupPlotPlugin):
 	def __init__(self, preferences, parent=None):
 		AbstractGroupPlotPlugin.__init__(self, preferences, parent)
 		self.preferences = preferences
-	 
+
 		self.name = 'Scatter plot'
 		self.type = 'Exploratory'
 		self.bSupportsHighlight = True
@@ -114,11 +109,11 @@ class ScatterPlot(AbstractGroupPlotPlugin):
 			field2.append(mean2)
 			
 			if self.spreadMethod == 'standard deviation':
-				xSpread.append([max(mean1 - stdDev(groupData1[i], mean1), 0), min(mean1 + stdDev(groupData1[i], mean1),100)])
-				ySpread.append([max(mean2 - stdDev(groupData2[i], mean2), 0), min(mean2 + stdDev(groupData2[i], mean2),100)])
+				xSpread.append([max(mean1 - std(groupData1[i]), 0), min(mean1 + std(groupData1[i]),100)])
+				ySpread.append([max(mean2 - std(groupData2[i]), 0), min(mean2 + std(groupData2[i]),100)])
 			elif self.spreadMethod == '2 * standard deviation':
-				xSpread.append([max(mean1 - 2*stdDev(groupData1[i], mean1), 0), min(mean1 + 2*stdDev(groupData1[i], mean1),100)])
-				ySpread.append([max(mean2 - 2*stdDev(groupData2[i], mean2), 0), min(mean2 + 2*stdDev(groupData2[i], mean2),100)])
+				xSpread.append([max(mean1 - 2*std(groupData1[i]), 0), min(mean1 + 2*std(groupData1[i]),100)])
+				ySpread.append([max(mean2 - 2*std(groupData2[i]), 0), min(mean2 + 2*std(groupData2[i]),100)])
 			elif self.spreadMethod == '25th and 75th percentile':
 				spread1 = mquantiles(groupData1[i], prob=[0.25,0.75])
 				spread2 = mquantiles(groupData2[i], prob=[0.25,0.75])
@@ -387,6 +382,6 @@ class ScatterPlot(AbstractGroupPlotPlugin):
 					
 if __name__ == "__main__": 
 	app = QtGui.QApplication(sys.argv)
-	testWindow = TestWindow(ProfileScatterPlot)
+	testWindow = TestWindow(ScatterPlot)
 	testWindow.show()
 	sys.exit(app.exec_())

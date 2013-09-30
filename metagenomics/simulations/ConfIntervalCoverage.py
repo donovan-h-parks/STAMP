@@ -4,8 +4,8 @@ Evaluate performance of different CI methods.
 @author: Donovan Parks
 '''
 
-import numpy
-from metagenomics.MathHelper import mean, stdDev
+from numpy import mean, std
+from numpy.random import binomial
 
 from metagenomics.plugins.confidenceIntervalMethods.DiffBetweenPropAsymptotic import DiffBetweenPropAsymptotic
 from metagenomics.plugins.confidenceIntervalMethods.DiffBetweenPropAsymptoticCC import DiffBetweenPropAsymptoticCC
@@ -75,13 +75,13 @@ for a in xrange(aMin, aMax+1):
     containedRepGart = 0   
     containedRepRP = 0   
     for r in xrange(0, replicates):
-      c1 = numpy.random.binomial(N1, p1)
+      c1 = binomial(N1, p1)
       while c1 == 0 or c1 == N1:
-        c1 = numpy.random.binomial(N1, p1)
+        c1 = binomial(N1, p1)
         
-      c2 = numpy.random.binomial(N2, p2)
+      c2 = binomial(N2, p2)
       while c2 == 0 or c2 == N2:
-        c2 = numpy.random.binomial(N2, p2)
+        c2 = binomial(N2, p2)
         
       # calculate CIs
       lowerCI, upperCI, effectSize = diffBetweenPropAsymptotic.run(c1, c2, N1, N2, coverage)
@@ -127,12 +127,12 @@ methodNames = ['DP: Asymptotic', 'DP: Asymptotic-CC', 'Newcombe-Wilson', 'Woolf'
 
 for i in xrange(0, len(results)):
   coverageMeanStr = '%.2f' % mean(results[i])
-  coverageSdStr = '%.2f' % stdDev(results[i])
+  coverageSdStr = '%.2f' % std(results[i])
   coverageMinStr = '%.2f' % min(results[i])
   coverageMaxStr = '%.2f' % max(results[i])
   
   lengthMeanStr = '%.2f' % mean(lengths[i])
-  lengthSdStr = '%.2f' % stdDev(lengths[i])
+  lengthSdStr = '%.2f' % std(lengths[i])
      
   fout.write(methodNames[i] + '\n')
   fout.write(coverageMeanStr + '+/-' + coverageSdStr + '[' + coverageMinStr + ';' + coverageMaxStr + ']\n')

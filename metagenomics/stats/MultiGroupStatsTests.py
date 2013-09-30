@@ -23,7 +23,7 @@
 
 from metagenomics import TableHelper
 
-from metagenomics.MathHelper import mean, stdDev
+from numpy import mean, std
 
 class PostHocResults:
 	def __init__(self):
@@ -296,9 +296,8 @@ class MultiGroupStatsTests(object):
 					else:
 						propGroup.append( 0.0 )
 					
-				meanGroup = mean(propGroup)
-				row.append(meanGroup)
-				row.append(stdDev(propGroup, meanGroup))
+				row.append(mean(propGroup))
+				row.append(std(propGroup))
 			
 			for i in xrange(0, len(seqCount)):
 				for j in xrange(0, len(seqCount[i])):

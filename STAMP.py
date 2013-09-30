@@ -19,8 +19,19 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
+__author__ = 'Donovan Parks'
+__copyright__ = 'Copyright 2013'
+__credits__ = ['Donovan Parks']
+__license__ = 'GPL3'
+__version__ = '2.0.1'
+__maintainer__ = 'Donovan Parks'
+__email__ = 'donovan.parks@gmail.com'
+__status__ = 'Development'
+
 import sys, os, platform
 import string
+
+import Dependencies
 
 from PyQt4 import QtGui, QtCore
 
@@ -54,14 +65,13 @@ from metagenomics.MultiGroupProfile import MultiGroupProfile
 
 from metagenomics.DirectoryHelper import getMainDir
 
-import Dependencies
 from plugins.PlotsManager import PlotsManager
 from plugins.PluginManager import PluginManager
 
 import matplotlib as mpl
 
 from numpy import seterr
- 
+
 class MainWindow(QtGui.QMainWindow):
 	def __init__(self, preferences, parent=None):
 		QtGui.QWidget.__init__(self, parent)
@@ -109,7 +119,7 @@ class MainWindow(QtGui.QMainWindow):
 		self.ui.dockProperties.toggleViewAction().setShortcut("Ctrl+P")
 		self.ui.dockProperties.toggleViewAction().setToolTip("Show\hide properties window")
 		self.ui.dockProperties.toggleViewAction().setStatusTip("Show\hide properties window")
-		mnuItem = self.ui.menuView.addAction(self.ui.dockProperties.toggleViewAction())
+		self.ui.menuView.addAction(self.ui.dockProperties.toggleViewAction())
 		
 		# setup group legend
 		self.ui.menuView.addSeparator()
@@ -152,7 +162,7 @@ class MainWindow(QtGui.QMainWindow):
 		self.connect(self.ui.mnuFileAppendCategoryCOG, QtCore.SIGNAL('triggered()'), self.appendCategoriesCOG)
 		self.connect(self.ui.mnuFileSavePlot, QtCore.SIGNAL('triggered()'), self.saveImageDlg)
 		self.connect(self.ui.mnuFileExit, QtCore.SIGNAL('triggered()'), QtCore.SLOT('close()'))
-			 
+
 		self.connect(self.ui.mnuViewSendPlotToWindow, QtCore.SIGNAL('triggered()'), self.sendPlotToWindow)
 		self.connect(self.ui.mnuSettingsPreferences, QtCore.SIGNAL('triggered()'), self.prefrencesDlg)
 		self.connect(self.ui.mnuHelpAbout, QtCore.SIGNAL('triggered()'), self.openAboutDlg)
@@ -254,7 +264,7 @@ class MainWindow(QtGui.QMainWindow):
 				
 		self.connect(self.ui.chkSampleEnableSignLevelFilter, QtCore.SIGNAL('toggled(bool)'), self.sampleFilteringPropChanged)
 		self.connect(self.ui.spinSampleSignLevelFilter, QtCore.SIGNAL('editingFinished()'), self.sampleFilteringPropChanged)
-		 
+
 		self.connect(self.ui.cboSampleSeqFilter, QtCore.SIGNAL('activated(QString)'), self.sampleSeqFilterChanged)
 		self.connect(self.ui.chkSampleEnableSeqFilter, QtCore.SIGNAL('toggled(bool)'), self.sampleFilteringPropChanged)
 		self.connect(self.ui.spinSampleFilterSample1, QtCore.SIGNAL('editingFinished()'), self.sampleFilteringPropChanged)
@@ -342,7 +352,7 @@ class MainWindow(QtGui.QMainWindow):
 		
 		self.connect(self.ui.chkGroupEnableSignLevelFilter, QtCore.SIGNAL('toggled(bool)'), self.groupFilteringPropChanged)
 		self.connect(self.ui.spinGroupSignLevelFilter, QtCore.SIGNAL('editingFinished()'), self.groupFilteringPropChanged)
-		 
+
 		self.connect(self.ui.cboGroupSeqFilter, QtCore.SIGNAL('activated(QString)'), self.groupSeqFilterChanged)
 		self.connect(self.ui.chkGroupEnableSeqFilter, QtCore.SIGNAL('toggled(bool)'), self.groupFilteringPropChanged)
 		self.connect(self.ui.spinGroupFilter1, QtCore.SIGNAL('editingFinished()'), self.groupFilteringPropChanged)
@@ -567,10 +577,10 @@ class MainWindow(QtGui.QMainWindow):
 		else:
 			icon.addPixmap(QtGui.QPixmap("icons/rightArrow.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
 		arrowButton.setIcon(icon)
-			 
+
 	def prefrencesDlg(self):
 		preferencesDlg = PreferencesDlg(self)
-		 
+
 		preferencesDlg.ui.spinPseudoCount.setValue(self.preferences['Pseudocount'])
 		preferencesDlg.ui.spinReplicates.setValue(self.preferences['Replicates'])
 		preferencesDlg.ui.chkTruncateFeatureNames.setChecked(self.preferences['Truncate feature names'])
@@ -595,7 +605,7 @@ class MainWindow(QtGui.QMainWindow):
 		self.samplePlotUpdate()
 		self.groupPlotUpdate()
 		self.multiGroupPlotUpdate()
-					 
+
 	def samplePlotUpdate(self):
 		QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
 		if self.sampleStatsTest.results.data != []:
@@ -720,7 +730,7 @@ class MainWindow(QtGui.QMainWindow):
 	def createProfileMothur(self):
 		createProfileMothurDlg = CreateProfileMothurDlg(self.preferences, self)
 		createProfileMothurDlg.exec_()
-					 
+
 	def loadProfile(self):
 		loadDataDlg = LoadDataDlg(self.preferences, self)
 		if loadDataDlg.exec_() == QtGui.QDialog.Accepted:
@@ -1044,7 +1054,7 @@ class MainWindow(QtGui.QMainWindow):
 				# apply multiple test correction
 				multCompClass = self.multCompDict[str(self.ui.cboSampleMultCompMethod.currentText())]
 				self.sampleStatsTest.results.performMultCompCorrection(multCompClass)
-			 
+
 				# apply filters
 				self.sampleApplyFilters()
 		else:
@@ -1092,7 +1102,7 @@ class MainWindow(QtGui.QMainWindow):
 				# apply multiple test correction
 				multCompClass = self.multCompDict[str(self.ui.cboGroupMultCompMethod.currentText())]
 				self.groupStatsTest.results.performMultCompCorrection(multCompClass)
-			 
+
 				# apply filters
 				self.groupApplyFilters()
 		else:
@@ -1397,7 +1407,7 @@ class MainWindow(QtGui.QMainWindow):
 			effectSizeOperator = 'OR'
 		else:
 			effectSizeOperator = 'AND'
-							 
+
 		self.sampleStatsTest.results.filterFeatures(signLevelFilter, seqFilter, sample1Filter, sample2Filter,
 																							parentSeqFilter, parentSample1Filter, parentSample2Filter,
 																							effectSizeMeasure1, minEffectSize1, effectSizeOperator,
@@ -1462,7 +1472,7 @@ class MainWindow(QtGui.QMainWindow):
 			effectSizeOperator = 'OR'
 		else:
 			effectSizeOperator = 'AND'
-							 
+
 		self.groupStatsTest.results.filterFeatures(signLevelFilter, seqFilter, group1Filter, group2Filter,
 																							parentSeqFilter, parentGroup1Filter, parentGroup2Filter,
 																							effectSizeMeasure1, minEffectSize1, effectSizeOperator,
@@ -1663,26 +1673,26 @@ class MainWindow(QtGui.QMainWindow):
 		else:
 			QtGui.QMessageBox.information(self, 'Select plot', 'A plot tab must be active to save a plot.', QtGui.QMessageBox.Ok)
 			return
-		 
-		file = QtGui.QFileDialog.getSaveFileName(self, 'Save plot...', self.preferences['Last directory'],
+
+		f = QtGui.QFileDialog.getSaveFileName(self, 'Save plot...', self.preferences['Last directory'],
 								'Portable Network Graphics (*.png);;' +
 								'Portable Document Format (*.pdf);;' +
 								'PostScript (*.ps);;' +
 								'Encapsulated PostScript (*.eps);;' +
 								'Scalable Vector Graphics (*.svg)')
 		
-		if file != '': 
-			self.preferences['Last directory'] = file[0:file.lastIndexOf('/')]
+		if f != '': 
+			self.preferences['Last directory'] = f[0:f.lastIndexOf('/')]
 			try:
-				if file[len(file)-3:len(file)] == 'png' or file[len(file)-3:len(file)] == 'PNG':
+				if f[len(f)-3:len(f)] == 'png' or f[len(f)-3:len(f)] == 'PNG':
 					dpi, ok = QtGui.QInputDialog.getInteger(self, 'Desired resolution', 'Enter desired resolution (DPI) of image:', 300)
 					if ok:
-						plotToSave.save(str(file), dpi)
+						plotToSave.save(str(f), dpi)
 				else:
-					plotToSave.save(str(file))
+					plotToSave.save(str(f))
 			except IOError:
 					QtGui.QMessageBox.information(self, 'Failed to save image', 'Write permission for file denied.', QtGui.QMessageBox.Ok)
-					 
+
 	def sendPlotToWindow(self): 
 		if self.ui.stackedWidgetViews.currentIndex() == 2:
 			self.samplePlot.sendToNewWindow(self, self.sampleProfile, self.sampleStatsTest.results)
@@ -1690,10 +1700,6 @@ class MainWindow(QtGui.QMainWindow):
 			self.groupPlot.sendToNewWindow(self, self.groupProfile, self.groupStatsTest.results)
 		elif self.ui.stackedWidgetViews.currentIndex() == 0:
 			self.multiGroupPlot.sendToNewWindow(self, self.multiGroupProfile, self.multiGroupStatsTest.results)
-
-	def viewTwoSampleTable(self):
-		statsSummaryDlg = StatsSummaryDlg(self.preferences)
-		statsSummaryDlg.exec_()
 		
 	def updateStatusBar(self):
 		if self.ui.tabWidgetProperties.tabText(self.ui.tabWidgetProperties.currentIndex()) == 'Two samples':

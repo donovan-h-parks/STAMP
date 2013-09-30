@@ -68,7 +68,7 @@ class White(AbstractGroupStatsTestPlugin):
 from plugins.samples.statisticalTests.Fishers import Fishers
 from plugins.samples.confidenceIntervalMethods.DiffBetweenPropAsymptoticCC import DiffBetweenPropAsymptoticCC
 
-from metagenomics.MathHelper import variance
+from numpy import var
 
 import random
 
@@ -257,11 +257,11 @@ def calc_twosample_ts(propGroup1, propGroup2):
 	notes = []
 	for r in xrange(0, numFeatures):
 		meanG1 = float(sum(propGroup1[r])) / n1
-		varG1 = variance(propGroup1[r], meanG1)
+		varG1 = var(propGroup1[r], ddof=1)
 		stdErrG1 = varG1 / n1
 
 		meanG2 = float(sum(propGroup2[r])) / n2
-		varG2 = variance(propGroup2[r], meanG2)
+		varG2 = var(propGroup2[r], ddof=1)
 		stdErrG2 = varG2 / n2 
 		
 		dp = meanG1 - meanG2

@@ -20,12 +20,11 @@
 #=======================================================================
 
 from PyQt4 import QtCore
-import operator
 
 from metagenomics.TableHelper import SortTableStrCol
 from metagenomics.TableHelper import SortTableNumericStrCol
 from metagenomics.StringHelper import isNumber
- 
+
 class GenericTable(QtCore.QAbstractTableModel): 
 	def __init__(self, data, headers, parent=None, *args): 
 		QtCore.QAbstractTableModel.__init__(self, parent, *args) 
@@ -85,5 +84,3 @@ class GenericTable(QtCore.QAbstractTableModel):
 			fout.write('\n')
 			
 		fout.close()
-			
-

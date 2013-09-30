@@ -7,7 +7,6 @@
 # Modified by Donovan Parks, 2011
 
 import numpy
-from metagenomics.MathHelper import stdDev
 
 def pca(data, algorithm='eig'):
 	"""pca(data) -> mean, pcs, norm_pcs, variances, positions, norm_positions
@@ -27,8 +26,8 @@ def pca(data, algorithm='eig'):
 			freqs = []
 			for j in xrange(0, len(data)):
 				freqs.append(data[j][i])
-			meanFreq = float(sum(freqs)) / len(freqs)
-			sdFreq = stdDev(freqs, meanFreq)
+			meanFreq = numpy.mean(freqs)
+			sdFreq = numpy.std(freqs)
 			
 			for j in xrange(0, len(data)):
 				data[j][i] -= meanFreq
@@ -39,9 +38,9 @@ def pca(data, algorithm='eig'):
 	centered = data - mean
 	
 	if algorithm=='eig':
-		pcs, variances, stds, positions, norm_positions = _pca_eig(centered)
+		_, variances, _, positions, _ = _pca_eig(centered)
 	elif algorithm=='svd':
-		pcs, variances, stds, positions, norm_positions = _pca_svd(centered)
+		_, variances, _, positions, _ = _pca_svd(centered)
 	else:
 		raise RuntimeError('Algorithm %s not known.'%algorithm)
 	
@@ -54,7 +53,6 @@ def pca(data, algorithm='eig'):
 def _pca_svd(data):
 	u, s, vt = numpy.linalg.svd(data, full_matrices = 0)
 	pcs = vt
-	v = numpy.transpose(vt)
 	data_count = len(data)
 	variances = s**2 / data_count
 	root_data_count = numpy.sqrt(data_count)

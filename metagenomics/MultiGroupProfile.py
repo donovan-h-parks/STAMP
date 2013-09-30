@@ -22,7 +22,6 @@
 #=======================================================================
 
 import numpy as np
-from metagenomics.MathHelper import mean, stdDev
 
 class MultiGroupProfileEntry:
 	def __init__(self):
@@ -78,7 +77,7 @@ class MultiGroupProfile:
 				self.activeGroupNames.append(groupName)
 				self.activeSamplesInGroups.append(self.samplesInGroups[groupIndex])
 				
-				for i in xrange(0, len(self.samplesInGroups[groupIndex])):
+				for _ in xrange(0, len(self.samplesInGroups[groupIndex])):
 					self.activeColumns.append(colIndex)
 					colIndex += 1
 					
@@ -118,7 +117,7 @@ class MultiGroupProfile:
 		index = 0
 		for i in xrange(0, len(self.samplesInGroups)):
 			data = []
-			for j in xrange(0, len(self.samplesInGroups[i])):
+			for _ in xrange(0, len(self.samplesInGroups[i])):
 				data.append(profile.featureCounts[index])
 				index += 1
 			sampleData.append(data)
@@ -132,7 +131,7 @@ class MultiGroupProfile:
 		index = 0
 		for i in xrange(0, len(self.activeSamplesInGroups)):
 			data = []
-			for j in xrange(0, len(self.activeSamplesInGroups[i])):
+			for _ in xrange(0, len(self.activeSamplesInGroups[i])):
 				data.append(profile.featureCounts[self.activeColumns[index]])
 				index += 1
 			sampleData.append(data)
@@ -146,7 +145,7 @@ class MultiGroupProfile:
 		index = 0
 		for i in xrange(0, len(self.samplesInGroups)):
 			data = []
-			for j in xrange(0, len(self.samplesInGroups[i])):
+			for _ in xrange(0, len(self.samplesInGroups[i])):
 				data.append(profile.parentCounts[index])
 				index += 1
 			sampleData.append(data)
@@ -160,7 +159,7 @@ class MultiGroupProfile:
 		index = 0
 		for i in xrange(0, len(self.activeSamplesInGroups)):
 			data = []
-			for j in xrange(0, len(self.activeSamplesInGroups[i])):
+			for _ in xrange(0, len(self.activeSamplesInGroups[i])):
 				data.append(profile.parentCounts[self.activeColumns[index]])
 				index += 1
 			sampleData.append(data)
@@ -174,7 +173,7 @@ class MultiGroupProfile:
 		index = 0
 		for i in xrange(0, len(self.samplesInGroups)):
 			data = []
-			for j in xrange(0, len(self.samplesInGroups[i])):
+			for _ in xrange(0, len(self.samplesInGroups[i])):
 				data.append(float(profile.featureCounts[index])*100 / profile.parentCounts[index])
 				index += 1
 			sampleData.append(data)
@@ -188,7 +187,7 @@ class MultiGroupProfile:
 		index = 0
 		for i in xrange(0, len(self.activeSamplesInGroups)):
 			data = []
-			for j in xrange(0, len(self.activeSamplesInGroups[i])):
+			for _ in xrange(0, len(self.activeSamplesInGroups[i])):
 				fc = float(profile.featureCounts[self.activeColumns[index]])*100
 				pc = profile.parentCounts[self.activeColumns[index]]
 				if pc > 0:

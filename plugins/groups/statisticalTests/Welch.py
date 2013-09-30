@@ -23,7 +23,7 @@
 
 import math
 from plugins.groups.AbstractGroupStatsTestPlugin import AbstractGroupStatsTestPlugin
-from metagenomics.MathHelper import variance
+from numpy import var
 
 from scipy.stats.distributions import t
 
@@ -67,8 +67,8 @@ class Welch(AbstractGroupStatsTestPlugin):
 			meanG2 = float(sum(propGroup2)) / n2
 			dp = meanG1 - meanG2
 			
-			varG1 = variance(propGroup1, meanG1)
-			varG2 = variance(propGroup2, meanG2)
+			varG1 = var(propGroup1, ddof=1)
+			varG2 = var(propGroup2, ddof=1)
 			
 			normVarG1 = varG1 / n1
 			normVarG2 = varG2 / n2
@@ -106,6 +106,6 @@ class Welch(AbstractGroupStatsTestPlugin):
 		return 1.0 - pValue, 2*min(pValue, 1.0 - pValue), lowerCI*100, upperCI*100, dp*100, note
 
 if __name__ == "__main__": 
-	tTest = tTest()
-	pValueOne, pValueTwo, lowerCI, upperCI, dp, note = tTest.run([5,4,6,4,3], [5,2,2,5,6,7], [10,10,10,10,10], [10,10,10,10,10,10], "DP: Welch's inverted", 0.95)
+	welch = Welch()
+	pValueOne, pValueTwo, lowerCI, upperCI, dp, note = welch.run([5,4,6,4,3], [5,2,2,5,6,7], [10,10,10,10,10], [10,10,10,10,10,10], "DP: Welch's inverted", 0.95)
 

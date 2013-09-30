@@ -24,7 +24,7 @@
 import random
 import math
 
-from metagenomics.MathHelper import mean, stdDev
+from numpy import mean, std
 
 class Power:
   
@@ -95,27 +95,27 @@ class Power:
       row.append(float(seq1) / parentSeq1)
       row.append(float(seq2) / parentSeq2)
       row.append(mean(powerList))
-      row.append(stdDev(powerList))
+      row.append(std(powerList))
       
       if math.isnan(mean(powerListLess5)):
         row.append('')
       else:
         row.append(mean(powerListLess5))
         
-      if math.isnan(stdDev(powerListLess5)):
+      if math.isnan(std(powerListLess5)):
         row.append('')
       else:
-        row.append(stdDev(powerListLess5))
+        row.append(std(powerListLess5))
         
       if math.isnan(mean(powerListGreater5)):
         row.append('')
       else:
         row.append(mean(powerListGreater5))
         
-      if math.isnan(stdDev(powerListGreater5)):
+      if math.isnan(std(powerListGreater5)):
         row.append('')
       else:
-        row.append(stdDev(powerListGreater5))
+        row.append(std(powerListGreater5))
 
       tableData.append(row)
       

@@ -21,12 +21,10 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-import random
 import math
 
+from numpy import mean, std
 from numpy.random import binomial
-
-from metagenomics.MathHelper import mean, stdDev
 
 class ConfIntervCoverage:
   
@@ -80,27 +78,27 @@ class ConfIntervCoverage:
       row.append(float(seq1) / parentSeq1)
       row.append(float(seq2) / parentSeq2)
       row.append(mean(coverageList))
-      row.append(stdDev(coverageList))
+      row.append(std(coverageList))
       
       if math.isnan(mean(coverageListLess5)):
         row.append('')
       else:
         row.append(mean(coverageListLess5))
         
-      if math.isnan(stdDev(coverageListLess5)):
+      if math.isnan(std(coverageListLess5)):
         row.append('')
       else:
-        row.append(stdDev(coverageListLess5))
+        row.append(std(coverageListLess5))
         
       if math.isnan(mean(coverageListGreater5)):
         row.append('')
       else:
         row.append(mean(coverageListGreater5))
         
-      if math.isnan(stdDev(coverageListGreater5)):
+      if math.isnan(std(coverageListGreater5)):
         row.append('')
       else:
-        row.append(stdDev(coverageListGreater5))
+        row.append(std(coverageListGreater5))
 
       tableData.append(row)
       

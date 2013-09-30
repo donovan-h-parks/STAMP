@@ -23,7 +23,7 @@
 
 from metagenomics import TableHelper
 
-from metagenomics.MathHelper import mean, stdDev
+from numpy import mean, std
 
 class GroupStatTestResults(object):
 	'''
@@ -336,7 +336,7 @@ class GroupStatsTests(object):
 					pValue = pValueTwoSided
 				else:
 					print 'Error: Unknown test type.'
-	 
+
 				# record results
 				seqsGroup1.append(seqGroup1)
 				seqsGroup2.append(seqGroup2)
@@ -392,9 +392,7 @@ class GroupStatsTests(object):
 				else:
 					propGroup2.append( 0.0 )
 			
-			meanGroup1 = mean(propGroup1)
-			meanGroup2 = mean(propGroup2)
-			row = [features[i], meanGroup1, stdDev(propGroup1, meanGroup1), meanGroup2, stdDev(propGroup2, meanGroup2),
+			row = [features[i], mean(propGroup1), std(propGroup1), mean(propGroup2), std(propGroup2),
 							float(pValues[i]),float(pValues[i]),float(effectSizes[i]),
 							float(lowerCIs[i]),float(upperCIs[i]), notes[i]]
 							

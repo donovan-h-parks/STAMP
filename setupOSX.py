@@ -56,7 +56,7 @@ setup(
 					'argv_emulation': False,
 					'iconfile': './icons/STAMP.icns',
 					'includes': ['sip', 'scipy'],
-					'packages': ['PyQt4','matplotlib', 'mpl_toolkits'],
+					'packages': ['PyQt4','matplotlib', 'mpl_toolkits', 'pyparsing'],
 					'optimize': 2,
 					'excludes': ['plugins'],
 					'dylib_excludes': ['libQtXmlPatterns.4.dylib','libQtXml.4.dylib','libQtWebKit.4.dylib','libQtTest.4.dylib','libQtSvg.4.dylib','libQtSql.4.dylib','libQtScriptTools.4.dylib','libQtScript.4.dylib','libQtOpenGL.4.dylib','libQtNetwork.4.dylib','libQtMultimedia.4.dylib','libQtHelp.4.dylib','libQtDesigner.4.dylib','libQtDeclarative.4.dylib','libQtCLucene.4.dylib'],

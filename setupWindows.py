@@ -26,34 +26,34 @@ for directory in plugin_directories:
 
 # grab all additional resource or data files
 icon_files = []
-for file in os.listdir("icons"):
-		f1 = "icons/" + file
+for f in os.listdir("icons"):
+		f1 = "icons/" + f
 		if os.path.isfile(f1): # skip directories
 				f2 = "icons", [f1]
 				icon_files.append(f2)
 				
 example_files = []
-for file in os.listdir("examples"):
-		f1 = "examples/" + file
+for f in os.listdir("examples"):
+		f1 = "examples/" + f
 		if os.path.isfile(f1): # skip directories
 				f2 = "examples", [f1]
 				example_files.append(f2)
 		else:
-			if file != '.svn':
-				for file in os.listdir(f1):
-					if os.path.isfile(f1 + '/' + file): # skip directories
-						f2 = f1, [f1 + '/' + file]
+			if f != '.svn':
+				for f in os.listdir(f1):
+					if os.path.isfile(f1 + '/' + f): # skip directories
+						f2 = f1, [f1 + '/' + f]
 						example_files.append(f2)
 				
-for file in os.listdir('examples'):
-		f1 = 'examples/' + file
+for f in os.listdir('examples'):
+		f1 = 'examples/' + f
 		if os.path.isfile(f1): # skip directories
 				f2 = 'examples', [f1]
 				example_files.append(f2)
 				
 data_files = []
-for file in os.listdir("data"):
-		f1 = "data/" + file
+for f in os.listdir("data"):
+		f1 = "data/" + f
 		if os.path.isfile(f1): # skip directories
 				f2 = "data", [f1]
 				data_files.append(f2)
@@ -65,7 +65,7 @@ mpl_data_files = mpl.get_py2exe_datafiles()
 # setup configuration
 setup(
 	name = "STAMP",
-	version = "2.0.0 (release candidate 6)",
+	version = "2.0.1",
 	description = "Statistical analysis of metagenomic profiles",
 	author = "Donovan Parks",
 	windows=[{"script":"STAMP.py", "icon_resources": [(1, "icons/programIcon.ico")]}],
@@ -78,7 +78,7 @@ setup(
 					"optimize": 2,
 					"skip_archive": True,
 					"includes": ["sip", "PyQt4", "sqlite3"],
-					"packages": ["matplotlib","pytz","scipy","mpl_toolkits"],
+					"packages": ["matplotlib","pytz","scipy","mpl_toolkits", "pyparsing"],
 					"dll_excludes": ["libgdk_pixbuf-2.0-0.dll","libgdk-win32-2.0-0.dll", "libgobject-2.0-0.dll", "tcl84.dll", "tk84.dll"],
 				}
 			},

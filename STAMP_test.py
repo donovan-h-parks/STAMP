@@ -42,7 +42,7 @@ class VerifyPostHocTests(unittest.TestCase):
 
 		# ground truth found with SPSS v19. Values are not exact since the critical Q value 
 		# are interpolated from tables in the STAMP implementation.
-		pValues, effectSize, lowerCI, upperCI, labels, note = gh.run([[1,2,3,4,5],[10,20,30,40,50,60],[1,2,3,4,5,6,7]], 0.95, ['1', '2', '3'])
+		pValues, effectSize, lowerCI, upperCI, labels, _ = gh.run([[1,2,3,4,5],[10,20,30,40,50,60],[1,2,3,4,5,6,7]], 0.95, ['1', '2', '3'])
 		self.assertEqual(labels[0], '1 : 2')
 		self.assertAlmostEqual(effectSize[0], -32)
 		self.assertAlmostEqual(lowerCI[0], -56.836534205367272) # SPSS = -56.80902338101632
@@ -67,7 +67,7 @@ class VerifyPostHocTests(unittest.TestCase):
 		tk = TukeyKramer(preferences)
 		
 		# ground truth found with the anova1 and multcompare function in MATLAB v7.10.0 and SPSS v19
-		pValues, effectSize, lowerCI, upperCI, labels, note = tk.run([[1,2,3,4,5],[10,20,30,40,50,60],[1,2,3,4,5,6,7]], 0.95, ['1', '2', '3'])
+		pValues, effectSize, lowerCI, upperCI, labels, _ = tk.run([[1,2,3,4,5],[10,20,30,40,50,60],[1,2,3,4,5,6,7]], 0.95, ['1', '2', '3'])
 		self.assertEqual(labels[0], '1 : 2')
 		self.assertAlmostEqual(effectSize[0], -32)
 		self.assertAlmostEqual(lowerCI[0], -49.172140035619407)
@@ -100,7 +100,7 @@ class VerifyPostHocTests(unittest.TestCase):
 		data.append([21.05,21.85,21.85,21.85,22.05,22.45,22.65,23.05,23.05,23.25,23.45,24.05,24.05,24.05,24.85])
 		data.append([19.85,20.05,20.25,20.85,20.85,20.85,21.05,21.05,21.05,21.25,21.45,22.05,22.05,22.05,22.25])
 		
-		pValues, effectSize, lowerCI, upperCI, labels, note = scheffe.run(data, 0.95, ['MeadowPipet', 'TreePipet', 'Sparrow', 'Robin', 'PiedWagtail', 'Wren'])
+		pValues, effectSize, lowerCI, upperCI, labels, _ = scheffe.run(data, 0.95, ['MeadowPipet', 'TreePipet', 'Sparrow', 'Robin', 'PiedWagtail', 'Wren'])
 		
 		self.assertEqual(labels[9], 'Sparrow : Robin')
 		self.assertAlmostEqual(effectSize[9], 0.546428571)
@@ -115,7 +115,7 @@ class VerifyPostHocTests(unittest.TestCase):
 		self.assertEqual(pValues[11] < 0.05, True)
 		
 		# ground truth found with the anova1 and multcompare function in MATLAB v7.10.0 and SPSS v19
-		pValues, effectSize, lowerCI, upperCI, labels, note = scheffe.run([[1,2,3,4,5],[10,20,30,40,50,60],[1,2,3,4,5,6,7]], 0.95, ['1', '2', '3'])
+		pValues, effectSize, lowerCI, upperCI, labels, _ = scheffe.run([[1,2,3,4,5],[10,20,30,40,50,60],[1,2,3,4,5,6,7]], 0.95, ['1', '2', '3'])
 		self.assertEqual(labels[0], '1 : 2')
 		self.assertAlmostEqual(effectSize[0], -32)
 		self.assertAlmostEqual(lowerCI[0], -49.941123031784372)
@@ -141,17 +141,17 @@ class VerifyStatisticalTests(unittest.TestCase):
 		anova = ANOVA(preferences)
 		
 		# checked against http://turner.faculty.swau.edu/mathematics/math241/materials/anova/
-		pValue, note = anova.hypothesisTest([[5,4,6,4,3],[5,2,2,5,6,7],[1,2,3,4,5,6,7]])
+		pValue, _ = anova.hypothesisTest([[5,4,6,4,3],[5,2,2,5,6,7],[1,2,3,4,5,6,7]])
 		self.assertAlmostEqual(pValue, 0.88347274205)
 		
 		# checked against http://faculty.vassar.edu/lowry/anova1u.html
-		pValue, note = anova.hypothesisTest([[1,2,3,4,5],[10,20,30,40,50],[4,5,4], [5,5,5]])
+		pValue, _ = anova.hypothesisTest([[1,2,3,4,5],[10,20,30,40,50],[4,5,4], [5,5,5]])
 		self.assertAlmostEqual(pValue, 0.0018740823031)
 		
-		pValue, note = anova.hypothesisTest([[5,4,5,4,5],[6,5,6,5,6,5],[700,800,700]])
+		pValue, _ = anova.hypothesisTest([[5,4,5,4,5],[6,5,6,5,6,5],[700,800,700]])
 		self.assertAlmostEqual(pValue, 0.0)
 		
-		pValue, note = anova.hypothesisTest([[1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5]])
+		pValue, _ = anova.hypothesisTest([[1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5]])
 		self.assertAlmostEqual(pValue, 1.0)
 		
 	def testKruskalWallis(self):
@@ -160,13 +160,13 @@ class VerifyStatisticalTests(unittest.TestCase):
 		kw = KruskalWallis(preferences)
 		
 		# checked against http://faculty.vassar.edu/lowry/kw3.html
-		pValue, note = kw.hypothesisTest([[5,4,6,4,3],[5,2,2,5,6,7],[1,2,3,4,5,6,7]])
+		pValue, _ = kw.hypothesisTest([[5,4,6,4,3],[5,2,2,5,6,7],[1,2,3,4,5,6,7]])
 		self.assertAlmostEqual(pValue, 0.88173680194259985)
 		
-		pValue, note = kw.hypothesisTest([[1,2,3,4,5,6,7],[8,9,10,11,12,13,14,15],[16,17,18,19,20,21,22]])
+		pValue, _ = kw.hypothesisTest([[1,2,3,4,5,6,7],[8,9,10,11,12,13,14,15],[16,17,18,19,20,21,22]])
 		self.assertAlmostEqual(pValue, 8.8020161301173428e-05)
 		
-		pValue, note = kw.hypothesisTest([[1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5]])
+		pValue, _ = kw.hypothesisTest([[1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5]])
 		self.assertAlmostEqual(pValue, 1.0)
 		
 	def testTTest(self):
@@ -175,7 +175,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		ttest = Ttest(preferences)
 		
 		# ground truth found with t.test in R v2.13.0
-		oneSided, twoSided, lowerCI, upperCI, effectSize, note = ttest.run([5,4,6,4,3],[5,2,2,5,6,7], [1,1,1,1,1], [1,1,1,1,1,1], None, 0.95)
+		oneSided, twoSided, lowerCI, upperCI, effectSize, _ = ttest.run([5,4,6,4,3],[5,2,2,5,6,7], [1,1,1,1,1], [1,1,1,1,1,1], None, 0.95)
 		self.assertAlmostEqual(oneSided, 0.537141726)
 		self.assertAlmostEqual(twoSided, 0.925716547365)
 		self.assertAlmostEqual(lowerCI, -245.935268272)
@@ -188,21 +188,21 @@ class VerifyStatisticalTests(unittest.TestCase):
 		ttest = Welch(preferences)
 		
 		# ground truth found with t.test in R v2.13.0
-		oneSided, twoSided, lowerCI, upperCI, effectSize, note = ttest.run([5,4,6,4,3],[5,2,2,5,6,7], [1,1,1,1,1], [1,1,1,1,1,1], None, 0.95)
+		oneSided, twoSided, lowerCI, upperCI, effectSize, _ = ttest.run([5,4,6,4,3],[5,2,2,5,6,7], [1,1,1,1,1], [1,1,1,1,1,1], None, 0.95)
 		self.assertAlmostEqual(oneSided, 0.5390501783)
 		self.assertAlmostEqual(twoSided, 0.9218996432)
 		self.assertAlmostEqual(lowerCI, -238.023177152)
 		self.assertAlmostEqual(upperCI, 218.023177152)
 		self.assertAlmostEqual(effectSize, -10.0)
 		
-		oneSided, twoSided, lowerCI, upperCI, effectSize, note = ttest.run([3.4,6.3,5.3,1.4,6.3,6.3],[3.5,6.4,5.2,1.3,6.4,6.2], [1,1,1,1,1,1], [1,1,1,1,1,1], None, 0.95)
+		oneSided, twoSided, lowerCI, upperCI, effectSize, _ = ttest.run([3.4,6.3,5.3,1.4,6.3,6.3],[3.5,6.4,5.2,1.3,6.4,6.2], [1,1,1,1,1,1], [1,1,1,1,1,1], None, 0.95)
 		self.assertAlmostEqual(oneSided, 0.5)
 		self.assertAlmostEqual(twoSided, 1.0)
 		self.assertAlmostEqual(lowerCI, -262.6606201199)
 		self.assertAlmostEqual(upperCI, 262.6606201199)
 		self.assertAlmostEqual(effectSize, 0.0)
 		
-		oneSided, twoSided, lowerCI, upperCI, effectSize, note = ttest.run([1,2,3,4,5,6,7,8,9,10],[10,20,30,40,50,60,70,80,90,100], [1,1,1,1,1,1,1,1,1,1], [1,1,1,1,1,1,1,1,1,1], None, 0.95)
+		oneSided, twoSided, lowerCI, upperCI, effectSize, _ = ttest.run([1,2,3,4,5,6,7,8,9,10],[10,20,30,40,50,60,70,80,90,100], [1,1,1,1,1,1,1,1,1,1], [1,1,1,1,1,1,1,1,1,1], None, 0.95)
 		self.assertAlmostEqual(oneSided, 0.9997146330)
 		self.assertAlmostEqual(twoSided, 0.0005707338)
 		self.assertAlmostEqual(lowerCI, -7120.16500998)
@@ -216,7 +216,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 		# This is a fairly degenerate test since the non-deterministic nature of this test
 		# makes it difficult to verify under more general conditions
-		pValuesOneSided, pValuesTwoSided, lowerCIs, upperCIs, effectSizes, notes  = white.runAll([[5,5,5,5,5]], [[6,6,6,6,6,6,6,6]], [[10,10,10,10,10]], [[10,10,10,10,10,10,10,10]], "DP: bootstrap", 0.95, None)
+		_, pValuesTwoSided, lowerCIs, upperCIs, effectSizes, _  = white.runAll([[5,5,5,5,5]], [[6,6,6,6,6,6,6,6]], [[10,10,10,10,10]], [[10,10,10,10,10,10,10,10]], "DP: bootstrap", 0.95, None)
 		self.assertAlmostEqual(pValuesTwoSided[0], 0.0)
 		self.assertAlmostEqual(lowerCIs[0], -10.0)
 		self.assertAlmostEqual(upperCIs[0], -10.0)
@@ -238,11 +238,11 @@ class VerifyStatisticalTests(unittest.TestCase):
 		chiSquare = ChiSquare(preferences) 
 		
 		# Ground truth obtained from R version 2.10		
-		oneSided, twoSided, note = chiSquare.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
+		oneSided, twoSided, _ = chiSquare.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
 		self.assertEqual(oneSided, float('inf'))
 		self.assertAlmostEqual(twoSided, 0.206550401252)
 		
-		oneSided, twoSided, note = chiSquare.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
+		oneSided, twoSided, _ = chiSquare.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
 		self.assertEqual(oneSided, float('inf'))
 		self.assertAlmostEqual(twoSided, 2.220446049e-16)
 		
@@ -252,11 +252,11 @@ class VerifyStatisticalTests(unittest.TestCase):
 		chiSquareYates = ChiSquareYates(preferences)
 		
 		# Ground truth obtained from R version 2.10		
-		oneSided, twoSided, note = chiSquareYates.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
+		oneSided, twoSided, _ = chiSquareYates.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
 		self.assertEqual(oneSided, float('inf'))
 		self.assertAlmostEqual(twoSided, 0.323739196466)
 		
-		oneSided, twoSided, note = chiSquareYates.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
+		oneSided, twoSided, _ = chiSquareYates.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
 		self.assertEqual(oneSided, float('inf'))
 		self.assertAlmostEqual(twoSided, 2.220446049e-16)
 		
@@ -266,11 +266,11 @@ class VerifyStatisticalTests(unittest.TestCase):
 		diffBetweenProp = DiffBetweenProp(preferences)
 		
 		# Ground truth obtained from R version 2.10		
-		oneSided, twoSided, note = diffBetweenProp.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
+		oneSided, twoSided, _ = diffBetweenProp.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
 		self.assertAlmostEqual(oneSided, 0.103275200626)
 		self.assertAlmostEqual(twoSided, 0.206550401252)
 		
-		oneSided, twoSided, note = diffBetweenProp.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
+		oneSided, twoSided, _ = diffBetweenProp.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
 		self.assertAlmostEqual(oneSided, 2.220446049e-16)
 		self.assertAlmostEqual(twoSided, 2.220446049e-16)
 
@@ -280,15 +280,15 @@ class VerifyStatisticalTests(unittest.TestCase):
 		fishers = Fishers(preferences)
 		
 		# Ground truth obtained from R version 2.10		
-		oneSided, twoSided, note = fishers.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
+		oneSided, twoSided, _ = fishers.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
 		self.assertAlmostEqual(oneSided, 0.16187126209690825)
 		self.assertAlmostEqual(twoSided, 0.2715543327789185)
 		
-		oneSided, twoSided, note = fishers.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
+		oneSided, twoSided, _ = fishers.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
 		self.assertAlmostEqual(oneSided, 2.220446049e-16)
 		self.assertAlmostEqual(twoSided, 2.220446049e-16)
 		
-		oneSided, twoSided, note = fishers.hypothesisTest(0.0, 0.0, 920852.999591, 953828.994346)
+		oneSided, twoSided, _ = fishers.hypothesisTest(0.0, 0.0, 920852.999591, 953828.994346)
 		self.assertAlmostEqual(oneSided, 1.0)
 		self.assertAlmostEqual(twoSided, 1.0)
 		
@@ -298,11 +298,11 @@ class VerifyStatisticalTests(unittest.TestCase):
 		gTest = GTest(preferences)
 		
 		# Ground truth obtained from Peter L. Hurd's R script (http://www.psych.ualberta.ca/~phurd/cruft/g.test.r)	
-		oneSided, twoSided, note = gTest.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
+		oneSided, twoSided, _ = gTest.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
 		self.assertEqual(oneSided, float('inf'))
 		self.assertAlmostEqual(twoSided, 0.208248664458)
 		
-		oneSided, twoSided, note = gTest.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
+		oneSided, twoSided, _ = gTest.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
 		self.assertEqual(oneSided, float('inf'))
 		self.assertAlmostEqual(twoSided, 2.220446049e-16)
 		
@@ -312,11 +312,11 @@ class VerifyStatisticalTests(unittest.TestCase):
 		gTestYates = GTestYates(preferences)
 		
 		# Ground truth obtained from Peter L. Hurd's R script (http://www.psych.ualberta.ca/~phurd/cruft/g.test.r)	
-		oneSided, twoSided, note = gTestYates.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
+		oneSided, twoSided, _ = gTestYates.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
 		self.assertEqual(oneSided, float('inf'))
 		self.assertAlmostEqual(twoSided, 0.325502240010)
 		
-		oneSided, twoSided, note = gTestYates.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
+		oneSided, twoSided, _ = gTestYates.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
 		self.assertEqual(oneSided, float('inf'))
 		self.assertAlmostEqual(twoSided, 2.220446049e-16)
 		
@@ -326,11 +326,11 @@ class VerifyStatisticalTests(unittest.TestCase):
 		hypergeometric = Hypergeometric(preferences)
 		
 		# Ground truth obtained using the phyper() and dyper() function in R version 2.10	 
-		oneSided, twoSided, note = hypergeometric.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
+		oneSided, twoSided, _ = hypergeometric.hypothesisTest(table1[0], table1[1], table1[2], table1[3])	 
 		self.assertAlmostEqual(oneSided, 0.161871262097)
 		self.assertAlmostEqual(twoSided, 2 * 0.161871262097)
 		
-		oneSided, twoSided, note = hypergeometric.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
+		oneSided, twoSided, _ = hypergeometric.hypothesisTest(table2[0], table2[1], table2[2], table2[3])	 
 		self.assertAlmostEqual(oneSided, 2.220446049e-16)
 		self.assertAlmostEqual(twoSided, 2.220446049e-16)
 		
@@ -414,12 +414,12 @@ class VerifyConfidenceIntervalMethods(unittest.TestCase):
 		from plugins.samples.confidenceIntervalMethods.DiffBetweenPropAsymptotic import DiffBetweenPropAsymptotic
 		diffBetweenPropAsymptotic = DiffBetweenPropAsymptotic(preferences)
 		
-		lowerCI, upperCI, effectSize, note = diffBetweenPropAsymptotic.run(table1[0], table1[1], table1[2], table1[3], 0.95)
+		lowerCI, upperCI, effectSize, _ = diffBetweenPropAsymptotic.run(table1[0], table1[1], table1[2], table1[3], 0.95)
 		self.assertAlmostEqual(lowerCI, -7.60015319099813)
 		self.assertAlmostEqual(upperCI, 34.2668198576648)
 		self.assertAlmostEqual(effectSize, 13.333333333)
 				
-		lowerCI, upperCI, effectSize, note = diffBetweenPropAsymptotic.run(table2[0], table2[1], table2[2], table2[3], 0.95)
+		lowerCI, upperCI, effectSize, _ = diffBetweenPropAsymptotic.run(table2[0], table2[1], table2[2], table2[3], 0.95)
 		self.assertAlmostEqual(lowerCI, 0.271701079166334)
 		self.assertAlmostEqual(upperCI, 0.328298920833666)
 		self.assertAlmostEqual(effectSize, 0.3)
@@ -429,12 +429,12 @@ class VerifyConfidenceIntervalMethods(unittest.TestCase):
 		from plugins.samples.confidenceIntervalMethods.DiffBetweenPropAsymptoticCC import DiffBetweenPropAsymptoticCC
 		diffBetweenPropAsymptoticCC = DiffBetweenPropAsymptoticCC(preferences)
 		
-		lowerCI, upperCI, effectSize, note = diffBetweenPropAsymptoticCC.run(table1[0], table1[1], table1[2], table1[3], 0.95)
+		lowerCI, upperCI, effectSize, _ = diffBetweenPropAsymptoticCC.run(table1[0], table1[1], table1[2], table1[3], 0.95)
 		self.assertAlmostEqual(lowerCI, -13.3167148125733)
 		self.assertAlmostEqual(upperCI, 39.98338147924)
 		self.assertAlmostEqual(effectSize, 13.333333333)
 				
-		lowerCI, upperCI, effectSize, note = diffBetweenPropAsymptoticCC.run(table2[0], table2[1], table2[2], table2[3], 0.95)
+		lowerCI, upperCI, effectSize, _ = diffBetweenPropAsymptoticCC.run(table2[0], table2[1], table2[2], table2[3], 0.95)
 		self.assertAlmostEqual(lowerCI, 0.271407084568653)
 		self.assertAlmostEqual(upperCI, 0.328592915431347)
 		self.assertAlmostEqual(effectSize, 0.3)
@@ -444,12 +444,12 @@ class VerifyConfidenceIntervalMethods(unittest.TestCase):
 		from plugins.samples.confidenceIntervalMethods.NewcombeWilson import NewcombeWilson
 		newcombeWilson = NewcombeWilson(preferences)
 		
-		lowerCI, upperCI, effectSize, note = newcombeWilson.run(table1[0], table1[1], table1[2], table1[3], 0.95)		
+		lowerCI, upperCI, effectSize, _ = newcombeWilson.run(table1[0], table1[1], table1[2], table1[3], 0.95)		
 		self.assertAlmostEqual(lowerCI, -7.07911677674112)
 		self.assertAlmostEqual(upperCI, 33.5862638376494)
 		self.assertAlmostEqual(effectSize, 13.333333333)
 				
-		lowerCI, upperCI, effectSize, note = newcombeWilson.run(table2[0], table2[1], table2[2], table2[3], 0.95)
+		lowerCI, upperCI, effectSize, _ = newcombeWilson.run(table2[0], table2[1], table2[2], table2[3], 0.95)
 		self.assertAlmostEqual(lowerCI, 0.271932757939523)
 		self.assertAlmostEqual(upperCI, 0.328541077116921)
 		self.assertAlmostEqual(effectSize, 0.3)
@@ -460,12 +460,12 @@ class VerifyConfidenceIntervalMethods(unittest.TestCase):
 		oddsRatio = OddsRatio(preferences)
 		
 		# Ground truth calculated by hand
-		lowerCI, upperCI, effectSize, note = oddsRatio.run(table1[0], table1[1], table1[2], table1[3], 0.95)	
+		lowerCI, upperCI, effectSize, _ = oddsRatio.run(table1[0], table1[1], table1[2], table1[3], 0.95)	
 		self.assertAlmostEqual(lowerCI, 0.676046021596)
 		self.assertAlmostEqual(upperCI, 5.91675695474)
 		self.assertAlmostEqual(effectSize, 2.0)
-				 
-		lowerCI, upperCI, effectSize, note = oddsRatio.run(table2[0], table2[1], table2[2], table2[3], 0.95)
+
+		lowerCI, upperCI, effectSize, _ = oddsRatio.run(table2[0], table2[1], table2[2], table2[3], 0.95)
 		self.assertAlmostEqual(lowerCI, 1.53926774059)
 		self.assertAlmostEqual(upperCI, 1.6732029238)
 		self.assertAlmostEqual(effectSize, 1.60483870968)
@@ -476,12 +476,12 @@ class VerifyConfidenceIntervalMethods(unittest.TestCase):
 		ratioProportions = RatioProportions(preferences)
 		
 		# Ground truth calculated by hand
-		lowerCI, upperCI, effectSize, note = ratioProportions.run(table1[0], table1[1], table1[2], table1[3], 0.95)	
+		lowerCI, upperCI, effectSize, _ = ratioProportions.run(table1[0], table1[1], table1[2], table1[3], 0.95)	
 		self.assertAlmostEqual(lowerCI, 0.748767825898)
 		self.assertAlmostEqual(upperCI, 3.70979852726)
 		self.assertAlmostEqual(effectSize, 1.66666666666666)
 				
-		lowerCI, upperCI, effectSize, note = ratioProportions.run(table2[0], table2[1], table2[2], table2[3], 0.95)
+		lowerCI, upperCI, effectSize, _ = ratioProportions.run(table2[0], table2[1], table2[2], table2[3], 0.95)
 		self.assertAlmostEqual(lowerCI, 1.53505365781)
 		self.assertAlmostEqual(upperCI, 1.6676941467)
 		self.assertAlmostEqual(effectSize, 1.6)
@@ -508,7 +508,6 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 		
 		# Ground truth calculated explicitly
 		correctedValues = bonferroni.correct(list(self.pValues), 0.05)
-		modifier = 1
 		for i in xrange(0, len(self.pValues)):
 			self.assertAlmostEqual(correctedValues[i], self.pValues[i]*len(self.pValues))
 			
@@ -548,7 +547,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 			
 	def testStoreyFDR(self):
 		"""Verify computation of Storey FDR method"""
-	 
+
 		# This method is based on a bootstrapping approach and as such does not always produce
 		# identical results. It has been tested against the results given by the R plugin by
 		# Alan Dadney and John Storey (http://cran.r-project.org/web/packages/qvalue/)
