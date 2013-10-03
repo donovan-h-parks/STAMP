@@ -83,7 +83,6 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 		self.bShowStdDev = plotToCopy.bShowStdDev
 		self.endCapSize = plotToCopy.endCapSize
 		
-		self.percentageOrSeqCount = plotToCopy.percentageOrSeqCount
 		self.legendPos = plotToCopy.legendPos
 	
 	def plot(self, profile, statsResults):
