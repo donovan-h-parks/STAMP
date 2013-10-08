@@ -1823,7 +1823,7 @@ if __name__ == "__main__":
 		ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 	
 	if (platform.system() == 'Windows' and len(sys.argv) == 1) or (platform.system() != 'Windows' and len(sys.argv) <= 2):
-		#sys.excepthook = exceptHook
+		sys.excepthook = exceptHook
 		app = QtGui.QApplication(sys.argv)
 		mainWindow = MainWindow(preferences)
 		mainWindow.show()

@@ -73,17 +73,21 @@ class CreateProfileMothurDlg(QtGui.QDialog):
 			self.namesFile = selectedFile
 	
 	def createProfile(self):
+		# determine group for each sequence ID
+		if self.groupsFile != None:
+			fin = open(self.groupsFile, 'U')
+			data = map(string.strip, fin.readlines())
+			fin.close()
+		else:
+			QtGui.QMessageBox.information(self, 'Missing data', 'A Group file must be specified.', QtGui.QMessageBox.Ok)
+			return
+			
 		outputFile = QtGui.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')
 		if outputFile == '':
 			return
 			
 		QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
 			
-		# determine group for each sequence ID
-		fin = open(self.groupsFile, 'U')
-		data = map(string.strip, fin.readlines())
-		fin.close()
-
 		seqIdToSampleId = {}
 		sampleIds = set([])
 		for line in data:
