@@ -42,14 +42,14 @@ class GenericTable(QtCore.QAbstractTableModel):
 	
 	def data(self, index, role): 
 		if not index.isValid(): 
-				return QtCore.QVariant() 
+			return QtCore.QVariant() 
 		elif role != QtCore.Qt.DisplayRole: 
-				return QtCore.QVariant() 
+			return QtCore.QVariant() 
 		return QtCore.QVariant(self.arraydata[index.row()][index.column()]) 
 	
 	def headerData(self, col, orientation, role):
 		if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
-				return QtCore.QVariant(self.headerdata[col])
+			return QtCore.QVariant(self.headerdata[col])
 		return QtCore.QVariant()
 	
 	def sort(self, Ncol, order):
@@ -66,10 +66,10 @@ class GenericTable(QtCore.QAbstractTableModel):
 		if dataIsNumeric:
 			self.arraydata = SortTableNumericStrCol(self.arraydata, Ncol)
 		else:
-			self.arraydata = SortTableStrCol(self.arraydata, Ncol)			
+			self.arraydata = SortTableStrCol(self.arraydata, Ncol)
 				
 		if order == QtCore.Qt.DescendingOrder:
-				self.arraydata.reverse()
+			self.arraydata.reverse()
 		self.emit(QtCore.SIGNAL("layoutChanged()"))
 		
 	def save(self, filename):

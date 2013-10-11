@@ -296,8 +296,8 @@ class MultiGroupStatsTests(object):
 					else:
 						propGroup.append( 0.0 )
 					
-				row.append(float(mean(propGroup)))
-				row.append(float(std(propGroup)))
+				row.append(mean(propGroup))
+				row.append(std(propGroup))
 			
 			for i in xrange(0, len(seqCount)):
 				for j in xrange(0, len(seqCount[i])):

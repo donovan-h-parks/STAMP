@@ -188,7 +188,7 @@ class MultiGroupProfile:
 		for i in xrange(0, len(self.activeSamplesInGroups)):
 			data = []
 			for _ in xrange(0, len(self.activeSamplesInGroups[i])):
-				fc = float(profile.featureCounts[self.activeColumns[index]])*100
+				fc = float(profile.featureCounts[self.activeColumns[index]])
 				pc = profile.parentCounts[self.activeColumns[index]]
 				if pc > 0:
 					data.append(fc*100 / pc)
