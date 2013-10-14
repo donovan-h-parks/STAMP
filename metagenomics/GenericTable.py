@@ -41,11 +41,10 @@ class GenericTable(QtCore.QAbstractTableModel):
 			return -1
 	
 	def data(self, index, role): 
-		if not index.isValid(): 
-			return QtCore.QVariant() 
-		elif role != QtCore.Qt.DisplayRole: 
-			return QtCore.QVariant() 
-		return QtCore.QVariant(self.arraydata[index.row()][index.column()]) 
+		if index.isValid() and role == QtCore.Qt.DisplayRole: 
+			return QtCore.QVariant(self.arraydata[index.row()][index.column()]) 
+
+		return QtCore.QVariant() 
 	
 	def headerData(self, col, orientation, role):
 		if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:

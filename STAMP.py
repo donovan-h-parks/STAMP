@@ -32,6 +32,7 @@ import sys, os, platform
 import string
 
 import Dependencies
+from GUI.plotDlg import PlotDlg # forward reference so py2app recognizes this file is required
 
 from PyQt4 import QtGui, QtCore
 
@@ -48,7 +49,6 @@ from GUI.multCompCorrectionInfoDlg import MultCompCorrectionInfoDlg
 from GUI.groupLegendDlg import GroupLegendDlg
 from GUI.statsTableDlg import StatsTableDlg
 from GUI.metadataTableDlg import MetadataTableDlg
-from GUI.plotDlg import PlotDlg # forward reference so py2app recognizes this file is required
 
 from commandLine import CommandLineParser
 
@@ -1416,7 +1416,7 @@ class MainWindow(QtGui.QMainWindow):
 		# update table summarizing statistical results
 		self.sampleUpdateFilterInfo()
 		self.sampleTable.updateTable(self.sampleStatsTest)
-		
+
 		# update plots
 		self.samplePlotUpdate()
 		
@@ -1825,7 +1825,22 @@ if __name__ == "__main__":
 	if (platform.system() == 'Windows' and len(sys.argv) == 1) or (platform.system() != 'Windows' and len(sys.argv) <= 2):
 		sys.excepthook = exceptHook
 		app = QtGui.QApplication(sys.argv)
-		mainWindow = MainWindow(preferences)
+		
+		if(False): # profile code 
+			import cProfile
+			cProfile.run('mainWindow = MainWindow(preferences)', 'profile.txt')
+			##########################################
+			##########################################
+			# Use this in python console!
+			#import pstats
+			#p = pstats.Stats('profile.txt')
+			#p.sort_stats('cumulative').print_stats(10)
+			#p.sort_stats('time').print_stats(10)
+			##########################################
+			##########################################
+		else:
+			mainWindow = MainWindow(preferences)
+			
 		mainWindow.show()
 		sys.exit(app.exec_())
 	else:

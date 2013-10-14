@@ -3,7 +3,7 @@
 #
 # Heatmap for two groups.
 #
-# Copyright 2011 Donovan Parks
+# Copyright 2013 Donovan Parks
 #
 # This file is part of STAMP.
 #
@@ -46,7 +46,7 @@ import scipy.spatial.distance as dist
 
 class HeatmapPlot(AbstractGroupPlotPlugin):
 	'''
-	Box plot for two groups.
+	Heatmap plot.
 	'''
 	def __init__(self, preferences, parent=None):
 		AbstractGroupPlotPlugin.__init__(self, preferences, parent)
