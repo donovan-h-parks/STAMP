@@ -109,6 +109,13 @@ class MultiGroupProfile:
 
 	def getHierarchy(self, feature):
 		return self.profileDict[feature].hierarchy
+	
+	def getSampleGroup(self, sampleId):
+		for i in xrange(0, len(self.samplesInGroups)):
+			if sampleId in self.samplesInGroups[i]:
+				return self.groupNames[i]
+			
+		return None
 		
 	def getFeatureCounts(self, feature):
 		profile = self.profileDict[feature]
@@ -137,6 +144,14 @@ class MultiGroupProfile:
 			sampleData.append(data)
 			
 		return sampleData
+	
+	def getActiveFeatureCountsAll(self):
+		allData = [] 
+		for feature in self.profileDict.keys():
+			data = self.getActiveFeatureCounts(feature)
+			allData.append(data)
+		
+		return allData
 		
 	def getParentCounts(self, feature):
 		profile = self.profileDict[feature]
@@ -199,6 +214,14 @@ class MultiGroupProfile:
 			sampleData.append(data)
 
 		return sampleData
+	
+	def getActiveFeatureProportionsAll(self):
+		allData = [] 
+		for feature in self.profileDict.keys():
+			data = self.getActiveFeatureProportions(feature)
+			allData.append(data)
+		
+		return allData
 
 	def getFeatureMatrix(self):
 		numSamples = len(self.profileDict[self.profileDict.keys()[0]].featureCounts)

@@ -24,7 +24,7 @@
 import sys
 import math
 
-from PyQt4 import QtGui, QtCore
+from PyQt4 import QtGui
 
 from plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
 from plugins.groups.plots.configGUI.pcaPlotUI import Ui_PcaPlotDialog
@@ -34,7 +34,6 @@ from plugins.PlotEventHandler import MultiPlotEventHandler
 from metagenomics.PCA import pca
 
 from matplotlib.patches import Rectangle
-from matplotlib.mlab import PCA
 
 from numpy.linalg import LinAlgError
 
@@ -45,7 +44,7 @@ class pcaPlot(AbstractGroupPlotPlugin):
 	def __init__(self, preferences, parent=None):
 		AbstractGroupPlotPlugin.__init__(self, preferences, parent)
 		self.preferences = preferences
-	 
+
 		self.name = 'PCA plot'
 		self.type = 'Exploratory'
 		
@@ -255,9 +254,9 @@ class pcaPlot(AbstractGroupPlotPlugin):
 			
 		colours = []
 		numGroup1Samples = len(profile.samplesInGroup1)
-		for i in xrange(0, numGroup1Samples):
+		for _ in xrange(0, numGroup1Samples):
 			colours.append(group1Colour)
-		for i in xrange(0, len(profile.samplesInGroup2)):
+		for _ in xrange(0, len(profile.samplesInGroup2)):
 			colours.append(group2Colour)
 
 		# scatter plots

@@ -28,12 +28,7 @@ from PyQt4 import QtGui, QtCore
 from plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
 from plugins.groups.plots.configGUI.BoxPlotUI import Ui_BoxPlotDialog
 
-from plugins.PlotEventHandler import PlotEventHandler
-
 from matplotlib.patches import Polygon
-from matplotlib.lines import Line2D
-from matplotlib.ticker import NullFormatter
-from matplotlib import collections
 
 from matplotlib.artist import setp
 

@@ -25,8 +25,8 @@ import sys
 
 from PyQt4 import QtGui
 
-from plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.groups.plots.configGUI.HeatmapPlotUI import Ui_HeatmapPlotDialog
+from plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
+from plugins.multiGroups.plots.configGUI.HeatmapPlotUI import Ui_HeatmapPlotDialog
 
 from plugins.PlotEventHandler import PlotEventHandler
 
@@ -39,12 +39,12 @@ import numpy
 import plugins.common.hierarchy as cluster
 import scipy.spatial.distance as dist
 
-class HeatmapPlot(AbstractGroupPlotPlugin):
+class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 	'''
 	Heatmap plot.
 	'''
 	def __init__(self, preferences, parent=None):
-		AbstractGroupPlotPlugin.__init__(self, preferences, parent)
+		AbstractMultiGroupPlotPlugin.__init__(self, preferences, parent)
 		
 
 		self.discreteColourMap = mpl.colors.ListedColormap([(141/255.0, 211/255.0, 199/255.0),(255/255.0, 255/255.0, 179/255.0),\
@@ -62,17 +62,17 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		self.bPlotFeaturesIndividually = False
 		
 		self.settings = preferences['Settings']
-		self.fieldToPlot = self.settings.value('group: ' + self.name + '/field to plot', 'Proportion of sequences (%)').toString()
-		self.figWidth = self.settings.value('group: ' + self.name + '/width', 7.0).toDouble()[0]
-		self.figHeight = self.settings.value('group: ' + self.name + '/height', 7.0).toDouble()[0]
-		self.dendrogramMethod = self.settings.value('group: ' + self.name + '/dendrogram method', 'Average neighbour (UPGMA)').toString()
-		self.bShowTopDendrogram = self.settings.value('group: ' + self.name + '/show top dendrogram', True).toBool()
-		self.bShowLeftDendrogram = self.settings.value('group: ' + self.name + '/show left dendrogram', True).toBool()
-		self.colourmap = self.settings.value('group: ' + self.name + '/colourmap', 'Blue to white to red').toString()
-		self.legendPos = self.settings.value('group: ' + self.name + '/legend position', 3).toInt()[0]
-		self.clusteringThreshold = self.settings.value('group: ' + self.name + '/clustering threshold', 0.75).toDouble()[0]
-		self.dendrogramHeight = self.settings.value('group: ' + self.name + '/dendrogram height', 1.5).toDouble()[0]
-		self.dendrogramWidth = self.settings.value('group: ' + self.name + '/dendrogram width', 1.5).toDouble()[0]
+		self.fieldToPlot = self.settings.value('multiple group: ' + self.name + '/field to plot', 'Proportion of sequences (%)').toString()
+		self.figWidth = self.settings.value('multiple group: ' + self.name + '/width', 7.0).toDouble()[0]
+		self.figHeight = self.settings.value('multiple group: ' + self.name + '/height', 7.0).toDouble()[0]
+		self.dendrogramMethod = self.settings.value('multiple group: ' + self.name + '/dendrogram method', 'Average neighbour (UPGMA)').toString()
+		self.bShowTopDendrogram = self.settings.value('multiple group: ' + self.name + '/show top dendrogram', True).toBool()
+		self.bShowLeftDendrogram = self.settings.value('multiple group: ' + self.name + '/show left dendrogram', True).toBool()
+		self.colourmap = self.settings.value('multiple group: ' + self.name + '/colourmap', 'Blue to white to red').toString()
+		self.legendPos = self.settings.value('multiple group: ' + self.name + '/legend position', 3).toInt()[0]
+		self.clusteringThreshold = self.settings.value('multiple group: ' + self.name + '/clustering threshold', 0.75).toDouble()[0]
+		self.dendrogramHeight = self.settings.value('multiple group: ' + self.name + '/dendrogram height', 1.5).toDouble()[0]
+		self.dendrogramWidth = self.settings.value('multiple group: ' + self.name + '/dendrogram width', 1.5).toDouble()[0]
 
 	def mirrorProperties(self, plotToCopy):
 		super(HeatmapPlot, self).mirrorProperties(plotToCopy)
@@ -116,13 +116,14 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		return index, dendrogram['leaves']
 
 	def plot(self, profile, statsResults):
-		if len(profile.profileDict) <= 0 or len(profile.samplesInGroup1) == 0 or len(profile.samplesInGroup2) == 0:
+		if len(profile.profileDict) <= 0 or len(profile.activeGroupNames) == 0:
 			self.emptyAxis()
 			return
 			
 		# *** Colour of plot elements
-		group1Colour = str(self.preferences['Group colours'][profile.groupName1].name())
-		group2Colour = str(self.preferences['Group colours'][profile.groupName2].name())
+		groupColours = {}
+		for groupName in profile.activeGroupNames:
+			groupColours[groupName] = str(self.preferences['Group colours'][groupName].name())
 		
 		# *** Colour map for category dendrogram on left
 		if self.colourmap == "Blues":
@@ -154,21 +155,23 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		
 		# *** Get data for each group
 		if self.fieldToPlot == "Number of sequences":
-			data1, data2 = profile.getFeatureCountsAll()
+			data = profile.getActiveFeatureCountsAll()
 		else: # Proportion of sequences (%)
-			data1, data2 = profile.getFeatureProportionsAll()
+			data = profile.getActiveFeatureProportionsAll()
 			
 		matrix = []
-		for row in data1:
+		for r in xrange(0, len(data)):
+			row = []
+			for d in data[r]:
+				row += d
 			matrix.append(row)
-			
-		for r in xrange(0, len(data2)):
-			matrix[r] += data2[r]
-	
+
 		matrix = numpy.array(matrix)
 			
 		# *** Get heatmap data
-		colHeaders = profile.samplesInGroup1 + profile.samplesInGroup2
+		colHeaders = [] 
+		for sampleNames in profile.activeSamplesInGroups:
+			colHeaders += sampleNames
 		rowHeaders = profile.getFeatures()
 		
 		# *** Find longest label
@@ -284,10 +287,8 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		sampleColourMap = []
 
 		for i in leafIndex2:
-			if colHeaders[i] in profile.samplesInGroup1:
-				sampleColourMap.append(group1Colour)
-			else:
-				sampleColourMap.append(group2Colour)
+			groupName = profile.getSampleGroup(colHeaders[i])
+			sampleColourMap.append(groupColours[groupName])
 		
 		sampleColourMap = mpl.colors.ListedColormap(sampleColourMap)
 		matrix = matrix[:,leafIndex2]
@@ -355,9 +356,13 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		
 		# plot legend
 		if self.legendPos != -1:
-			legend1 = Rectangle((0, 0), 1, 1, fc=group1Colour)
-			legend2 = Rectangle((0, 0), 1, 1, fc=group2Colour)
-			legend = self.fig.legend([legend1, legend2], (profile.groupName1, profile.groupName2), loc=self.legendPos, ncol=1)
+			groupRecs = []
+			groups = []
+			for group, colour in groupColours.iteritems():
+				groupRecs.append(Rectangle((0, 0), 1, 1, fc=colour))
+				groups.append(group)
+
+			legend = self.fig.legend(groupRecs, groups, loc=self.legendPos, ncol=int(len(groups)/2 + 0.5))
 			legend.get_frame().set_linewidth(0)
 					
 		self.updateGeometry()
@@ -424,17 +429,17 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 			self.dendrogramWidth = configDlg.ui.spinDendrogramWidth.value()
 			self.dendrogramHeight = configDlg.ui.spinDendrogramHeight.value()
 				
-			self.settings.setValue('group: ' + self.name + '/field to plot', self.fieldToPlot)
-			self.settings.setValue('group: ' + self.name + '/width', self.figWidth)
-			self.settings.setValue('group: ' + self.name + '/height', self.figHeight)
-			self.settings.setValue('group: ' + self.name + '/dendrogram method', self.dendrogramMethod)
-			self.settings.setValue('group: ' + self.name + '/show top dendrogram', self.bShowTopDendrogram)
-			self.settings.setValue('group: ' + self.name + '/show left dendrogram', self.bShowLeftDendrogram)
-			self.settings.setValue('group: ' + self.name + '/colourmap', self.colourmap)
-			self.settings.setValue('group: ' + self.name + '/legend position', self.legendPos)
-			self.settings.setValue('group: ' + self.name + '/clustering threshold', self.clusteringThreshold)
-			self.settings.setValue('group: ' + self.name + '/dendrogram height', self.dendrogramHeight)
-			self.settings.setValue('group: ' + self.name + '/dendrogram width', self.dendrogramWidth)
+			self.settings.setValue('multiple group: ' + self.name + '/field to plot', self.fieldToPlot)
+			self.settings.setValue('multiple group: ' + self.name + '/width', self.figWidth)
+			self.settings.setValue('multiple group: ' + self.name + '/height', self.figHeight)
+			self.settings.setValue('multiple group: ' + self.name + '/dendrogram method', self.dendrogramMethod)
+			self.settings.setValue('multiple group: ' + self.name + '/show top dendrogram', self.bShowTopDendrogram)
+			self.settings.setValue('multiple group: ' + self.name + '/show left dendrogram', self.bShowLeftDendrogram)
+			self.settings.setValue('multiple group: ' + self.name + '/colourmap', self.colourmap)
+			self.settings.setValue('multiple group: ' + self.name + '/legend position', self.legendPos)
+			self.settings.setValue('multiple group: ' + self.name + '/clustering threshold', self.clusteringThreshold)
+			self.settings.setValue('multiple group: ' + self.name + '/dendrogram height', self.dendrogramHeight)
+			self.settings.setValue('multiple group: ' + self.name + '/dendrogram width', self.dendrogramWidth)
 
 			self.plot(profile, statsResults)
 					

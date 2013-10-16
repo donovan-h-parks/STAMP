@@ -735,12 +735,14 @@ class MainWindow(QtGui.QMainWindow):
 		loadDataDlg = LoadDataDlg(self.preferences, self)
 		if loadDataDlg.exec_() == QtGui.QDialog.Accepted:
 			profileFile = loadDataDlg.getProfileFile()
+			#profileFile = "D:/GitHub/STAMP/examples/heatmap.spf"
 			if profileFile == '':
 				return
+			self.preferences['Last directory'] = profileFile[0:profileFile.lastIndexOf('/')]
 				
 			metadataFile = loadDataDlg.getMetadataFile()
-			self.preferences['Last directory'] = profileFile[0:profileFile.lastIndexOf('/')]
-
+			#metadataFile = "D:/GitHub/STAMP/examples/heatmap.metadata.tsv"
+			
 			# read profiles from file
 			try:
 				stampIO = StampIO(self.preferences)
@@ -1735,7 +1737,7 @@ class MainWindow(QtGui.QMainWindow):
 				'%s\n'
 				'%s\n'
 				'%s\n\n' 
-				'%s' % ('Donovan Parks and Robert Beiko', 'v2.0.0 (release candidate 6)', 'May 24, 2013', 'Program icon by Caihua (http://commons.wikimedia.org/wiki/File:Fairytale_colors.png)'))
+				'%s' % ('Donovan Parks and Robert Beiko', 'v2.0.1', 'October 18, 2013', 'Program icon by Caihua (http://commons.wikimedia.org/wiki/File:Fairytale_colors.png)'))
 
 	def closeEvent(self, event):
 		# save size and location of main window and all dock widgets

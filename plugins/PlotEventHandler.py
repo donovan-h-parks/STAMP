@@ -25,11 +25,18 @@ import math
 from PyQt4 import QtGui
 
 class PlotEventHandler:
-	def __init__(self, xData, yData, toolTips):
+	def __init__(self, xData, yData, toolTips, xtol=None, ytol=None):
 		self.data = zip(xData, yData, toolTips)
 		
-		self.xtol = (max(xData) - min(xData)) / 50
-		self.ytol = (max(yData) - min(yData)) / 50
+		if xtol == None:
+			self.xtol = (max(xData) - min(xData)) / 50
+		else:
+			self.xtol = xtol
+			
+		if ytol == None:
+			self.ytol = (max(yData) - min(yData)) / 50
+		else:
+			self.ytol = ytol
 	
 	def distance(self, x1, x2, y1, y2):
 		return( (x1 - x2)**2 + (y1 - y2)**2 )

@@ -46,7 +46,7 @@ root_files = ['/opt/local/lib/Resources/qt_menu.nib']
 setup(
 	app = ['STAMP.py'],
 	name = 'STAMP',
-	version = '2.0.0 (release candidate 6)',
+	version = '2.0.1',
 	description = 'Statistical analysis of metagenomic profiles',
 	author = 'Donovan Parks',
 	options = 
