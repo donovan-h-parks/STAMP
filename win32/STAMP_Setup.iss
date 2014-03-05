@@ -7,7 +7,7 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{058AA4B2-FB5A-4D89-9134-D6E06AB9E894}
 AppName=STAMP
-AppVerName=STAMP v2.0.1
+AppVerName=STAMP v2.0.2
 AppPublisher=Donovan Parks and Robert Beiko
 AppPublisherURL=http://kiwi.cs.dal.ca/Software/STAMP
 AppSupportURL=http://kiwi.cs.dal.ca/Software/STAMP
@@ -18,7 +18,7 @@ AllowNoIcons=yes
 LicenseFile=..\dist\license.txt
 InfoBeforeFile=..\dist\readme.txt
 OutputDir=..\win32\install
-OutputBaseFilename=STAMP_2_0_1
+OutputBaseFilename=STAMP_2_0_2
 SetupIconFile=..\dist\icons\programIcon.ico
 Compression=lzma
 SolidCompression=yes

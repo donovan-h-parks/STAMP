@@ -65,7 +65,7 @@ mpl_data_files = mpl.get_py2exe_datafiles()
 # setup configuration
 setup(
 	name = "STAMP",
-	version = "2.0.1",
+	version = "2.0.2",
 	description = "Statistical analysis of metagenomic profiles",
 	author = "Donovan Parks",
 	windows=[{"script":"STAMP.py", "icon_resources": [(1, "icons/programIcon.ico")]}],
@@ -78,7 +78,7 @@ setup(
 					"optimize": 2,
 					"skip_archive": True,
 					"includes": ["sip", "PyQt4", "sqlite3"],
-					"packages": ["matplotlib","pytz","scipy","mpl_toolkits", "pyparsing"],
+					"packages": ["matplotlib","pytz","scipy","mpl_toolkits", "pyparsing", "biom", "pyqi"],
 					"dll_excludes": ["libgdk_pixbuf-2.0-0.dll","libgdk-win32-2.0-0.dll", "libgobject-2.0-0.dll", "tcl84.dll", "tk84.dll"],
 				}
 			},

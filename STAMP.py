@@ -42,6 +42,7 @@ from GUI.createProfileMgRastDlg import CreateProfileMgRastDlg
 from GUI.createProfileRITADlg import CreateProfileRITADlg
 from GUI.createProfileCoMetDlg import CreateProfileCoMetDlg
 from GUI.createProfileMothurDlg import CreateProfileMothurDlg
+from GUI.createProfileBiomDlg import CreateProfileBiomDlg
 from GUI.loadDataDlg import LoadDataDlg
 from GUI.assignCOGsDlg import AssignCOGsDlg
 from GUI.preferencesDlg import PreferencesDlg
@@ -159,6 +160,7 @@ class MainWindow(QtGui.QMainWindow):
 		self.connect(self.ui.mnuFileRITA, QtCore.SIGNAL('triggered()'), self.createProfileRita)
 		self.connect(self.ui.mnuFileCoMet, QtCore.SIGNAL('triggered()'), self.createProfileComet)
 		self.connect(self.ui.mnuFileMothur, QtCore.SIGNAL('triggered()'), self.createProfileMothur)
+		self.connect(self.ui.mnuFileBIOM, QtCore.SIGNAL('triggered()'), self.createProfileBIOM)
 		self.connect(self.ui.mnuFileAppendCategoryCOG, QtCore.SIGNAL('triggered()'), self.appendCategoriesCOG)
 		self.connect(self.ui.mnuFileSavePlot, QtCore.SIGNAL('triggered()'), self.saveImageDlg)
 		self.connect(self.ui.mnuFileExit, QtCore.SIGNAL('triggered()'), QtCore.SLOT('close()'))
@@ -730,6 +732,10 @@ class MainWindow(QtGui.QMainWindow):
 	def createProfileMothur(self):
 		createProfileMothurDlg = CreateProfileMothurDlg(self.preferences, self)
 		createProfileMothurDlg.exec_()
+		
+	def createProfileBIOM(self):
+		createProfileBiomDlg = CreateProfileBiomDlg(self.preferences, self)
+		createProfileBiomDlg.exec_()
 
 	def loadProfile(self):
 		loadDataDlg = LoadDataDlg(self.preferences, self)
@@ -1737,7 +1743,7 @@ class MainWindow(QtGui.QMainWindow):
 				'%s\n'
 				'%s\n'
 				'%s\n\n' 
-				'%s' % ('Donovan Parks and Robert Beiko', 'v2.0.1', 'October 18, 2013', 'Program icon by Caihua (http://commons.wikimedia.org/wiki/File:Fairytale_colors.png)'))
+				'%s' % ('Donovan Parks and Robert Beiko', 'v2.0.2', 'March 5, 2014', 'Program icon by Caihua (http://commons.wikimedia.org/wiki/File:Fairytale_colors.png)'))
 
 	def closeEvent(self, event):
 		# save size and location of main window and all dock widgets

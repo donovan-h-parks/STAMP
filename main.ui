@@ -387,8 +387,8 @@
              <rect>
               <x>0</x>
               <y>0</y>
-              <width>36</width>
-              <height>16</height>
+              <width>98</width>
+              <height>28</height>
              </rect>
             </property>
            </widget>
@@ -612,8 +612,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>80</width>
-             <height>16</height>
+             <width>98</width>
+             <height>28</height>
             </rect>
            </property>
           </widget>
@@ -3986,10 +3986,11 @@
       <iconset resource="STAMP.qrc">
        <normaloff>:/icons/icons/createProfile.png</normaloff>:/icons/icons/createProfile.png</iconset>
      </property>
-     <addaction name="mnuFileCoMet"/>
      <addaction name="mnuFileMgRast"/>
-     <addaction name="mnuFileMothur"/>
+     <addaction name="mnuFileBIOM"/>
      <addaction name="mnuFileRITA"/>
+     <addaction name="mnuFileMothur"/>
+     <addaction name="mnuFileCoMet"/>
     </widget>
     <addaction name="mnuFileOpenProfile"/>
     <addaction name="separator"/>
@@ -4226,6 +4227,16 @@
    </property>
    <property name="statusTip">
     <string>Create STAMP profile from mothur data</string>
+   </property>
+  </action>
+  <action name="mnuFileBIOM">
+   <property name="text">
+    <string>BIOM profile</string>
+   </property>
+  </action>
+  <action name="mnuFileQiimeOtu">
+   <property name="text">
+    <string>QIIME OTU BIOM file</string>
    </property>
   </action>
  </widget>
