@@ -105,7 +105,6 @@ class CreateProfileBiomDlg(QtGui.QDialog):
 		fout.write("\t".join(header) + '\n')
 		
 		#now process each observation (row in the table)
-		test = {}
 		for obs_vals, obs_id, obs_metadata in table.iterObservations():
 			row=[]
 			if max_len_metadata > 0:
@@ -122,7 +121,5 @@ class CreateProfileBiomDlg(QtGui.QDialog):
 			#Add count data to the row
 			row.extend(map(str,obs_vals))
 			fout.write("\t".join(row) + '\n')
-			
-		print len(test)
 			
 		fout.close()
