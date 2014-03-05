@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'createProfileBiom.ui'
 #
-# Created: Wed Mar 05 08:53:03 2014
-#      by: PyQt4 UI code generator 4.9.6
+# Created: Thu Mar 06 08:05:50 2014
+#      by: PyQt4 UI code generator 4.9.5
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,21 +12,12 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    def _fromUtf8(s):
-        return s
-
-try:
-    _encoding = QtGui.QApplication.UnicodeUTF8
-    def _translate(context, text, disambig):
-        return QtGui.QApplication.translate(context, text, disambig, _encoding)
-except AttributeError:
-    def _translate(context, text, disambig):
-        return QtGui.QApplication.translate(context, text, disambig)
+    _fromUtf8 = lambda s: s
 
 class Ui_CreateProfileBiomDlg(object):
     def setupUi(self, CreateProfileBiomDlg):
         CreateProfileBiomDlg.setObjectName(_fromUtf8("CreateProfileBiomDlg"))
-        CreateProfileBiomDlg.resize(396, 107)
+        CreateProfileBiomDlg.resize(396, 122)
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(_fromUtf8("../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         CreateProfileBiomDlg.setWindowIcon(icon)
@@ -58,6 +49,7 @@ class Ui_CreateProfileBiomDlg(object):
         self.cboMetadataField.addItem(_fromUtf8(""))
         self.cboMetadataField.addItem(_fromUtf8(""))
         self.cboMetadataField.addItem(_fromUtf8(""))
+        self.cboMetadataField.addItem(_fromUtf8(""))
         self.horizontalLayout_2.addWidget(self.cboMetadataField)
         self.formLayout.setLayout(1, QtGui.QFormLayout.FieldRole, self.horizontalLayout_2)
         spacerItem = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
@@ -78,13 +70,14 @@ class Ui_CreateProfileBiomDlg(object):
         QtCore.QMetaObject.connectSlotsByName(CreateProfileBiomDlg)
 
     def retranslateUi(self, CreateProfileBiomDlg):
-        CreateProfileBiomDlg.setWindowTitle(_translate("CreateProfileBiomDlg", "Create profile", None))
-        self.lblTaxonomyFile.setText(_translate("CreateProfileBiomDlg", "BIOM file:", None))
-        self.btnBiomFile.setText(_translate("CreateProfileBiomDlg", "Load", None))
-        self.label_2.setText(_translate("CreateProfileBiomDlg", "Metadata field:", None))
-        self.cboMetadataField.setItemText(0, _translate("CreateProfileBiomDlg", "taxonomy", None))
-        self.cboMetadataField.setItemText(1, _translate("CreateProfileBiomDlg", "KEGG_Pathways", None))
-        self.cboMetadataField.setItemText(2, _translate("CreateProfileBiomDlg", "COG_Category", None))
-        self.btnCreateProfile.setText(_translate("CreateProfileBiomDlg", "Create STAMP profile", None))
-        self.btnCancel.setText(_translate("CreateProfileBiomDlg", "Cancel", None))
+        CreateProfileBiomDlg.setWindowTitle(QtGui.QApplication.translate("CreateProfileBiomDlg", "Create profile", None, QtGui.QApplication.UnicodeUTF8))
+        self.lblTaxonomyFile.setText(QtGui.QApplication.translate("CreateProfileBiomDlg", "BIOM file:", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnBiomFile.setText(QtGui.QApplication.translate("CreateProfileBiomDlg", "Load", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtGui.QApplication.translate("CreateProfileBiomDlg", "Metadata field:", None, QtGui.QApplication.UnicodeUTF8))
+        self.cboMetadataField.setItemText(0, QtGui.QApplication.translate("CreateProfileBiomDlg", "<observation ids>", None, QtGui.QApplication.UnicodeUTF8))
+        self.cboMetadataField.setItemText(1, QtGui.QApplication.translate("CreateProfileBiomDlg", "COG_Category (PICRUSt COG analysis)", None, QtGui.QApplication.UnicodeUTF8))
+        self.cboMetadataField.setItemText(2, QtGui.QApplication.translate("CreateProfileBiomDlg", "KEGG_Pathways (PICRUSt KEGG analysis)", None, QtGui.QApplication.UnicodeUTF8))
+        self.cboMetadataField.setItemText(3, QtGui.QApplication.translate("CreateProfileBiomDlg", "taxonomy (QIIME OTU table)", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnCreateProfile.setText(QtGui.QApplication.translate("CreateProfileBiomDlg", "Create STAMP profile", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnCancel.setText(QtGui.QApplication.translate("CreateProfileBiomDlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
 

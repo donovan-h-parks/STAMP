@@ -68,7 +68,7 @@ class CreateProfileBiomDlg(QtGui.QDialog):
 
 	def centerWindow(self):
 		screen = QtGui.QDesktopWidget().screenGeometry()
-		size =	self.geometry()
+		size = self.geometry()
 		self.move((screen.width()-size.width())/2, (screen.height()-size.height())/2)
 		
 	def convertBiomFileToStampProfile(self, file_name, output_name, metadata_name):
@@ -83,8 +83,9 @@ class CreateProfileBiomDlg(QtGui.QDialog):
 		else:
 			table = parse_biom_table(open(file_name,'U'))
 		
-		if metadata_name is None:
-			max_len_metadata=0
+		metadata_name = metadata_name.split('(')[0].rstrip()
+		if metadata_name is None or metadata_name == '<observation ids>':
+			max_len_metadata = 0
 		elif table.ObservationMetadata and metadata_name in table.ObservationMetadata[0]:
 			#figure out the longest list within the given metadata
 			max_len_metadata = max(len(p[metadata_name]) for p in table.ObservationMetadata)
@@ -95,8 +96,9 @@ class CreateProfileBiomDlg(QtGui.QDialog):
 		#make the header line
 		header=[]
 		#make simple labels for each level in the metadata (e.g. 'Level_1', 'Level_2', etc.) "+1" for the observation id as well.
-		for i in range(max_len_metadata+1):
+		for i in range(max_len_metadata):
 			header.append('Level_'+ str(i+1))
+		header.append('Observation Ids')
 		
 		#add the sample ids to the header line
 		header.extend(table.SampleIds)

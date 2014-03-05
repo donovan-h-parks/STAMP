@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>396</width>
-    <height>107</height>
+    <height>122</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -60,17 +60,22 @@
          </property>
          <item>
           <property name="text">
-           <string>taxonomy</string>
+           <string>&lt;observation ids&gt;</string>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>KEGG_Pathways</string>
+           <string>COG_Category (PICRUSt COG analysis)</string>
           </property>
          </item>
          <item>
           <property name="text">
-           <string>COG_Category</string>
+           <string>KEGG_Pathways (PICRUSt KEGG analysis)</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>taxonomy (QIIME OTU table)</string>
           </property>
          </item>
         </widget>
