@@ -96,7 +96,10 @@ class CreateProfileMgRastDlg(QtGui.QDialog):
 	def customizeHeadings(self):
 		customizeHeadingsDlg = CustomizeHeadingsDlg(self) 
 		
-		customizeHeadingsDlg.ui.txtInfo.setText('This MG-RAST profiles consists of ' + str(self.headings.index('')) + ' hierarchical levels.')
+		numHeadings = len(self.headings)
+		if '' in self.headings:
+			numHeadings = self.headings.index('')
+		customizeHeadingsDlg.ui.txtInfo.setText('This MG-RAST profiles consists of ' + str(numHeadings) + ' hierarchical levels.')
 	 
 		customizeHeadingsDlg.ui.txtLevel1.setText(self.headings[0])
 		customizeHeadingsDlg.ui.txtLevel2.setText(self.headings[1])
@@ -161,7 +164,10 @@ class CreateProfileMgRastDlg(QtGui.QDialog):
 			for i in xrange(1, len(hierarchy)):
 				if hierarchy[i] == '-':
 					if self.header[1] == 'domain':
-						hierarchy[i] = 'Unclassified ' + hierarchy[i-1]
+						if 'Unclassified' not in hierarchy[i-1]:
+							hierarchy[i] = 'Unclassified ' + hierarchy[i-1]
+						else:
+							hierarchy[i] = hierarchy[i-1]
 					else:
 						hierarchy[i] = hierarchy[i-1]
 					
