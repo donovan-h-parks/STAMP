@@ -59,6 +59,7 @@ for f in os.listdir("data"):
 				data_files.append(f2)
 				
 root_files = ['license.txt', 'STAMP.exe.log', 'readme.txt']
+
 				
 mpl_data_files = mpl.get_py2exe_datafiles()
 

@@ -35,7 +35,7 @@ Source: "..\dist\STAMP.exe.log"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\commandLine.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\license.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\python27.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\STAMP_Users_Guide_v2.0.0.pdf"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\STAMP_Users_Guide_v2.0.2.pdf"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\w9xpopen.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\dist\examples\*"; DestDir: "{app}\examples"; Flags: ignoreversion recursesubdirs createallsubdirs
