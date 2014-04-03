@@ -40,7 +40,6 @@ class LoadDataDlg(QtGui.QDialog):
 		self.connect(self.ui.tbProfileFile, QtCore.SIGNAL("clicked()"), self.openProfileFile)
 		self.connect(self.ui.tbMetadataFile, QtCore.SIGNAL("clicked()"), self.openMetadataFile)
 		
-		
 	def openProfileFile(self):
 		profileFile = QtGui.QFileDialog.getOpenFileName(self, 'Open profile', self.preferences['Last directory'], 'STAMP profile file (*.spf *.tsv *.txt);;All files (*.*)')
 		if profileFile != '':
@@ -64,6 +63,5 @@ class LoadDataDlg(QtGui.QDialog):
 	def getMetadataFile(self):
 		return self.ui.txtMetadataFile.text()
 	
-		
 if __name__ == "__main__": 
 	pass

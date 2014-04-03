@@ -20,12 +20,14 @@
 #=======================================================================
 
 import string
+import gzip
+from os.path import splitext
 
 from PyQt4 import QtGui, QtCore
-from createProfileBiomUI import Ui_CreateProfileBiomDlg
-from os.path import splitext
 from biom.parse import parse_biom_table
-import gzip
+
+from createProfileBiomUI import Ui_CreateProfileBiomDlg
+from metagenomics.StringHelper import isNumber
 
 class CreateProfileBiomDlg(QtGui.QDialog):
 	def __init__(self, preferences, parent=None):
@@ -118,7 +120,10 @@ class CreateProfileBiomDlg(QtGui.QDialog):
 					row.append('unclassified')
 			
 			#Add the observation id as the last "Level"
-			row.append(obs_id)
+			if isNumber(obs_id):
+				row.append('ID' + obs_id)
+			else:
+				row.append(obs_id)
 			
 			#Add count data to the row
 			row.extend(map(str,obs_vals))

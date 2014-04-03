@@ -741,14 +741,12 @@ class MainWindow(QtGui.QMainWindow):
 		loadDataDlg = LoadDataDlg(self.preferences, self)
 		if loadDataDlg.exec_() == QtGui.QDialog.Accepted:
 			profileFile = loadDataDlg.getProfileFile()
-			#profileFile = "D:/GitHub/STAMP/examples/heatmap.spf"
 			if profileFile == '':
 				return
 			self.preferences['Last directory'] = profileFile[0:profileFile.lastIndexOf('/')]
 				
 			metadataFile = loadDataDlg.getMetadataFile()
-			#metadataFile = "D:/GitHub/STAMP/examples/heatmap.metadata.tsv"
-			
+
 			# read profiles from file
 			try:
 				stampIO = StampIO(self.preferences)
