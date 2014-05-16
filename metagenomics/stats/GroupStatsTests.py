@@ -128,7 +128,6 @@ class GroupStatTestResults(object):
 					valueStr = '%.2e' % row[index]
 					if row[index] < 10**self.preferences['Minimum reported p-value exponent']:
 						valueStr = '< 1e' + str(int(self.preferences['Minimum reported p-value exponent']))
-						print 'here1'
 					elif 'e-00' in valueStr:
 						valueStr = valueStr.replace('e-00', 'e-')
 					elif 'e-0' in valueStr:
