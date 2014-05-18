@@ -1,4 +1,4 @@
-from setuptools import setup
+from distutils.core import setup
 
 pluginPkgs = []
 pluginPkgs.append('stamp.plugins')
@@ -34,21 +34,20 @@ metagenomicPkgs.append('stamp.metagenomics.stats.tests')
 
 setup(
     name='STAMP',
-    version='2.0.2',
+    version='2.0.3',
     author='Donovan Parks, Rob Beiko',
     author_email='donovan.parks@gmail.com',
     packages=['stamp', 'stamp.GUI'] + pluginPkgs + metagenomicPkgs,
-    #data_files=[('data', ['/data/*.txt'])]
-    scripts=['STAMP.py'],
+    package_data={'stamp': ['data/*.txt']},
+    scripts=['bin/STAMP'],
     url='http://pypi.python.org/pypi/stamp/',
     license='GPL3',
     description='A graphical software package for analyzing taxonomic and functional profiles.',
     long_description=open('README.md').read(),
     install_requires=[
-        "pyqt4 >= 4.8.4"
-        "numpy >= 1.6.0",
-        "scipy >= 0.9.0",
-        "matplotlib >= 1.0.1",
-        "biom-format >= 1.3.1",
-        "pyqi >= 0.3.1",],
+        "numpy >= 1.7.1",
+        "scipy >= 0.13.0",
+        "matplotlib >= 1.3.1",
+        "biom-format >= 1.2.0",
+        "pyqi >= 0.2.0",],
 )

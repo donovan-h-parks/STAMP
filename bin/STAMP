@@ -1,3 +1,5 @@
+#!/srv/sw/python/2.7.4/bin/python
+
 #=======================================================================
 # Author: Donovan Parks
 #
@@ -19,6 +21,6 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-import stamp.STAMP as STAMP
+from stamp import STAMP
 
 STAMP.main()
