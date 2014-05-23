@@ -32,8 +32,9 @@ metagenomicPkgs.append('stamp.metagenomics.stats.distributions')
 metagenomicPkgs.append('stamp.metagenomics.stats.empiricalTests')
 metagenomicPkgs.append('stamp.metagenomics.stats.tests')
 
-root_files = ['LICENSE.txt', './manual/STAMP_Users_Guide.pdf', 'README.md']
-
+root_files = [('.', ['LICENSE.txt']),
+                  ('./manual', ['./manual/STAMP_Users_Guide.pdf']),
+                  ('.', ['README.md'])]
 setup(
     name='STAMP',
     version='2.0.3',
