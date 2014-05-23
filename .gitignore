@@ -25,6 +25,7 @@ parts
 var
 sdist
 develop-eggs
+windows/install
 .installed.cfg
 
 # Installer logs
