@@ -19,7 +19,7 @@ class Ui_BoxPlotDialog(object):
         sizePolicy.setHeightForWidth(BoxPlotDialog.sizePolicy().hasHeightForWidth())
         BoxPlotDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("../../../../../icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icons/icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         BoxPlotDialog.setWindowIcon(icon)
         self.verticalLayout = QtGui.QVBoxLayout(BoxPlotDialog)
         self.verticalLayout.setObjectName("verticalLayout")

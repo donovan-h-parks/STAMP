@@ -28,9 +28,9 @@ import math
 import numpy as np
 from mpl_toolkits.axes_grid import make_axes_locatable, Size
 
-from plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.groups.plots.configGUI.extendedErrorBarUI import Ui_ExtendedErrorBarDialog
-from metagenomics import TableHelper
+from stamp.plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.groups.plots.configGUI.extendedErrorBarUI import Ui_ExtendedErrorBarDialog
+from stamp.metagenomics import TableHelper
 
 from matplotlib.patches import Rectangle
 		

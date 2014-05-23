@@ -28,7 +28,9 @@
 #=======================================================================
 
 import math
-from metagenomics.stats.distributions.NormalDist import zScore
+
+from stamp.metagenomics.stats.distributions.NormalDist import zScore
+
 from scipy.stats import chi2
 
 class WilsonCI():

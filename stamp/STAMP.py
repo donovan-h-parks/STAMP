@@ -28,46 +28,46 @@ __maintainer__ = 'Donovan Parks'
 __email__ = 'donovan.parks@gmail.com'
 __status__ = 'Development'
 
-import sys, os, platform
+import os
+import sys
+import platform
 import string
 
-import Dependencies
-from GUI.plotDlg import PlotDlg # forward reference so py2app recognizes this file is required
+import stamp.Dependencies
+from stamp.GUI.plotDlg import PlotDlg # forward reference so py2app recognizes this file is required
 
 from PyQt4 import QtGui, QtCore
 
 from mainUI import Ui_MainWindow
-from GUI.selectFeaturesDlg import SelectFeaturesDlg
-from GUI.createProfileMgRastDlg import CreateProfileMgRastDlg
-from GUI.createProfileRITADlg import CreateProfileRITADlg
-from GUI.createProfileCoMetDlg import CreateProfileCoMetDlg
-from GUI.createProfileMothurDlg import CreateProfileMothurDlg
-from GUI.createProfileBiomDlg import CreateProfileBiomDlg
-from GUI.loadDataDlg import LoadDataDlg
-from GUI.assignCOGsDlg import AssignCOGsDlg
-from GUI.preferencesDlg import PreferencesDlg
-from GUI.multCompCorrectionInfoDlg import MultCompCorrectionInfoDlg
-from GUI.groupLegendDlg import GroupLegendDlg
-from GUI.statsTableDlg import StatsTableDlg
-from GUI.metadataTableDlg import MetadataTableDlg
+from stamp.GUI.selectFeaturesDlg import SelectFeaturesDlg
+from stamp.GUI.createProfileMgRastDlg import CreateProfileMgRastDlg
+from stamp.GUI.createProfileRITADlg import CreateProfileRITADlg
+from stamp.GUI.createProfileCoMetDlg import CreateProfileCoMetDlg
+from stamp.GUI.createProfileMothurDlg import CreateProfileMothurDlg
+from stamp.GUI.createProfileBiomDlg import CreateProfileBiomDlg
+from stamp.GUI.loadDataDlg import LoadDataDlg
+from stamp.GUI.assignCOGsDlg import AssignCOGsDlg
+from stamp.GUI.preferencesDlg import PreferencesDlg
+from stamp.GUI.multCompCorrectionInfoDlg import MultCompCorrectionInfoDlg
+from stamp.GUI.groupLegendDlg import GroupLegendDlg
+from stamp.GUI.statsTableDlg import StatsTableDlg
+from stamp.GUI.metadataTableDlg import MetadataTableDlg
 
-from commandLine import CommandLineParser
+from stamp.metagenomics.stats.SampleStatsTests import SampleStatsTests
+from stamp.metagenomics.stats.GroupStatsTests import GroupStatsTests
+from stamp.metagenomics.stats.MultiGroupStatsTests import MultiGroupStatsTests
+from stamp.metagenomics.fileIO.StampIO import StampIO
+from stamp.metagenomics.fileIO.MetadataIO import MetadataIO
+from stamp.metagenomics.GenericTable import GenericTable
+from stamp.metagenomics.ProfileTree import ProfileTree
+from stamp.metagenomics.SampleProfile import SampleProfile
+from stamp.metagenomics.GroupProfile import GroupProfile
+from stamp.metagenomics.MultiGroupProfile import MultiGroupProfile
 
-from metagenomics.stats.SampleStatsTests import SampleStatsTests
-from metagenomics.stats.GroupStatsTests import GroupStatsTests
-from metagenomics.stats.MultiGroupStatsTests import MultiGroupStatsTests
-from metagenomics.fileIO.StampIO import StampIO
-from metagenomics.fileIO.MetadataIO import MetadataIO
-from metagenomics.GenericTable import GenericTable
-from metagenomics.ProfileTree import ProfileTree
-from metagenomics.SampleProfile import SampleProfile
-from metagenomics.GroupProfile import GroupProfile
-from metagenomics.MultiGroupProfile import MultiGroupProfile
+from stamp.metagenomics.DirectoryHelper import getMainDir
 
-from metagenomics.DirectoryHelper import getMainDir
-
-from plugins.PlotsManager import PlotsManager
-from plugins.PluginManager import PluginManager
+from stamp.plugins.PlotsManager import PlotsManager
+from stamp.plugins.PluginManager import PluginManager
 
 import matplotlib as mpl
 
@@ -92,7 +92,7 @@ class MainWindow(QtGui.QMainWindow):
 
 		# icons
 		self.refreshIcon = QtGui.QIcon()
-		self.refreshIcon.addPixmap(QtGui.QPixmap("icons/refresh.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+		self.refreshIcon.addPixmap(QtGui.QPixmap(":/icons/icons/refresh.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
 
 		# initialize GUI
 		self.ui = Ui_MainWindow()
@@ -180,7 +180,7 @@ class MainWindow(QtGui.QMainWindow):
 
 		# load multiple test correction methods
 		pluginManager = PluginManager(self.preferences)
-		self.multCompDict = pluginManager.loadPlugins('plugins/common/multipleComparisonCorrections/')
+		self.multCompDict = pluginManager.loadPlugins('stamp/plugins/common/multipleComparisonCorrections/')
 		pluginManager.populateComboBox(self.multCompDict, self.ui.cboSampleMultCompMethod, 'No correction')
 		pluginManager.populateComboBox(self.multCompDict, self.ui.cboGroupMultCompMethod, 'No correction')
 		pluginManager.populateComboBox(self.multCompDict, self.ui.cboMultiGroupMultCompMethod, 'No correction')
@@ -223,18 +223,18 @@ class MainWindow(QtGui.QMainWindow):
 
 		# load plot plugins
 		self.samplePlot = PlotsManager(self.ui.cboSamplePlots, self.ui.plotSampleScrollArea, 'Scatter plot')
-		self.samplePlot.loadPlots(self.preferences, 'plugins/samples/plots/')
+		self.samplePlot.loadPlots(self.preferences, 'stamp/plugins/samples/plots/')
 
 		# load statistical technique plugins
 		pluginManager = PluginManager(self.preferences)
-		self.sampleStatTestDict = pluginManager.loadPlugins('plugins/samples/statisticalTests/')
+		self.sampleStatTestDict = pluginManager.loadPlugins('stamp/plugins/samples/statisticalTests/')
 		pluginManager.populateComboBox(self.sampleStatTestDict, self.ui.cboSampleStatTests, 'G-test (w/ Yates\') + Fisher\'s')
 
-		self.sampleConfIntervMethodDict = pluginManager.loadPlugins('plugins/samples/confidenceIntervalMethods/')
+		self.sampleConfIntervMethodDict = pluginManager.loadPlugins('stamp/plugins/samples/confidenceIntervalMethods/')
 		pluginManager.populateComboBox(self.sampleConfIntervMethodDict, self.ui.cboSampleConfIntervMethods, 'DP: Asymptotic-CC')
 
 		# load effect size filters
-		self.sampleEffectSizeDict = pluginManager.loadPlugins('plugins/samples/effectSizeFilters/')
+		self.sampleEffectSizeDict = pluginManager.loadPlugins('stamp/plugins/samples/effectSizeFilters/')
 		pluginManager.populateComboBox(self.sampleEffectSizeDict, self.ui.cboSampleEffectSizeMeasure1, 'Difference between proportions')
 		pluginManager.populateComboBox(self.sampleEffectSizeDict, self.ui.cboSampleEffectSizeMeasure2, 'Ratio of proportions')
 
@@ -314,15 +314,15 @@ class MainWindow(QtGui.QMainWindow):
 
 		# load plot plugins
 		self.groupPlot = PlotsManager(self.ui.cboGroupPlots, self.ui.plotGroupScrollArea, 'PCA plot')
-		self.groupPlot.loadPlots(self.preferences, 'plugins/groups/plots/')
+		self.groupPlot.loadPlots(self.preferences, 'stamp/plugins/groups/plots/')
 
 		# load statistical technique plugins
 		pluginManager = PluginManager(self.preferences)
-		self.groupStatTestDict = pluginManager.loadPlugins('plugins/groups/statisticalTests/')
+		self.groupStatTestDict = pluginManager.loadPlugins('stamp/plugins/groups/statisticalTests/')
 		pluginManager.populateComboBox(self.groupStatTestDict, self.ui.cboGroupStatTests, "Welch's t-test")
 
 		# load effect size filters
-		self.groupEffectSizeDict = pluginManager.loadPlugins('plugins/groups/effectSizeFilters/')
+		self.groupEffectSizeDict = pluginManager.loadPlugins('stamp/plugins/groups/effectSizeFilters/')
 		pluginManager.populateComboBox(self.groupEffectSizeDict, self.ui.cboGroupEffectSizeMeasure1, 'Difference between proportions')
 		pluginManager.populateComboBox(self.groupEffectSizeDict, self.ui.cboGroupEffectSizeMeasure2, 'Ratio of proportions')
 
@@ -406,18 +406,18 @@ class MainWindow(QtGui.QMainWindow):
 
 		# load plot plugins
 		self.multiGroupPlot = PlotsManager(self.ui.cboMultiGroupPlots, self.ui.plotMultiGroupScrollArea, 'PCA plot')
-		self.multiGroupPlot.loadPlots(self.preferences, 'plugins/multiGroups/plots/')
+		self.multiGroupPlot.loadPlots(self.preferences, 'stamp/plugins/multiGroups/plots/')
 
 		# load statistical technique plugins
 		pluginManager = PluginManager(self.preferences)
-		self.multiGroupStatTestDict = pluginManager.loadPlugins('plugins/multiGroups/statisticalTests/')
+		self.multiGroupStatTestDict = pluginManager.loadPlugins('stamp/plugins/multiGroups/statisticalTests/')
 		pluginManager.populateComboBox(self.multiGroupStatTestDict, self.ui.cboMultiGroupStatTests, 'ANOVA')
 
-		self.postHocTestDict = pluginManager.loadPlugins('plugins/multiGroups/postHoc/')
+		self.postHocTestDict = pluginManager.loadPlugins('stamp/plugins/multiGroups/postHoc/')
 		pluginManager.populateComboBox(self.postHocTestDict, self.ui.cboPostHocTest, 'Tukey-Kramer')
 
 		# load effect size filters
-		self.multiGroupEffectSizeDict = pluginManager.loadPlugins('plugins/multiGroups/effectSizeFilters/')
+		self.multiGroupEffectSizeDict = pluginManager.loadPlugins('stamp/plugins/multiGroups/effectSizeFilters/')
 		pluginManager.populateComboBox(self.multiGroupEffectSizeDict, self.ui.cboMultiGroupEffectSizeMeasure, 'Eta-squared')
 
 		# widget controls in sidebar
@@ -575,9 +575,9 @@ class MainWindow(QtGui.QMainWindow):
 	def updateSideBarTabIcon(self, tab, arrowButton):
 		icon = QtGui.QIcon()
 		if tab.isVisible():
-			icon.addPixmap(QtGui.QPixmap("icons/downArrow.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+			icon.addPixmap(QtGui.QPixmap(":/icons/icons/downArrow.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
 		else:
-			icon.addPixmap(QtGui.QPixmap("icons/rightArrow.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+			icon.addPixmap(QtGui.QPixmap(":/icons/icons/rightArrow.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
 		arrowButton.setIcon(icon)
 
 	def prefrencesDlg(self):
@@ -972,8 +972,8 @@ class MainWindow(QtGui.QMainWindow):
 			for i in xrange(0, len(features)):
 				tableData.append([features[i], effectSizes[i], pValues[i], pValuesCorrected[i], notes[i]])
 
-		if preferences['Selected group feature'] not in features:
-			preferences['Selected group feature'] = ''
+		if self.preferences['Selected group feature'] not in features:
+			self.preferences['Selected group feature'] = ''
 
 		self.groupFeatureTable = GenericTable(tableData, ['Feature', 'Diff. between means', 'p-value', 'Corrected p-value', 'Note'], self)
 		self.groupFeatureTable.sort(0,QtCore.Qt.AscendingOrder) # start with features in alphabetical order
@@ -1002,8 +1002,8 @@ class MainWindow(QtGui.QMainWindow):
 			for i in xrange(0, len(features)):
 				tableData.append([features[i], effectSizes[i], pValues[i], pValuesCorrected[i], notes[i]])
 
-		if preferences['Selected multiple group feature'] not in features:
-			preferences['Selected multiple group feature'] = ''
+		if self.preferences['Selected multiple group feature'] not in features:
+			self.preferences['Selected multiple group feature'] = ''
 
 		self.multiGroupFeatureTable = GenericTable(tableData, ['Feature', 'Eta-squared', 'p-value', 'Corrected p-value', 'Note'], self)
 		self.multiGroupFeatureTable.sort(0,QtCore.Qt.AscendingOrder) # start with features in alphabetical order
@@ -1776,7 +1776,7 @@ def exceptHook(exc_type, exc_value, exc_traceback):
 	filename = os.path.basename( filename )
 	error = "%s: %s" % ( exc_type.__name__, exc_value)
 
-	QtGui.QMessageBox.critical(mainWindow, "Unknown error...",
+	QtGui.QMessageBox.critical(None, "Unknown error...",
 		"<center>An error has occured:<br/><br/>"
 	+ "<b><i>%s</i></b><br/>" % error
 	+ "It occured at <b>line %d</b> of file <b>%s</b>.<br/>" % ( line, filename )
@@ -1850,8 +1850,7 @@ def main():
 		mainWindow.show()
 		sys.exit(app.exec_())
 	else:
-		commandLineParser = CommandLineParser(preferences)
-		commandLineParser.run()
+		print 'Failed to start STAMP.'
 		sys.exit()
 		
 if __name__ == "__main__":

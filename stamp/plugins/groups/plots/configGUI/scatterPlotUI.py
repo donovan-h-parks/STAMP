@@ -24,7 +24,7 @@ class Ui_ScatterPlotDialog(object):
         sizePolicy.setHeightForWidth(ScatterPlotDialog.sizePolicy().hasHeightForWidth())
         ScatterPlotDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../../../../../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         ScatterPlotDialog.setWindowIcon(icon)
         self.verticalLayout_2 = QtGui.QVBoxLayout(ScatterPlotDialog)
         self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))

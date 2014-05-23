@@ -23,10 +23,10 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTestPlugin
+from stamp.plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTestPlugin
 
-from plugins.samples.statisticalTests.Fishers import Fishers
-from plugins.samples.statisticalTests.GTestYates import GTestYates
+from stamp.plugins.samples.statisticalTests.Fishers import Fishers
+from stamp.plugins.samples.statisticalTests.GTestYates import GTestYates
 
 from scipy import special
 

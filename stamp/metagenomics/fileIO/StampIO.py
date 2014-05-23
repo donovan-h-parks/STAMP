@@ -23,8 +23,8 @@
 
 import string
 
-from metagenomics.ProfileTree import ProfileTree, Node
-from metagenomics.StringHelper import isNumber
+from stamp.metagenomics.ProfileTree import ProfileTree, Node
+from stamp.metagenomics.StringHelper import isNumber
 
 class StampIO(object):
 	def __init__(self, preferences):

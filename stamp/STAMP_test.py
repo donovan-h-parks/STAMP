@@ -556,7 +556,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 class VerifyOther(unittest.TestCase):
 	def testNormalDist(self):
 		"""Verify computation of normal distribution methods"""
-		from metagenomics.stats.distributions.NormalDist import standardNormalCDF, zScore
+		from stamp.metagenomics.stats.distributions.NormalDist import standardNormalCDF, zScore
 		
 		self.assertAlmostEqual(standardNormalCDF(-2), 0.022750131948179209)
 		self.assertAlmostEqual(standardNormalCDF(-1), 0.15865525393145705)

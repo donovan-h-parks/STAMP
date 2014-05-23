@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from plugins.common.AbstractMultCompCorrection import AbstractMultCompCorrection
+from stamp.plugins.common.AbstractMultCompCorrection import AbstractMultCompCorrection
 
 class NoCorrection(AbstractMultCompCorrection):
   

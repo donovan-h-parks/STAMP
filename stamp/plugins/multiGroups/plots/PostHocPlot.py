@@ -31,9 +31,9 @@ import numpy as np
 from matplotlib.font_manager import FontProperties
 from mpl_toolkits.axes_grid import make_axes_locatable, Size
 
-from plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.multiGroups.plots.configGUI.PostHocPlotUI import Ui_PostHocPlotDialog
-from metagenomics import TableHelper
+from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.multiGroups.plots.configGUI.PostHocPlotUI import Ui_PostHocPlotDialog
+from stamp.metagenomics import TableHelper
 
 class PostHocPlot(AbstractMultiGroupPlotPlugin):
 	'''

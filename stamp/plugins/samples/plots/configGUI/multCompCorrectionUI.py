@@ -19,7 +19,7 @@ class Ui_MultCompCorrectionDialog(object):
         sizePolicy.setHeightForWidth(MultCompCorrectionDialog.sizePolicy().hasHeightForWidth())
         MultCompCorrectionDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("../../../../icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icons/icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         MultCompCorrectionDialog.setWindowIcon(icon)
         self.verticalLayout_3 = QtGui.QVBoxLayout(MultCompCorrectionDialog)
         self.verticalLayout_3.setObjectName("verticalLayout_3")

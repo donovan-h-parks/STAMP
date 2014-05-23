@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTestPlugin
+from stamp.plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTestPlugin
 
 from scipy.stats import chi2
 

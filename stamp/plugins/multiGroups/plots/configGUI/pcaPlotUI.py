@@ -24,7 +24,7 @@ class Ui_PcaPlotDialog(object):
         sizePolicy.setHeightForWidth(PcaPlotDialog.sizePolicy().hasHeightForWidth())
         PcaPlotDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../../../../../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         PcaPlotDialog.setWindowIcon(icon)
         self.verticalLayout_3 = QtGui.QVBoxLayout(PcaPlotDialog)
         self.verticalLayout_3.setObjectName(_fromUtf8("verticalLayout_3"))

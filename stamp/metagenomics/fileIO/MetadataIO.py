@@ -23,8 +23,7 @@
 
 import string
 
-from metagenomics.Metadata import Metadata
-from metagenomics.StringHelper import isNumber
+from stamp.metagenomics.Metadata import Metadata
 
 class MetadataIO(object):
 	def __init__(self, preferences):

@@ -57,7 +57,7 @@ class PlotEventHandler:
 			msgBox = QtGui.QMessageBox()
 			
 			icon = QtGui.QIcon()
-			icon.addPixmap(QtGui.QPixmap("icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+			icon.addPixmap(QtGui.QPixmap(":/icons/icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
 			msgBox.setWindowIcon(icon)
 			
 			msgBox.setWindowTitle('Tooltip')
@@ -99,7 +99,7 @@ class MultiPlotEventHandler:
 			msgBox = QtGui.QMessageBox()
 			
 			icon = QtGui.QIcon()
-			icon.addPixmap(QtGui.QPixmap("icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+			icon.addPixmap(QtGui.QPixmap(":/icons/icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
 			msgBox.setWindowIcon(icon)
 			
 			msgBox.setWindowTitle('Tooltip')

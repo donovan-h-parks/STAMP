@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from plugins.samples.AbstractSampleEffectSizePlugin import AbstractSampleEffectSizePlugin
+from stamp.plugins.samples.AbstractSampleEffectSizePlugin import AbstractSampleEffectSizePlugin
 
 class DiffBetweenProp(AbstractSampleEffectSizePlugin):
   

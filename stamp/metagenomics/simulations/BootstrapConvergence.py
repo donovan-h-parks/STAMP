@@ -1,7 +1,7 @@
-from metagenomics.plugins.statisticalTests.Fishers import Fishers
-from metagenomics.plugins.statisticalTests.DiffBetweenProp import DiffBetweenProp
-from metagenomics.plugins.statisticalTests.Bootstrap import Bootstrap 
-from metagenomics.plugins.statisticalTests.Barnard import Barnard 
+from stamp.metagenomics.plugins.statisticalTests.Fishers import Fishers
+from stamp.metagenomics.plugins.statisticalTests.DiffBetweenProp import DiffBetweenProp
+from stamp.metagenomics.plugins.statisticalTests.Bootstrap import Bootstrap 
+from stamp.metagenomics.plugins.statisticalTests.Barnard import Barnard 
 
 fishers = Fishers()
 diffBetweenProp = DiffBetweenProp()

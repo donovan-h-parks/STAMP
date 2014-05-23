@@ -1,8 +1,8 @@
 import math
 import random
 
-from plugins.statisticalTests.Fishers import Fishers
-from plugins.statisticalTests.Hypergeometric import Hypergeometric
+from stamp.plugins.statisticalTests.Fishers import Fishers
+from stamp.plugins.statisticalTests.Hypergeometric import Hypergeometric
 
 fishers = Fishers({})
 hypergeometric = Hypergeometric({})

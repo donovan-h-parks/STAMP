@@ -27,8 +27,8 @@ import sys
 from PyQt4 import QtCore, QtGui
 import numpy as np
 
-from plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
-from plugins.samples.plots.configGUI.multCompCorrectionUI import Ui_MultCompCorrectionDialog
+from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.samples.plots.configGUI.multCompCorrectionUI import Ui_MultCompCorrectionDialog
 
 class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 	'''

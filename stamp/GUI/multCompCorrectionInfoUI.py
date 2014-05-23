@@ -34,4 +34,4 @@ class Ui_multCompCorrectionInfoDlg(object):
     def retranslateUi(self, multCompCorrectionInfoDlg):
         multCompCorrectionInfoDlg.setWindowTitle(QtGui.QApplication.translate("multCompCorrectionInfoDlg", "Additional info", None, QtGui.QApplication.UnicodeUTF8))
 
-import STAMP_rc
+import stamp.STAMP_rc

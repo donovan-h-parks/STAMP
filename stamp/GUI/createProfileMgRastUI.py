@@ -48,4 +48,4 @@ class Ui_CreateProfileMgRastDlg(object):
         self.btnCreateProfile.setText(QtGui.QApplication.translate("CreateProfileMgRastDlg", "Create STAMP profile", None, QtGui.QApplication.UnicodeUTF8))
         self.btnCancel.setText(QtGui.QApplication.translate("CreateProfileMgRastDlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
 
-import STAMP_rc
+import stamp.STAMP_rc

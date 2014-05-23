@@ -22,8 +22,9 @@
 #=======================================================================
 
 import math
-from plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTestPlugin
-from metagenomics.stats.distributions.NormalDist import standardNormalCDF, zScore
+
+from stamp.plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTestPlugin
+from stamp.metagenomics.stats.distributions.NormalDist import standardNormalCDF, zScore
 
 class DiffBetweenProp(AbstractSampleStatsTestPlugin):
 	'''

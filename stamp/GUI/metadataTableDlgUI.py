@@ -124,4 +124,4 @@ class Ui_MetadataTableDlg(object):
         self.tbMetadataFilter.setText(QtGui.QApplication.translate("MetadataTableDlg", "...", None, QtGui.QApplication.UnicodeUTF8))
         self.tableMetadata.setSortingEnabled(True)
 
-import STAMP_rc
+import stamp.STAMP_rc

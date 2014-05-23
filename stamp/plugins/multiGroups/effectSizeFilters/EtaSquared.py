@@ -21,7 +21,7 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from plugins.multiGroups.AbstractMultiGroupEffectSizePlugin import AbstractMultiGroupEffectSizePlugin
+from stamp.plugins.multiGroups.AbstractMultiGroupEffectSizePlugin import AbstractMultiGroupEffectSizePlugin
 
 class EtaSquared(AbstractMultiGroupEffectSizePlugin):
 	

@@ -26,9 +26,9 @@ an executable as some method is needed to determine all required dependencies.
 @author: Donovan Parks
 '''
 
-import metagenomics.stats.distributions.NormalDist
-import metagenomics.stats.distributions.QTable
-import metagenomics.stats.CI.WilsonCI
-import metagenomics.PCA
-import metagenomics.Bootstrap
+import stamp.metagenomics.stats.distributions.NormalDist
+import stamp.metagenomics.stats.distributions.QTable
+import stamp.metagenomics.stats.CI.WilsonCI
+import stamp.metagenomics.PCA
+import stamp.metagenomics.Bootstrap
 

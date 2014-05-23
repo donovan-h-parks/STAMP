@@ -33,7 +33,7 @@ class Ui_HeatmapPlotDialog(object):
         sizePolicy.setHeightForWidth(HeatmapPlotDialog.sizePolicy().hasHeightForWidth())
         HeatmapPlotDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../../../../../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         HeatmapPlotDialog.setWindowIcon(icon)
         self.verticalLayout_3 = QtGui.QVBoxLayout(HeatmapPlotDialog)
         self.verticalLayout_3.setObjectName(_fromUtf8("verticalLayout_3"))

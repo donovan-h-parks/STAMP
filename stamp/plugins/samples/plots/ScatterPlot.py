@@ -25,16 +25,16 @@ import sys
 
 from PyQt4 import QtGui, QtCore
 
-from plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
-from plugins.samples.plots.configGUI.scatterPlotUI import Ui_ScatterPlotDialog
+from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.samples.plots.configGUI.scatterPlotUI import Ui_ScatterPlotDialog
 
-from plugins.PlotEventHandler import PlotEventHandler
+from stamp.plugins.PlotEventHandler import PlotEventHandler
 
 from matplotlib.lines import Line2D
 from matplotlib.ticker import NullFormatter
 from matplotlib import collections
 
-from metagenomics.stats.CI.WilsonCI import WilsonCI
+from stamp.metagenomics.stats.CI.WilsonCI import WilsonCI
 
 from matplotlib.artist import setp
 

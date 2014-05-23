@@ -23,7 +23,7 @@
 
 import os, platform
 
-from metagenomics.DirectoryHelper import runningExecutable, getMainDir
+from stamp.metagenomics.DirectoryHelper import runningExecutable, getMainDir
 
 class PluginManager:
 	def __init__(self, preferences):
@@ -42,8 +42,10 @@ class PluginManager:
 			else:
 				# os x plugin folder
 				pluginFolder = './lib/python2.6/site-packages/' + pluginFolder
+		else:
+			pluginFolder = os.path.join(os.path.split(os.path.realpath(__file__))[0], '..', '..', pluginFolder)
 		
-		dict = {}
+		d = {}
 		for filename in os.listdir(pluginFolder):
 			if os.path.isdir(os.path.join (pluginFolder, filename)):
 				continue
@@ -54,12 +56,12 @@ class PluginManager:
 				theModule = __import__(pluginModulePath + pluginModule, fromlist='*')
 				theClass = getattr(theModule, pluginModule)
 				theObject = theClass(self.preferences)
-				dict[theObject.name] = theObject
-					 
-		return dict
+				d[theObject.name] = theObject
+
+		return d
 	
-	def populateComboBox(self, dict, comboBox, defaultPlugin):
-		keys = dict.keys()
+	def populateComboBox(self, d, comboBox, defaultPlugin):
+		keys = d.keys()
 		keys.sort(lambda x,y: cmp(x.lower(), y.lower()))
 		for key in keys:
 			comboBox.addItem(key)

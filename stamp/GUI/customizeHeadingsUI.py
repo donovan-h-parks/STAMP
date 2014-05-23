@@ -108,4 +108,4 @@ class Ui_CreateProfileDlg(object):
         self.btnOK.setText(QtGui.QApplication.translate("CreateProfileDlg", "OK", None, QtGui.QApplication.UnicodeUTF8))
         self.btnCancel.setText(QtGui.QApplication.translate("CreateProfileDlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
 
-import STAMP_rc
+import stamp.STAMP_rc

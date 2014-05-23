@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from metagenomics import TableHelper
+from stamp.metagenomics import TableHelper
 
 from numpy import mean, std
 

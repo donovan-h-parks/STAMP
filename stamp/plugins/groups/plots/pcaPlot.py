@@ -26,12 +26,12 @@ import math
 
 from PyQt4 import QtGui
 
-from plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.groups.plots.configGUI.pcaPlotUI import Ui_PcaPlotDialog
+from stamp.plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.groups.plots.configGUI.pcaPlotUI import Ui_PcaPlotDialog
 
-from plugins.PlotEventHandler import MultiPlotEventHandler
+from stamp.plugins.PlotEventHandler import MultiPlotEventHandler
 
-from metagenomics.PCA import pca
+from stamp.metagenomics.PCA import pca
 
 from matplotlib.patches import Rectangle
 

@@ -70,4 +70,4 @@ class Ui_PlotDlg(object):
     def retranslateUi(self, PlotDlg):
         pass
 
-import STAMP_rc
+import stamp.STAMP_rc

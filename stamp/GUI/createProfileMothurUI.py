@@ -20,7 +20,7 @@ class Ui_CreateProfileMothurDlg(object):
         CreateProfileMothurDlg.resize(396, 144)
         CreateProfileMothurDlg.setWindowTitle(QtGui.QApplication.translate("CreateProfileMothurDlg", "Create profile", None, QtGui.QApplication.UnicodeUTF8))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         CreateProfileMothurDlg.setWindowIcon(icon)
         self.verticalLayout_2 = QtGui.QVBoxLayout(CreateProfileMothurDlg)
         self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))

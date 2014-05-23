@@ -1,11 +1,11 @@
-from metagenomics.plugins.statisticalTests.Fishers import Fishers
-from metagenomics.plugins.statisticalTests.ChiSquare import ChiSquare
-from metagenomics.plugins.statisticalTests.ChiSquareYates import ChiSquareYates
-from metagenomics.plugins.statisticalTests.GTest import GTest
-from metagenomics.plugins.statisticalTests.GTestYates import GTestYates
-from metagenomics.plugins.statisticalTests.Permutation import Permutation
-from metagenomics.plugins.statisticalTests.DiffBetweenProp import DiffBetweenProp
-from metagenomics.plugins.statisticalTests.Bootstrap import Bootstrap 
+from stamp.metagenomics.plugins.statisticalTests.Fishers import Fishers
+from stamp.metagenomics.plugins.statisticalTests.ChiSquare import ChiSquare
+from stamp.metagenomics.plugins.statisticalTests.ChiSquareYates import ChiSquareYates
+from stamp.metagenomics.plugins.statisticalTests.GTest import GTest
+from stamp.metagenomics.plugins.statisticalTests.GTestYates import GTestYates
+from stamp.metagenomics.plugins.statisticalTests.Permutation import Permutation
+from stamp.metagenomics.plugins.statisticalTests.DiffBetweenProp import DiffBetweenProp
+from stamp.metagenomics.plugins.statisticalTests.Bootstrap import Bootstrap 
 
 fishers = Fishers()
 chiSquare = ChiSquare()

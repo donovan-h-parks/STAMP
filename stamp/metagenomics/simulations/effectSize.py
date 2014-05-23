@@ -1,5 +1,5 @@
 
-from plugins.statisticalTests.Fishers import Fishers
+from stamp.plugins.statisticalTests.Fishers import Fishers
 
 preferences = {}
 fishers = Fishers(preferences)

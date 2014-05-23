@@ -25,8 +25,8 @@ import sys
 
 from PyQt4 import QtGui, QtCore
 
-from plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.groups.plots.configGUI.BoxPlotUI import Ui_BoxPlotDialog
+from stamp.plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.groups.plots.configGUI.BoxPlotUI import Ui_BoxPlotDialog
 
 from matplotlib.patches import Polygon
 

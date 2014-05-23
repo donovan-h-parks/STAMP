@@ -7,12 +7,12 @@ Evaluate performance of different CI methods.
 from numpy import mean, std
 from numpy.random import binomial
 
-from metagenomics.plugins.confidenceIntervalMethods.DiffBetweenPropAsymptotic import DiffBetweenPropAsymptotic
-from metagenomics.plugins.confidenceIntervalMethods.DiffBetweenPropAsymptoticCC import DiffBetweenPropAsymptoticCC
-from metagenomics.plugins.confidenceIntervalMethods.NewcombeWilson import NewcombeWilson
-from metagenomics.plugins.confidenceIntervalMethods.OddsRatio import OddsRatio
-from metagenomics.plugins.confidenceIntervalMethods.NewcombeWilson import NewcombeWilson
-from metagenomics.plugins.confidenceIntervalMethods.RatioProportions import RatioProportions
+from stamp.metagenomics.plugins.confidenceIntervalMethods.DiffBetweenPropAsymptotic import DiffBetweenPropAsymptotic
+from stamp.metagenomics.plugins.confidenceIntervalMethods.DiffBetweenPropAsymptoticCC import DiffBetweenPropAsymptoticCC
+from stamp.metagenomics.plugins.confidenceIntervalMethods.NewcombeWilson import NewcombeWilson
+from stamp.metagenomics.plugins.confidenceIntervalMethods.OddsRatio import OddsRatio
+from stamp.metagenomics.plugins.confidenceIntervalMethods.NewcombeWilson import NewcombeWilson
+from stamp.metagenomics.plugins.confidenceIntervalMethods.RatioProportions import RatioProportions
 
 aMin = 5
 aMax = 10

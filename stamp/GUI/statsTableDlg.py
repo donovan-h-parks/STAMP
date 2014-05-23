@@ -24,7 +24,7 @@
 from PyQt4 import QtGui, QtCore
 from statsTableDlgUI import Ui_StatsTableDlg
 
-from metagenomics.GenericTable import GenericTable
+from stamp.metagenomics.GenericTable import GenericTable
 
 class StatsTableDlg(QtGui.QDockWidget):
 	def __init__(self, preferences, parent=None, info=None):

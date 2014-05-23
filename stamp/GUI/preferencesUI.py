@@ -143,4 +143,4 @@ class Ui_preferencesDlg(object):
         self.spinMinPvalue.setPrefix(QtGui.QApplication.translate("preferencesDlg", "-", None, QtGui.QApplication.UnicodeUTF8))
         self.btnOK.setText(QtGui.QApplication.translate("preferencesDlg", "OK", None, QtGui.QApplication.UnicodeUTF8))
 
-import STAMP_rc
+import stamp.STAMP_rc

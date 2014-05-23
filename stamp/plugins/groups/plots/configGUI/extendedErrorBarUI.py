@@ -25,7 +25,7 @@ class Ui_ExtendedErrorBarDialog(object):
         sizePolicy.setHeightForWidth(ExtendedErrorBarDialog.sizePolicy().hasHeightForWidth())
         ExtendedErrorBarDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../../../../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         ExtendedErrorBarDialog.setWindowIcon(icon)
         self.horizontalLayout_7 = QtGui.QHBoxLayout(ExtendedErrorBarDialog)
         self.horizontalLayout_7.setObjectName(_fromUtf8("horizontalLayout_7"))

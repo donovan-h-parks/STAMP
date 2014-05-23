@@ -23,9 +23,9 @@
 
 import sys
 
-from metagenomics.SampleProfile import SampleProfile, SampleProfileEntry
-from metagenomics.GroupProfile import GroupProfile, GroupProfileEntry
-from metagenomics.MultiGroupProfile import MultiGroupProfile, MultiGroupProfileEntry
+from stamp.metagenomics.SampleProfile import SampleProfile, SampleProfileEntry
+from stamp.metagenomics.GroupProfile import GroupProfile, GroupProfileEntry
+from stamp.metagenomics.MultiGroupProfile import MultiGroupProfile
 
 class Node:
 	def __init__(self, name, parent = None):

@@ -26,10 +26,10 @@ import sys
 from PyQt4 import QtGui, QtCore
 import numpy as np
 
-from plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.multiGroups.plots.configGUI.BarPlotUI import Ui_BarPlotDialog
+from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.multiGroups.plots.configGUI.BarPlotUI import Ui_BarPlotDialog
 
-from metagenomics.stats.CI.WilsonCI import WilsonCI
+from stamp.metagenomics.stats.CI.WilsonCI import WilsonCI
 
 class BarPlot(AbstractMultiGroupPlotPlugin):
 	'''

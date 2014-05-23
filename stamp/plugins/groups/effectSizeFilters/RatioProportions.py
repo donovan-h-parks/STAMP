@@ -21,7 +21,7 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from plugins.groups.AbstractGroupEffectSizePlugin import AbstractGroupEffectSizePlugin
+from stamp.plugins.groups.AbstractGroupEffectSizePlugin import AbstractGroupEffectSizePlugin
 
 class RatioProportions(AbstractGroupEffectSizePlugin):
 	

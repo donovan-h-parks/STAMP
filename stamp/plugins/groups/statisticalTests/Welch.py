@@ -22,7 +22,7 @@
 #=======================================================================
 
 import math
-from plugins.groups.AbstractGroupStatsTestPlugin import AbstractGroupStatsTestPlugin
+from stamp.plugins.groups.AbstractGroupStatsTestPlugin import AbstractGroupStatsTestPlugin
 from numpy import var
 
 from scipy.stats.distributions import t

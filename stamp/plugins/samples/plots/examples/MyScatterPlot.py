@@ -23,7 +23,7 @@
 
 import sys
 
-from plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
 
 
 class MyScatterPlot(AbstractSamplePlotPlugin):

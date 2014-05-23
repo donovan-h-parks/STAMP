@@ -105,4 +105,4 @@ class Ui_SelectFeatureDlg(object):
         self.lstFilteredFeatures.setSortingEnabled(True)
         self.label_4.setText(QtGui.QApplication.translate("SelectFeatureDlg", "Number of selected features:", None, QtGui.QApplication.UnicodeUTF8))
 
-import STAMP_rc
+import stamp.STAMP_rc

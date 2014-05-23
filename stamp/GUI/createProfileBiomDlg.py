@@ -19,7 +19,6 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-import string
 import gzip
 from os.path import splitext
 
@@ -27,7 +26,7 @@ from PyQt4 import QtGui, QtCore
 from biom.parse import parse_biom_table
 
 from createProfileBiomUI import Ui_CreateProfileBiomDlg
-from metagenomics.StringHelper import isNumber
+from stamp.metagenomics.StringHelper import isNumber
 
 class CreateProfileBiomDlg(QtGui.QDialog):
 	def __init__(self, preferences, parent=None):

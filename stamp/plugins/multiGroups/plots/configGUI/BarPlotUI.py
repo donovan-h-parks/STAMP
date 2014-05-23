@@ -19,7 +19,7 @@ class Ui_BarPlotDialog(object):
         sizePolicy.setHeightForWidth(BarPlotDialog.sizePolicy().hasHeightForWidth())
         BarPlotDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("../../../../../icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icons/icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         BarPlotDialog.setWindowIcon(icon)
         self.verticalLayout_4 = QtGui.QVBoxLayout(BarPlotDialog)
         self.verticalLayout_4.setObjectName("verticalLayout_4")

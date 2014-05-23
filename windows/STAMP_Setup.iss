@@ -15,11 +15,11 @@ AppUpdatesURL=http://kiwi.cs.dal.ca/Software/STAMP
 DefaultDirName={pf}\STAMP
 DefaultGroupName=STAMP
 AllowNoIcons=yes
-LicenseFile=..\stamp\dist\LICENSE.txt
-InfoBeforeFile=..\stamp\dist\readme.txt
+LicenseFile=..\dist\LICENSE.txt
+InfoBeforeFile=..\dist\readme.txt
 OutputDir=.\install
 OutputBaseFilename=STAMP_2_0_3
-SetupIconFile=..\stamp\dist\icons\programIcon.ico
+SetupIconFile=..\dist\icons\programIcon.ico
 Compression=lzma
 SolidCompression=yes
 
@@ -30,18 +30,16 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\stamp\dist\STAMP.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\stamp\dist\STAMP.exe.log"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\stamp\dist\commandLine.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\stamp\dist\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\stamp\dist\python27.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\stamp\dist\STAMP_Users_Guide.pdf"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\stamp\dist\w9xpopen.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\stamp\dist\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\stamp\dist\examples\*"; DestDir: "{app}\examples"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\stamp\dist\icons\*"; DestDir: "{app}\icons"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\stamp\dist\library\*"; DestDir: "{app}\library"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\stamp\dist\mpl-data\*"; DestDir: "{app}\mpl-data"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\STAMP.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\STAMP.exe.log"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\python27.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\STAMP_Users_Guide.pdf"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\w9xpopen.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\examples\*"; DestDir: "{app}\examples"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\icons\*"; DestDir: "{app}\icons"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\library\*"; DestDir: "{app}\library"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\mpl-data\*"; DestDir: "{app}\mpl-data"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]

@@ -25,7 +25,7 @@ class Ui_PostHocPlotDialog(object):
         sizePolicy.setHeightForWidth(PostHocPlotDialog.sizePolicy().hasHeightForWidth())
         PostHocPlotDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../../../../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         PostHocPlotDialog.setWindowIcon(icon)
         self.horizontalLayout_8 = QtGui.QHBoxLayout(PostHocPlotDialog)
         self.horizontalLayout_8.setObjectName(_fromUtf8("horizontalLayout_8"))

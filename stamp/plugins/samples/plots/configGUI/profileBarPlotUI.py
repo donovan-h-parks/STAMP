@@ -24,7 +24,7 @@ class Ui_ProfileBarPlotDialog(object):
         sizePolicy.setHeightForWidth(ProfileBarPlotDialog.sizePolicy().hasHeightForWidth())
         ProfileBarPlotDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../../../../../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         ProfileBarPlotDialog.setWindowIcon(icon)
         self.verticalLayout_5 = QtGui.QVBoxLayout(ProfileBarPlotDialog)
         self.verticalLayout_5.setObjectName(_fromUtf8("verticalLayout_5"))

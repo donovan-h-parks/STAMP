@@ -21,14 +21,14 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from metagenomics.DirectoryHelper import getMainDir
+from stamp.metagenomics.DirectoryHelper import getMainDir
 
 class COG_IO():
   def __init__(self):
     pass
   
   def appendCategories(self, inputFile, multiCogTreatment, outputFile, preferences):
-    fin = open(getMainDir() + '/data/fun.txt', 'U')
+    fin = open(getMainDir() + '/stamp/data/fun.txt', 'U')
     funcData = fin.readlines()
     fin.close()
     
@@ -48,7 +48,7 @@ class COG_IO():
         curClass = line
 
     # get COG category for each COG
-    fin = open(getMainDir() + '/data/whog.txt', 'U')
+    fin = open(getMainDir() + '/stamp/data/whog.txt', 'U')
     cogData = fin.readlines()
     fin.close()
     

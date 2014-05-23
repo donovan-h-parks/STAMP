@@ -1,12 +1,12 @@
 import math
 import random
 
-from metagenomics.plugins.statisticalTests.Fishers import Fishers
-from metagenomics.plugins.statisticalTests.GTest import GTest
-from metagenomics.plugins.statisticalTests.GTestYates import GTestYates
-from metagenomics.plugins.statisticalTests.DiffBetweenProp import DiffBetweenProp
+from stamp.metagenomics.plugins.statisticalTests.Fishers import Fishers
+from stamp.metagenomics.plugins.statisticalTests.GTest import GTest
+from stamp.metagenomics.plugins.statisticalTests.GTestYates import GTestYates
+from stamp.metagenomics.plugins.statisticalTests.DiffBetweenProp import DiffBetweenProp
 
-from metagenomics.stats.tests.Spearman import Spearman
+from stamp.metagenomics.stats.tests.Spearman import Spearman
 
 fishers = Fishers()
 gTest = GTest()

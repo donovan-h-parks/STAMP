@@ -27,8 +27,8 @@ from PyQt4 import QtGui, QtCore
 
 from mpl_toolkits.axes_grid.inset_locator import inset_axes
 
-from plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
-from plugins.samples.plots.configGUI.pValueHistogramUI import Ui_pValueHistogramDialog
+from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.samples.plots.configGUI.pValueHistogramUI import Ui_pValueHistogramDialog
 
 class pValueHistogram(AbstractSamplePlotPlugin):
 	'''

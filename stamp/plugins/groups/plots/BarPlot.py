@@ -26,10 +26,10 @@ import sys
 from PyQt4 import QtGui, QtCore
 import numpy as np
 
-from plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.groups.plots.configGUI.BarPlotUI import Ui_BarPlotDialog
+from stamp.plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.groups.plots.configGUI.BarPlotUI import Ui_BarPlotDialog
 
-from metagenomics.stats.CI.WilsonCI import WilsonCI
+from stamp.metagenomics.stats.CI.WilsonCI import WilsonCI
 
 class BarPlot(AbstractGroupPlotPlugin):
 	'''
@@ -38,7 +38,7 @@ class BarPlot(AbstractGroupPlotPlugin):
 	def __init__(self, preferences, parent=None):
 		AbstractGroupPlotPlugin.__init__(self, preferences, parent)
 		self.preferences = preferences
-	 
+
 		self.name = 'Bar plot'
 		self.type = 'Exploratory'
 

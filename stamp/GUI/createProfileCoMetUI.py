@@ -19,7 +19,7 @@ class Ui_CreateProfileCoMetDlg(object):
         CreateProfileCoMetDlg.setObjectName(_fromUtf8("CreateProfileCoMetDlg"))
         CreateProfileCoMetDlg.resize(554, 295)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         CreateProfileCoMetDlg.setWindowIcon(icon)
         self.verticalLayout_2 = QtGui.QVBoxLayout(CreateProfileCoMetDlg)
         self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))

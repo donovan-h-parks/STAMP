@@ -23,9 +23,9 @@
 
 import math
 
-from plugins.samples.AbstractSampleConfIntervMethod import AbstractSampleConfIntervMethod
+from stamp.plugins.samples.AbstractSampleConfIntervMethod import AbstractSampleConfIntervMethod
 
-from metagenomics.stats.distributions.NormalDist import zScore
+from stamp.metagenomics.stats.distributions.NormalDist import zScore
 
 class OddsRatio(AbstractSampleConfIntervMethod):
 	

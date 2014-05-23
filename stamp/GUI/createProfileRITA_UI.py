@@ -19,7 +19,7 @@ class Ui_CreateProfileRITADlg(object):
         CreateProfileRITADlg.setObjectName(_fromUtf8("CreateProfileRITADlg"))
         CreateProfileRITADlg.resize(595, 295)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         CreateProfileRITADlg.setWindowIcon(icon)
         self.horizontalLayout = QtGui.QHBoxLayout(CreateProfileRITADlg)
         self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))

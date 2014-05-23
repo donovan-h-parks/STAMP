@@ -25,10 +25,10 @@ import sys
 
 from PyQt4 import QtGui, QtCore
 
-from plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.groups.plots.configGUI.scatterPlotUI import Ui_ScatterPlotDialog
+from stamp.plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.groups.plots.configGUI.scatterPlotUI import Ui_ScatterPlotDialog
 
-from plugins.PlotEventHandler import PlotEventHandler
+from stamp.plugins.PlotEventHandler import PlotEventHandler
 
 from matplotlib.ticker import NullFormatter
 

@@ -69,4 +69,4 @@ class Ui_loadDataDlg(object):
         self.label.setText(QtGui.QApplication.translate("loadDataDlg", "Profile file:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("loadDataDlg", "Group metadata file (optional):", None, QtGui.QApplication.UnicodeUTF8))
 
-import STAMP_rc
+import stamp.STAMP_rc

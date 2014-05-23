@@ -26,7 +26,8 @@
 #=======================================================================
 
 import math
-from plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTestPlugin
+
+from stamp.plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTestPlugin
 
 from scipy import special
 

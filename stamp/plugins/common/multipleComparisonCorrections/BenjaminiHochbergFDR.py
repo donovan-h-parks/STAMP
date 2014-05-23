@@ -29,7 +29,7 @@
 
 '''
 
-from plugins.common.AbstractMultCompCorrection import AbstractMultCompCorrection
+from stamp.plugins.common.AbstractMultCompCorrection import AbstractMultCompCorrection
 
 class BenjaminiHochbergFDR(AbstractMultCompCorrection):
   

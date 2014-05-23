@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from metagenomics.StringHelper import isStrictNumber
+from stamp.metagenomics.StringHelper import isStrictNumber
 
 class Metadata:
 	def __init__(self):

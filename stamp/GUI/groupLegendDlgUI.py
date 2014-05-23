@@ -51,4 +51,4 @@ class Ui_GroupLegendDlg(object):
     def retranslateUi(self, GroupLegendDlg):
         GroupLegendDlg.setWindowTitle(QtGui.QApplication.translate("GroupLegendDlg", "Group legend", None, QtGui.QApplication.UnicodeUTF8))
 
-import STAMP_rc
+import stamp.STAMP_rc

@@ -24,9 +24,7 @@
 from PyQt4 import QtGui, QtCore
 from metadataTableDlgUI import Ui_MetadataTableDlg
 
-from metagenomics.GenericTable import GenericTable
-from metagenomics.StringHelper import isNumber
-from metagenomics.TableHelper import QTableWidgetNumericItem
+from stamp.metagenomics.TableHelper import QTableWidgetNumericItem
 
 class MetadataTableDlg(QtGui.QDockWidget):
 	def __init__(self, preferences, parent=None, info=None):

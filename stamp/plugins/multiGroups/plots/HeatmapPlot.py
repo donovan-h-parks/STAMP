@@ -25,10 +25,11 @@ import sys
 
 from PyQt4 import QtGui
 
-from plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.multiGroups.plots.configGUI.HeatmapPlotUI import Ui_HeatmapPlotDialog
+from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.multiGroups.plots.configGUI.HeatmapPlotUI import Ui_HeatmapPlotDialog
 
-from plugins.PlotEventHandler import PlotEventHandler
+from stamp.plugins.PlotEventHandler import PlotEventHandler
+import stamp.plugins.common.hierarchy as cluster
 
 from matplotlib import pylab
 import matplotlib as mpl
@@ -36,7 +37,6 @@ from matplotlib.patches import Rectangle
 
 import numpy
 
-import plugins.common.hierarchy as cluster
 import scipy.spatial.distance as dist
 
 class HeatmapPlot(AbstractMultiGroupPlotPlugin):
@@ -68,7 +68,7 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 		self.dendrogramMethod = self.settings.value('multiple group: ' + self.name + '/dendrogram method', 'Average neighbour (UPGMA)').toString()
 		self.bShowTopDendrogram = self.settings.value('multiple group: ' + self.name + '/show top dendrogram', True).toBool()
 		self.bShowLeftDendrogram = self.settings.value('multiple group: ' + self.name + '/show left dendrogram', True).toBool()
-		self.colourmap = self.settings.value('multiple group: ' + self.name + '/colourmap', 'Blue to white to red').toString()
+		self.colourmap = self.settings.value('multiple group: ' + self.name + '/colourmap', 'Blues').toString()
 		self.legendPos = self.settings.value('multiple group: ' + self.name + '/legend position', 3).toInt()[0]
 		self.clusteringThreshold = self.settings.value('multiple group: ' + self.name + '/clustering threshold', 0.75).toDouble()[0]
 		self.dendrogramHeight = self.settings.value('multiple group: ' + self.name + '/dendrogram height', 1.5).toDouble()[0]

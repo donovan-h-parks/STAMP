@@ -21,6 +21,14 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from stamp import STAMP
+import os
+import sys
+
+try:
+    from stamp import STAMP
+except:
+    # STAMP library must be added to python path
+    sys.path.append(os.path.join(os.path.split(os.path.realpath(__file__))[0], ".."))
+    from stamp import STAMP
 
 STAMP.main()

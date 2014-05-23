@@ -26,8 +26,8 @@ import math
 
 from PyQt4 import QtCore, QtGui
 
-from plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
-from plugins.samples.plots.configGUI.seqHistogramUI import Ui_SeqHistogramDialog
+from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.samples.plots.configGUI.seqHistogramUI import Ui_SeqHistogramDialog
 
 class SeqHistogram(AbstractSamplePlotPlugin):
 	'''

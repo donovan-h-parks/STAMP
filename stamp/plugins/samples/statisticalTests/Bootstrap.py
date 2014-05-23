@@ -22,7 +22,7 @@
 #=======================================================================
 
 import random
-from plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTestPlugin
+from stamp.plugins.samples.AbstractSampleStatsTestPlugin import AbstractSampleStatsTestPlugin
 
 from numpy.random import binomial
 

@@ -26,12 +26,12 @@ import math
 
 from PyQt4 import QtGui, QtCore
 
-from plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.multiGroups.plots.configGUI.pcaPlotUI import Ui_PcaPlotDialog
+from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.multiGroups.plots.configGUI.pcaPlotUI import Ui_PcaPlotDialog
 
-from plugins.PlotEventHandler import MultiPlotEventHandler
+from stamp.plugins.PlotEventHandler import MultiPlotEventHandler
 
-from metagenomics.PCA import pca
+from stamp.metagenomics.PCA import pca
 
 from matplotlib.lines import Line2D
 from matplotlib.ticker import NullFormatter

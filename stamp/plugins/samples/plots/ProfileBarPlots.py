@@ -26,10 +26,10 @@ import sys
 from PyQt4 import QtGui, QtCore
 import numpy as np
 
-from plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
-from plugins.samples.plots.configGUI.profileBarPlotUI import Ui_ProfileBarPlotDialog
+from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.samples.plots.configGUI.profileBarPlotUI import Ui_ProfileBarPlotDialog
 
-from metagenomics.stats.CI.WilsonCI import WilsonCI
+from stamp.metagenomics.stats.CI.WilsonCI import WilsonCI
 
 from matplotlib.artist import setp
 

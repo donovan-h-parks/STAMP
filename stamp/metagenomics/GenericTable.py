@@ -21,9 +21,9 @@
 
 from PyQt4 import QtCore
 
-from metagenomics.TableHelper import SortTableStrCol
-from metagenomics.TableHelper import SortTableNumericStrCol
-from metagenomics.StringHelper import isNumber
+from stamp.metagenomics.TableHelper import SortTableStrCol
+from stamp.metagenomics.TableHelper import SortTableNumericStrCol
+from stamp.metagenomics.StringHelper import isNumber
 
 class GenericTable(QtCore.QAbstractTableModel): 
 	def __init__(self, data, headers, parent=None, *args): 

@@ -28,10 +28,9 @@ import numpy as np
 
 from matplotlib.ticker import ScalarFormatter
 
-
-from plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
-from plugins.samples.plots.configGUI.barUI import Ui_BarConfigDialog
-from metagenomics import TableHelper
+from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.samples.plots.configGUI.barUI import Ui_BarConfigDialog
+from stamp.metagenomics import TableHelper
 
 class Bar(AbstractSamplePlotPlugin):
 	'''
@@ -40,7 +39,7 @@ class Bar(AbstractSamplePlotPlugin):
 	def __init__(self, preferences, parent=None):
 		AbstractSamplePlotPlugin.__init__(self, preferences, parent)
 		self.preferences = preferences
-	 
+
 		self.name = 'Bar plot'
 		self.type = 'Statistical'
 		

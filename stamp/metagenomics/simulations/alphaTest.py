@@ -1,9 +1,9 @@
 import random
 
-from metagenomics.plugins.statisticalTests.Fishers import Fishers
-from metagenomics.plugins.statisticalTests.GTest import GTest
-from metagenomics.plugins.statisticalTests.GTestYates import GTestYates
-from metagenomics.plugins.statisticalTests.DiffBetweenProp import DiffBetweenProp
+from stamp.metagenomics.plugins.statisticalTests.Fishers import Fishers
+from stamp.metagenomics.plugins.statisticalTests.GTest import GTest
+from stamp.metagenomics.plugins.statisticalTests.GTestYates import GTestYates
+from stamp.metagenomics.plugins.statisticalTests.DiffBetweenProp import DiffBetweenProp
 
 fishers = Fishers()
 gTest = GTest()

@@ -19,7 +19,7 @@ class Ui_pValueHistogramDialog(object):
         sizePolicy.setHeightForWidth(pValueHistogramDialog.sizePolicy().hasHeightForWidth())
         pValueHistogramDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("../../../../icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icons/icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         pValueHistogramDialog.setWindowIcon(icon)
         self.verticalLayout_7 = QtGui.QVBoxLayout(pValueHistogramDialog)
         self.verticalLayout_7.setObjectName("verticalLayout_7")

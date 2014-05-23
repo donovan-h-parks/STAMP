@@ -56,4 +56,4 @@ class Ui_StatsTableDlg(object):
         self.chkShowActiveFeatures.setText(QtGui.QApplication.translate("StatsTableDlg", "Show only active features", None, QtGui.QApplication.UnicodeUTF8))
         self.btnSave.setText(QtGui.QApplication.translate("StatsTableDlg", "Save", None, QtGui.QApplication.UnicodeUTF8))
 
-import STAMP_rc
+import stamp.STAMP_rc

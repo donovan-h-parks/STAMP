@@ -22,7 +22,7 @@
 #======================================================================='''
 
 import math
-from plugins.multiGroups.AbstractMultiGroupStatsTestPlugin import AbstractMultiGroupStatsTestPlugin
+from stamp.plugins.multiGroups.AbstractMultiGroupStatsTestPlugin import AbstractMultiGroupStatsTestPlugin
 
 from scipy.stats import f_oneway
 

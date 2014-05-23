@@ -35,7 +35,7 @@ estimation, and simultaneous conservative consistency of false discovery rates: 
 approach. Journal of the Royal Statistical Society, Series B, 66:187-205. 
 '''
 
-from plugins.common.AbstractMultCompCorrection import AbstractMultCompCorrection
+from stamp.plugins.common.AbstractMultCompCorrection import AbstractMultCompCorrection
 
 import numpy
 import scipy

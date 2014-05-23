@@ -23,7 +23,8 @@ import string
 
 from PyQt4 import QtGui, QtCore
 from createProfileRITA_UI import Ui_CreateProfileRITADlg
-from GUI.customizeHeadingsDlg import CustomizeHeadingsDlg
+
+from stamp.GUI.customizeHeadingsDlg import CustomizeHeadingsDlg
 
 class ProfileRow():
 	def __init__(self):

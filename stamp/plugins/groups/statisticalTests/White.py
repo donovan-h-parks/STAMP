@@ -30,8 +30,8 @@
 
 import math
 
-from metagenomics.Bootstrap import bootstrapDiffOfMeanProp
-from plugins.groups.AbstractGroupStatsTestPlugin import AbstractGroupStatsTestPlugin
+from stamp.metagenomics.Bootstrap import bootstrapDiffOfMeanProp
+from stamp.plugins.groups.AbstractGroupStatsTestPlugin import AbstractGroupStatsTestPlugin
 
 class White(AbstractGroupStatsTestPlugin):
 	'''
@@ -65,8 +65,8 @@ class White(AbstractGroupStatsTestPlugin):
 #*****************************************************************************************************
 #*****************************************************************************************************
 
-from plugins.samples.statisticalTests.Fishers import Fishers
-from plugins.samples.confidenceIntervalMethods.DiffBetweenPropAsymptoticCC import DiffBetweenPropAsymptoticCC
+from stamp.plugins.samples.statisticalTests.Fishers import Fishers
+from stamp.plugins.samples.confidenceIntervalMethods.DiffBetweenPropAsymptoticCC import DiffBetweenPropAsymptoticCC
 
 from numpy import var
 

@@ -24,7 +24,7 @@ class Ui_SeqHistogramDialog(object):
         sizePolicy.setHeightForWidth(SeqHistogramDialog.sizePolicy().hasHeightForWidth())
         SeqHistogramDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../../../../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         SeqHistogramDialog.setWindowIcon(icon)
         self.verticalLayout_2 = QtGui.QVBoxLayout(SeqHistogramDialog)
         self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))

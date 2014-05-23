@@ -21,11 +21,13 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
+from PyQt4 import QtCore
 
-import os, platform
-from metagenomics.DirectoryHelper import runningExecutable, getMainDir
-from GUI.plotDlg import PlotDlg
+import os
+import sys
+import platform
+from stamp.metagenomics.DirectoryHelper import runningExecutable, getMainDir
+from stamp.GUI.plotDlg import PlotDlg
 
 class PlotsManager:
 	def __init__(self, cboPlots, plotScrollArea, defaultPlot):
@@ -43,7 +45,7 @@ class PlotsManager:
 		os.chdir(getMainDir())
 		
 		pluginModulePath = pluginFolder.replace('/', '.')
-		
+
 		if runningExecutable():
 			if platform.system() == 'Windows':
 				# windows plugin folder
@@ -51,6 +53,8 @@ class PlotsManager:
 			else:
 				# os x plugin folder
 				pluginFolder = './lib/python2.6/site-packages/' + pluginFolder
+		else:		
+			pluginFolder = os.path.join(os.path.split(os.path.realpath(__file__))[0], '..', '..', pluginFolder)
 		
 		for filename in os.listdir(pluginFolder):
 			if os.path.isdir(os.path.join (pluginFolder, filename)):

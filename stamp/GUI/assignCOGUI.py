@@ -71,4 +71,4 @@ class Ui_AssignCOGsDlg(object):
         self.btnCreateProfile.setText(QtGui.QApplication.translate("AssignCOGsDlg", "Create STAMP profile", None, QtGui.QApplication.UnicodeUTF8))
         self.btnCancel.setText(QtGui.QApplication.translate("AssignCOGsDlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
 
-import STAMP_rc
+import stamp.STAMP_rc

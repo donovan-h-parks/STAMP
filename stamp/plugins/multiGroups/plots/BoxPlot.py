@@ -25,10 +25,10 @@ import sys
 
 from PyQt4 import QtGui, QtCore
 
-from plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
-from plugins.multiGroups.plots.configGUI.BoxPlotUI import Ui_BoxPlotDialog
+from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.multiGroups.plots.configGUI.BoxPlotUI import Ui_BoxPlotDialog
 
-from plugins.PlotEventHandler import PlotEventHandler
+from stamp.plugins.PlotEventHandler import PlotEventHandler
 
 from matplotlib.patches import Polygon
 from matplotlib.lines import Line2D

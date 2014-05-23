@@ -23,7 +23,6 @@ import string
 
 from PyQt4 import QtGui, QtCore
 from createProfileCoMetUI import Ui_CreateProfileCoMetDlg
-from GUI.customizeHeadingsDlg import CustomizeHeadingsDlg
 
 class ProfileRow():
 	def __init__(self):
