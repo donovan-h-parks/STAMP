@@ -32,6 +32,8 @@ metagenomicPkgs.append('stamp.metagenomics.stats.distributions')
 metagenomicPkgs.append('stamp.metagenomics.stats.empiricalTests')
 metagenomicPkgs.append('stamp.metagenomics.stats.tests')
 
+root_files = ['LICENSE.txt', './manual/STAMP_Users_Guide.pdf', 'README.md']
+
 setup(
     name='STAMP',
     version='2.0.3',
@@ -40,9 +42,10 @@ setup(
     packages=['stamp', 'stamp.GUI'] + pluginPkgs + metagenomicPkgs,
     package_data={'stamp': ['data/*.txt']},
     scripts=['bin/STAMP'],
+    license='LICENSE.txt',
     url='http://pypi.python.org/pypi/stamp/',
-    license='GPL3',
     description='A graphical software package for analyzing taxonomic and functional profiles.',
+    data_files = root_files,
     long_description=open('README.md').read(),
     install_requires=[
         "numpy >= 1.7.1",
