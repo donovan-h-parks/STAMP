@@ -37,7 +37,7 @@ preferences['Replicates'] = 1000
 class VerifyPostHocTests(unittest.TestCase):
 	def testGamesHowell(self):
 		"""Verify computation of Games-Howell post-hoc test"""
-		from plugins.multiGroups.postHoc.GamesHowell import GamesHowell
+		from stamp.plugins.multiGroups.postHoc.GamesHowell import GamesHowell
 		gh = GamesHowell(preferences)
 
 		# ground truth found with SPSS v19. Values are not exact since the critical Q value 
@@ -63,7 +63,7 @@ class VerifyPostHocTests(unittest.TestCase):
 		
 	def testTukeyKramer(self):
 		"""Verify computation of Tukey-Kramer post-hoc test"""
-		from plugins.multiGroups.postHoc.TukeyKramer import TukeyKramer
+		from stamp.plugins.multiGroups.postHoc.TukeyKramer import TukeyKramer
 		tk = TukeyKramer(preferences)
 		
 		# ground truth found with the anova1 and multcompare function in MATLAB v7.10.0 and SPSS v19
@@ -88,7 +88,7 @@ class VerifyPostHocTests(unittest.TestCase):
 
 	def testScheffe(self):
 		"""Verify computation of Scheffe post-hoc test"""
-		from plugins.multiGroups.postHoc.Scheffe import Scheffe
+		from stamp.plugins.multiGroups.postHoc.Scheffe import Scheffe
 		scheffe = Scheffe(preferences)
 		
 		# ground truth example taken from http://www.mathcs.duq.edu/larget/math225/notes18.html
@@ -137,7 +137,7 @@ class VerifyPostHocTests(unittest.TestCase):
 class VerifyStatisticalTests(unittest.TestCase): 
 	def testANOVA(self):
 		"""Verify computation of ANOVA"""
-		from plugins.multiGroups.statisticalTests.ANOVA import ANOVA
+		from stamp.plugins.multiGroups.statisticalTests.ANOVA import ANOVA
 		anova = ANOVA(preferences)
 		
 		# checked against http://turner.faculty.swau.edu/mathematics/math241/materials/anova/
@@ -156,7 +156,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	def testKruskalWallis(self):
 		"""Verify computation of Kruskal-Wallis H-test"""
-		from plugins.multiGroups.statisticalTests.KruskalWallis import KruskalWallis
+		from stamp.plugins.multiGroups.statisticalTests.KruskalWallis import KruskalWallis
 		kw = KruskalWallis(preferences)
 		
 		# checked against http://faculty.vassar.edu/lowry/kw3.html
@@ -171,7 +171,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	def testTTest(self):
 		"""Verify computation of t-test (equal variance assumption) """
-		from plugins.groups.statisticalTests.Ttest import Ttest
+		from stamp.plugins.groups.statisticalTests.Ttest import Ttest
 		ttest = Ttest(preferences)
 		
 		# ground truth found with t.test in R v2.13.0
@@ -184,7 +184,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	def testWelchTest(self):
 		"""Verify computation of Welsh's t-test"""
-		from plugins.groups.statisticalTests.Welch import Welch
+		from stamp.plugins.groups.statisticalTests.Welch import Welch
 		ttest = Welch(preferences)
 		
 		# ground truth found with t.test in R v2.13.0
@@ -211,7 +211,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	def testWhiteTest(self):
 		"""Verify computation of White's non-parametric test"""
-		from plugins.groups.statisticalTests.White import White
+		from stamp.plugins.groups.statisticalTests.White import White
 		white = White(preferences)
 		
 		# This is a fairly degenerate test since the non-deterministic nature of this test
@@ -224,7 +224,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	#def testBarnard(self):
 	#	"""Verify computation of Barnard's exact test"""
-	#	from plugins.statisticalTests.Barnard import Barnard
+	#	from stamp.plugins.statisticalTests.Barnard import Barnard
 	#	barnard = Barnard(preferences)
 
 		# Ground truth obtained from StatXact v8.0.0
@@ -234,7 +234,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	def testChiSquare(self):
 		"""Verify computation of Chi-square test"""
-		from plugins.samples.statisticalTests.ChiSquare import ChiSquare
+		from stamp.plugins.samples.statisticalTests.ChiSquare import ChiSquare
 		chiSquare = ChiSquare(preferences) 
 		
 		# Ground truth obtained from R version 2.10		
@@ -248,7 +248,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	def testChiSquareYates(self):
 		"""Verify computation of Chi-square test with Yates' continuity correction"""
-		from plugins.samples.statisticalTests.ChiSquareYates import ChiSquareYates
+		from stamp.plugins.samples.statisticalTests.ChiSquareYates import ChiSquareYates
 		chiSquareYates = ChiSquareYates(preferences)
 		
 		# Ground truth obtained from R version 2.10		
@@ -262,7 +262,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	def testDiffBetweenProp(self):
 		"""Verify computation of Difference between proportions test"""
-		from plugins.samples.statisticalTests.DiffBetweenProp import DiffBetweenProp
+		from stamp.plugins.samples.statisticalTests.DiffBetweenProp import DiffBetweenProp
 		diffBetweenProp = DiffBetweenProp(preferences)
 		
 		# Ground truth obtained from R version 2.10		
@@ -276,7 +276,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 
 	def testFishers(self):
 		"""Verify computation of Fisher's exact test (minimum-likelihood approach)"""
-		from plugins.samples.statisticalTests.Fishers import Fishers
+		from stamp.plugins.samples.statisticalTests.Fishers import Fishers
 		fishers = Fishers(preferences)
 		
 		# Ground truth obtained from R version 2.10		
@@ -294,7 +294,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	def testGTest(self):
 		"""Verify computation of G-test"""
-		from plugins.samples.statisticalTests.GTest import GTest
+		from stamp.plugins.samples.statisticalTests.GTest import GTest
 		gTest = GTest(preferences)
 		
 		# Ground truth obtained from Peter L. Hurd's R script (http://www.psych.ualberta.ca/~phurd/cruft/g.test.r)	
@@ -308,7 +308,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	def testGTestYates(self):
 		"""Verify computation of G-test with Yates' continuity correction"""
-		from plugins.samples.statisticalTests.GTestYates import GTestYates
+		from stamp.plugins.samples.statisticalTests.GTestYates import GTestYates
 		gTestYates = GTestYates(preferences)
 		
 		# Ground truth obtained from Peter L. Hurd's R script (http://www.psych.ualberta.ca/~phurd/cruft/g.test.r)	
@@ -322,7 +322,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 		
 	def testHypergeometric(self):
 		"""Verify computation of Hypergeometric test (Fisher's exact test with p-value doubling approach)"""
-		from plugins.samples.statisticalTests.Hypergeometric import Hypergeometric
+		from stamp.plugins.samples.statisticalTests.Hypergeometric import Hypergeometric
 		hypergeometric = Hypergeometric(preferences)
 		
 		# Ground truth obtained using the phyper() and dyper() function in R version 2.10	 
@@ -337,7 +337,7 @@ class VerifyStatisticalTests(unittest.TestCase):
 class VerifyEffectSizeFilters(unittest.TestCase):
 	def testEtaSquared(self):
 		"""Verify computation of eta-squared effect size filter"""
-		from plugins.multiGroups.effectSizeFilters.EtaSquared import EtaSquared
+		from stamp.plugins.multiGroups.effectSizeFilters.EtaSquared import EtaSquared
 		etaSquared = EtaSquared(preferences)
 		
 		# ground truth taken from http://turner.faculty.swau.edu/mathematics/math241/materials/anova/
@@ -350,7 +350,7 @@ class VerifyEffectSizeFilters(unittest.TestCase):
 		
 	def testDiffBetweenProp(self):
 		"""Verify computation of Difference between proportions effect size filter"""
-		from plugins.samples.effectSizeFilters.DiffBetweenProp import DiffBetweenProp
+		from stamp.plugins.samples.effectSizeFilters.DiffBetweenProp import DiffBetweenProp
 		diffBetweenProp = DiffBetweenProp(preferences)
 		
 		# Ground truth calculated by hand
@@ -362,7 +362,7 @@ class VerifyEffectSizeFilters(unittest.TestCase):
 		
 	def testOddsRatio(self):
 		"""Verify computation of Odds ratio effect size filter"""
-		from plugins.samples.effectSizeFilters.OddsRatio import OddsRatio
+		from stamp.plugins.samples.effectSizeFilters.OddsRatio import OddsRatio
 		oddsRatio = OddsRatio(preferences)
 		
 		# Ground truth calculated by hand
@@ -374,7 +374,7 @@ class VerifyEffectSizeFilters(unittest.TestCase):
 		
 	def testRatioProportions(self):
 		"""Verify computation of ratio of proportions effect size filter"""
-		from plugins.samples.effectSizeFilters.RatioProportions import RatioProportions
+		from stamp.plugins.samples.effectSizeFilters.RatioProportions import RatioProportions
 		ratioProportions = RatioProportions(preferences)
 		
 		# Ground truth calculated by hand
@@ -386,7 +386,7 @@ class VerifyEffectSizeFilters(unittest.TestCase):
 		
 	def testDiffBetweenPropGroup(self):
 		"""Verify computation of Difference between proportions group effect size filter"""
-		from plugins.groups.effectSizeFilters.DiffBetweenProp import DiffBetweenProp
+		from stamp.plugins.groups.effectSizeFilters.DiffBetweenProp import DiffBetweenProp
 		diffBetweenProp = DiffBetweenProp(preferences)
 		
 		# Ground truth calculated by hand
@@ -398,7 +398,7 @@ class VerifyEffectSizeFilters(unittest.TestCase):
 		
 	def testRatioProportionsGroup(self):
 		"""Verify computation of ratio of proportions group effect size filter"""
-		from plugins.groups.effectSizeFilters.RatioProportions import RatioProportions
+		from stamp.plugins.groups.effectSizeFilters.RatioProportions import RatioProportions
 		ratioProportions = RatioProportions(preferences)
 		
 		# Ground truth calculated by hand
@@ -411,7 +411,7 @@ class VerifyEffectSizeFilters(unittest.TestCase):
 class VerifyConfidenceIntervalMethods(unittest.TestCase):
 	def testDiffBetweenPropAsymptotic(self):
 		"""Verify computation of Difference between proportions asymptotic CI method"""
-		from plugins.samples.confidenceIntervalMethods.DiffBetweenPropAsymptotic import DiffBetweenPropAsymptotic
+		from stamp.plugins.samples.confidenceIntervalMethods.DiffBetweenPropAsymptotic import DiffBetweenPropAsymptotic
 		diffBetweenPropAsymptotic = DiffBetweenPropAsymptotic(preferences)
 		
 		lowerCI, upperCI, effectSize, _ = diffBetweenPropAsymptotic.run(table1[0], table1[1], table1[2], table1[3], 0.95)
@@ -426,7 +426,7 @@ class VerifyConfidenceIntervalMethods(unittest.TestCase):
 		
 	def testDiffBetweenPropAsymptoticCC(self):
 		"""Verify computation of Difference between proportions asymptotic CI method with continuity correction"""
-		from plugins.samples.confidenceIntervalMethods.DiffBetweenPropAsymptoticCC import DiffBetweenPropAsymptoticCC
+		from stamp.plugins.samples.confidenceIntervalMethods.DiffBetweenPropAsymptoticCC import DiffBetweenPropAsymptoticCC
 		diffBetweenPropAsymptoticCC = DiffBetweenPropAsymptoticCC(preferences)
 		
 		lowerCI, upperCI, effectSize, _ = diffBetweenPropAsymptoticCC.run(table1[0], table1[1], table1[2], table1[3], 0.95)
@@ -441,7 +441,7 @@ class VerifyConfidenceIntervalMethods(unittest.TestCase):
 		
 	def testNewcombeWilson(self):
 		"""Verify computation of Newcombe-Wilson CI method"""
-		from plugins.samples.confidenceIntervalMethods.NewcombeWilson import NewcombeWilson
+		from stamp.plugins.samples.confidenceIntervalMethods.NewcombeWilson import NewcombeWilson
 		newcombeWilson = NewcombeWilson(preferences)
 		
 		lowerCI, upperCI, effectSize, _ = newcombeWilson.run(table1[0], table1[1], table1[2], table1[3], 0.95)		
@@ -456,7 +456,7 @@ class VerifyConfidenceIntervalMethods(unittest.TestCase):
 		
 	def testOddsRatio(self):
 		"""Verify computation of Odds ratio CI method"""
-		from plugins.samples.confidenceIntervalMethods.OddsRatio import OddsRatio
+		from stamp.plugins.samples.confidenceIntervalMethods.OddsRatio import OddsRatio
 		oddsRatio = OddsRatio(preferences)
 		
 		# Ground truth calculated by hand
@@ -472,7 +472,7 @@ class VerifyConfidenceIntervalMethods(unittest.TestCase):
 		
 	def testRatioProportions(self):
 		"""Verify computation of Ratio of proportions CI method"""
-		from plugins.samples.confidenceIntervalMethods.RatioProportions import RatioProportions
+		from stamp.plugins.samples.confidenceIntervalMethods.RatioProportions import RatioProportions
 		ratioProportions = RatioProportions(preferences)
 		
 		# Ground truth calculated by hand
@@ -491,7 +491,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 	
 	def testBenjaminiHochbergFDR(self):
 		"""Verify computation of Bejamini-Hochberg FDR method"""
-		from plugins.common.multipleComparisonCorrections.BenjaminiHochbergFDR import BenjaminiHochbergFDR
+		from stamp.plugins.common.multipleComparisonCorrections.BenjaminiHochbergFDR import BenjaminiHochbergFDR
 		benjaminiHochbergFDR = BenjaminiHochbergFDR(preferences)
 		
 		# Ground truth calculated explicitly
@@ -503,7 +503,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 			
 	def testBonferroni(self):
 		"""Verify computation of Bonferroni method"""
-		from plugins.common.multipleComparisonCorrections.Bonferroni import Bonferroni
+		from stamp.plugins.common.multipleComparisonCorrections.Bonferroni import Bonferroni
 		bonferroni = Bonferroni(preferences)
 		
 		# Ground truth calculated explicitly
@@ -513,7 +513,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 			
 	def testHolmBonferroni(self):
 		"""Verify computation of Holm-Bonferroni method"""
-		from plugins.common.multipleComparisonCorrections.additional.HolmBonferroni import HolmBonferroni
+		from stamp.plugins.common.multipleComparisonCorrections.additional.HolmBonferroni import HolmBonferroni
 		holmBonferroni = HolmBonferroni(preferences)
 		
 		# Ground truth calculated by hand
@@ -527,7 +527,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 		
 	def testNoCorrection(self):
 		"""Verify computation of No multiple comparison correction method"""
-		from plugins.common.multipleComparisonCorrections.NoCorrection import NoCorrection
+		from stamp.plugins.common.multipleComparisonCorrections.NoCorrection import NoCorrection
 		noCorrection = NoCorrection(preferences)
 		
 		# Ground truth calculated explicitly
@@ -537,7 +537,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 			
 	def testSidak(self):
 		"""Verify computation of Sidak method"""
-		from plugins.common.multipleComparisonCorrections.Sidak import Sidak
+		from stamp.plugins.common.multipleComparisonCorrections.Sidak import Sidak
 		sidak = Sidak(preferences)
 		
 		# Ground truth calculated explicitly
