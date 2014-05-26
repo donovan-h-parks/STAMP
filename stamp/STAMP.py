@@ -1741,7 +1741,7 @@ class MainWindow(QtGui.QMainWindow):
 				'%s\n'
 				'%s\n'
 				'%s\n\n'
-				'%s' % ('Donovan Parks and Robert Beiko', 'v2.0.3', 'May 18, 2014', 'Program icon by Caihua (http://commons.wikimedia.org/wiki/File:Fairytale_colors.png)'))
+				'%s' % ('Donovan Parks and Robert Beiko', 'v2.0.3', 'May 26, 2014', 'Program icon by Caihua (http://commons.wikimedia.org/wiki/File:Fairytale_colors.png)'))
 
 	def closeEvent(self, event):
 		# save size and location of main window and all dock widgets
