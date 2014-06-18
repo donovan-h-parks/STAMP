@@ -102,13 +102,13 @@ class CreateProfileBiomDlg(QtGui.QDialog):
 		header.append('Observation Ids')
 		
 		#add the sample ids to the header line
-		header.extend(table.SampleIds)
+		header.extend(table.sample_ids)
 		
 		fout = open(output_name, 'w')
 		fout.write("\t".join(header) + '\n')
 		
 		#now process each observation (row in the table)
-		for obs_vals, obs_id, obs_metadata in table.iterObservations():
+		for obs_vals, obs_id, obs_metadata in table.iter(axis='observation'):
 			row=[]
 			if max_len_metadata > 0:
 				row = obs_metadata[metadata_name]
