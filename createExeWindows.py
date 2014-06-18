@@ -78,7 +78,7 @@ setup(
 					"optimize": 2,
 					"skip_archive": True,
 					"includes": ["sip", "PyQt4", "sqlite3"],
-					"packages": ["matplotlib","pytz","scipy","mpl_toolkits", "pyparsing", "biom", "pyqi"],
+					"packages": ["matplotlib","pytz","scipy","mpl_toolkits", "pyparsing", "biom", "pyqi", "h5py"],
 					"dll_excludes": ["libgdk_pixbuf-2.0-0.dll","libgdk-win32-2.0-0.dll", "libgobject-2.0-0.dll", "tcl84.dll", "tk84.dll"],
 				}
 			},
