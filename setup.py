@@ -49,10 +49,9 @@ setup(
     data_files = root_files,
     long_description=open('README.md').read(),
     install_requires=[
-        "numpy >= 1.8.1",
-        "scipy >= 0.14.0",
+        "numpy >= 1.7.1",
+        "scipy >= 0.13.0",
         "matplotlib >= 1.3.1",
-        "biom-format >= 2.0",
-        "pyqi >= 0.3.2",
-        "h5py >= 2.3.0",],
+        "biom-format >= 2.0.1",
+        "pyqi >= 0.3.2",],
 )
