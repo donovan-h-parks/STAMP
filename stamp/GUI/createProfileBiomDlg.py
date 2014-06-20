@@ -87,9 +87,9 @@ class CreateProfileBiomDlg(QtGui.QDialog):
 		metadata_name = metadata_name.split('(')[0].rstrip()
 		if metadata_name is None or metadata_name == '<observation ids>':
 			max_len_metadata = 0
-		elif table.ObservationMetadata and metadata_name in table.ObservationMetadata[0]:
+		elif table.observation_metadata and metadata_name in table.observation_metadata[0]:
 			#figure out the longest list within the given metadata
-			max_len_metadata = max(len(p[metadata_name]) for p in table.ObservationMetadata)
+			max_len_metadata = max(len(p[metadata_name]) for p in table.observation_metadata)
 		else:
 			QtGui.QMessageBox.information(self, 'Unrecognized metadata file', "'" + metadata_name + "' was not found in the BIOM table.", QtGui.QMessageBox.Ok)
 			return
