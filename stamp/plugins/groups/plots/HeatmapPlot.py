@@ -23,7 +23,7 @@
 
 import sys
 
-from PyQt4 import QtGui
+from PyQt4 import QtGui, QtCore
 
 from stamp.plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.groups.plots.configGUI.HeatmapPlotUI import Ui_HeatmapPlotDialog
@@ -116,6 +116,12 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 
 	def plot(self, profile, statsResults):
 		if len(profile.profileDict) <= 0 or len(profile.samplesInGroup1) == 0 or len(profile.samplesInGroup2) == 0:
+			self.emptyAxis()
+			return
+		elif len(profile.profileDict) > 100 or len(profile.samplesInGroup1) + len(profile.samplesInGroup2) > 100:
+			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+			QtGui.QMessageBox.information(self, 'Too much data!', 'Heatmap plots are limited to 100 samples and 100 features.', QtGui.QMessageBox.Ok)
+			QtGui.QApplication.instance().restoreOverrideCursor()
 			self.emptyAxis()
 			return
 			
