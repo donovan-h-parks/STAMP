@@ -1,7 +1,7 @@
 import random
 
 numGroups = 3
-numSamples = 100
+numSamples = 200
 numFeatures = 5000
 
 # create metadata file
