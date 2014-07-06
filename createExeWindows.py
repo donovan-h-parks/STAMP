@@ -66,10 +66,10 @@ mpl_data_files = mpl.get_py2exe_datafiles()
 # setup configuration
 setup(
 	name = "STAMP",
-	version = "2.0.3",
+	version = "2.0.6",
 	description = "Statistical analysis of taxonomic and functional profiles",
 	author = "Donovan Parks",
-	windows=[{"script":"STAMP.py", "icon_resources": [(1, "./stamp/icons/programIcon.ico")]}],
+	windows=[{"script":"STAMP.py", "icon_resources": [(1, "./stamp/icons/stamp.ico")]}],
 	options = 
 			{
 				"py2exe":
