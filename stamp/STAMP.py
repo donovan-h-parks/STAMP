@@ -23,7 +23,8 @@ __author__ = 'Donovan Parks'
 __copyright__ = 'Copyright 2013'
 __credits__ = ['Donovan Parks']
 __license__ = 'GPL3'
-__version__ = '2.0.5'
+__version__ = '2.0.6'
+__date__ = 'July 7, 2014'
 __maintainer__ = 'Donovan Parks'
 __email__ = 'donovan.parks@gmail.com'
 __status__ = 'Development'
@@ -1741,7 +1742,7 @@ class MainWindow(QtGui.QMainWindow):
 				'%s\n'
 				'%s\n'
 				'%s\n\n'
-				'%s' % ('Donovan Parks and Robert Beiko', 'v2.0.5', 'June 29, 2014', 'Program icon by Caihua (http://commons.wikimedia.org/wiki/File:Fairytale_colors.png)'))
+				'%s' % ('Donovan Parks and Robert Beiko', __version__, __date__, 'Program icon by Caihua (http://commons.wikimedia.org/wiki/File:Fairytale_colors.png)'))
 
 	def closeEvent(self, event):
 		# save size and location of main window and all dock widgets
