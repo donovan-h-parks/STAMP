@@ -152,6 +152,14 @@ class MultiGroupProfile:
 			allData.append(data)
 		
 		return allData
+	
+	def getActiveFeatureFromActiveSamplesCounts(self, activeFeatures):
+		allData = [] 
+		for feature in activeFeatures:
+			data = self.getActiveFeatureCounts(feature)
+			allData.append(data)
+		
+		return allData
 		
 	def getParentCounts(self, feature):
 		profile = self.profileDict[feature]
@@ -218,6 +226,14 @@ class MultiGroupProfile:
 	def getActiveFeatureProportionsAll(self):
 		allData = [] 
 		for feature in self.profileDict.keys():
+			data = self.getActiveFeatureProportions(feature)
+			allData.append(data)
+		
+		return allData
+	
+	def getActiveFeatureFromActiveSamplesProportions(self, activeFeatures):
+		allData = [] 
+		for feature in activeFeatures:
 			data = self.getActiveFeatureProportions(feature)
 			allData.append(data)
 		

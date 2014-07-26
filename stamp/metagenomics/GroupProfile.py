@@ -87,9 +87,12 @@ class GroupProfile:
 		return data1, data2
 		
 	def getFeatureCountsAll(self):
+		return self.getActiveFeatureCounts(self.profileDict.keys())
+
+	def getActiveFeatureCounts(self, activeFeatures):
 		seqGroup1 = [] 
 		seqGroup2 = []
-		for feature in self.profileDict.keys():
+		for feature in activeFeatures:
 			data1, data2 = self.getFeatureCounts(feature)
 			seqGroup1.append(data1)
 			seqGroup2.append(data2)
@@ -130,9 +133,12 @@ class GroupProfile:
 		return data1, data2
 		
 	def getFeatureProportionsAll(self):
+		return self.getActiveFeatureProportions(self.profileDict.keys())
+	
+	def getActiveFeatureProportions(self, activeFeatures):
 		groupData1 = [] 
 		groupData2 = []
-		for feature in self.profileDict.keys():
+		for feature in activeFeatures:
 			data1, data2 = self.getFeatureProportions(feature)
 			groupData1.append(data1)
 			groupData2.append(data2)

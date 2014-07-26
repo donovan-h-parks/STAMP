@@ -58,10 +58,9 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		self.name = 'Heatmap plot'
 		self.type = 'Exploratory'
 		
-		self.bPlotFeaturesIndividually = False
-		
 		self.settings = preferences['Settings']
 		self.fieldToPlot = self.settings.value('group: ' + self.name + '/field to plot', 'Proportion of sequences (%)').toString()
+		self.bPlotOnlyActiveFeatures = self.settings.value('group: ' + self.name + '/plot only active features', False).toBool()
 		self.figWidth = self.settings.value('group: ' + self.name + '/width', 7.0).toDouble()[0]
 		self.figHeight = self.settings.value('group: ' + self.name + '/height', 7.0).toDouble()[0]
 		self.dendrogramMethod = self.settings.value('group: ' + self.name + '/dendrogram method', 'Average neighbour (UPGMA)').toString()
@@ -79,6 +78,7 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		self.name = plotToCopy.name
 		
 		self.fieldToPlot = plotToCopy.fieldToPlot
+		self.bPlotOnlyActiveFeatures = plotToCopy.bPlotOnlyActiveFeatures
 		
 		self.figWidth = plotToCopy.figWidth
 		self.figHeight = plotToCopy.figHeight
@@ -115,10 +115,16 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		return index, dendrogram['leaves']
 
 	def plot(self, profile, statsResults):
-		if len(profile.profileDict) <= 0 or len(profile.samplesInGroup1) == 0 or len(profile.samplesInGroup2) == 0:
+		
+		# determine features to plot
+		featuresToPlot = profile.profileDict.keys()
+		if self.bPlotOnlyActiveFeatures:
+			featuresToPlot = statsResults.activeFeatures
+
+		if len(featuresToPlot) <= 1 or (len(profile.samplesInGroup1) + len(profile.samplesInGroup2)) <= 1:
 			self.emptyAxis()
 			return
-		elif len(profile.profileDict) > 100 or len(profile.samplesInGroup1) + len(profile.samplesInGroup2) > 100:
+		elif len(featuresToPlot) > 100 or len(profile.samplesInGroup1) + len(profile.samplesInGroup2) > 100:
 			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 			QtGui.QMessageBox.information(self, 'Too much data!', 'Heatmap plots are limited to 100 samples and 100 features.', QtGui.QMessageBox.Ok)
 			QtGui.QApplication.instance().restoreOverrideCursor()
@@ -159,9 +165,9 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		
 		# *** Get data for each group
 		if self.fieldToPlot == "Number of sequences":
-			data1, data2 = profile.getFeatureCountsAll()
+			data1, data2 = profile.getActiveFeatureCounts(featuresToPlot)
 		else: # Proportion of sequences (%)
-			data1, data2 = profile.getFeatureProportionsAll()
+			data1, data2 = profile.getActiveFeatureProportions(featuresToPlot)
 			
 		matrix = []
 		for row in data1:
@@ -174,7 +180,7 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 			
 		# *** Get heatmap data
 		colHeaders = profile.samplesInGroup1 + profile.samplesInGroup2
-		rowHeaders = profile.getFeatures()
+		rowHeaders = featuresToPlot 
 		
 		# *** Find longest label
 		bTruncate = False
@@ -296,25 +302,27 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		
 		sampleColourMap = mpl.colors.ListedColormap(sampleColourMap)
 		matrix = matrix[:,leafIndex2]
-		ind2 = ind2[:,leafIndex2] 
+		ind2 = ind2[leafIndex2] 
 		
-		axc = self.fig.add_axes([colClusterBarX, colClusterBarY, colClusterBarW, colClusterBarH])  # axes for column side colorbar
-		dc = numpy.array(numpy.arange(len(leafIndex2)), dtype=int)
-		dc.shape = (1,len(leafIndex2)) 
-		axc.matshow(dc, aspect='auto', origin='lower', cmap=sampleColourMap)
-		axc.set_xticks([]) 
-		axc.set_yticks([])
+		if self.bShowTopDendrogram:
+			axc = self.fig.add_axes([colClusterBarX, colClusterBarY, colClusterBarW, colClusterBarH])  # axes for column side colorbar
+			dc = numpy.array(numpy.arange(len(leafIndex2)), dtype=int)
+			dc.shape = (1,len(leafIndex2)) 
+			axc.matshow(dc, aspect='auto', origin='lower', cmap=sampleColourMap)
+			axc.set_xticks([]) 
+			axc.set_yticks([])
 
 		# plot row clustering bars
 		matrix = matrix[leafIndex1,:]
-		ind1 = ind1[leafIndex1,:]
+		ind1 = ind1[leafIndex1]
 		
-		axr = self.fig.add_axes([rowClusterBarX, rowClusterBarY, rowClusterBarW, rowClusterBarH]) 
-		dr = numpy.array(ind1, dtype=int)
-		dr.shape = (len(ind1),1)
-		axr.matshow(dr, aspect='auto', origin='lower', cmap=self.discreteColourMap)
-		axr.set_xticks([]) 
-		axr.set_yticks([])
+		if self.bShowLeftDendrogram:
+			axr = self.fig.add_axes([rowClusterBarX, rowClusterBarY, rowClusterBarW, rowClusterBarH]) 
+			dr = numpy.array(ind1, dtype=int)
+			dr.shape = (len(ind1),1)
+			axr.matshow(dr, aspect='auto', origin='lower', cmap=self.discreteColourMap)
+			axr.set_xticks([]) 
+			axr.set_yticks([])
 
 		# determine scale for colour map
 		minValue = 1e6
@@ -372,6 +380,7 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		configDlg = ConfigureDialog(Ui_HeatmapPlotDialog)
 		
 		configDlg.ui.cboFieldToPlot.setCurrentIndex(configDlg.ui.cboFieldToPlot.findText(self.fieldToPlot))
+		configDlg.ui.chkPlotOnlyActiveFeatures.setChecked(self.bPlotOnlyActiveFeatures)
 
 		configDlg.ui.spinFigWidth.setValue(self.figWidth)
 		configDlg.ui.spinFigHeight.setValue(self.figHeight)
@@ -401,6 +410,7 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 				
 		if configDlg.exec_() == QtGui.QDialog.Accepted:
 			self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
+			self.bPlotOnlyActiveFeatures = configDlg.ui.chkPlotOnlyActiveFeatures.isChecked()
 			
 			self.figWidth = configDlg.ui.spinFigWidth.value()
 			self.figHeight = configDlg.ui.spinFigHeight.value()
@@ -430,6 +440,7 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 			self.dendrogramHeight = configDlg.ui.spinDendrogramHeight.value()
 				
 			self.settings.setValue('group: ' + self.name + '/field to plot', self.fieldToPlot)
+			self.settings.setValue('group: ' + self.name + '/plot only active features', self.bPlotOnlyActiveFeatures)
 			self.settings.setValue('group: ' + self.name + '/width', self.figWidth)
 			self.settings.setValue('group: ' + self.name + '/height', self.figHeight)
 			self.settings.setValue('group: ' + self.name + '/dendrogram method', self.dendrogramMethod)

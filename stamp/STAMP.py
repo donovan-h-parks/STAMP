@@ -23,8 +23,8 @@ __author__ = 'Donovan Parks'
 __copyright__ = 'Copyright 2013'
 __credits__ = ['Donovan Parks']
 __license__ = 'GPL3'
-__version__ = '2.0.6'
-__date__ = 'July 7, 2014'
+__version__ = '2.0.7'
+__date__ = 'July 26, 2014'
 __maintainer__ = 'Donovan Parks'
 __email__ = 'donovan.parks@gmail.com'
 __status__ = 'Development'
@@ -1738,7 +1738,7 @@ class MainWindow(QtGui.QMainWindow):
 
 	def openAboutDlg(self):
 		QtGui.QMessageBox.about(self, 'About...',
-				'STAMP: STatistical Analysis of Metagenomic Profiles\n\n'
+				'STAMP: statistical analysis of taxonomic and functional profiles\n\n'
 				'%s\n'
 				'%s\n'
 				'%s\n\n'

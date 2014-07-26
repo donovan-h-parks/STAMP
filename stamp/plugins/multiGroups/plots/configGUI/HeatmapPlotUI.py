@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'HeatmapPlot.ui'
 #
-# Created: Wed Oct 16 11:32:12 2013
+# Created: Sat Jul 26 11:35:52 2014
 #      by: PyQt4 UI code generator 4.9.6
 #
 # WARNING! All changes made in this file will be lost!
@@ -26,14 +26,14 @@ except AttributeError:
 class Ui_HeatmapPlotDialog(object):
     def setupUi(self, HeatmapPlotDialog):
         HeatmapPlotDialog.setObjectName(_fromUtf8("HeatmapPlotDialog"))
-        HeatmapPlotDialog.resize(260, 432)
+        HeatmapPlotDialog.resize(260, 455)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(HeatmapPlotDialog.sizePolicy().hasHeightForWidth())
         HeatmapPlotDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../../../../../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         HeatmapPlotDialog.setWindowIcon(icon)
         self.verticalLayout_3 = QtGui.QVBoxLayout(HeatmapPlotDialog)
         self.verticalLayout_3.setObjectName(_fromUtf8("verticalLayout_3"))
@@ -53,6 +53,9 @@ class Ui_HeatmapPlotDialog(object):
         self.cboFieldToPlot.addItem(_fromUtf8(""))
         self.horizontalLayout_6.addWidget(self.cboFieldToPlot)
         self.verticalLayout_3.addLayout(self.horizontalLayout_6)
+        self.chkPlotOnlyActiveFeatures = QtGui.QCheckBox(HeatmapPlotDialog)
+        self.chkPlotOnlyActiveFeatures.setObjectName(_fromUtf8("chkPlotOnlyActiveFeatures"))
+        self.verticalLayout_3.addWidget(self.chkPlotOnlyActiveFeatures)
         self.groupBox_3 = QtGui.QGroupBox(HeatmapPlotDialog)
         self.groupBox_3.setObjectName(_fromUtf8("groupBox_3"))
         self.verticalLayout = QtGui.QVBoxLayout(self.groupBox_3)
@@ -269,6 +272,7 @@ class Ui_HeatmapPlotDialog(object):
         self.label.setText(_translate("HeatmapPlotDialog", "Field to plot:", None))
         self.cboFieldToPlot.setItemText(0, _translate("HeatmapPlotDialog", "Number of sequences", None))
         self.cboFieldToPlot.setItemText(1, _translate("HeatmapPlotDialog", "Proportion of sequences (%)", None))
+        self.chkPlotOnlyActiveFeatures.setText(_translate("HeatmapPlotDialog", "Plot only active features", None))
         self.groupBox_3.setTitle(_translate("HeatmapPlotDialog", "Figure size", None))
         self.lblFigureWidth.setText(_translate("HeatmapPlotDialog", "Width:", None))
         self.lblFigureHeight.setText(_translate("HeatmapPlotDialog", "Height:", None))
