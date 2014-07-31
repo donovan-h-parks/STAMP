@@ -22,6 +22,7 @@
 #=======================================================================
 
 import string
+from collections import defaultdict
 
 from stamp.metagenomics.ProfileTree import ProfileTree, Node
 from stamp.metagenomics.StringHelper import isNumber
@@ -36,7 +37,7 @@ class StampIO(object):
 		fin = open(filename, 'U')
 		data = map(string.strip, fin.readlines())
 		fin.close()
- 
+
 		profileTree = ProfileTree()
 		
 		# determine number of hierarchical levels and samples
@@ -48,6 +49,11 @@ class StampIO(object):
 		
 		if profileTree.numHierarchicalLevels() == 0:
 			errMsg = 'Profile file must contain a column indicating feature names.'
+			return None, errMsg
+		
+		# verify data forms a strict hierarchy
+		errMsg = self.checkHierarchy(data, profileTree.numHierarchicalLevels())
+		if errMsg != None:
 			return None, errMsg
 		
 		# construct profile tree
@@ -67,7 +73,7 @@ class StampIO(object):
 				# check for unclassified categories
 				taxa = ''
 				for j in xrange(0, len(categories)):
-					if categories[j].lower() == 'unclassified':
+					if self.isUnclassified(categories[j]):
 						categories[j] = 'Unclassified ' + taxa
 						categories[j] = categories[j].rstrip()
 					else:
@@ -95,6 +101,14 @@ class StampIO(object):
 			errMsg = 'Failed to correctly parse line: ' + str(i+1)
 			
 		return profileTree, errMsg
+	
+	def isUnclassified(self, value):
+		"""Check if value (taxon, metabolic pathway) is unclassified."""
+		
+		# currently unclassified sequences need to be explicitly stated as
+		# 'unclassified' (case insensitive) or '*__unclassified' which is
+		# the format used by GreenGenes
+		return value.lower() == 'unclassified' or value.lower()[1:] == '__unclassified'
 				
 	def determineColumns(self, data, profileTree):
 		firstDataRow = data[1].split('\t')
@@ -111,3 +125,30 @@ class StampIO(object):
 		headings = map(string.strip, headings)
 		profileTree.hierarchyHeadings = headings[0:firstSampleIndex]
 		profileTree.sampleNames = headings[firstSampleIndex:]
+		
+	def checkHierarchy(self, data, numHierarchicalLevels):
+		"""Verify that data forms a strict hierarchy."""
+		parent = defaultdict(dict)
+		for line in data:
+			lineSplit = line.split('\t')
+			lineSplit = map(string.strip, lineSplit)
+				
+			categories = lineSplit[0:numHierarchicalLevels]
+			for r, value in enumerate(categories):
+				if r == 0:
+					continue # top of hierarchy has no parent
+				
+				if self.isUnclassified(value):
+					continue # ignore unclassified sequences
+				
+				if r not in parent:
+					parent[r] = {}
+					
+				if value not in parent[r]:
+					parent[r][value] = categories[r-1]
+				else:
+					if parent[r][value] != categories[r-1]:
+						# data is not a strict hierarchy
+						return "Data does not form a strict hierarchy. Child %s has multiple parents (e.g., %s, %s)." % (value, parent[r][value], categories[r-1])		
+		return None
+			
