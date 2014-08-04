@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'HeatmapPlot.ui'
 #
-# Created: Sat Jul 26 11:35:52 2014
+# Created: Mon Aug 04 15:27:32 2014
 #      by: PyQt4 UI code generator 4.9.6
 #
 # WARNING! All changes made in this file will be lost!
@@ -73,7 +73,7 @@ class Ui_HeatmapPlotDialog(object):
         self.spinFigWidth.setSizePolicy(sizePolicy)
         self.spinFigWidth.setDecimals(2)
         self.spinFigWidth.setMinimum(0.5)
-        self.spinFigWidth.setMaximum(30.0)
+        self.spinFigWidth.setMaximum(100.0)
         self.spinFigWidth.setSingleStep(0.1)
         self.spinFigWidth.setProperty("value", 7.0)
         self.spinFigWidth.setObjectName(_fromUtf8("spinFigWidth"))
@@ -90,7 +90,7 @@ class Ui_HeatmapPlotDialog(object):
         self.spinFigHeight.setSizePolicy(sizePolicy)
         self.spinFigHeight.setDecimals(2)
         self.spinFigHeight.setMinimum(0.5)
-        self.spinFigHeight.setMaximum(30.0)
+        self.spinFigHeight.setMaximum(100.0)
         self.spinFigHeight.setSingleStep(0.1)
         self.spinFigHeight.setProperty("value", 7.0)
         self.spinFigHeight.setObjectName(_fromUtf8("spinFigHeight"))
@@ -268,7 +268,7 @@ class Ui_HeatmapPlotDialog(object):
         QtCore.QMetaObject.connectSlotsByName(HeatmapPlotDialog)
 
     def retranslateUi(self, HeatmapPlotDialog):
-        HeatmapPlotDialog.setWindowTitle(_translate("HeatmapPlotDialog", "PCA plot", None))
+        HeatmapPlotDialog.setWindowTitle(_translate("HeatmapPlotDialog", "Heatmap plot", None))
         self.label.setText(_translate("HeatmapPlotDialog", "Field to plot:", None))
         self.cboFieldToPlot.setItemText(0, _translate("HeatmapPlotDialog", "Number of sequences", None))
         self.cboFieldToPlot.setItemText(1, _translate("HeatmapPlotDialog", "Proportion of sequences (%)", None))

@@ -135,20 +135,28 @@ class StampIO(object):
 				
 			categories = lineSplit[0:numHierarchicalLevels]
 			for r, value in enumerate(categories):
+				# top of hierarchy has no parent
 				if r == 0:
-					continue # top of hierarchy has no parent
+					continue 
 				
+				# ignore unclassified sequences
 				if self.isUnclassified(value):
-					continue # ignore unclassified sequences
+					continue 
+				
+				# make sure parent is not unclassified
+				parentValue = categories[r-1]
+				if self.isUnclassified(parentValue):
+					return "Child %s has an unclassified parent." % value
+					continue 
 				
 				if r not in parent:
 					parent[r] = {}
 					
 				if value not in parent[r]:
-					parent[r][value] = categories[r-1]
+					parent[r][value] = parentValue
 				else:
-					if parent[r][value] != categories[r-1]:
+					if parent[r][value] != parentValue:
 						# data is not a strict hierarchy
-						return "Data does not form a strict hierarchy. Child %s has multiple parents (e.g., %s, %s)." % (value, parent[r][value], categories[r-1])		
+						return "Data does not form a strict hierarchy. Child %s has multiple parents (e.g., %s, %s)." % (value, parent[r][value], parentValue)		
 		return None
 			

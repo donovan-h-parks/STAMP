@@ -124,9 +124,9 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		if len(featuresToPlot) <= 1 or (len(profile.samplesInGroup1) + len(profile.samplesInGroup2)) <= 1:
 			self.emptyAxis()
 			return
-		elif len(featuresToPlot) > 100 or len(profile.samplesInGroup1) + len(profile.samplesInGroup2) > 100:
+		elif len(featuresToPlot) > 1000 or len(profile.samplesInGroup1) + len(profile.samplesInGroup2) > 1000:
 			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
-			QtGui.QMessageBox.information(self, 'Too much data!', 'Heatmap plots are limited to 100 samples and 100 features.', QtGui.QMessageBox.Ok)
+			QtGui.QMessageBox.information(self, 'Too much data!', 'Heatmap plots are limited to 1000 samples and 1000 features.', QtGui.QMessageBox.Ok)
 			QtGui.QApplication.instance().restoreOverrideCursor()
 			self.emptyAxis()
 			return
