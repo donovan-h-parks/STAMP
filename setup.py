@@ -42,7 +42,7 @@ setup(
     author_email='donovan.parks@gmail.com',
     packages=['stamp', 'stamp.GUI'] + pluginPkgs + metagenomicPkgs,
     package_data={'stamp': ['data/*.txt']},
-    scripts=['bin/STAMP'],
+    scripts=['bin/STAMP', 'scripts/checkHierarchy.py'],
     license='LICENSE.txt',
     url='http://pypi.python.org/pypi/stamp/',
     description='A graphical software package for analyzing taxonomic and functional profiles.',
