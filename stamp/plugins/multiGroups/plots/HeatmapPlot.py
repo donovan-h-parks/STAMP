@@ -145,6 +145,8 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 			self.matrixColourmap = pylab.cm.brg
 		elif self.colourmap == "Blue to white to red":
 			self.matrixColourmap = pylab.cm.bwr
+		elif self.colourmap == "Red to yellow to green":
+			self.matrixColourmap = pylab.cm.RdYlBu
 		elif self.colourmap == "Cool to warm":
 			self.matrixColourmap = pylab.cm.cool
 		elif self.colourmap == "Grayscale":
