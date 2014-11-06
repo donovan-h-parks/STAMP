@@ -58,22 +58,28 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		self.name = 'Heatmap plot'
 		self.type = 'Exploratory'
 		
+		self.bPlotFeaturesIndividually = False
+		
 		self.settings = preferences['Settings']
 		self.fieldToPlot = self.settings.value('group: ' + self.name + '/field to plot', 'Proportion of sequences (%)').toString()
 		self.bPlotOnlyActiveFeatures = self.settings.value('group: ' + self.name + '/plot only active features', False).toBool()
 		self.figWidth = self.settings.value('group: ' + self.name + '/width', 7.0).toDouble()[0]
 		self.figHeight = self.settings.value('group: ' + self.name + '/height', 7.0).toDouble()[0]
-		self.dendrogramMethod = self.settings.value('group: ' + self.name + '/dendrogram method', 'Average neighbour (UPGMA)').toString()
-		self.bShowTopDendrogram = self.settings.value('group: ' + self.name + '/show top dendrogram', True).toBool()
-		self.bShowLeftDendrogram = self.settings.value('group: ' + self.name + '/show left dendrogram', True).toBool()
+		self.sortColMethod = self.settings.value('group: ' + self.name + '/sort col method', 'Average neighbour (UPGMA)').toString()
+		self.sortRowMethod = self.settings.value('group: ' + self.name + '/sort row method', 'Average neighbour (UPGMA)').toString()
+		self.bShowColDendrogram = self.settings.value('group: ' + self.name + '/show col dendrogram', True).toBool()
+		self.bShowRowDendrogram = self.settings.value('group: ' + self.name + '/show row dendrogram', True).toBool()
 		self.colourmap = self.settings.value('group: ' + self.name + '/colourmap', 'Blues').toString()
 		self.legendPos = self.settings.value('group: ' + self.name + '/legend position', 3).toInt()[0]
-		self.clusteringThreshold = self.settings.value('group: ' + self.name + '/clustering threshold', 0.75).toDouble()[0]
-		self.dendrogramHeight = self.settings.value('group: ' + self.name + '/dendrogram height', 1.5).toDouble()[0]
-		self.dendrogramWidth = self.settings.value('group: ' + self.name + '/dendrogram width', 1.5).toDouble()[0]
+		self.clusteringColThreshold = self.settings.value('group: ' + self.name + '/clustering col threshold', 0.75).toDouble()[0]
+		self.clusteringRowThreshold = self.settings.value('group: ' + self.name + '/clustering row threshold', 0.75).toDouble()[0]
+		self.dendrogramHeight = self.settings.value('group: ' + self.name + '/dendrogram col height', 1.5).toDouble()[0]
+		self.dendrogramWidth = self.settings.value('group: ' + self.name + '/dendrogram row width', 1.5).toDouble()[0]
 
 	def mirrorProperties(self, plotToCopy):
 		super(HeatmapPlot, self).mirrorProperties(plotToCopy)
+		
+		self.bPlotFeaturesIndividually = False
 		
 		self.name = plotToCopy.name
 		
@@ -83,28 +89,31 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		self.figWidth = plotToCopy.figWidth
 		self.figHeight = plotToCopy.figHeight
 		
-		self.dendrogramMethod = plotToCopy.dendrogramMethod
-		self.bShowTopDendrogram = plotToCopy.bShowTopDendrogram
-		self.bShowLeftDendrogram = plotToCopy.bShowLeftDendrogram
+		self.sortColMethod = plotToCopy.sortColMethod
+		self.sortRowMethod = plotToCopy.sortRowMethod
+		self.bShowColDendrogram = plotToCopy.bShowColDendrogram
+		self.bShowRowDendrogram = plotToCopy.bShowRowDendrogram
 		self.colourmap = plotToCopy.colourmap
 		self.legendPos = plotToCopy.legendPos
 		
-		self.clusteringThreshold = plotToCopy.clusteringThreshold
+		self.clusteringColThreshold = plotToCopy.clusteringColThreshold
+		self.clusteringRowThreshold = plotToCopy.clusteringRowThreshold
+		
 		self.dendrogramHeight = plotToCopy.dendrogramHeight
 		self.dendrogramWidth = plotToCopy.dendrogramWidth
 		
-	def plotDendrogram(self, matrix, axis, clusteringThreshold, orientation, bPlot):
+	def plotDendrogram(self, matrix, axis, dendrogramMethod, clusteringThreshold, orientation, bPlot):
 		d = dist.pdist(matrix)
 		
-		if self.dendrogramMethod == 'Average neighbour (UPGMA)':
+		if dendrogramMethod == 'Average neighbour (UPGMA)':
 			linkage = cluster.linkage(dist.squareform(d), method='average')
-		elif self.dendrogramMethod == 'Centroid':
+		elif dendrogramMethod == 'Centroid':
 			linkage = cluster.linkage(dist.squareform(d), method='centroid')
-		elif self.dendrogramMethod == 'Nearest neighbour':
+		elif dendrogramMethod == 'Nearest neighbour':
 			linkage = cluster.linkage(dist.squareform(d), method='single')
-		elif self.dendrogramMethod == 'Furthest neighbour':
+		elif dendrogramMethod == 'Furthest neighbour':
 			linkage = cluster.linkage(dist.squareform(d), method='complete')
-		elif self.dendrogramMethod == 'Ward':
+		elif dendrogramMethod == 'Ward':
 			linkage = cluster.linkage(dist.squareform(d), method='ward')
 			
 		dendrogram = cluster.dendrogram(linkage, orientation=orientation, link_color_func=lambda k: 'k', axis=axis, no_plot = not bPlot)
@@ -142,8 +151,6 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 			self.matrixColourmap = pylab.cm.brg
 		elif self.colourmap == "Blue to white to red":
 			self.matrixColourmap = pylab.cm.bwr
-		elif self.colourmap == "Red to yellow to green":
-			self.matrixColourmap = pylab.cm.RdYlBu
 		elif self.colourmap == "Cool to warm":
 			self.matrixColourmap = pylab.cm.cool
 		elif self.colourmap == "Grayscale":
@@ -160,6 +167,8 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 			self.matrixColourmap = pylab.cm.Reds
 		elif self.colourmap == "Red to blue":
 			self.matrixColourmap = pylab.cm.RdBu
+		elif self.colourmap == "Red to yellow to blue":
+			self.matrixColourmap = pylab.cm.RdYlBu
 		elif self.colourmap == "Spectral":
 			self.matrixColourmap = pylab.cm.spectral
 		elif self.colourmap == "Yellow to orange to red":
@@ -210,6 +219,13 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 				longestLabelLen = len(colHeaders[i])
 				longestColLabel = colHeaders[i]
 					
+		# *** Check sorting method and adjust dendrogram parameters appropriately
+		if self.sortRowMethod == 'Alphabetical order':
+			self.bShowRowDendrogram = False
+
+		if self.sortColMethod == 'Alphabetical order':
+			self.bShowColDendrogram = False
+
 		# *** Set figure size
 		self.fig.clear()
 		self.fig.set_size_inches(self.figWidth, self.figHeight)
@@ -222,8 +238,15 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		marginX = 0.05 / self.figWidth
 		marginY = 0.05 / self.figHeight
 		
-		dendrogramWidth = self.dendrogramWidth / self.figWidth
-		dendrogramHeight = self.dendrogramHeight / self.figHeight
+		if self.bShowRowDendrogram:
+			dendrogramWidth = self.dendrogramWidth / self.figWidth
+		else:
+			dendrogramWidth = 0.2 / self.figWidth
+			
+		if self.bShowColDendrogram:
+			dendrogramHeight = self.dendrogramHeight / self.figHeight
+		else:
+			dendrogramHeight = 0.2 / self.figHeight
 
 		cellSizeX =  (1.0 - 2*0.02 - dendrogramWidth - colourBarWidthX - 2*marginX - yLabelBounds.width)*self.figWidth/len(colHeaders)
 		cellSizeY =  (1.0 - 2*0.02 - dendrogramHeight - colourBarWidthY - 2*marginY - xLabelBounds.height)*self.figHeight/len(rowHeaders)
@@ -261,17 +284,23 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		heatmapH = rowDendrogramH
 		
 		legendHeight = 0.2 / self.figHeight
-		legendX = rowDendrogramX
-		legendY = 1.0 - paddingY - legendHeight - yLabelBounds.height
-		legendW = rowDendrogramW
+		legendW = max(rowDendrogramW, 1.5 / self.figWidth)
 		legendH = legendHeight
-
+		legendX = heatmapX + 0.5 * (heatmapW - legendW)
+		legendY = 1.0 - legendHeight - 2*yLabelBounds.height + 0.5*paddingY
+		
 		# plot dendrograms
-		axisRowDendrogram = self.fig.add_axes([rowDendrogramX, rowDendrogramY, rowDendrogramW, rowDendrogramH], frame_on=False)
-		ind1, leafIndex1 = self.plotDendrogram(matrix, axisRowDendrogram, self.clusteringThreshold, 'right', bPlot = self.bShowLeftDendrogram)
+		if self.sortRowMethod != 'Alphabetical order':
+			axisRowDendrogram = self.fig.add_axes([rowDendrogramX, rowDendrogramY, rowDendrogramW, rowDendrogramH], frame_on=False)
+			ind1, leafIndex1 = self.plotDendrogram(matrix, axisRowDendrogram, self.sortRowMethod, self.clusteringRowThreshold, 'right', bPlot = self.bShowRowDendrogram)
+		else:
+			leafIndex1 = numpy.argsort(rowHeaders)[::-1]
 
-		axisColDendrogram = self.fig.add_axes([colDendrogramX, colDendrogramY, colDendrogramW, colDendrogramH], frame_on=False)
-		ind2, leafIndex2 = self.plotDendrogram(matrix.T, axisColDendrogram, self.clusteringThreshold, 'top', bPlot = self.bShowTopDendrogram)
+		if self.sortColMethod != 'Alphabetical order':
+			axisColDendrogram = self.fig.add_axes([colDendrogramX, colDendrogramY, colDendrogramW, colDendrogramH], frame_on=False)
+			ind2, leafIndex2 = self.plotDendrogram(matrix.T, axisColDendrogram, self.sortColMethod, self.clusteringColThreshold, 'top', bPlot = self.bShowColDendrogram)
+		else:
+			leafIndex2 = numpy.argsort(colHeaders)
 
 		# *** Handle mouse events
 		xCell = []
@@ -288,7 +317,7 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 					tooltip += '%d' % (matrix[leafIndex1[y]][leafIndex2[x]])
 				else:
 					tooltip += '%.3f' % (matrix[leafIndex1[y]][leafIndex2[x]]) + '%'
-				tooltips.append(tooltip)
+				tooltips.append(tooltip) 
 			
 		self.plotEventHandler =	PlotEventHandler(xCell, yCell, tooltips, 0.4, 0.4)
 		self.mouseEventCallback(self.plotEventHandler)
@@ -304,9 +333,9 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		
 		sampleColourMap = mpl.colors.ListedColormap(sampleColourMap)
 		matrix = matrix[:,leafIndex2]
-		ind2 = ind2[leafIndex2] 
-		
-		if self.bShowTopDendrogram:
+
+		if self.bShowColDendrogram:
+			ind2 = ind2[leafIndex2] 
 			axc = self.fig.add_axes([colClusterBarX, colClusterBarY, colClusterBarW, colClusterBarH])  # axes for column side colorbar
 			dc = numpy.array(numpy.arange(len(leafIndex2)), dtype=int)
 			dc.shape = (1,len(leafIndex2)) 
@@ -316,9 +345,9 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 
 		# plot row clustering bars
 		matrix = matrix[leafIndex1,:]
-		ind1 = ind1[leafIndex1]
-		
-		if self.bShowLeftDendrogram:
+
+		if self.bShowRowDendrogram:
+			ind1 = ind1[leafIndex1]
 			axr = self.fig.add_axes([rowClusterBarX, rowClusterBarY, rowClusterBarW, rowClusterBarH]) 
 			dr = numpy.array(ind1, dtype=int)
 			dr.shape = (len(ind1),1)
@@ -387,10 +416,11 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		configDlg.ui.spinFigWidth.setValue(self.figWidth)
 		configDlg.ui.spinFigHeight.setValue(self.figHeight)
 		
-		configDlg.ui.cboDendrogramMethod.setCurrentIndex(configDlg.ui.cboDendrogramMethod.findText(self.dendrogramMethod))
+		configDlg.ui.cboColSortMethod.setCurrentIndex(configDlg.ui.cboColSortMethod.findText(self.sortColMethod))
+		configDlg.ui.cboRowSortMethod.setCurrentIndex(configDlg.ui.cboRowSortMethod.findText(self.sortRowMethod))
 		
-		configDlg.ui.chkShowTopDendrogram.setChecked(self.bShowTopDendrogram)
-		configDlg.ui.chkShowLeftDendrogram.setChecked(self.bShowLeftDendrogram)
+		configDlg.ui.chkShowColDendrogram.setChecked(self.bShowColDendrogram)
+		configDlg.ui.chkShowRowDendrogram.setChecked(self.bShowRowDendrogram)
 		
 		configDlg.ui.cboColourMap.setCurrentIndex(configDlg.ui.cboColourMap.findText(self.colourmap))
 		
@@ -406,9 +436,12 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		else:
 			configDlg.ui.radioLegendPosNone.setChecked(True)
 			
-		configDlg.ui.spinClusteringThreshold.setValue(self.clusteringThreshold)
-		configDlg.ui.spinDendrogramWidth.setValue(self.dendrogramWidth)
-		configDlg.ui.spinDendrogramHeight.setValue(self.dendrogramHeight)
+		configDlg.ui.spinColClusteringThreshold.setValue(self.clusteringColThreshold)
+		configDlg.ui.spinRowClusteringThreshold.setValue(self.clusteringRowThreshold)
+		
+		configDlg.ui.spinDendrogramColHeight.setValue(self.dendrogramHeight)
+		configDlg.ui.spinDendrogramRowWidth.setValue(self.dendrogramWidth)
+		
 				
 		if configDlg.exec_() == QtGui.QDialog.Accepted:
 			self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
@@ -417,10 +450,11 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 			self.figWidth = configDlg.ui.spinFigWidth.value()
 			self.figHeight = configDlg.ui.spinFigHeight.value()
 			
-			self.dendrogramMethod = str(configDlg.ui.cboDendrogramMethod.currentText())
+			self.sortColMethod = str(configDlg.ui.cboColSortMethod.currentText())
+			self.sortRowMethod = str(configDlg.ui.cboRowSortMethod.currentText())
 			
-			self.bShowTopDendrogram = configDlg.ui.chkShowTopDendrogram.isChecked()
-			self.bShowLeftDendrogram = configDlg.ui.chkShowLeftDendrogram.isChecked()
+			self.bShowColDendrogram = configDlg.ui.chkShowColDendrogram.isChecked()
+			self.bShowRowDendrogram = configDlg.ui.chkShowRowDendrogram.isChecked()
 			
 			self.colourmap = str(configDlg.ui.cboColourMap.currentText())
 			
@@ -436,26 +470,29 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 			else:
 				self.legendPos = -1
 				
-			self.clusteringThreshold = configDlg.ui.spinClusteringThreshold.value()
+			self.clusteringColThreshold = configDlg.ui.spinColClusteringThreshold.value()
+			self.clusteringRowThreshold = configDlg.ui.spinRowClusteringThreshold.value()
 			
-			self.dendrogramWidth = configDlg.ui.spinDendrogramWidth.value()
-			self.dendrogramHeight = configDlg.ui.spinDendrogramHeight.value()
+			self.dendrogramHeight = configDlg.ui.spinDendrogramColHeight.value()
+			self.dendrogramWidth = configDlg.ui.spinDendrogramRowWidth.value()
 				
 			self.settings.setValue('group: ' + self.name + '/field to plot', self.fieldToPlot)
 			self.settings.setValue('group: ' + self.name + '/plot only active features', self.bPlotOnlyActiveFeatures)
 			self.settings.setValue('group: ' + self.name + '/width', self.figWidth)
 			self.settings.setValue('group: ' + self.name + '/height', self.figHeight)
-			self.settings.setValue('group: ' + self.name + '/dendrogram method', self.dendrogramMethod)
-			self.settings.setValue('group: ' + self.name + '/show top dendrogram', self.bShowTopDendrogram)
-			self.settings.setValue('group: ' + self.name + '/show left dendrogram', self.bShowLeftDendrogram)
+			self.settings.setValue('group: ' + self.name + '/sort col method', self.sortColMethod)
+			self.settings.setValue('group: ' + self.name + '/sort row method', self.sortRowMethod)
+			self.settings.setValue('group: ' + self.name + '/show col dendrogram', self.bShowColDendrogram)
+			self.settings.setValue('group: ' + self.name + '/show row dendrogram', self.bShowRowDendrogram)
 			self.settings.setValue('group: ' + self.name + '/colourmap', self.colourmap)
 			self.settings.setValue('group: ' + self.name + '/legend position', self.legendPos)
-			self.settings.setValue('group: ' + self.name + '/clustering threshold', self.clusteringThreshold)
-			self.settings.setValue('group: ' + self.name + '/dendrogram height', self.dendrogramHeight)
-			self.settings.setValue('group: ' + self.name + '/dendrogram width', self.dendrogramWidth)
+			self.settings.setValue('group: ' + self.name + '/clustering col threshold', self.clusteringColThreshold)
+			self.settings.setValue('group: ' + self.name + '/clustering row threshold', self.clusteringRowThreshold)
+			self.settings.setValue('group: ' + self.name + '/dendrogram col height', self.dendrogramHeight)
+			self.settings.setValue('group: ' + self.name + '/dendrogram row width', self.dendrogramWidth)
 
 			self.plot(profile, statsResults)
-					
+
 if __name__ == "__main__": 
 	app = QtGui.QApplication(sys.argv)
 	testWindow = TestWindow(HeatmapPlot)
