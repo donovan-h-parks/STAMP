@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>310</width>
-    <height>628</height>
+    <height>544</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -176,7 +176,7 @@
         </sizepolicy>
        </property>
        <property name="currentIndex">
-        <number>2</number>
+        <number>0</number>
        </property>
        <item>
         <property name="text">
@@ -231,6 +231,11 @@
        <item>
         <property name="text">
          <string>Red to blue</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Red to yellow to blue</string>
         </property>
        </item>
        <item>
@@ -424,7 +429,7 @@
    <item>
     <widget class="QGroupBox" name="groupBox_2">
      <property name="title">
-      <string>Sort rows</string>
+      <string>Sort columns</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_3">
       <item>
@@ -603,31 +608,10 @@
         <string>Legend position</string>
        </property>
        <layout class="QGridLayout" name="gridLayout">
-        <item row="0" column="0">
-         <widget class="QRadioButton" name="radioLegendPosNone">
-          <property name="text">
-           <string>None</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="2">
-         <widget class="QRadioButton" name="radioLegendPosLowerLeft">
-          <property name="text">
-           <string>Lower left</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="2">
+        <item row="2" column="2">
          <widget class="QRadioButton" name="radioLegendPosLowerRight">
           <property name="text">
            <string>Lower right</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QRadioButton" name="radioLegendPosUpperRight">
-          <property name="text">
-           <string>Upper right</string>
           </property>
          </widget>
         </item>
@@ -638,6 +622,27 @@
           </property>
           <property name="checked">
            <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QRadioButton" name="radioLegendPosLowerLeft">
+          <property name="text">
+           <string>Lower left</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="QRadioButton" name="radioLegendPosUpperRight">
+          <property name="text">
+           <string>Upper right</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QRadioButton" name="radioLegendPosNone">
+          <property name="text">
+           <string>None</string>
           </property>
          </widget>
         </item>

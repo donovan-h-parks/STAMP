@@ -235,8 +235,8 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		# position all figure elements
 		colourBarWidthX = 0.2 / self.figWidth
 		colourBarWidthY = 0.2 / self.figHeight
-		marginX = 0.05 / self.figWidth
-		marginY = 0.05 / self.figHeight
+		marginX = 0.1 / self.figWidth
+		marginY = 0.1 / self.figHeight
 		
 		if self.bShowRowDendrogram:
 			dendrogramWidth = self.dendrogramWidth / self.figWidth
@@ -284,11 +284,15 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		heatmapH = rowDendrogramH
 		
 		legendHeight = 0.2 / self.figHeight
-		legendW = max(rowDendrogramW, 1.5 / self.figWidth)
+		legendW = max(rowDendrogramW, 1.25 / self.figWidth)
 		legendH = legendHeight
-		legendX = heatmapX + 0.5 * (heatmapW - legendW)
-		legendY = 1.0 - legendHeight - 2*yLabelBounds.height + 0.5*paddingY
-		
+		legendX = heatmapX + heatmapW + 0.1/self.figWidth
+		legendY = 1.0 - legendHeight - (2*yLabelBounds.height) - marginY
+		if not self.bShowColDendrogram:
+			# move legend to side
+			legendX = heatmapX + 0.5 * (heatmapW - legendW)
+			legendY = heatmapY + heatmapH + (1.5*yLabelBounds.height) + 0.1/self.figWidth
+
 		# plot dendrograms
 		if self.sortRowMethod != 'Alphabetical order':
 			axisRowDendrogram = self.fig.add_axes([rowDendrogramX, rowDendrogramY, rowDendrogramW, rowDendrogramH], frame_on=False)
