@@ -39,7 +39,7 @@ class MetadataIO(object):
 		metadata = Metadata()
 		
 		features = data[0].split('\t')
-		
+
 		profileSamples = set(profileTree.sampleNames)
 		
 		try:
@@ -63,8 +63,7 @@ class MetadataIO(object):
 					missingInProfile.append(sampleName)
 		except:
 			warningMessage = 'Failed to parse line: ' + str(r+1)
-				
-		
+
 		if len(missingInProfile) != 0:
 			warningMessage = 'Unknown sample(s) specified in metadata file: ' + ', '.join(missingInProfile) + '\n\n'
 				
@@ -73,13 +72,7 @@ class MetadataIO(object):
 			for sample in profileSamples:
 				missingSamples.append(sample)
 				
-				# set metadata to 'NA'
-				featureDict = {}
-				for f in features:
-					featureDict[f] = 'NA'
-				metadata.metadataDict[sample] = featureDict
-				
-			warningMessage += 'Missing metadata for the following samples: ' + ', '.join(missingSamples)
+			warningMessage = 'Missing metadata for the following samples: ' + ', '.join(missingSamples)
 
 		return metadata, warningMessage
  
