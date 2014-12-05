@@ -23,8 +23,8 @@ __author__ = 'Donovan Parks'
 __copyright__ = 'Copyright 2013'
 __credits__ = ['Donovan Parks']
 __license__ = 'GPL3'
-__version__ = '2.0.8'
-__date__ = 'August 4, 2014'
+__version__ = '2.0.9'
+__date__ = 'December 5, 2014'
 __maintainer__ = 'Donovan Parks'
 __email__ = 'donovan.parks@gmail.com'
 __status__ = 'Development'
@@ -35,7 +35,7 @@ import platform
 import string
 
 import stamp.Dependencies
-from stamp.GUI.plotDlg import PlotDlg # forward reference so py2app recognizes this file is required
+from stamp.GUI.plotDlg import PlotDlg  # forward reference so py2app recognizes this file is required
 
 from PyQt4 import QtGui, QtCore
 
@@ -200,7 +200,7 @@ class MainWindow(QtGui.QMainWindow):
 
 		self.metadata = None
 
-		#self.loadProfile() # *** For debugging purposes
+		# self.loadProfile() # *** For debugging purposes
 
 	def propertiesTabChanged(self, currentIndex):
 		self.ui.stackedWidgetViews.setCurrentIndex(currentIndex)
@@ -691,7 +691,7 @@ class MainWindow(QtGui.QMainWindow):
 		if colour.isValid():
 			self.setGroup1Colour(colour)
 
-	def setGroup1Colour(self, colour, bUpdatePlot = True):
+	def setGroup1Colour(self, colour, bUpdatePlot=True):
 		colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
 		self.ui.btnGroup1Colour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
 		self.preferences['Group colours'][self.groupProfile.groupName1] = colour
@@ -706,7 +706,7 @@ class MainWindow(QtGui.QMainWindow):
 		if colour.isValid():
 			self.setGroup2Colour(colour)
 
-	def setGroup2Colour(self, colour, bUpdatePlot = True):
+	def setGroup2Colour(self, colour, bUpdatePlot=True):
 		colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
 		self.ui.btnGroup2Colour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
 		self.preferences['Group colours'][self.groupProfile.groupName2] = colour
@@ -757,7 +757,7 @@ class MainWindow(QtGui.QMainWindow):
 					QtGui.QMessageBox.information(self, 'Error reading profile file', errMsg, QtGui.QMessageBox.Warning)
 					return
 			except:
-				QtGui.QMessageBox.information(self, 'Error reading profile file','Unknown parsing error.', QtGui.QMessageBox.Warning)
+				QtGui.QMessageBox.information(self, 'Error reading profile file', 'Unknown parsing error.', QtGui.QMessageBox.Warning)
 				return
 
 			self.metadata = None
@@ -800,7 +800,7 @@ class MainWindow(QtGui.QMainWindow):
 			# indicate the hierarchical level of interest has changed
 			bGroupLegendVisibility = self.groupLegendDlg.isVisible()
 			if platform.system() != 'Windows' and bGroupLegendVisibility:
-				self.groupLegendDlg.setVisible(False)		# HACK: OS X crashes if this dialog is open when loading data for the first time!
+				self.groupLegendDlg.setVisible(False)  # HACK: OS X crashes if this dialog is open when loading data for the first time!
 
 			self.multiGroupHierarchicalLevelsChanged()
 			self.groupHierarchicalLevelsChanged()
@@ -829,7 +829,7 @@ class MainWindow(QtGui.QMainWindow):
 
 	def parentLevelChanged(self):
 		parentDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboParentalLevel.currentText()))
-		profileDepth= self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboProfileLevel.currentText()))
+		profileDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboProfileLevel.currentText()))
 		if parentDepth >= profileDepth:
 			QtGui.QMessageBox.information(self, 'Invalid profile', 'The parent level must be higher in the hierarchy than the profile level.', QtGui.QMessageBox.Warning)
 			self.ui.cboParentalLevel.setCurrentIndex(0)
@@ -840,11 +840,11 @@ class MainWindow(QtGui.QMainWindow):
 
 	def profileLevelChanged(self):
 		parentDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboParentalLevel.currentText()))
-		profileDepth= self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboProfileLevel.currentText()))
+		profileDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboProfileLevel.currentText()))
 
 		if profileDepth <= parentDepth:
 			QtGui.QMessageBox.information(self, 'Invalid profile', 'The profile level must be deeper in the hierarchy than the parent level.', QtGui.QMessageBox.Warning)
-			self.ui.cboProfileLevel.setCurrentIndex(len(self.profileTree.hierarchyHeadings)-1)
+			self.ui.cboProfileLevel.setCurrentIndex(len(self.profileTree.hierarchyHeadings) - 1)
 			return
 
 		self.sampleHierarchicalLevelsChanged()
@@ -874,7 +874,7 @@ class MainWindow(QtGui.QMainWindow):
 		profileIndex = self.profileTree.hierarchyHeadings.index(profileHeading)
 		self.ui.cboSampleHighlightHierarchy.clear()
 		self.ui.cboSampleHighlightHierarchy.addItem('None')
-		for header in self.profileTree.hierarchyHeadings[0:profileIndex+1]:
+		for header in self.profileTree.hierarchyHeadings[0:profileIndex + 1]:
 			self.ui.cboSampleHighlightHierarchy.addItem(header)
 		self.ui.cboSampleHighlightHierarchy.setCurrentIndex(0)
 
@@ -911,7 +911,7 @@ class MainWindow(QtGui.QMainWindow):
 		profileIndex = self.profileTree.hierarchyHeadings.index(profileHeading)
 		self.ui.cboGroupHighlightHierarchy.clear()
 		self.ui.cboGroupHighlightHierarchy.addItem('None')
-		for header in self.profileTree.hierarchyHeadings[0:profileIndex+1]:
+		for header in self.profileTree.hierarchyHeadings[0:profileIndex + 1]:
 			self.ui.cboGroupHighlightHierarchy.addItem(header)
 		self.ui.cboGroupHighlightHierarchy.setCurrentIndex(0)
 
@@ -940,7 +940,7 @@ class MainWindow(QtGui.QMainWindow):
 		profileIndex = self.profileTree.hierarchyHeadings.index(profileHeading)
 		self.ui.cboMultiGroupHighlightHierarchy.clear()
 		self.ui.cboMultiGroupHighlightHierarchy.addItem('None')
-		for header in self.profileTree.hierarchyHeadings[0:profileIndex+1]:
+		for header in self.profileTree.hierarchyHeadings[0:profileIndex + 1]:
 			self.ui.cboMultiGroupHighlightHierarchy.addItem(header)
 		self.ui.cboMultiGroupHighlightHierarchy.setCurrentIndex(0)
 
@@ -977,7 +977,7 @@ class MainWindow(QtGui.QMainWindow):
 			self.preferences['Selected group feature'] = ''
 
 		self.groupFeatureTable = GenericTable(tableData, ['Feature', 'Diff. between means', 'p-value', 'Corrected p-value', 'Note'], self)
-		self.groupFeatureTable.sort(0,QtCore.Qt.AscendingOrder) # start with features in alphabetical order
+		self.groupFeatureTable.sort(0, QtCore.Qt.AscendingOrder)  # start with features in alphabetical order
 
 		self.ui.tableGroupFeatures.horizontalHeader().setStretchLastSection(True)
 		self.ui.tableGroupFeatures.setModel(self.groupFeatureTable)
@@ -1007,7 +1007,7 @@ class MainWindow(QtGui.QMainWindow):
 			self.preferences['Selected multiple group feature'] = ''
 
 		self.multiGroupFeatureTable = GenericTable(tableData, ['Feature', 'Eta-squared', 'p-value', 'Corrected p-value', 'Note'], self)
-		self.multiGroupFeatureTable.sort(0,QtCore.Qt.AscendingOrder) # start with features in alphabetical order
+		self.multiGroupFeatureTable.sort(0, QtCore.Qt.AscendingOrder)  # start with features in alphabetical order
 
 		self.ui.tableMultiGroupFeatures.horizontalHeader().setStretchLastSection(True)
 		self.ui.tableMultiGroupFeatures.setModel(self.multiGroupFeatureTable)
@@ -1045,7 +1045,7 @@ class MainWindow(QtGui.QMainWindow):
 																		self.ui.cboUnclassified.currentText())
 
 			# show progress of test
-			progress = QtGui.QProgressDialog('Running two-sample statistical test...', 'Cancel', 0, len(self.sampleProfile.getFeatures())+1, self)
+			progress = QtGui.QProgressDialog('Running two-sample statistical test...', 'Cancel', 0, len(self.sampleProfile.getFeatures()) + 1, self)
 			progress.setWindowTitle('Progress')
 			progress.setWindowModality(QtCore.Qt.WindowModal)
 			progress.setVisible(True)
@@ -1093,7 +1093,7 @@ class MainWindow(QtGui.QMainWindow):
 				self.setGroup2Colour(self.preferences['All other samples colour'])
 
 			# show progress of test
-			progress = QtGui.QProgressDialog('Running two-group statistical test...', 'Cancel', 0, len(self.groupProfile.getFeatures())+1, self)
+			progress = QtGui.QProgressDialog('Running two-group statistical test...', 'Cancel', 0, len(self.groupProfile.getFeatures()) + 1, self)
 			progress.setWindowTitle('Progress')
 			progress.setWindowModality(QtCore.Qt.WindowModal)
 			progress.setVisible(True)
@@ -1133,7 +1133,7 @@ class MainWindow(QtGui.QMainWindow):
 
 		if len(self.multiGroupProfile.activeGroupNames) >= 2:
 			# show progress of test
-			progress = QtGui.QProgressDialog('Running multiple groups statistical test...', 'Cancel', 0, len(self.multiGroupProfile.getFeatures())+1, self)
+			progress = QtGui.QProgressDialog('Running multiple groups statistical test...', 'Cancel', 0, len(self.multiGroupProfile.getFeatures()) + 1, self)
 			progress.setWindowTitle('Progress')
 			progress.setWindowModality(QtCore.Qt.WindowModal)
 			progress.setVisible(True)
@@ -1558,7 +1558,7 @@ class MainWindow(QtGui.QMainWindow):
 			featureStrList.append(feature)
 
 		self.ui.cboSampleHighlightFeature.clear()
-		self.ui.cboSampleHighlightFeature.insertItems(len(featureStrList),featureStrList)
+		self.ui.cboSampleHighlightFeature.insertItems(len(featureStrList), featureStrList)
 		self.ui.cboSampleHighlightFeature.setCurrentIndex(0)
 
 		self.ui.cboSampleHighlightFeature.adjustSize()
@@ -1586,7 +1586,7 @@ class MainWindow(QtGui.QMainWindow):
 			featureStrList.append(feature)
 
 		self.ui.cboGroupHighlightFeature.clear()
-		self.ui.cboGroupHighlightFeature.insertItems(len(featureStrList),featureStrList)
+		self.ui.cboGroupHighlightFeature.insertItems(len(featureStrList), featureStrList)
 		self.ui.cboGroupHighlightFeature.setCurrentIndex(0)
 
 		self.ui.cboGroupHighlightFeature.adjustSize()
@@ -1614,7 +1614,7 @@ class MainWindow(QtGui.QMainWindow):
 			featureStrList.append(feature)
 
 		self.ui.cboMultiGroupHighlightFeature.clear()
-		self.ui.cboMultiGroupHighlightFeature.insertItems(len(featureStrList),featureStrList)
+		self.ui.cboMultiGroupHighlightFeature.insertItems(len(featureStrList), featureStrList)
 		self.ui.cboMultiGroupHighlightFeature.setCurrentIndex(0)
 
 		self.ui.cboMultiGroupHighlightFeature.adjustSize()
@@ -1691,7 +1691,7 @@ class MainWindow(QtGui.QMainWindow):
 		if f != '':
 			self.preferences['Last directory'] = f[0:f.lastIndexOf('/')]
 			try:
-				if f[len(f)-3:len(f)] == 'png' or f[len(f)-3:len(f)] == 'PNG':
+				if f[len(f) - 3:len(f)] == 'png' or f[len(f) - 3:len(f)] == 'PNG':
 					dpi, ok = QtGui.QInputDialog.getInteger(self, 'Desired resolution', 'Enter desired resolution (DPI) of image:', 300)
 					if ok:
 						plotToSave.save(str(f), dpi)
@@ -1760,28 +1760,28 @@ class MainWindow(QtGui.QMainWindow):
 		settings.setValue('Preferences/Minimum reported p-value exponent', self.preferences['Minimum reported p-value exponent'])
 
 def exceptHook(exc_type, exc_value, exc_traceback):
-	## Copyright (c) 2002-2007 Pascal Varet <p.varet@gmail.com>
-	##
-	## Originally part of Spyrit.
+	# # Copyright (c) 2002-2007 Pascal Varet <p.varet@gmail.com>
+	# #
+	# # Originally part of Spyrit.
 
 	import traceback
 
-	## KeyboardInterrupt is a special case.
-	## We don't raise the error dialog when it occurs.
-	if issubclass( exc_type, KeyboardInterrupt ):
+	# # KeyboardInterrupt is a special case.
+	# # We don't raise the error dialog when it occurs.
+	if issubclass(exc_type, KeyboardInterrupt):
 		if qApp():
 			qApp().quit()
 		return
 
-	filename, line, dummy, dummy = traceback.extract_tb( exc_traceback ).pop()
-	filename = os.path.basename( filename )
-	error = "%s: %s" % ( exc_type.__name__, exc_value)
+	filename, line, dummy, dummy = traceback.extract_tb(exc_traceback).pop()
+	filename = os.path.basename(filename)
+	error = "%s: %s" % (exc_type.__name__, exc_value)
 
 	QtGui.QMessageBox.critical(None, "Unknown error...",
 		"<center>An error has occured:<br/><br/>"
 	+ "<b><i>%s</i></b><br/>" % error
-	+ "It occured at <b>line %d</b> of file <b>%s</b>.<br/>" % ( line, filename )
-	+ "</center>" )
+	+ "It occured at <b>line %d</b> of file <b>%s</b>.<br/>" % (line, filename)
+	+ "</center>")
 
 def main():
 	# ignore numpy warnings as invalid results are handled within STAMP
@@ -1816,7 +1816,7 @@ def main():
 	workingDir = getMainDir()
 	preferences['Last directory'] = ''
 	if 'STAMP.app/Contents/Resources' in workingDir:
-		workingDir = workingDir[0:len(workingDir)-len('/STAMP.app/Contents/Resources')]
+		workingDir = workingDir[0:len(workingDir) - len('/STAMP.app/Contents/Resources')]
 		preferences['Last directory'] = workingDir
 		os.chdir(workingDir)
 
@@ -1826,23 +1826,23 @@ def main():
 		# the program icon is displayed in the taskbar instead of the generic
 		# Python icon.
 		import ctypes
-		myappid = 'beikolab.software.stamp.2' # arbitrary string
+		myappid = 'beikolab.software.stamp.2'  # arbitrary string
 		ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
 	if (platform.system() == 'Windows' and len(sys.argv) == 1) or (platform.system() != 'Windows' and len(sys.argv) <= 2):
 		sys.excepthook = exceptHook
 		app = QtGui.QApplication(sys.argv)
 
-		if(False): # profile code
+		if(False):  # profile code
 			import cProfile
 			cProfile.run('mainWindow = MainWindow(preferences)', 'profile.txt')
 			##########################################
 			##########################################
 			# Use this in python console!
-			#import pstats
-			#p = pstats.Stats('profile.txt')
-			#p.sort_stats('cumulative').print_stats(10)
-			#p.sort_stats('time').print_stats(10)
+			# import pstats
+			# p = pstats.Stats('profile.txt')
+			# p.sort_stats('cumulative').print_stats(10)
+			# p.sort_stats('time').print_stats(10)
 			##########################################
 			##########################################
 		else:
