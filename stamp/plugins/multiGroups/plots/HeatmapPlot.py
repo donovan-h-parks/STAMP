@@ -29,7 +29,6 @@ from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMulti
 from stamp.plugins.multiGroups.plots.configGUI.HeatmapPlotUI import Ui_HeatmapPlotDialog
 
 from stamp.plugins.PlotEventHandler import PlotEventHandler
-import stamp.plugins.common.hierarchy as cluster
 
 from matplotlib import pylab
 import matplotlib as mpl
@@ -37,6 +36,7 @@ from matplotlib.patches import Rectangle
 
 import numpy
 
+import scipy.cluster.hierarchy as cluster
 import scipy.spatial.distance as dist
 
 class HeatmapPlot(AbstractMultiGroupPlotPlugin):
@@ -117,7 +117,7 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 		elif dendrogramMethod == 'Ward':
 			linkage = cluster.linkage(dist.squareform(d), method='ward')
 			
-		dendrogram = cluster.dendrogram(linkage, orientation=orientation, link_color_func=lambda k: 'k', axis=axis, no_plot = not bPlot)
+		dendrogram = cluster.dendrogram(linkage, orientation=orientation, link_color_func=lambda k: 'k', ax=axis, no_plot = not bPlot)
 		index = cluster.fcluster(linkage, clusteringThreshold * max(linkage[:,2]), 'distance')
 		axis.set_xticks([])
 		axis.set_yticks([])
@@ -287,9 +287,9 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 		heatmapH = rowDendrogramH
 		
 		legendHeight = 0.2 / self.figHeight
-		legendW = max(rowDendrogramW, 1.25 / self.figWidth)
+		legendW = min(0.8*yLabelBounds.width, 1.25 / self.figWidth)
 		legendH = legendHeight
-		legendX = heatmapX + heatmapW + 0.1/self.figWidth
+		legendX = heatmapX + heatmapW + 0.2/self.figWidth
 		legendY = 1.0 - legendHeight - (2*yLabelBounds.height) - marginY
 		if not self.bShowColDendrogram:
 			# move legend to side

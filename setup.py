@@ -37,7 +37,7 @@ root_files = [('.', ['LICENSE.txt']),
                   ('.', ['README.md'])]
 setup(
     name='STAMP',
-    version='2.0.9',
+    version='2.1.0',
     author='Donovan Parks, Rob Beiko',
     author_email='donovan.parks@gmail.com',
     packages=['stamp', 'stamp.GUI'] + pluginPkgs + metagenomicPkgs,
@@ -49,9 +49,9 @@ setup(
     data_files = root_files,
     long_description=open('README.md').read(),
     install_requires=[
-        "numpy >= 1.7.1",
-        "scipy >= 0.13.0",
-        "matplotlib >= 1.3.1",
+        "numpy >= 1.9.1",
+        "scipy >= 0.15.1",
+        "matplotlib >= 1.4.2",
         "biom-format >= 2.0.1",
         "pyqi >= 0.3.2",],
 )
