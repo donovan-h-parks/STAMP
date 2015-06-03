@@ -52,6 +52,7 @@ setup(
         "numpy >= 1.9.1",
         "scipy >= 0.15.1",
         "matplotlib >= 1.4.2",
+        "six >= 1.3",
         "biom-format >= 2.0.1",
         "pyqi >= 0.3.2",],
 )
