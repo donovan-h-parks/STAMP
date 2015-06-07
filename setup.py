@@ -37,7 +37,7 @@ root_files = [('.', ['LICENSE.txt']),
                   ('.', ['README.md'])]
 setup(
     name='STAMP',
-    version='2.1.0',
+    version='2.1.1',
     author='Donovan Parks, Rob Beiko',
     author_email='donovan.parks@gmail.com',
     packages=['stamp', 'stamp.GUI'] + pluginPkgs + metagenomicPkgs,

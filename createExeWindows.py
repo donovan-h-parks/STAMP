@@ -66,7 +66,7 @@ mpl_data_files = mpl.get_py2exe_datafiles()
 # setup configuration
 setup(
 	name = "STAMP",
-	version = "2.0.6",
+	version = "2.1.1",
 	description = "Statistical analysis of taxonomic and functional profiles",
 	author = "Donovan Parks",
 	windows=[{"script":"STAMP.py", "icon_resources": [(1, "./stamp/icons/stamp.ico")]}],
@@ -77,8 +77,8 @@ setup(
 					"unbuffered": True,
 					"optimize": 2,
 					"skip_archive": True,
-					"includes": ["sip", "PyQt4", "sqlite3"],
-					"packages": ["matplotlib","pytz","scipy","mpl_toolkits", "pyparsing", "biom", "pyqi", "h5py"],
+					"includes": ["sip", "PyQt4", "sqlite3", "FileDialog"],
+					"packages": ["matplotlib","pytz","scipy","mpl_toolkits", "pyparsing", "biom", "pyqi", "h5py", "six"],
 					"dll_excludes": ["libgdk_pixbuf-2.0-0.dll","libgdk-win32-2.0-0.dll", "libgobject-2.0-0.dll", "tcl84.dll", "tk84.dll"],
 				}
 			},
