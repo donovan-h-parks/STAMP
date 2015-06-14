@@ -83,7 +83,7 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 	def plot(self, profile, statsResults):
 		# *** Check if there is sufficient data to generate the plot
 		if len(statsResults.activeData) <= 0:
-			self.emptyAxis()			
+			self.emptyAxis()
 			return
 		
 		features = statsResults.getColumn('Features')
@@ -129,7 +129,8 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 
 		if self.bShowCorrectedPvalues:
 			pValueLabels = statsResults.getColumnAsStr('pValuesCorrected')
-			pValueTitle += ' (corrected)'
+			if statsResults.multCompCorrection.method != 'No correction':
+				pValueTitle += ' (corrected)'
 		else:
 			pValueLabels = statsResults.getColumnAsStr('pValues')
 			
@@ -229,11 +230,11 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 		
 		widthErrorBarPlot = widthPlotFigSpace*self.imageWidth - widthNumSeqPlot - spacingBetweenPlots
 				
-		axInitAxis = self.fig.add_axes([xPlotOffsetFigSpace,yPlotOffsetFigSpace,widthPlotFigSpace,heightPlotFigSpace])		
-		divider = make_axes_locatable(axInitAxis)	
+		axInitAxis = self.fig.add_axes([xPlotOffsetFigSpace,yPlotOffsetFigSpace,widthPlotFigSpace,heightPlotFigSpace])
+		divider = make_axes_locatable(axInitAxis)
 		divider.get_vertical()[0] = Size.Fixed(len(features)*self.figHeightPerRow)
 	 
-		if self.bShowBarPlot == True:	 
+		if self.bShowBarPlot == True:	
 			divider.get_horizontal()[0] = Size.Fixed(widthNumSeqPlot)
 			axErrorbar = divider.new_horizontal(widthErrorBarPlot, pad=spacingBetweenPlots, sharey=axInitAxis)
 			self.fig.add_axes(axErrorbar)
@@ -368,6 +369,9 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 			for a in axRight.yaxis.majorTicks:
 				a.tick1On=False
 				a.tick2On=False
+				
+			for loc, spine in axRight.spines.iteritems():
+				spine.set_color('none') 
 		
 		# *** Legend
 		# *** Legend

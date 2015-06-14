@@ -131,7 +131,7 @@ class pcaPlot(AbstractGroupPlotPlugin):
 		
 		axesExpandPercentage = 0.1
 		
-		border = 0.25 # inches
+		border = 0.4 # inches
 		plotSpacing = 0.15
 		xLabelOffset = 0.5
 		yLabelOffset = 0.2
@@ -416,7 +416,7 @@ class pcaPlot(AbstractGroupPlotPlugin):
 			self.bShowPC1vsPC3 = configDlg.ui.chkPC1vsPC3.isChecked()
 			self.bShowPC3vsPC2 = configDlg.ui.chkPC3vsPC2.isChecked()
 			
-			# legend position			
+			# legend position
 			if configDlg.ui.radioLegendPosUpperLeft.isChecked() == True:
 				self.legendPos = 2
 			elif configDlg.ui.radioLegendPosLowerLeft.isChecked() == True:

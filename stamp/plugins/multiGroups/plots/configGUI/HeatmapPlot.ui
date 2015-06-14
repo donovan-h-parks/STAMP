@@ -282,6 +282,11 @@
           </item>
           <item>
            <property name="text">
+            <string>Mean abundance</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
             <string>Average neighbour (UPGMA)</string>
            </property>
           </item>

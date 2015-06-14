@@ -23,8 +23,8 @@ __author__ = 'Donovan Parks'
 __copyright__ = 'Copyright 2013'
 __credits__ = ['Donovan Parks']
 __license__ = 'GPL3'
-__version__ = '2.1.1'
-__date__ = 'June 7, 2015'
+__version__ = '2.1.2'
+__date__ = 'June 15, 2015'
 __maintainer__ = 'Donovan Parks'
 __email__ = 'donovan.parks@gmail.com'
 __status__ = 'Development'
@@ -790,7 +790,7 @@ class MainWindow(QtGui.QMainWindow):
 			self.ui.cboProfileLevel.setCurrentIndex(0)
 
 			# setup group legend
-			if self.metadata != None:
+			if self.metadata != None and len(self.metadata.getFeatures()) != 0:
 				self.groupLegendDlg.initLegend(self.profileTree, self.metadata, self.metadata.getFeatures()[0])
 				self.preferences['Group colours'] = self.groupLegendDlg.groupColourDict
 

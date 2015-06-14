@@ -134,7 +134,8 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 
 		if self.bShowCorrectedPvalues:
 			pValueLabels = statsResults.getColumnAsStr('pValuesCorrected')
-			pValueTitle += ' (corrected)'
+			if statsResults.multCompCorrection.method != 'No correction':
+				pValueTitle += ' (corrected)'
 		else:
 			pValueLabels = statsResults.getColumnAsStr('pValues')
 			
@@ -368,6 +369,9 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 			for a in axRight.yaxis.majorTicks:
 				a.tick1On=False
 				a.tick2On=False
+				
+			for loc, spine in axRight.spines.iteritems():
+				spine.set_color('none') 
 				
 		# *** Legend
 		if self.legendPos != -1:

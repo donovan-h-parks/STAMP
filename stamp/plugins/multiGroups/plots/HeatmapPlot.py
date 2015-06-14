@@ -223,10 +223,10 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 				longestColLabel = colHeaders[i]
 				
 		# *** Check sorting method and adjust dendrogram parameters appropriately
-		if self.sortRowMethod == 'Alphabetical order':
+		if self.sortRowMethod == 'Alphabetical order' or self.sortRowMethod == 'Mean abundance':
 			self.bShowRowDendrogram = False
 
-		if self.sortColMethod == 'Alphabetical order':
+		if self.sortColMethod == 'Alphabetical order' or self.sortColMethod == 'Mean abundance':
 			self.bShowColDendrogram = False
 					
 		# *** Set figure size
@@ -297,17 +297,21 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 			legendY = heatmapY + heatmapH + (1.5*yLabelBounds.height) + 0.1/self.figWidth
 
 		# plot dendrograms
-		if self.sortRowMethod != 'Alphabetical order':
+		if self.sortRowMethod == 'Alphabetical order':
+			leafIndex1 = numpy.argsort(rowHeaders)[::-1]
+		elif self.sortRowMethod == 'Mean abundance':
+			leafIndex1 = numpy.argsort(numpy.mean(matrix, axis=1))
+		else:
 			axisRowDendrogram = self.fig.add_axes([rowDendrogramX, rowDendrogramY, rowDendrogramW, rowDendrogramH], frame_on=False)
 			ind1, leafIndex1 = self.plotDendrogram(matrix, axisRowDendrogram, self.sortRowMethod, self.clusteringRowThreshold, 'right', bPlot = self.bShowRowDendrogram)
-		else:
-			leafIndex1 = numpy.argsort(rowHeaders)[::-1]
 
-		if self.sortColMethod != 'Alphabetical order':
+		if self.sortColMethod == 'Alphabetical order':
+			leafIndex2 = numpy.argsort(colHeaders)
+		elif self.sortColMethod == 'Mean abundance':
+			leafIndex2 = numpy.argsort(numpy.mean(matrix, axis=0))
+		else:
 			axisColDendrogram = self.fig.add_axes([colDendrogramX, colDendrogramY, colDendrogramW, colDendrogramH], frame_on=False)
 			ind2, leafIndex2 = self.plotDendrogram(matrix.T, axisColDendrogram, self.sortColMethod, self.clusteringColThreshold, 'top', bPlot = self.bShowColDendrogram)
-		else:
-			leafIndex2 = numpy.argsort(colHeaders)
 
 		# *** Handle mouse events
 		xCell = []

@@ -37,6 +37,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 	'''
 	Profile bar plots.
 	'''
+
 	def __init__(self, preferences, parent=None):
 		AbstractSamplePlotPlugin.__init__(self, preferences, parent)
 		self.preferences = preferences
@@ -55,6 +56,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		self.barWidth = self.settings.value(self.name + '/bar width (%)', 80).toDouble()[0]
 		self.bShowPvalue = self.settings.value(self.name + '/show p-value', True).toBool()
 		self.pValueThreshold = self.settings.value(self.name + '/p-value threshold', 0.05).toDouble()[0]
+		self.bOnlyActiveFeatures = self.settings.value(self.name + '/only active features', True).toBool()
 
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -67,6 +69,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		self.numFeaturesToShow = plotToCopy.numFeaturesToShow
 		self.bShowPvalue = plotToCopy.bShowPvalue
 		self.pValueThreshold = plotToCopy.pValueThreshold
+		self.bOnlyActiveFeatures = plotToCopy.bOnlyActiveFeatures
 		
 	def plot(self, profile, statsResults):
 		if len(profile.profileDict) <= 0:
@@ -85,9 +88,16 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		parentField1 = []
 		parentField2 = []
 		
+		if self.bOnlyActiveFeatures:
+			activeFeatures = set([d[0] for d in statsResults.activeData])
+
 		tables = profile.getLabeledTables()
 		for table in tables:
 			feature, seq1, seq2, parentSeq1, parentSeq2 = table
+			
+			if self.bOnlyActiveFeatures and feature not in activeFeatures:
+				continue
+			
 			field1.append(seq1)
 			field2.append(seq2)
 			parentField1.append(parentSeq1)
@@ -254,7 +264,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		configDlg.ui.spinEndCapSize.setEnabled(self.bShowCIs)
 		configDlg.ui.spinPvalueThreshold.setEnabled(self.bShowPvalue)
 		
-		# set current values		
+		# set current values
 		configDlg.ui.cboFieldToPlot.setCurrentIndex(configDlg.ui.cboFieldToPlot.findText(self.fieldToPlot))
 
 		configDlg.ui.spinFigColWidth.setValue(self.figColWidth)
@@ -264,6 +274,8 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		configDlg.ui.spinEndCapSize.setValue(self.endCapSize)
 		
 		configDlg.ui.spinFeaturesToShow.setValue(self.numFeaturesToShow)
+		
+		configDlg.ui.chkOnlyActiveFeatures.setChecked(self.bOnlyActiveFeatures)
 		
 		# legend position
 		if self.legendPos == 0:
@@ -297,9 +309,11 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 			self.bShowCIs = configDlg.ui.chkShowCIs.isChecked()
 			self.endCapSize = configDlg.ui.spinEndCapSize.value()
 			
-			self.numFeaturesToShow = configDlg.ui.spinFeaturesToShow.value();
+			self.numFeaturesToShow = configDlg.ui.spinFeaturesToShow.value()
 			
-			# legend position			
+			self.bOnlyActiveFeatures = configDlg.ui.chkOnlyActiveFeatures.isChecked()
+			
+			# legend position
 			if configDlg.ui.radioLegendPosBest.isChecked() == True:
 				self.legendPos = 0
 			elif configDlg.ui.radioLegendPosUpperRight.isChecked() == True:
@@ -332,6 +346,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 			self.settings.setValue(self.name + '/bar width (%)', self.barWidth)
 			self.settings.setValue(self.name + '/show p-value', self.bShowPvalue)
 			self.settings.setValue(self.name + '/p-value threshold', self.pValueThreshold)
+			self.settings.setValue(self.name + '/only active features', self.bOnlyActiveFeatures)
 			
 			self.plot(profile, statsResults)
 					

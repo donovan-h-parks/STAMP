@@ -37,6 +37,8 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import NullFormatter
 from matplotlib import collections
 
+from matplotlib.patches import Rectangle
+
 from matplotlib.mlab import PCA
 
 from numpy.linalg import LinAlgError
@@ -62,7 +64,8 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		self.bRotateLabels = self.settings.value('multiple group: ' + self.name + '/rotate pc3 labels', True).toBool()
 		self.bShowPC1vsPC3 = self.settings.value('multiple group: ' + self.name + '/showPC1vsPC3', True).toBool()
 		self.bShowPC3vsPC2 = self.settings.value('multiple group: ' + self.name + '/showPC3vsPC2', True).toBool()
-		self.bUniqueShapes = self.settings.value('group: ' + self.name + '/unique shapes', True).toBool()
+		self.legendPos = self.settings.value('multiple group: ' + self.name + '/legend position', -1).toInt()[0]
+		self.bUniqueShapes = self.settings.value('multiple group: ' + self.name + '/unique shapes', True).toBool()
 		
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -78,6 +81,8 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		
 		self.bShowPC1vsPC3 = plotToCopy.bShowPC1vsPC3
 		self.bShowPC3vsPC2 = plotToCopy.bShowPC3vsPC2
+		
+		self.legendPos = plotToCopy.legendPos
 		
 		self.bUniqueShapes = plotToCopy.bUniqueShapes
 		
@@ -130,7 +135,7 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		
 		axesExpandPercentage = 0.1
 		
-		border = 0.2 # inches
+		border = 0.6 # inches
 		plotSpacing = 0.15
 		xLabelOffset = 0.5
 		yLabelOffset = 0.2
@@ -369,6 +374,7 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 				else:
 					spine.set_color(axesColour)
 					
+
 		# *** Handle mouse events
 		tooltips = []
 		for i in xrange(0, len(profile.activeSamplesInGroups)):
@@ -379,6 +385,22 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		self.plotEventHandler = MultiPlotEventHandler(xData, yData, scatterPlotAxes, tooltips)
 		self.mouseEventCallback(self.plotEventHandler)
 
+		# *** Legend
+		if self.legendPos != -1:
+			legendItems = []
+			groupNames = []
+			for i in xrange(0, len(profile.activeSamplesInGroups)):
+				legendItem = Rectangle((0, 0), 1, 1, fc=str(self.preferences['Group colours'][profile.activeGroupNames[i]].name()))
+				legendItems.append(legendItem)
+				groupNames.append(profile.activeGroupNames[i])
+			
+			numCols = 3
+			if len(groupNames) <= 4:
+				numCols = len(groupNames)
+				
+			legend = self.fig.legend(legendItems, groupNames, loc=self.legendPos, ncol=numCols)
+			legend.get_frame().set_linewidth(0)
+		
 		self.updateGeometry()
 		self.draw()
 
@@ -399,6 +421,19 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		configDlg.ui.chkPC1vsPC3.setChecked(self.bShowPC1vsPC3)
 		configDlg.ui.chkPC3vsPC2.setChecked(self.bShowPC3vsPC2)
 		
+		if self.legendPos == 2:
+			configDlg.ui.radioLegendPosUpperLeft.setChecked(True)
+		elif self.legendPos == 3:
+			configDlg.ui.radioLegendPosLowerLeft.setChecked(True)
+		elif self.legendPos == 4:
+			configDlg.ui.radioLegendPosLowerRight.setChecked(True)
+		elif self.legendPos == 9:
+			configDlg.ui.radioLegendPosUpperCentre.setChecked(True)
+		elif self.legendPos == 1:
+			configDlg.ui.radioLegendPosUpperRight.setChecked(True)
+		else:
+			configDlg.ui.radioLegendPosNone.setChecked(True)
+		
 		configDlg.ui.chkUniqueShapes.setChecked(self.bUniqueShapes)
 		
 		if configDlg.exec_() == QtGui.QDialog.Accepted:	 
@@ -414,6 +449,20 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 			self.bShowPC1vsPC3 = configDlg.ui.chkPC1vsPC3.isChecked()
 			self.bShowPC3vsPC2 = configDlg.ui.chkPC3vsPC2.isChecked()
 			
+			# legend position
+			if configDlg.ui.radioLegendPosUpperLeft.isChecked() == True:
+				self.legendPos = 2
+			elif configDlg.ui.radioLegendPosLowerLeft.isChecked() == True:
+				self.legendPos = 3
+			elif configDlg.ui.radioLegendPosUpperCentre.isChecked() == True:
+				self.legendPos = 9
+			elif configDlg.ui.radioLegendPosLowerRight.isChecked() == True:
+				self.legendPos = 4
+			elif configDlg.ui.radioLegendPosUpperRight.isChecked() == True:
+				self.legendPos = 1
+			else:
+				self.legendPos = -1
+			
 			self.bUniqueShapes = configDlg.ui.chkUniqueShapes.isChecked()
 			
 			self.settings.setValue('multiple group: ' + self.name + '/width', self.figWidth)
@@ -423,7 +472,8 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 			self.settings.setValue('multiple group: ' + self.name + '/rotate pc3 labels', self.bRotateLabels)
 			self.settings.setValue('multiple group: ' + self.name + '/showPC1vsPC3', self.bShowPC1vsPC3)
 			self.settings.setValue('multiple group: ' + self.name + '/showPC3vsPC2', self.bShowPC3vsPC2)
-			self.settings.setValue('group: ' + self.name + '/unique shapes', self.bUniqueShapes)
+			self.settings.setValue('multiple group: ' + self.name + '/legend position', self.legendPos)
+			self.settings.setValue('multiple group: ' + self.name + '/unique shapes', self.bUniqueShapes)
 			
 			self.plot(profile, statsResults)
 					

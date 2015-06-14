@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'profileBarPlot.ui'
 #
-# Created: Thu Aug 11 10:42:25 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Fri Jun 12 15:44:48 2015
+#      by: PyQt4 UI code generator 4.9.6
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,19 +12,28 @@ from PyQt4 import QtCore, QtGui
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
-    _fromUtf8 = lambda s: s
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 class Ui_ProfileBarPlotDialog(object):
     def setupUi(self, ProfileBarPlotDialog):
         ProfileBarPlotDialog.setObjectName(_fromUtf8("ProfileBarPlotDialog"))
-        ProfileBarPlotDialog.resize(418, 277)
+        ProfileBarPlotDialog.resize(418, 300)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(ProfileBarPlotDialog.sizePolicy().hasHeightForWidth())
         ProfileBarPlotDialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8("../../../../../icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         ProfileBarPlotDialog.setWindowIcon(icon)
         self.verticalLayout_5 = QtGui.QVBoxLayout(ProfileBarPlotDialog)
         self.verticalLayout_5.setObjectName(_fromUtf8("verticalLayout_5"))
@@ -62,7 +71,7 @@ class Ui_ProfileBarPlotDialog(object):
         self.spinFigColWidth.setMinimum(0.01)
         self.spinFigColWidth.setMaximum(10.0)
         self.spinFigColWidth.setSingleStep(0.01)
-        self.spinFigColWidth.setProperty(_fromUtf8("value"), 0.5)
+        self.spinFigColWidth.setProperty("value", 0.5)
         self.spinFigColWidth.setObjectName(_fromUtf8("spinFigColWidth"))
         self.formLayout_2.setWidget(0, QtGui.QFormLayout.FieldRole, self.spinFigColWidth)
         self.lblFigureHeight = QtGui.QLabel(self.groupBox_3)
@@ -72,7 +81,7 @@ class Ui_ProfileBarPlotDialog(object):
         self.spinFigHeight.setMinimum(0.1)
         self.spinFigHeight.setMaximum(20.0)
         self.spinFigHeight.setSingleStep(0.05)
-        self.spinFigHeight.setProperty(_fromUtf8("value"), 6.0)
+        self.spinFigHeight.setProperty("value", 6.0)
         self.spinFigHeight.setObjectName(_fromUtf8("spinFigHeight"))
         self.formLayout_2.setWidget(2, QtGui.QFormLayout.FieldRole, self.spinFigHeight)
         self.lblFigureWidth = QtGui.QLabel(self.groupBox_3)
@@ -84,7 +93,7 @@ class Ui_ProfileBarPlotDialog(object):
         self.spinBarWidth = QtGui.QSpinBox(self.groupBox_3)
         self.spinBarWidth.setMaximum(100)
         self.spinBarWidth.setSingleStep(5)
-        self.spinBarWidth.setProperty(_fromUtf8("value"), 80)
+        self.spinBarWidth.setProperty("value", 80)
         self.spinBarWidth.setObjectName(_fromUtf8("spinBarWidth"))
         self.formLayout_2.setWidget(1, QtGui.QFormLayout.FieldRole, self.spinBarWidth)
         self.verticalLayout_6.addLayout(self.formLayout_2)
@@ -124,7 +133,7 @@ class Ui_ProfileBarPlotDialog(object):
         self.spinPvalueThreshold.setDecimals(4)
         self.spinPvalueThreshold.setMaximum(1.0)
         self.spinPvalueThreshold.setSingleStep(0.0001)
-        self.spinPvalueThreshold.setProperty(_fromUtf8("value"), 0.05)
+        self.spinPvalueThreshold.setProperty("value", 0.05)
         self.spinPvalueThreshold.setObjectName(_fromUtf8("spinPvalueThreshold"))
         self.horizontalLayout_4.addWidget(self.spinPvalueThreshold)
         spacerItem1 = QtGui.QSpacerItem(1, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
@@ -138,12 +147,15 @@ class Ui_ProfileBarPlotDialog(object):
         self.spinFeaturesToShow = QtGui.QSpinBox(ProfileBarPlotDialog)
         self.spinFeaturesToShow.setMinimum(1)
         self.spinFeaturesToShow.setMaximum(1000)
-        self.spinFeaturesToShow.setProperty(_fromUtf8("value"), 50)
+        self.spinFeaturesToShow.setProperty("value", 50)
         self.spinFeaturesToShow.setObjectName(_fromUtf8("spinFeaturesToShow"))
         self.horizontalLayout_3.addWidget(self.spinFeaturesToShow)
         spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_3.addItem(spacerItem2)
         self.verticalLayout_4.addLayout(self.horizontalLayout_3)
+        self.chkOnlyActiveFeatures = QtGui.QCheckBox(ProfileBarPlotDialog)
+        self.chkOnlyActiveFeatures.setObjectName(_fromUtf8("chkOnlyActiveFeatures"))
+        self.verticalLayout_4.addWidget(self.chkOnlyActiveFeatures)
         self.horizontalLayout_7.addLayout(self.verticalLayout_4)
         self.groupBox = QtGui.QGroupBox(ProfileBarPlotDialog)
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
@@ -199,27 +211,28 @@ class Ui_ProfileBarPlotDialog(object):
         QtCore.QMetaObject.connectSlotsByName(ProfileBarPlotDialog)
 
     def retranslateUi(self, ProfileBarPlotDialog):
-        ProfileBarPlotDialog.setWindowTitle(QtGui.QApplication.translate("ProfileBarPlotDialog", "Profile bar plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFieldToPlot.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Field to plot:", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboFieldToPlot.setItemText(0, QtGui.QApplication.translate("ProfileBarPlotDialog", "Number of sequences", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboFieldToPlot.setItemText(1, QtGui.QApplication.translate("ProfileBarPlotDialog", "Proportion of sequences (%)", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("ProfileBarPlotDialog", "Figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Column width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Bar width (%):", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_4.setTitle(QtGui.QApplication.translate("ProfileBarPlotDialog", "Confidence Intervals", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowCIs.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Show CIs", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "End cap size:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_5.setTitle(QtGui.QApplication.translate("ProfileBarPlotDialog", "Mark significant features", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowPvalue.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Mark features with a p-value <=", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Maximum # features to show:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("ProfileBarPlotDialog", "Legend position", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosNone.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "None", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosBest.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Best", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperRight.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Upper right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosCentreRight.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Centre right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerRight.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Lower right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperLeft.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Upper left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosCentreLeft.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Centre left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerLeft.setText(QtGui.QApplication.translate("ProfileBarPlotDialog", "Lower left", None, QtGui.QApplication.UnicodeUTF8))
+        ProfileBarPlotDialog.setWindowTitle(_translate("ProfileBarPlotDialog", "Profile bar plot", None))
+        self.lblFieldToPlot.setText(_translate("ProfileBarPlotDialog", "Field to plot:", None))
+        self.cboFieldToPlot.setItemText(0, _translate("ProfileBarPlotDialog", "Number of sequences", None))
+        self.cboFieldToPlot.setItemText(1, _translate("ProfileBarPlotDialog", "Proportion of sequences (%)", None))
+        self.groupBox_3.setTitle(_translate("ProfileBarPlotDialog", "Figure size", None))
+        self.lblFigureHeight.setText(_translate("ProfileBarPlotDialog", "Height:", None))
+        self.lblFigureWidth.setText(_translate("ProfileBarPlotDialog", "Column width:", None))
+        self.label_3.setText(_translate("ProfileBarPlotDialog", "Bar width (%):", None))
+        self.groupBox_4.setTitle(_translate("ProfileBarPlotDialog", "Confidence Intervals", None))
+        self.chkShowCIs.setText(_translate("ProfileBarPlotDialog", "Show CIs", None))
+        self.label.setText(_translate("ProfileBarPlotDialog", "End cap size:", None))
+        self.groupBox_5.setTitle(_translate("ProfileBarPlotDialog", "Mark significant features", None))
+        self.chkShowPvalue.setText(_translate("ProfileBarPlotDialog", "Mark features with a p-value <=", None))
+        self.label_2.setText(_translate("ProfileBarPlotDialog", "Maximum # features to show:", None))
+        self.chkOnlyActiveFeatures.setText(_translate("ProfileBarPlotDialog", "Only show active features", None))
+        self.groupBox.setTitle(_translate("ProfileBarPlotDialog", "Legend position", None))
+        self.radioLegendPosNone.setText(_translate("ProfileBarPlotDialog", "None", None))
+        self.radioLegendPosBest.setText(_translate("ProfileBarPlotDialog", "Best", None))
+        self.radioLegendPosUpperRight.setText(_translate("ProfileBarPlotDialog", "Upper right", None))
+        self.radioLegendPosCentreRight.setText(_translate("ProfileBarPlotDialog", "Centre right", None))
+        self.radioLegendPosLowerRight.setText(_translate("ProfileBarPlotDialog", "Lower right", None))
+        self.radioLegendPosUpperLeft.setText(_translate("ProfileBarPlotDialog", "Upper left", None))
+        self.radioLegendPosCentreLeft.setText(_translate("ProfileBarPlotDialog", "Centre left", None))
+        self.radioLegendPosLowerLeft.setText(_translate("ProfileBarPlotDialog", "Lower left", None))
 

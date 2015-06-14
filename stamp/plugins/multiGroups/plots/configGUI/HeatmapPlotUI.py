@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'HeatmapPlot.ui'
 #
-# Created: Fri Nov 07 11:02:38 2014
+# Created: Fri Jun 12 15:14:54 2015
 #      by: PyQt4 UI code generator 4.9.6
 #
 # WARNING! All changes made in this file will be lost!
@@ -143,6 +143,7 @@ class Ui_HeatmapPlotDialog(object):
         sizePolicy.setHeightForWidth(self.cboRowSortMethod.sizePolicy().hasHeightForWidth())
         self.cboRowSortMethod.setSizePolicy(sizePolicy)
         self.cboRowSortMethod.setObjectName(_fromUtf8("cboRowSortMethod"))
+        self.cboRowSortMethod.addItem(_fromUtf8(""))
         self.cboRowSortMethod.addItem(_fromUtf8(""))
         self.cboRowSortMethod.addItem(_fromUtf8(""))
         self.cboRowSortMethod.addItem(_fromUtf8(""))
@@ -343,11 +344,12 @@ class Ui_HeatmapPlotDialog(object):
         self.groupBox.setTitle(_translate("HeatmapPlotDialog", "Sort rows", None))
         self.lblDendrogramMethod.setText(_translate("HeatmapPlotDialog", "Methods:", None))
         self.cboRowSortMethod.setItemText(0, _translate("HeatmapPlotDialog", "Alphabetical order", None))
-        self.cboRowSortMethod.setItemText(1, _translate("HeatmapPlotDialog", "Average neighbour (UPGMA)", None))
-        self.cboRowSortMethod.setItemText(2, _translate("HeatmapPlotDialog", "Centroid", None))
-        self.cboRowSortMethod.setItemText(3, _translate("HeatmapPlotDialog", "Furthest neighbour", None))
-        self.cboRowSortMethod.setItemText(4, _translate("HeatmapPlotDialog", "Nearest neighbour", None))
-        self.cboRowSortMethod.setItemText(5, _translate("HeatmapPlotDialog", "Ward", None))
+        self.cboRowSortMethod.setItemText(1, _translate("HeatmapPlotDialog", "Mean abundance", None))
+        self.cboRowSortMethod.setItemText(2, _translate("HeatmapPlotDialog", "Average neighbour (UPGMA)", None))
+        self.cboRowSortMethod.setItemText(3, _translate("HeatmapPlotDialog", "Centroid", None))
+        self.cboRowSortMethod.setItemText(4, _translate("HeatmapPlotDialog", "Furthest neighbour", None))
+        self.cboRowSortMethod.setItemText(5, _translate("HeatmapPlotDialog", "Nearest neighbour", None))
+        self.cboRowSortMethod.setItemText(6, _translate("HeatmapPlotDialog", "Ward", None))
         self.lblClusteringThreshold.setText(_translate("HeatmapPlotDialog", "Dendrogram clustering threshold:", None))
         self.chkShowRowDendrogram.setText(_translate("HeatmapPlotDialog", "Show dendrogram", None))
         self.lblDendrogramWidth.setText(_translate("HeatmapPlotDialog", "Width (inches):", None))

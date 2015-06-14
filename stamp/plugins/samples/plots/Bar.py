@@ -60,7 +60,7 @@ class Bar(AbstractSamplePlotPlugin):
 		
 	def plot(self, profile, statsResults):
 		if len(statsResults.activeData) <= 0:
-			self.emptyAxis()			
+			self.emptyAxis()
 			return
 		
 		features = statsResults.getColumn('Features')
@@ -71,7 +71,7 @@ class Bar(AbstractSamplePlotPlugin):
 																		'Do you wish to continue?', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
 			QtGui.QApplication.instance().restoreOverrideCursor()
 			if reply == QtGui.QMessageBox.No:
-				self.emptyAxis()	
+				self.emptyAxis()
 				return
 
 		# *** Colour of plot elements

@@ -390,6 +390,9 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 			for a in axRight.yaxis.majorTicks:
 				a.tick1On=False
 				a.tick2On=False
+				
+			for loc, spine in axRight.spines.iteritems():
+				spine.set_color('none') 
 
 		self.updateGeometry()
 		self.draw()
