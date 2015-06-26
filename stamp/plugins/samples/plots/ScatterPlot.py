@@ -72,7 +72,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 		self.markerSize = plotToCopy.markerSize
 		
 	def plot(self, profile, statsResults):
-		if len(profile.profileDict) <= 0:
+		if len(profile.profileDict) <= 1:
 			self.emptyAxis()
 			return
 
