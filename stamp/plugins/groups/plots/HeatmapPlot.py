@@ -385,7 +385,7 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 
 		labelOffset = 0.5 * (xLabelBounds.width / cellSizeXPer)
 		for i in xrange(0, len(colHeaders)):
-			axisHeatmap.text(i - labelOffset, -0.5, '  ' + colHeaders[leafIndex2[i]], rotation=270, verticalalignment="top")
+			axisHeatmap.text(i - labelOffset, -0.5, '  ' + colHeaders[leafIndex2[i]], rotation='vertical', verticalalignment="top")
 
 		# plot colour map legend
 		axisColourMap = self.fig.add_axes([legendX, legendY, legendW, legendH], frame_on=False)  # axes for colorbar
