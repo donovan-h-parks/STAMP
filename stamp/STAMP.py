@@ -71,6 +71,7 @@ from stamp.plugins.PlotsManager import PlotsManager
 from stamp.plugins.PluginManager import PluginManager
 
 import matplotlib as mpl
+mpl.rcParams['svg.fonttype'] = 'none'
 
 from numpy import seterr
 
