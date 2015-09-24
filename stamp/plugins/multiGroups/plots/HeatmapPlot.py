@@ -251,8 +251,8 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 		else:
 			dendrogramHeight = 0.2 / self.figHeight
 
-		cellSizeX =  (1.0 - 2*0.02 - dendrogramWidth - colourBarWidthX - 2*marginX - yLabelBounds.width)*self.figWidth/len(colHeaders)
-		cellSizeY =  (1.0 - 2*0.02 - dendrogramHeight - colourBarWidthY - 2*marginY - xLabelBounds.height)*self.figHeight/len(rowHeaders)
+		cellSizeX = max((1.0 - 2*0.02 - dendrogramWidth - colourBarWidthX - 2*marginX - yLabelBounds.width), 0.01)*self.figWidth/len(colHeaders)
+		cellSizeY =  max((1.0 - 2*0.02 - dendrogramHeight - colourBarWidthY - 2*marginY - xLabelBounds.height), 0.01)*self.figHeight/len(rowHeaders)
 		cellSize = min(cellSizeX, cellSizeY)
 
 		cellSizeXPer = cellSize / self.figWidth
