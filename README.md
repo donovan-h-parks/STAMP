@@ -11,6 +11,10 @@ http://kiwi.cs.dal.ca/Software/STAMP
 The STAMP Google Group can be found at:
 https://groups.google.com/forum/?hl=en#!forum/stamp_help
 
+## License
+
+STAMP is open source and released under the GNU General Public License v3.0. See LICENSE for further details.
+
 ## Copyright
 
-Copyright 2010 Donovan Parks. See LICENSE for further details.
+Copyright 2010 Donovan Parks.
