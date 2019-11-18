@@ -14,7 +14,3 @@ https://groups.google.com/forum/?hl=en#!forum/stamp_help
 ## License
 
 STAMP is open source and released under the GNU General Public License v3.0. See LICENSE for further details.
-
-## Copyright
-
-Copyright 2010 Donovan Parks.
