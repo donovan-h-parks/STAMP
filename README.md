@@ -5,6 +5,8 @@
 
 STAMP is a software package for analyzing taxonomic or metabolic profiles that promotes ‘best practices’ in choosing appropriate statistical techniques and reporting results. Statistical hypothesis tests for pairs of samples or groups of samples is support along with a wide range of exploratory plots. STAMP encourages the use of effect sizes and confidence intervals in assessing biological importance. A user friendly, graphical interface permits easy exploration of statistical results and generation of publication quality plots for inferring the biological relevance of features in a metagenomic profile. STAMP is open source, extensible via a plugin framework, and available for all major platforms.
 
+STAMP can be obtained from the [Releases](https://github.com/dparks1134/STAMP/releases) page of this GitHub repository.
+
 Further information, including installation and user documentation, can be found [here](http://kiwi.cs.dal.ca/Software/STAMP). (Link is currently down due to a server issue and it is unclear when it will be live again).
 
 The STAMP Google Group can be found [here](https://groups.google.com/forum/?hl=en#!forum/stamp_help).
