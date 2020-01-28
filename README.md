@@ -7,7 +7,7 @@ STAMP is a software package for analyzing taxonomic or metabolic profiles that p
 
 STAMP can be obtained from the [Releases](https://github.com/dparks1134/STAMP/releases) page of this GitHub repository.
 
-Further information, including installation and user documentation, can be found [here](http://kiwi.cs.dal.ca/Software/STAMP). (Link is currently down due to a server issue and it is unclear when it will be live again).
+Further information, including installation and user documentation, can be found [here](https://beikolab.cs.dal.ca/software/STAMP).
 
 The STAMP Google Group can be found [here](https://groups.google.com/forum/?hl=en#!forum/stamp_help).
 
