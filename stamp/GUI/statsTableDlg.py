@@ -21,14 +21,14 @@
 # along with STAMP. If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
-from statsTableDlgUI import Ui_StatsTableDlg
+from PyQt5 import QtGui, QtCore, QtWidgets
+from stamp.GUI.statsTableDlgUI import Ui_StatsTableDlg
 
 from stamp.metagenomics.GenericTable import GenericTable
 
-class StatsTableDlg(QtGui.QDockWidget):
+class StatsTableDlg(QtWidgets.QDockWidget):
 	def __init__(self, preferences, parent=None, info=None):
-		QtGui.QDockWidget.__init__(self, parent)
+		QtWidgets.QDockWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_StatsTableDlg()
@@ -36,10 +36,10 @@ class StatsTableDlg(QtGui.QDockWidget):
 		
 		self.preferences = preferences
 		self.table = ''
-		
-		# signals
-		self.connect(self.ui.btnSave, QtCore.SIGNAL("clicked()"), self.saveTable)
-		self.connect(self.ui.chkShowActiveFeatures, QtCore.SIGNAL("clicked()"), self.__updateTable)
+
+		# Modern PyQt5 Syntax
+		self.ui.btnSave.clicked.connect(self.saveTable)
+		self.ui.chkShowActiveFeatures.clicked.connect(self.__updateTable)
 		
 	def updateTable(self, statsTest):
 		self.statsTest = statsTest
@@ -57,11 +57,11 @@ class StatsTableDlg(QtGui.QDockWidget):
 			
 			# resize columns to fit context by sampling first 100 rows
 			#self.ui.tableStatisticalSummary.resizeColumnsToContents()
-			for colIndex in xrange(0, self.table.columnCount(None)):
+			for colIndex in range(0, self.table.columnCount(None)):
 				fm = self.ui.tableStatisticalSummary.fontMetrics()
 				maxWidth = fm.width(tableHeadings[colIndex]) + 10
 				
-				for i in xrange(0, 100): # sample first 100 rows to estimate column width, this is strictly for efficiency	
+				for i in range(0, 100): # sample first 100 rows to estimate column width, this is strictly for efficiency	
 					width = fm.width(self.ui.tableStatisticalSummary.model().data(self.ui.tableStatisticalSummary.model().index(i,colIndex), QtCore.Qt.DisplayRole).toString()) + 10
 					if  width > maxWidth:
 						maxWidth = width

@@ -18,6 +18,6 @@ diffBetweenPropOneSided, diffBetweenPropTwoSided = diffBetweenProp.hypothesisTes
 bootstrapOneSided, bootstrapTwoSided = bootstrap.hypothesisTest(a, b, totalSamples1, totalSamples2)
 barnardOneSided, barnardTwoSided = barnard.hypothesisTest(a, b, totalSamples1, totalSamples2)
 
-print diffBetweenPropTwoSided, bootstrapTwoSided, fishersTwoSided, barnardTwoSided
+print(diffBetweenPropTwoSided, bootstrapTwoSided, fishersTwoSided, barnardTwoSided)
     
     

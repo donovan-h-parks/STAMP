@@ -67,15 +67,15 @@ class CheckHierarchy(object):
 		# sanity check profile
 		numSamples = len(headerValues) - firstSampleIndex
 		if numSamples < 2:
-			print '[Error] Profile must contain at least two samples. Identified %d samples' % numSamples
+			print('[Error] Profile must contain at least two samples. Identified %d samples' % numSamples)
 			sys.exit()
 
 		if firstSampleIndex == 0:
-			print '[Error] Profile file must contain at least one column indicating feature names.'
+			print('[Error] Profile file must contain at least one column indicating feature names.')
 			sys.exit()
 			
-		print 'Identified %d samples.' % numSamples
-		print 'Identified %d hierarchical columns.' % firstSampleIndex
+		print('Identified %d samples.' % numSamples)
+		print('Identified %d hierarchical columns.' % firstSampleIndex)
 
 		# get name of hierarchical columns
 		columnNames = headerValues[0:firstSampleIndex]
@@ -100,7 +100,7 @@ class CheckHierarchy(object):
 				dataValues = map(str.strip, lineSplit)
 				
 				if len(headerValues) != len(dataValues):
-					print '[Error] Line %d does not contain as many entries as the header line.' % rowNumber
+					print('[Error] Line %d does not contain as many entries as the header line.' % rowNumber)
 					sys.exit()
 				
 				if not columnNames:
@@ -133,27 +133,27 @@ class CheckHierarchy(object):
 							
 		# report entries breaking hierarchy
 		if len(entriesWithUnclassifiedParents) > 0:
-			print ''
-			print 'The following entries have an unclassified parent:'
+			print('')
+			print('The following entries have an unclassified parent:')
 			for entry in entriesWithUnclassifiedParents:
 				rowNumber, r, value = entry
-				print '%s\t%s\t%s' % (rowNumber, columnNames[r], value)
+				print('%s\t%s\t%s' % (rowNumber, columnNames[r], value))
 				
 		
 		if len(entriesBreakingHierarchy) > 0:
-			print ''
-			print 'The following entries have two (and potentially more) parents:'
+			print('')
+			print('The following entries have two (and potentially more) parents:')
 			for entry in entriesBreakingHierarchy:
 				rowNumber, r, value, parent1, parent2 = entry
-				print '%s\t%s\t%s\t%s' % (rowNumber, columnNames[r], value, ','.join([parent1, parent2]))
+				print('%s\t%s\t%s\t%s' % (rowNumber, columnNames[r], value, ','.join([parent1, parent2])))
 				
 		if len(entriesWithUnclassifiedParents) == 0 and len(entriesBreakingHierarchy) == 0:
-			print ''
-			print 'Profile forms a strict hierarchy. You are good to go!'
+			print('')
+			print('Profile forms a strict hierarchy. You are good to go!')
 
 if __name__ == '__main__':
-	print __prog_name__ + ' v' + __version__ + ': ' + __prog_desc__
-	print '  by ' + __author__ + ' (' + __email__ + ')' + '\n'
+	print(__prog_name__ + ' v' + __version__ + ': ' + __prog_desc__)
+	print('  by ' + __author__ + ' (' + __email__ + ')' + '\n')
 
 	parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 	parser.add_argument('stamp_profile', help='STAMP profile to evaluate')
@@ -164,7 +164,7 @@ if __name__ == '__main__':
 		checkHierarchy = CheckHierarchy()
 		checkHierarchy.run(args.stamp_profile)
 	except SystemExit:
-		print "\nControlled exit resulting from an unrecoverable error or warning."
+		print("\nControlled exit resulting from an unrecoverable error or warning.")
 	except:
-		print "\nUnexpected error:", sys.exc_info()[0]
+		print("\nUnexpected error:", sys.exc_info()[0])
 		raise

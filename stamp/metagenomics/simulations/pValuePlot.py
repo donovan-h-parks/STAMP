@@ -26,7 +26,7 @@ def mean(x):
     return 0
     
   sum = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sum += x[i]
   return sum / len(x)
   
@@ -36,7 +36,7 @@ def stdDev(x):
     
   m = mean(x)
   sumsq = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sumsq += (x[i] - m)*(x[i] - m)
   return math.sqrt(sumsq / len(x))
   
@@ -59,9 +59,9 @@ gTestYatesResults = []
 permutationResults = []
 diffBetweenPropResults = []
 bootstrapResults = []
-for a in xrange(11, maxPositiveSeqs):
-  print a
-  for b in xrange(a, maxPositiveSeqs):    
+for a in range(11, maxPositiveSeqs):
+  print(a)
+  for b in range(a, maxPositiveSeqs):    
         
     # calculate p-values
     fishersOneSided, fishersTwoSided = fishers.hypothesisTest(a, b, totalSamples1, totalSamples2)        
@@ -89,8 +89,8 @@ for method in methods:
   fout.write(method + ',') 
 fout.write('\n')
 
-for i in xrange(0, len(testResults[0])):
-  for j in xrange(0, len(testResults)):        
+for i in range(0, len(testResults[0])):
+  for j in range(0, len(testResults)):        
     fout.write(str(testResults[j][i]) + ',')      
   fout.write('\n')
 

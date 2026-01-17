@@ -26,7 +26,7 @@ def mean(x):
     return 0
     
   sum = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sum += x[i]
   return sum / len(x)
   
@@ -36,7 +36,7 @@ def stdDev(x):
     
   m = mean(x)
   sumsq = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sumsq += (x[i] - m)*(x[i] - m)
   return math.sqrt(sumsq / len(x))
   
@@ -45,7 +45,7 @@ fout = open('pValueTest.txt','w')
 random.seed()
 
 for N in sampleSize:
-  print N
+  print(N)
   totalSamples1 = N
   totalSamples2 = N*2
   
@@ -61,8 +61,8 @@ for N in sampleSize:
   permutationResults = []
   diffBetweenPropResults = []
   bootstrapResults = []
-  for a in xrange(11, maxPositiveSeqs):
-    for b in xrange(a, maxPositiveSeqs):        
+  for a in range(11, maxPositiveSeqs):
+    for b in range(a, maxPositiveSeqs):        
       # calculate p-values
       fishersOneSided, fishersTwoSided = fishers.hypothesisTest(a, b, totalSamples1, totalSamples2)
       if (fishersTwoSided < 0.01 or fishersTwoSided > 0.1):
@@ -96,11 +96,11 @@ for N in sampleSize:
         
     testResults = [chiSquareResults,chiSquareYatesResults, gTestResults, gTestYatesResults, permutationResults, diffBetweenPropResults, bootstrapResults]
     method = ['Chi-square','Chi-square w/ Yates','G-test', 'G-test w/ Yates', 'Permutation', 'Diff. between proportions', 'Bootstrap']
-    for i in xrange(0, len(testResults)):
+    for i in range(0, len(testResults)):
       # calculate relative error and number of non-significant features
       results = []
       missedSignFeatures = 0
-      for j in xrange(0, len(testResults[i])):
+      for j in range(0, len(testResults[i])):
         results.append(100 * (testResults[i][j] - fishersResults[j]) / fishersResults[j])
         
         if fishersResults[j] < 0.05 and testResults[i][j] > 0.05:

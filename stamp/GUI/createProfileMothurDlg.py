@@ -21,17 +21,17 @@
 
 import string
 
-from PyQt4 import QtGui, QtCore
-from createProfileMothurUI import Ui_CreateProfileMothurDlg
+from PyQt5 import QtGui, QtCore,QtWidgets
+from stamp.GUI.createProfileMothurUI import Ui_CreateProfileMothurDlg
 
 class ProfileRow():
 	def __init__(self):
 		countData = []
 		hierarchy = []
 
-class CreateProfileMothurDlg(QtGui.QDialog):
+class CreateProfileMothurDlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None):
-		QtGui.QWidget.__init__(self, parent)
+		QWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_CreateProfileMothurDlg()
@@ -86,7 +86,7 @@ class CreateProfileMothurDlg(QtGui.QDialog):
 		if outputFile == '':
 			return
 			
-		QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
 			
 		seqIdToSampleId = {}
 		sampleIds = set([])
@@ -160,7 +160,7 @@ class CreateProfileMothurDlg(QtGui.QDialog):
 
 		taxonomicRanks = ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8', 'Level 9', 'Level 10', 'Level 11', 'Level 12']
 		fout.write(taxonomicRanks[0])
-		for r in xrange(1, deepestRank):
+		for r in range(1, deepestRank):
 			fout.write('\t' + taxonomicRanks[r])
 
 		for sampleId in sampleIds:
@@ -172,10 +172,10 @@ class CreateProfileMothurDlg(QtGui.QDialog):
 			classification = classification[0:len(classification)-1]
 			
 			fout.write(classification[0])
-			for c in xrange(1, len(classification)):
+			for c in range(1, len(classification)):
 				fout.write('\t' + classification[c])
 				
-			for c in xrange(len(classification), deepestRank):
+			for c in range(len(classification), deepestRank):
 				fout.write('\t' + 'unclassified')
 				
 			counts = sampleProfiles[classificationStr]
@@ -188,7 +188,7 @@ class CreateProfileMothurDlg(QtGui.QDialog):
 			
 		fout.close()
 
-		QtGui.QApplication.instance().restoreOverrideCursor()
+		QtWidgets.QApplication.instance().restoreOverrideCursor()
 		
 		self.accept()
 

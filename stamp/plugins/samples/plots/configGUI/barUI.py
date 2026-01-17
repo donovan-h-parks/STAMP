@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -129,19 +129,19 @@ class Ui_BarConfigDialog(object):
         QtCore.QMetaObject.connectSlotsByName(BarConfigDialog)
 
     def retranslateUi(self, BarConfigDialog):
-        BarConfigDialog.setWindowTitle(QtGui.QApplication.translate("BarConfigDialog", "Bar plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFieldToPlot.setText(QtGui.QApplication.translate("BarConfigDialog", "Field to plot:", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkSort.setText(QtGui.QApplication.translate("BarConfigDialog", "Sort values", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("BarConfigDialog", "Figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("BarConfigDialog", "Width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("BarConfigDialog", "Row height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("BarConfigDialog", "Legend position", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperLeft.setText(QtGui.QApplication.translate("BarConfigDialog", "Upper left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosCentreLeft.setText(QtGui.QApplication.translate("BarConfigDialog", "Centre left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerLeft.setText(QtGui.QApplication.translate("BarConfigDialog", "Lower left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperRight.setText(QtGui.QApplication.translate("BarConfigDialog", "Upper right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosCentreRight.setText(QtGui.QApplication.translate("BarConfigDialog", "Centre right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerRight.setText(QtGui.QApplication.translate("BarConfigDialog", "Lower right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosBest.setText(QtGui.QApplication.translate("BarConfigDialog", "Best", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosNone.setText(QtGui.QApplication.translate("BarConfigDialog", "None", None, QtGui.QApplication.UnicodeUTF8))
+        BarConfigDialog.setWindowTitle(QtWidgets.QApplication.translate("BarConfigDialog", "Bar plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFieldToPlot.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Field to plot:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkSort.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Sort values", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtWidgets.QApplication.translate("BarConfigDialog", "Figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureWidth.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureHeight.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Row height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("BarConfigDialog", "Legend position", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosUpperLeft.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Upper left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosCentreLeft.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Centre left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerLeft.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Lower left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosUpperRight.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Upper right", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosCentreRight.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Centre right", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerRight.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Lower right", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosBest.setText(QtWidgets.QApplication.translate("BarConfigDialog", "Best", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosNone.setText(QtWidgets.QApplication.translate("BarConfigDialog", "None", None, QtWidgets.QApplication.UnicodeUTF8))
 

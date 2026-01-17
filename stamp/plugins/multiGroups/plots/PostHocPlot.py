@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 
 import sys
 import math
@@ -29,7 +29,8 @@ import operator
 import numpy as np
 
 from matplotlib.font_manager import FontProperties
-from mpl_toolkits.axes_grid import make_axes_locatable, Size
+from mpl_toolkits.axes_grid1 import make_axes_locatable, Size
+
 
 from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.multiGroups.plots.configGUI.PostHocPlotUI import Ui_PostHocPlotDialog
@@ -48,18 +49,18 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 		self.bRunPostHocTest = True
 		
 		self.settings = preferences['Settings']
-		self.figWidth = self.settings.value('multiple group: ' + self.name + '/width', 7.0).toDouble()[0]
-		self.figHeightPerRow = self.settings.value('multiple group: ' + self.name + '/row height', 0.2).toDouble()[0]
-		self.sortingField = self.settings.value('multiple group: ' + self.name + '/field', 'p-values').toString()
-		self.bShowBarPlot = self.settings.value('multiple group: ' + self.name + '/sequences subplot', True).toBool()
-		self.bShowPValueLabels = self.settings.value('multiple group: ' + self.name + '/p-value labels', True).toBool()
-		self.bCustomLimits = self.settings.value('multiple group: ' + self.name + '/use custom limits', False).toBool()
-		self.minX = self.settings.value('multiple group: ' + self.name + '/minimum', 0.0).toDouble()[0]
-		self.maxX = self.settings.value('multiple group: ' + self.name + '/maximum', 1.0).toDouble()[0]
-		self.markerSize = self.settings.value('multiple group: ' + self.name + '/marker size', 30).toInt()[0]
-		self.bShowStdDev = self.settings.value('multiple group: ' + self.name + '/show std. dev.', False).toBool()
-		self.endCapSize = self.settings.value('multiple group: ' + self.name + '/end cap size', 0.0).toInt()[0]
-		self.bPvalueFilter = self.settings.value('multiple group: ' + self.name + '/p-value filter', True).toBool()
+		self.figWidth = float(self.settings.value('multiple group: ' + self.name + '/width', 7.0))
+		self.figHeightPerRow = float(self.settings.value('multiple group: ' + self.name + '/row height', 0.2))
+		self.sortingField = str(self.settings.value('multiple group: ' + self.name + '/field', 'p-values'))
+		self.bShowBarPlot = bool(self.settings.value('multiple group: ' + self.name + '/sequences subplot', True))
+		self.bShowPValueLabels = bool(self.settings.value('multiple group: ' + self.name + '/p-value labels', True))
+		self.bCustomLimits = bool(self.settings.value('multiple group: ' + self.name + '/use custom limits', False))
+		self.minX = float(self.settings.value('multiple group: ' + self.name + '/minimum', 0.0))
+		self.maxX = float(self.settings.value('multiple group: ' + self.name + '/maximum', 1.0))
+		self.markerSize = int(self.settings.value('multiple group: ' + self.name + '/marker size', 30))
+		self.bShowStdDev = bool(self.settings.value('multiple group: ' + self.name + '/show std. dev.', False))
+		self.endCapSize = int(self.settings.value('multiple group: ' + self.name + '/end cap size', 0.0))
+		self.bPvalueFilter = bool(self.settings.value('multiple group: ' + self.name + '/p-value filter', True))
 		
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -89,11 +90,11 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 			return
 
 		if len(statsResults.postHocResults.pValues) > 200:
-			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 			reply = QtGui.QMessageBox.question(self, 'Continue?', 'Plots contains ' + str(len(statsResults.postHocResults.pValues)) + ' rows. ' +
 																		'It may take several seconds to generate this plot. We recommend filtering the results first.' + 
 																		'Do you wish to continue?', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
-			QtGui.QApplication.instance().restoreOverrideCursor()
+			QtWidgets.QApplication.instance().restoreOverrideCursor()
 			if reply == QtGui.QMessageBox.No:
 				self.emptyAxis('Too many rows.')	
 				return
@@ -109,7 +110,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 		lowerCIs = []
 		upperCIs = []
 		if self.bPvalueFilter:
-			for i in xrange(0, len(statsResults.postHocResults.labels)):
+			for i in range(0, len(statsResults.postHocResults.labels)):
 				# get numeric p-value
 				if isinstance(statsResults.postHocResults.pValues[i], str):
 					pValueSplit = statsResults.postHocResults.pValues[i].split(' ')
@@ -140,7 +141,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 			
 		# *** Determine dominant group for each contrast (i.e., row).
 		#  Adjust labels and effect sizes to reflect the dominant group.
-		for i in xrange(0, len(effectSizes)):
+		for i in range(0, len(effectSizes)):
 			labelSplit = labels[i].split(':')
 			if effectSizes[i] > 0.0:
 				lowerCIs[i] = effectSizes[i] - lowerCIs[i]
@@ -170,7 +171,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 		
 		# *** Make list of which group is dominant in each contrast.
 		dominantGroup = {}
-		for i in xrange(0, len(effectSizes)):
+		for i in range(0, len(effectSizes)):
 			labelSplit = labels[i].split(':')
 			groupName = labelSplit[0].strip()
 
@@ -198,7 +199,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 		if self.preferences['Truncate feature names']:
 			length = self.preferences['Length of truncated feature names']
 			
-			for i in xrange(0, len(labels)):
+			for i in range(0, len(labels)):
 				if len(labels[i]) > length+3:
 					adjustedLabels[i] = labels[i][0:length] + '...'
 				
@@ -207,10 +208,10 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 		self.imageWidth = self.figWidth
 		self.imageHeight = plotHeight	+ 0.65	 # 0.65 inches for bottom and top labels
 		if self.imageWidth > 256 or self.imageHeight > 256:
-				QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+				QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 				self.emptyAxis()	
 				reply = QtGui.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
-				QtGui.QApplication.instance().restoreOverrideCursor()
+				QtWidgets.QApplication.instance().restoreOverrideCursor()
 				return
 		
 		self.fig.set_size_inches(self.imageWidth, self.imageHeight)	
@@ -262,7 +263,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 			
 			# get relative frequency and standard deviation of each contrast
 			maxPercentage = 0
-			for i in xrange(0, len(labels)):
+			for i in range(0, len(labels)):
 				splitLabel = labels[i].split(':')
 				groupName1 = splitLabel[0].strip()
 				groupName2 = splitLabel[1].strip()
@@ -427,7 +428,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 		self.configDlg.ui.chkFilterPvalue.setChecked(self.bPvalueFilter)
 		
 		if self.configDlg.exec_() == QtGui.QDialog.Accepted:
-			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
 			
 			self.sortingField = str(self.configDlg.ui.cboSortingField.currentText())
 			
@@ -463,10 +464,10 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 
 			self.plot(profile, statsResults)
 			
-			QtGui.QApplication.instance().restoreOverrideCursor()
+			QtWidgets.QApplication.instance().restoreOverrideCursor()
 
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(ExtendedErrorBar)
 	testWindow.show()
 	sys.exit(app.exec_())

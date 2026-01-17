@@ -23,7 +23,7 @@
 
 import sys
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 import numpy as np
 
 from stamp.plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
@@ -43,12 +43,13 @@ class BarPlot(AbstractGroupPlotPlugin):
 		self.type = 'Exploratory'
 
 		self.settings = preferences['Settings']
-		self.figColWidth = self.settings.value('group: ' + self.name + '/column width', 0.2).toDouble()[0]
-		self.figHeight = self.settings.value('group: ' + self.name + '/height', 6.0).toDouble()[0]
-		self.fieldToPlot = self.settings.value('group: ' + self.name + '/field to plot', 'Proportion of sequences (%)').toString()
-		self.bShowAverages = self.settings.value('group: ' + self.name + '/show averages', True).toBool()
-		self.legendPos = self.settings.value('group: ' + self.name + '/legend position', -1).toInt()[0]
-		self.bShowPvalue = self.settings.value('group: ' + self.name + '/show p-value', True).toBool()
+		self.figColWidth = float(self.settings.value('group: ' + self.name + '/column width', 0.2))
+		self.figHeight = float(self.settings.value('group: ' + self.name + '/height', 6.0))
+		self.fieldToPlot = str(
+			self.settings.value('group: ' + self.name + '/field to plot', 'Proportion of sequences (%)'))
+		self.bShowAverages = bool(self.settings.value('group: ' + self.name + '/show averages', True))
+		self.legendPos = int(self.settings.value('group: ' + self.name + '/legend position', -1))
+		self.bShowPvalue = bool(self.settings.value('group: ' + self.name + '/show p-value', True))
 
 	def mirrorProperties(self, plotToCopy):
 		super(BarPlot, self).mirrorProperties(plotToCopy)
@@ -89,7 +90,7 @@ class BarPlot(AbstractGroupPlotPlugin):
 		
 		longestLabelLen = 0
 		longestLabel = ''
-		for i in xrange(0, len(sampleNames)):
+		for i in range(0, len(sampleNames)):
 			if bTruncate and len(sampleNames[i]) > length+3:
 				sampleNames[i] = sampleNames[i][0:length] + '...'
 				
@@ -102,10 +103,10 @@ class BarPlot(AbstractGroupPlotPlugin):
 		figWidth = self.figColWidth*len(sampleNames)
 		figHeight = self.figHeight
 		if figWidth > 256 or figHeight > 256:
-				QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+				QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 				self.emptyAxis()	
 				QtGui.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
-				QtGui.QApplication.instance().restoreOverrideCursor()
+				QtWidgets.QApplication.instance().restoreOverrideCursor()
 				return
 
 		self.fig.set_size_inches(figWidth, figHeight)
@@ -245,7 +246,7 @@ class BarPlot(AbstractGroupPlotPlugin):
 			self.plot(profile, statsResults)
 					
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(ProfileBarPlots)
 	testWindow.show()
 	sys.exit(app.exec_())

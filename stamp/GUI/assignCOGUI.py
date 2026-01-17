@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -63,12 +63,12 @@ class Ui_AssignCOGsDlg(object):
         QtCore.QMetaObject.connectSlotsByName(AssignCOGsDlg)
 
     def retranslateUi(self, AssignCOGsDlg):
-        AssignCOGsDlg.setWindowTitle(QtGui.QApplication.translate("AssignCOGsDlg", "Assign COG categories", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnLoadProfiles.setText(QtGui.QApplication.translate("AssignCOGsDlg", "Load profiles", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("AssignCOGsDlg", "Multi-code COG treatment:", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboMultiCogTreatment.setItemText(0, QtGui.QApplication.translate("AssignCOGsDlg", "Assign sequence to each COG code", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboMultiCogTreatment.setItemText(1, QtGui.QApplication.translate("AssignCOGsDlg", "Treat multi-code COGs as features", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCreateProfile.setText(QtGui.QApplication.translate("AssignCOGsDlg", "Create STAMP profile", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCancel.setText(QtGui.QApplication.translate("AssignCOGsDlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
+        AssignCOGsDlg.setWindowTitle(QtWidgets.QApplication.translate("AssignCOGsDlg", "Assign COG categories", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnLoadProfiles.setText(QtWidgets.QApplication.translate("AssignCOGsDlg", "Load profiles", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("AssignCOGsDlg", "Multi-code COG treatment:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboMultiCogTreatment.setItemText(0, QtWidgets.QApplication.translate("AssignCOGsDlg", "Assign sequence to each COG code", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboMultiCogTreatment.setItemText(1, QtWidgets.QApplication.translate("AssignCOGsDlg", "Treat multi-code COGs as features", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCreateProfile.setText(QtWidgets.QApplication.translate("AssignCOGsDlg", "Create STAMP profile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCancel.setText(QtWidgets.QApplication.translate("AssignCOGsDlg", "Cancel", None, QtWidgets.QApplication.UnicodeUTF8))
 
 import stamp.STAMP_rc

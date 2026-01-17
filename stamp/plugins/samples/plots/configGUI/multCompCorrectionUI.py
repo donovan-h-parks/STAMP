@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 class Ui_MultCompCorrectionDialog(object):
     def setupUi(self, MultCompCorrectionDialog):
@@ -179,19 +179,19 @@ class Ui_MultCompCorrectionDialog(object):
         QtCore.QMetaObject.connectSlotsByName(MultCompCorrectionDialog)
 
     def retranslateUi(self, MultCompCorrectionDialog):
-        MultCompCorrectionDialog.setWindowTitle(QtGui.QApplication.translate("MultCompCorrectionDialog", "Multiple comparison plots", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("MultCompCorrectionDialog", "Main figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("MultCompCorrectionDialog", "Width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("MultCompCorrectionDialog", "Height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_8.setTitle(QtGui.QApplication.translate("MultCompCorrectionDialog", "Histogram plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblBinWidth.setText(QtGui.QApplication.translate("MultCompCorrectionDialog", "Bin width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("MultCompCorrectionDialog", "x-axis limit:", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnXmaxFig1.setText(QtGui.QApplication.translate("MultCompCorrectionDialog", "Max", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkLogScale.setText(QtGui.QApplication.translate("MultCompCorrectionDialog", "Show y-axis as log scale", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("MultCompCorrectionDialog", "Correction plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("MultCompCorrectionDialog", "x-axis limit:", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnXmaxFig2.setText(QtGui.QApplication.translate("MultCompCorrectionDialog", "Max", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("MultCompCorrectionDialog", "Significant features plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("MultCompCorrectionDialog", "x-axis limit:", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnXmaxFig3.setText(QtGui.QApplication.translate("MultCompCorrectionDialog", "Max", None, QtGui.QApplication.UnicodeUTF8))
+        MultCompCorrectionDialog.setWindowTitle(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Multiple comparison plots", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Main figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureWidth.setText(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureHeight.setText(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_8.setTitle(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Histogram plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblBinWidth.setText(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Bin width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "x-axis limit:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnXmaxFig1.setText(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Max", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkLogScale.setText(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Show y-axis as log scale", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_2.setTitle(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Correction plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "x-axis limit:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnXmaxFig2.setText(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Max", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Significant features plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "x-axis limit:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnXmaxFig3.setText(QtWidgets.QApplication.translate("MultCompCorrectionDialog", "Max", None, QtWidgets.QApplication.UnicodeUTF8))
 

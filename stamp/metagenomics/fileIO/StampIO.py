@@ -59,7 +59,7 @@ class StampIO(object):
 		# construct profile tree
 		try:
 			profileTree.numSeqInSample = [0] * profileTree.numSamples()
-			for i in xrange(1, len(data)):
+			for i in range(1, len(data)):
 				# ignore blank lines
 				if data[i].strip() == "":
 					continue
@@ -72,7 +72,7 @@ class StampIO(object):
 				
 				# check for unclassified categories
 				taxa = ''
-				for j in xrange(0, len(categories)):
+				for j in range(0, len(categories)):
 					if self.isUnclassified(categories[j]):
 						categories[j] = 'Unclassified ' + taxa
 						categories[j] = categories[j].rstrip()
@@ -90,12 +90,12 @@ class StampIO(object):
 					curNode = node
 					
 				# add count data to leaf node
-				for j in xrange(0, len(profileTree.sampleNames)):
+				for j in range(0, len(profileTree.sampleNames)):
 					sampleName = profileTree.sampleNames[j]
 					curNode.countData[sampleName] = curNode.countData.get(sampleName, 0) + countData[j]
 						
 				# add count data to total sequence count
-				for j in xrange(0, len(countData)):
+				for j in range(0, len(countData)):
 					profileTree.numSeqInSample[j] += countData[j]
 		except:
 			errMsg = 'Failed to correctly parse line: ' + str(i+1)

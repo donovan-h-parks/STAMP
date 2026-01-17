@@ -23,7 +23,7 @@
 
 import sys
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 import numpy as np
 
 from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
@@ -46,17 +46,19 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		self.type = 'Exploratory'
 
 		self.settings = preferences['Settings']
-		self.figColWidth = self.settings.value(self.name + '/column width', 0.25).toDouble()[0]
-		self.figHeight = self.settings.value(self.name + '/height', 6.0).toDouble()[0]
-		self.fieldToPlot = self.settings.value(self.name + '/field to plot', 'Proportion of sequences (%)').toString()
-		self.legendPos = self.settings.value(self.name + '/legend position', 0).toInt()[0]
-		self.bShowCIs = self.settings.value(self.name + '/show cis', True).toBool()
-		self.endCapSize = self.settings.value(self.name + '/end cap size', 0).toInt()[0]
-		self.numFeaturesToShow = self.settings.value(self.name + '/features to show', 50).toInt()[0]
-		self.barWidth = self.settings.value(self.name + '/bar width (%)', 80).toDouble()[0]
-		self.bShowPvalue = self.settings.value(self.name + '/show p-value', True).toBool()
-		self.pValueThreshold = self.settings.value(self.name + '/p-value threshold', 0.05).toDouble()[0]
-		self.bOnlyActiveFeatures = self.settings.value(self.name + '/only active features', True).toBool()
+		self.figColWidth = float(self.settings.value(self.name + '/column width', 0.25))
+		self.figHeight = float(self.settings.value(self.name + '/height', 6.0))
+		self.fieldToPlot = str(self.settings.value(self.name + '/field to plot', 'Proportion of sequences (%)'))
+		self.legendPos = int(self.settings.value(self.name + '/legend position', 0))
+		self.bShowCIs = bool(self.settings.value(self.name + '/show cis', True))
+		self.endCapSize = int(self.settings.value(self.name + '/end cap size', 0))
+		self.numFeaturesToShow = int(self.settings.value(self.name + '/features to show', 50))
+		self.barWidth = float(self.settings.value(self.name + '/bar width (%)', 80.0))
+		self.bShowPvalue = bool(self.settings.value(self.name + '/show p-value', True))
+		self.pValueThreshold = float(self.settings.value(self.name + '/p-value threshold', 0.05))
+		self.bOnlyActiveFeatures = bool(self.settings.value(self.name + '/only active features', True))
+
+
 
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -125,7 +127,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		confInter2 = []
 		
 		if self.fieldToPlot == 'Number of sequences':
-			for i in xrange(0, len(field1)):
+			for i in range(0, len(field1)):
 				if self.bShowCIs:
 					lowerCI, upperCI, p = wilsonCI.run(field1[i], parentField1[i], 0.95, 1.96)
 					confInter1.append(max((p - lowerCI)*parentField1[i], 0))
@@ -137,7 +139,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 					confInter2.append(0)
 				
 		elif self.fieldToPlot == 'Proportion of sequences (%)':
-			for i in xrange(0, len(field1)):
+			for i in range(0, len(field1)):
 				if self.bShowCIs:
 					lowerCI, upperCI, p = wilsonCI.run(field1[i], parentField1[i], 0.95, 1.96)
 					confInter1.append(max((p - lowerCI)*100, 0))
@@ -159,17 +161,17 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		if self.preferences['Truncate feature names']:
 			length = self.preferences['Length of truncated feature names']
 						
-			for i in xrange(0, len(truncatedNames)):
+			for i in range(0, len(truncatedNames)):
 				if len(truncatedNames[i]) > length+3:
 					truncatedNames[i] = truncatedNames[i][0:length] + '...'
 					
-			for i in xrange(0, len(highlightedFeatures)):
+			for i in range(0, len(highlightedFeatures)):
 				if len(highlightedFeatures[i]) > length+3:
 					highlightedFeatures[i] = highlightedFeatures[i][0:length] + '...'
 					
 		# *** Find longest label
 		longestLabelLen = 0
-		for i in xrange(0, len(truncatedNames)):
+		for i in range(0, len(truncatedNames)):
 			if len(truncatedNames[i]) > longestLabelLen:
 				longestLabelLen = len(truncatedNames[i])
 				longestLabel = truncatedNames[i]
@@ -179,10 +181,10 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		figWidth = self.figColWidth*len(features)
 		figHeight = self.figHeight
 		if figWidth > 256 or figHeight > 256:
-				QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+				QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 				self.emptyAxis()	
 				QtGui.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
-				QtGui.QApplication.instance().restoreOverrideCursor()
+				QtWidgets.QApplication.instance().restoreOverrideCursor()
 				return
 
 		self.fig.set_size_inches(figWidth, figHeight)
@@ -222,7 +224,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 			
 			x = []
 			y = []
-			for i in xrange(0, len(features)):
+			for i in range(0, len(features)):
 				pValue = float(statsResults.getFeatureStatistic(features[i], 'pValuesCorrected'))
 				if pValue <= self.pValueThreshold:
 					x.append(i*colWidth + barWidth)
@@ -351,7 +353,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 			self.plot(profile, statsResults)
 					
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(ProfileBarPlots)
 	testWindow.show()
 	sys.exit(app.exec_())

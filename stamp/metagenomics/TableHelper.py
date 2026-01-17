@@ -22,7 +22,9 @@
 import operator
 import math
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
+from PyQt5.uic.Compiler.qtproxies import QtWidgets
+
 
 def SortTable(table, cols, bAscending = True, bAbsoluteValue = False, bLog = False):
 	''' 
@@ -88,7 +90,7 @@ def SortTableNumericStrCol(table, col, bAscending = True):
 			
 	return table
 
-class QTableWidgetNumericItem(QtGui.QTableWidgetItem):
+class QTableWidgetNumericItem(QtWidgets.QTableWidgetItem):
 	'''
 	Sort table columns in numeric order.
 	'''

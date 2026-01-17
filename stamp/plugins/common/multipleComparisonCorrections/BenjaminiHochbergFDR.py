@@ -55,7 +55,7 @@ class BenjaminiHochbergFDR(AbstractMultCompCorrection):
     numComparisons = len(pValues)
     modifier = numComparisons
     self.numSignFeatures = 0
-    for i in xrange(0, len(indexedList)):
+    for i in range(0, len(indexedList)):
       index = indexedList[i][1]     
       
       pValues[index] = pValues[index] * numComparisons / float(modifier)

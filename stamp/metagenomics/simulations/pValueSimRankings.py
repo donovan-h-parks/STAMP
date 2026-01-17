@@ -21,7 +21,7 @@ def mean(x):
     return 0
     
   sum = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sum += x[i]
   return sum / len(x)
   
@@ -31,7 +31,7 @@ def stdDev(x):
     
   m = mean(x)
   sumsq = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sumsq += (x[i] - m)*(x[i] - m)
   return math.sqrt(sumsq / len(x))
   
@@ -44,12 +44,12 @@ fishersDict = {}
 gTestDict = {}
 gTestYatesDict = {}
 diffBetweenPropDict = {}
-for r in xrange(0, replicates):
-  print r
+for r in range(0, replicates):
+  print(r)
   a = random.randint(0,10000)
   b = int(a + random.gauss(0,0.5*a))
   if b < 0:
-    print 'here'
+    print('here')
     b = 0
     
   totalSamples1 = random.randint(max(a,b), 100000)
@@ -79,9 +79,9 @@ for name in testNames:
 fout.write('\n')
 
 spearman = Spearman()
-for i in xrange(0, len(testDict)):
+for i in range(0, len(testDict)):
   fout.write(testNames[i])
-  for j in xrange(0, len(testDict)):
+  for j in range(0, len(testDict)):
     test1 = testDict[i]
     test2 = testDict[j]
     
@@ -93,7 +93,7 @@ for i in xrange(0, len(testDict)):
         data1.append(test1[feature])
         data2.append(test2[feature])
             
-    print len(data1)
+    print(len(data1))
     Rs = spearman.compute(data1, data2)
     
     fout.write(',' + str(Rs))

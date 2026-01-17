@@ -45,7 +45,7 @@ class Power:
       powerList = []  
       powerListLess5 = []  
       powerListGreater5 = []  
-      for trial in xrange(0, trials): 
+      for trial in range(0, trials): 
         if progress != '':
           index += 1
           progress.setValue(index)
@@ -53,15 +53,15 @@ class Power:
           
         power = 0
         processedReplicates = 0
-        for dummy in xrange(0, bootstrapRep):
+        for dummy in range(0, bootstrapRep):
           c1 = 0
           c2 = 0
-          for dummy in xrange(0, parentSeq1):
+          for dummy in range(0, parentSeq1):
             rnd = random.random()
             if rnd <= p1:
               c1 += 1
               
-          for dummy in xrange(0, parentSeq2):
+          for dummy in range(0, parentSeq2):
             rnd = random.random()
             if rnd <= p2:
               c2 += 1

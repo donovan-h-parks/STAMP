@@ -47,14 +47,14 @@ class ConfIntervCoverage:
       coverageList = []  
       coverageListLess5 = []  
       coverageListGreater5 = []  
-      for trial in xrange(0, trials): 
+      for trial in range(0, trials): 
         if progress != '':
           index += 1
           progress.setValue(index)
           progress.setLabelText(feature + ' - Trial = ' + str(trial))  
           
         containedRep = 0
-        for dummy in xrange(0, bootstrapRep):
+        for dummy in range(0, bootstrapRep):
           c1 = binomial(parentSeq1, p1)
           c2 = binomial(parentSeq2, p2)
       

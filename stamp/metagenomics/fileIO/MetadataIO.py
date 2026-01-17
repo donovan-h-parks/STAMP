@@ -44,7 +44,7 @@ class MetadataIO(object):
 		
 		try:
 			missingInProfile = []
-			for r in xrange(1, len(data)):
+			for r in range(1, len(data)):
 				if data[r].strip() == '':
 					continue
 
@@ -54,7 +54,7 @@ class MetadataIO(object):
 					profileSamples.remove(sampleName)
 					
 					featureDict = {}
-					for v in xrange(1, len(values)):
+					for v in range(1, len(values)):
 						featureDict[features[v]] = values[v].strip()
 						
 					metadata.metadataDict[sampleName] = featureDict

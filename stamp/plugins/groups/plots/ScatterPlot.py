@@ -23,7 +23,7 @@
 
 import sys
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 
 from stamp.plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.groups.plots.configGUI.scatterPlotUI import Ui_ScatterPlotDialog
@@ -50,14 +50,15 @@ class ScatterPlot(AbstractGroupPlotPlugin):
 		self.bPlotFeaturesIndividually = False
 		
 		self.settings = preferences['Settings']
-		self.figWidth = self.settings.value('group: ' + self.name + '/width', 7.0).toDouble()[0]
-		self.figHeight = self.settings.value('group: ' + self.name + '/height', 7.0).toDouble()[0]
-		self.spreadMethod = self.settings.value('group: ' + self.name + '/spread method', '2nd and 98th percentile').toString()
-		self.numBins = self.settings.value('group: ' + self.name + '/bins', 30).toInt()[0]
-		self.histogramSize = self.settings.value('group: ' + self.name + '/bin size', 0.5).toDouble()[0]
-		self.bShowHistograms = self.settings.value('group: ' + self.name + '/show histograms', True).toBool()
-		self.markerSize = self.settings.value('group: ' + self.name + '/marker size', 20).toInt()[0]
-		self.bShowR2 = self.settings.value('group: ' + self.name + '/show R2', True).toBool()
+		self.figWidth=float(self.settings.value(self.name + '/width', 7.0))
+		self.figHeight=float(self.settings.value(self.name + '/height', 7.0))
+		self.spreadMethod=str(self.settings.value(self.name + '/spread method', '2nd and 98th percentile'))
+		self.numBins=int(self.settings.value(self.name + '/bins', 30))
+		self.histogramSize=float(self.settings.value(self.name + '/bin size', 0.5))
+		self.bShowHistograms=bool(self.settings.value(self.name + '/show histograms', True))
+		self.markerSize=int(self.settings.value(self.name + '/marker size', 20))
+		self.bShowR2=bool(self.settings.value(self.name + '/show R2', True))
+
 		
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -75,11 +76,11 @@ class ScatterPlot(AbstractGroupPlotPlugin):
 			return
 
 		if len(profile.profileDict) > 10000:
-			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 			reply = QtGui.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(profile.profileDict)) + ' features. ' +
 																		'It may take several seconds to generate this plot. Exploring the data at a higher hierarchy level is recommended. ' + 
 																		'Do you wish to continue?', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
-			QtGui.QApplication.instance().restoreOverrideCursor()
+			QtWidgets.QApplication.instance().restoreOverrideCursor()
 			if reply == QtGui.QMessageBox.No:
 				self.emptyAxis()	
 				return
@@ -101,7 +102,7 @@ class ScatterPlot(AbstractGroupPlotPlugin):
 		field2 = []
 		xSpread = []
 		ySpread = []
-		for i in xrange(0, len(groupData1)):
+		for i in range(0, len(groupData1)):
 			mean1 = mean(groupData1[i])
 			mean2 = mean(groupData2[i])
 			
@@ -159,7 +160,7 @@ class ScatterPlot(AbstractGroupPlotPlugin):
 		
 		# *** Handle mouse events
 		tooltips = []
-		for i in xrange(0, len(field1)):
+		for i in range(0, len(field1)):
 			tooltip = features[i] + '\n\n'
 			tooltip += (self.groupName1 + ' mean proportion: %.3f' % field1[i]) + '\n' 
 			tooltip += (self.groupName2 + ' mean proportion: %.3f' % field2[i]) + '\n\n' 
@@ -193,7 +194,7 @@ class ScatterPlot(AbstractGroupPlotPlugin):
 		highlightedField1 = []
 		highlightedField2 = []
 		highlighColours = []
-		for i in xrange(0, len(field1)):
+		for i in range(0, len(field1)):
 			if field1[i] > field2[i]:
 				colours.append(group1Colour)
 			else:
@@ -213,7 +214,7 @@ class ScatterPlot(AbstractGroupPlotPlugin):
 		if self.spreadMethod != 'None':
 			xlist = []
 			ylist = []
-			for i in xrange(0, len(field1)):
+			for i in range(0, len(field1)):
 				# horizontal CIs
 				xlist.append(xSpread[i][0])
 				xlist.append(xSpread[i][1])
@@ -381,7 +382,7 @@ class ScatterPlot(AbstractGroupPlotPlugin):
 			self.plot(profile, statsResults)
 					
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(ScatterPlot)
 	testWindow.show()
 	sys.exit(app.exec_())

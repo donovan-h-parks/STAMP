@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -77,17 +77,17 @@ class Ui_CreateProfileRITADlg(object):
         QtCore.QMetaObject.connectSlotsByName(CreateProfileRITADlg)
 
     def retranslateUi(self, CreateProfileRITADlg):
-        CreateProfileRITADlg.setWindowTitle(QtGui.QApplication.translate("CreateProfileRITADlg", "Create profile", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnLoadProfiles.setText(QtGui.QApplication.translate("CreateProfileRITADlg", "Load profiles", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("CreateProfileRITADlg", "Groups to retain", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkNB_DBLASTN.setText(QtGui.QApplication.translate("CreateProfileRITADlg", "NB and D-BLASTN", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkDBLASTN.setText(QtGui.QApplication.translate("CreateProfileRITADlg", "D-BLASTN ratio", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkNB_BLASTN.setText(QtGui.QApplication.translate("CreateProfileRITADlg", "NB and BLASTN", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkBLASTN.setText(QtGui.QApplication.translate("CreateProfileRITADlg", "BLASTN ratio", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkNB_BLASTX.setText(QtGui.QApplication.translate("CreateProfileRITADlg", "NB and BLASTX", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkBLASTX.setText(QtGui.QApplication.translate("CreateProfileRITADlg", "BLASTX ratio", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkNB.setText(QtGui.QApplication.translate("CreateProfileRITADlg", "NB ratio", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCreateProfile.setText(QtGui.QApplication.translate("CreateProfileRITADlg", "Create STAMP profile", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCancel.setText(QtGui.QApplication.translate("CreateProfileRITADlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
+        CreateProfileRITADlg.setWindowTitle(QtWidgets.QApplication.translate("CreateProfileRITADlg", "Create profile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnLoadProfiles.setText(QtWidgets.QApplication.translate("CreateProfileRITADlg", "Load profiles", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("CreateProfileRITADlg", "Groups to retain", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkNB_DBLASTN.setText(QtWidgets.QApplication.translate("CreateProfileRITADlg", "NB and D-BLASTN", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkDBLASTN.setText(QtWidgets.QApplication.translate("CreateProfileRITADlg", "D-BLASTN ratio", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkNB_BLASTN.setText(QtWidgets.QApplication.translate("CreateProfileRITADlg", "NB and BLASTN", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkBLASTN.setText(QtWidgets.QApplication.translate("CreateProfileRITADlg", "BLASTN ratio", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkNB_BLASTX.setText(QtWidgets.QApplication.translate("CreateProfileRITADlg", "NB and BLASTX", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkBLASTX.setText(QtWidgets.QApplication.translate("CreateProfileRITADlg", "BLASTX ratio", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkNB.setText(QtWidgets.QApplication.translate("CreateProfileRITADlg", "NB ratio", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCreateProfile.setText(QtWidgets.QApplication.translate("CreateProfileRITADlg", "Create STAMP profile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCancel.setText(QtWidgets.QApplication.translate("CreateProfileRITADlg", "Cancel", None, QtWidgets.QApplication.UnicodeUTF8))
         self.lstSelectedProfiles.setSortingEnabled(True)
 

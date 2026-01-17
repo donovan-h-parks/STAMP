@@ -194,7 +194,7 @@ class SampleStatTestResults(object):
 		pValues = self.getColumn('pValues', False)
 		pValuesCorrected = multCompCorrection.correct(pValues, self.alpha)
 		
-		for i in xrange(0, len(self.data)):
+		for i in range(0, len(self.data)):
 			self.data[i][index] = pValuesCorrected[i]
 			
 		self.multCompCorrectionInfo = multCompCorrection.additionalInfo()
@@ -303,13 +303,13 @@ class SampleStatsTests(object):
 		self.results.profile = profile
 		
 		if progress == 'Verbose':
-			print '  Processing feature:'
+			print('  Processing feature:')
 		 
 		self.results.data = []
 		index = 0
 		for feature in profile.getFeatures():
 			if progress == 'Verbose':
-				print '    ' + feature
+				print ('    ' + feature)
 			elif progress != None:
 				if progress.wasCanceled():
 					self.results.data = []
@@ -328,7 +328,7 @@ class SampleStatsTests(object):
 			elif testType == 'Two-sided':
 				pValue = pValueTwoSided
 			else:
-				print 'Error: Unknown test type.'
+				print('Error: Unknown test type.')
 			
 			# Confidence interval
 			lowerCI, upperCI, effectSize, ciNote = confIntervMethod.run(seq1, seq2, parentSeq1, parentSeq2, coverage)

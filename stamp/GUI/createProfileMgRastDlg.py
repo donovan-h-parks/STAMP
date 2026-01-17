@@ -23,8 +23,8 @@
 
 import string
 
-from PyQt4 import QtGui, QtCore
-from createProfileMgRastUI import Ui_CreateProfileMgRastDlg
+from PyQt5 import QtGui, QtCore, QtWidgets
+from stamp.GUI.createProfileMgRastUI import Ui_CreateProfileMgRastDlg
 
 from stamp.GUI.customizeHeadingsDlg import CustomizeHeadingsDlg
 
@@ -33,9 +33,9 @@ class ProfileRow():
 		countData = []
 		hierarchy = []
 
-class CreateProfileMgRastDlg(QtGui.QDialog):
+class CreateProfileMgRastDlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None):
-		QtGui.QWidget.__init__(self, parent)
+		QWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_CreateProfileMgRastDlg()
@@ -85,10 +85,10 @@ class CreateProfileMgRastDlg(QtGui.QDialog):
 			else:
 				self.startIndex = 2
 					
-			for i in xrange(self.startIndex, self.header.index('abundance')):
+			for i in range(self.startIndex, self.header.index('abundance')):
 				self.headings.append(self.header[i])
 					
-			for i in xrange(0, 8-len(self.headings)):
+			for i in range(0, 8-len(self.headings)):
 				self.headings.append('')
 		
 			self.ui.btnCustomizeHeadings.setEnabled(True)
@@ -137,7 +137,7 @@ class CreateProfileMgRastDlg(QtGui.QDialog):
 
 		# determine samples in profile
 		sampleNames = []
-		for i in xrange(1, len(self.data)):
+		for i in range(1, len(self.data)):
 			sampleId = self.data[i].split(splitCh)[0]
 			if sampleId not in sampleNames:
 				sampleNames.append(sampleId)
@@ -146,10 +146,10 @@ class CreateProfileMgRastDlg(QtGui.QDialog):
 		profileDict = {}
 		
 		parentMap = {}
-		for i in xrange(1, dataIndex-hierarchyStartIndex):
+		for i in range(1, dataIndex-hierarchyStartIndex):
 			parentMap[i] = {}
 			
-		for i in xrange(1, len(self.data)):
+		for i in range(1, len(self.data)):
 			if self.data[i] == "":
 				continue	# skip blank lines
 			
@@ -162,7 +162,7 @@ class CreateProfileMgRastDlg(QtGui.QDialog):
 			hierarchy = lineSplit[hierarchyStartIndex:dataIndex]
 			
 			# replace '-' categories with parent
-			for i in xrange(1, len(hierarchy)):
+			for i in range(1, len(hierarchy)):
 				if hierarchy[i] == '-':
 					if self.header[1] == 'domain':
 						if 'Unclassified' not in hierarchy[i-1]:
@@ -173,7 +173,7 @@ class CreateProfileMgRastDlg(QtGui.QDialog):
 						hierarchy[i] = hierarchy[i-1]
 					
 			# force MG-RAST profile to be strictly tree-like
-			for i in xrange(1, len(hierarchy)): 
+			for i in range(1, len(hierarchy)): 
 				parent = '-'.join(hierarchy[0:i])
 				child = hierarchy[i]
 				

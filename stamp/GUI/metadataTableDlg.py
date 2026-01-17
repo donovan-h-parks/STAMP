@@ -21,24 +21,29 @@
 # along with STAMP. If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
-from metadataTableDlgUI import Ui_MetadataTableDlg
+from PyQt5 import QtGui, QtCore, QtWidgets
+from stamp.GUI.metadataTableDlgUI import Ui_MetadataTableDlg
 
 from stamp.metagenomics.TableHelper import QTableWidgetNumericItem
 
-class MetadataTableDlg(QtGui.QDockWidget):
+class MetadataTableDlg(QtWidgets.QDockWidget):
+	# 1. Declare the signal here (MUST be outside __init__)
+	activeSamplesChanged = QtCore.pyqtSignal()
+
 	def __init__(self, preferences, parent=None, info=None):
-		QtGui.QDockWidget.__init__(self, parent)
+		QtWidgets.QDockWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_MetadataTableDlg()
 		self.ui.setupUi(self)
 		
 		# setup signals
-		self.connect(self.ui.tbMetadataAddAll, QtCore.SIGNAL('clicked(bool)'), self.checkAll)
-		self.connect(self.ui.tbMetadataRemoveAll, QtCore.SIGNAL('clicked(bool)'), self.uncheckAll)
-		self.connect(self.ui.tbMetadataFilter, QtCore.SIGNAL('clicked(bool)'), self.filter)
-		self.connect(self.ui.cboMetadataField, QtCore.SIGNAL('currentIndexChanged(int)'), self.setValues)
+		# Modern PyQt5 Syntax
+		self.ui.tbMetadataAddAll.clicked.connect(self.checkAll)
+		self.ui.tbMetadataRemoveAll.clicked.connect(self.uncheckAll)
+		self.ui.tbMetadataFilter.clicked.connect(self.filter)
+		self.ui.cboMetadataField.currentIndexChanged.connect(self.setValues)
+
 		
 		self.preferences = preferences
 		self.table = ''
@@ -46,23 +51,23 @@ class MetadataTableDlg(QtGui.QDockWidget):
 		self.metadata = None
 		
 	def checkAll(self):
-		for r in xrange(0, self.ui.tableMetadata.rowCount()):
+		for r in range(0, self.ui.tableMetadata.rowCount()):
 			self.ui.tableMetadata.item(r,0).setCheckState(QtCore.Qt.Checked)
 		self.updateActiveSamples()
 			
 	def uncheckAll(self):
-		for r in xrange(0, self.ui.tableMetadata.rowCount()):
+		for r in range(0, self.ui.tableMetadata.rowCount()):
 			self.ui.tableMetadata.item(r,0).setCheckState(QtCore.Qt.Unchecked)
 		self.updateActiveSamples()
 			
 	def checkSpecifiedSamples(self, sampleIds):
-		for r in xrange(0, self.ui.tableMetadata.rowCount()):
+		for r in range(0, self.ui.tableMetadata.rowCount()):
 			if str(self.ui.tableMetadata.item(r,0).text()) in sampleIds:
 				self.ui.tableMetadata.item(r,0).setCheckState(QtCore.Qt.Checked)
 		self.updateActiveSamples()
 				
 	def uncheckSpecifiedSamples(self, sampleIds):
-		for r in xrange(0, self.ui.tableMetadata.rowCount()):
+		for r in range(0, self.ui.tableMetadata.rowCount()):
 			if str(self.ui.tableMetadata.item(r,0).text()) in sampleIds:
 				self.ui.tableMetadata.item(r,0).setCheckState(QtCore.Qt.Unchecked)
 		self.updateActiveSamples()
@@ -122,7 +127,7 @@ class MetadataTableDlg(QtGui.QDockWidget):
 
 	def updateActiveSamples(self):
 		activeSamples = []
-		for r in xrange(0, self.ui.tableMetadata.rowCount()):
+		for r in range(0, self.ui.tableMetadata.rowCount()):
 			if self.ui.tableMetadata.item(r,0).checkState() == QtCore.Qt.Checked:
 				activeSamples.append(str(self.ui.tableMetadata.item(r,0).text()))
 				
@@ -151,10 +156,10 @@ class MetadataTableDlg(QtGui.QDockWidget):
 			for field in headers[1:]:
 				isNumeric.append(self.metadata.isNumericalData(field))
 			
-			for i in xrange(0, len(table)):
+			for i in range(0, len(table)):
 				row = table[i]
 
-				for j in xrange(0, len(row)):
+				for j in range(0, len(row)):
 					if isNumeric[j]:
 						item = QTableWidgetNumericItem(row[j])
 					else:

@@ -23,7 +23,7 @@
 
 import sys
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 import numpy as np
 
 from matplotlib.ticker import ScalarFormatter
@@ -44,11 +44,12 @@ class Bar(AbstractSamplePlotPlugin):
 		self.type = 'Statistical'
 		
 		self.settings = preferences['Settings']
-		self.figWidth = self.settings.value(self.name + '/width', 7.0).toDouble()[0]
-		self.figHeightPerRow = self.settings.value(self.name +  '/row height', 0.2).toDouble()[0]
-		self.fieldToPlot = self.settings.value(self.name +  '/field to plot', 'Proportion of sequences (%)').toString()
-		self.legendPos = self.settings.value(self.name +  '/legend position', 0).toInt()[0]
-		self.bSortFeatures = self.settings.value(self.name +  '/sort values', True).toBool()
+		self.figWidth = float(self.settings.value(self.name + '/width', 7.0))
+		self.figHeightPerRow = float(self.settings.value(self.name +  '/row height', 0.2))
+		self.fieldToPlot = str(self.settings.value(self.name +  '/field to plot', 'Proportion of sequences (%)'))
+		self.legendPos = int(self.settings.value(self.name +  '/legend position', 0))
+		self.bSortFeatures = bool(self.settings.value(self.name +  '/sort values', True))
+
 		
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -65,11 +66,11 @@ class Bar(AbstractSamplePlotPlugin):
 		
 		features = statsResults.getColumn('Features')
 		if len(features) > 200:
-			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 			reply = QtGui.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(features)) + ' features. ' +
 																		'It may take several seconds to generate this plot. We recommend filtering your profile first. ' + 
 																		'Do you wish to continue?', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
-			QtGui.QApplication.instance().restoreOverrideCursor()
+			QtWidgets.QApplication.instance().restoreOverrideCursor()
 			if reply == QtGui.QMessageBox.No:
 				self.emptyAxis()
 				return
@@ -138,11 +139,11 @@ class Bar(AbstractSamplePlotPlugin):
 		if self.preferences['Truncate feature names']:
 			length = self.preferences['Length of truncated feature names']
 			
-			for i in xrange(0, len(features)):
+			for i in range(0, len(features)):
 				if len(features[i]) > length+3:
 					features[i] = features[i][0:length] + '...'
 
-			for i in xrange(0, len(highlightedFeatures)):
+			for i in range(0, len(highlightedFeatures)):
 				if len(highlightedFeatures[i]) > length+3:
 					highlightedFeatures[i] = highlightedFeatures[i][0:length] + '...'
 						
@@ -298,7 +299,7 @@ class Bar(AbstractSamplePlotPlugin):
 			self.plot(profile, statsResults)
 					
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(Bar)
 	testWindow.show()
 	sys.exit(app.exec_())

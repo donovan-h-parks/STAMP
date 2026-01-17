@@ -66,5 +66,5 @@ class ChiSquareYates(AbstractSampleStatsTestPlugin):
 if __name__ == "__main__": 
   chiSquareYates = ChiSquareYates()
   pValueOne, pValueTwo = chiSquareYates.hypothesisTest(10, 20, 60, 50)
-  print pValueOne
-  print pValueTwo
+  print(pValueOne)
+  print(pValueTwo)

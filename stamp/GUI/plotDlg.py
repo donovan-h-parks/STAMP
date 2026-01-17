@@ -21,12 +21,12 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
-from plotDlgUI import Ui_PlotDlg
+from PyQt5 import QtGui, QtCore,QtWidgets
+from stamp.GUI.plotDlgUI import Ui_PlotDlg
 
-class PlotDlg(QtGui.QDockWidget):
+class PlotDlg(QtWidgets.QDockWidget):
 	def __init__(self, parent=None, info=None):
-		QtGui.QWidget.__init__(self, parent)
+		QWidgets.QWidget.__init__(self, parent)
 		
 		self.ui = Ui_PlotDlg()
 		self.ui.setupUi(self)

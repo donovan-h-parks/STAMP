@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -220,31 +220,31 @@ class Ui_ExtendedErrorBarDialog(object):
         QtCore.QMetaObject.connectSlotsByName(ExtendedErrorBarDialog)
 
     def retranslateUi(self, ExtendedErrorBarDialog):
-        ExtendedErrorBarDialog.setWindowTitle(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Extended error bar plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Sorting", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Field:", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSortingField.setItemText(0, QtGui.QApplication.translate("ExtendedErrorBarDialog", "p-values", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSortingField.setItemText(1, QtGui.QApplication.translate("ExtendedErrorBarDialog", "Effect sizes", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSortingField.setItemText(2, QtGui.QApplication.translate("ExtendedErrorBarDialog", "Feature labels", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Row height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_5.setTitle(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Error bar x-axis limits", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkCustomLimits.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Use custom limits", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Minimum:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Maximum:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Figure elements", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowBarPlot.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Show bar subplot", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowStdDev.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Show std. dev. on bar subplot", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "End cap size:", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkPValueLabels.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Show p-value labels", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Marker size:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_4.setTitle(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Multiple comparisons", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkCorrectedPvalues.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Show corrected p-values", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_6.setTitle(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Legend position", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosNone.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "None", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperLeft.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Upper left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerLeft.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Lower left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerCentre.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Lower centre", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerRight.setText(QtGui.QApplication.translate("ExtendedErrorBarDialog", "Lower right", None, QtGui.QApplication.UnicodeUTF8))
+        ExtendedErrorBarDialog.setWindowTitle(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Extended error bar plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_2.setTitle(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Sorting", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Field:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSortingField.setItemText(0, QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "p-values", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSortingField.setItemText(1, QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Effect sizes", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSortingField.setItemText(2, QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Feature labels", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureWidth.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureHeight.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Row height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_5.setTitle(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Error bar x-axis limits", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkCustomLimits.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Use custom limits", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Minimum:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Maximum:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Figure elements", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowBarPlot.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Show bar subplot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowStdDev.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Show std. dev. on bar subplot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "End cap size:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkPValueLabels.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Show p-value labels", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Marker size:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_4.setTitle(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Multiple comparisons", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkCorrectedPvalues.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Show corrected p-values", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_6.setTitle(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Legend position", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosNone.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "None", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosUpperLeft.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Upper left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerLeft.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Lower left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerCentre.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Lower centre", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerRight.setText(QtWidgets.QApplication.translate("ExtendedErrorBarDialog", "Lower right", None, QtWidgets.QApplication.UnicodeUTF8))
 

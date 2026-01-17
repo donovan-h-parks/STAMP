@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 class Ui_BoxPlotDialog(object):
     def setupUi(self, BoxPlotDialog):
@@ -94,13 +94,13 @@ class Ui_BoxPlotDialog(object):
         QtCore.QMetaObject.connectSlotsByName(BoxPlotDialog)
 
     def retranslateUi(self, BoxPlotDialog):
-        BoxPlotDialog.setWindowTitle(QtGui.QApplication.translate("BoxPlotDialog", "Box plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFieldToPlot.setText(QtGui.QApplication.translate("BoxPlotDialog", "Field to plot:", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboFieldToPlot.setItemText(0, QtGui.QApplication.translate("BoxPlotDialog", "Number of sequences", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboFieldToPlot.setItemText(1, QtGui.QApplication.translate("BoxPlotDialog", "Proportion of sequences (%)", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("BoxPlotDialog", "Figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("BoxPlotDialog", "Height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("BoxPlotDialog", "Width", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowAverage.setText(QtGui.QApplication.translate("BoxPlotDialog", "Show average of each group", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowPvalue.setText(QtGui.QApplication.translate("BoxPlotDialog", "Show p-value", None, QtGui.QApplication.UnicodeUTF8))
+        BoxPlotDialog.setWindowTitle(QtWidgets.QApplication.translate("BoxPlotDialog", "Box plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFieldToPlot.setText(QtWidgets.QApplication.translate("BoxPlotDialog", "Field to plot:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboFieldToPlot.setItemText(0, QtWidgets.QApplication.translate("BoxPlotDialog", "Number of sequences", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboFieldToPlot.setItemText(1, QtWidgets.QApplication.translate("BoxPlotDialog", "Proportion of sequences (%)", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtWidgets.QApplication.translate("BoxPlotDialog", "Figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureHeight.setText(QtWidgets.QApplication.translate("BoxPlotDialog", "Height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureWidth.setText(QtWidgets.QApplication.translate("BoxPlotDialog", "Width", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowAverage.setText(QtWidgets.QApplication.translate("BoxPlotDialog", "Show average of each group", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowPvalue.setText(QtWidgets.QApplication.translate("BoxPlotDialog", "Show p-value", None, QtWidgets.QApplication.UnicodeUTF8))
 

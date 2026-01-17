@@ -23,7 +23,7 @@
 
 import sys
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 
 from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.multiGroups.plots.configGUI.HeatmapPlotUI import Ui_HeatmapPlotDialog
@@ -62,20 +62,26 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 		self.bPlotFeaturesIndividually = False
 
 		self.settings = preferences['Settings']
-		self.fieldToPlot = self.settings.value('group: ' + self.name + '/field to plot', 'Proportion of sequences (%)').toString()
-		self.bPlotOnlyActiveFeatures = self.settings.value('group: ' + self.name + '/plot only active features', False).toBool()
-		self.figWidth = self.settings.value('group: ' + self.name + '/width', 7.0).toDouble()[0]
-		self.figHeight = self.settings.value('group: ' + self.name + '/height', 7.0).toDouble()[0]
-		self.sortColMethod = self.settings.value('group: ' + self.name + '/sort col method', 'Average neighbour (UPGMA)').toString()
-		self.sortRowMethod = self.settings.value('group: ' + self.name + '/sort row method', 'Average neighbour (UPGMA)').toString()
-		self.bShowColDendrogram = self.settings.value('group: ' + self.name + '/show col dendrogram', True).toBool()
-		self.bShowRowDendrogram = self.settings.value('group: ' + self.name + '/show row dendrogram', True).toBool()
-		self.colourmap = self.settings.value('group: ' + self.name + '/colourmap', 'Blues').toString()
-		self.legendPos = self.settings.value('group: ' + self.name + '/legend position', 3).toInt()[0]
-		self.clusteringColThreshold = self.settings.value('group: ' + self.name + '/clustering col threshold', 0.75).toDouble()[0]
-		self.clusteringRowThreshold = self.settings.value('group: ' + self.name + '/clustering row threshold', 0.75).toDouble()[0]
-		self.dendrogramHeight = self.settings.value('group: ' + self.name + '/dendrogram col height', 1.5).toDouble()[0]
-		self.dendrogramWidth = self.settings.value('group: ' + self.name + '/dendrogram row width', 1.5).toDouble()[0]
+		self.fieldToPlot = str(
+			self.settings.value('group: ' + self.name + '/field to plot', 'Proportion of sequences (%)'))
+		self.bPlotOnlyActiveFeatures = bool(
+			self.settings.value('group: ' + self.name + '/plot only active features', False))
+		self.figWidth = float(self.settings.value('group: ' + self.name + '/width', 7.0))
+		self.figHeight = float(self.settings.value('group: ' + self.name + '/height', 7.0))
+		self.sortColMethod = str(
+			self.settings.value('group: ' + self.name + '/sort col method', 'Average neighbour (UPGMA)'))
+		self.sortRowMethod = str(
+			self.settings.value('group: ' + self.name + '/sort row method', 'Average neighbour (UPGMA)'))
+		self.bShowColDendrogram = bool(self.settings.value('group: ' + self.name + '/show col dendrogram', True))
+		self.bShowRowDendrogram = bool(self.settings.value('group: ' + self.name + '/show row dendrogram', True))
+		self.colourmap = str(self.settings.value('group: ' + self.name + '/colourmap', 'Blues'))
+		self.legendPos = int(self.settings.value('group: ' + self.name + '/legend position', 3))
+		self.clusteringColThreshold = float(
+			self.settings.value('group: ' + self.name + '/clustering col threshold', 0.75))
+		self.clusteringRowThreshold = float(
+			self.settings.value('group: ' + self.name + '/clustering row threshold', 0.75))
+		self.dendrogramHeight = float(self.settings.value('group: ' + self.name + '/dendrogram col height', 1.5))
+		self.dendrogramWidth = float(self.settings.value('group: ' + self.name + '/dendrogram row width', 1.5))
 
 	def mirrorProperties(self, plotToCopy):
 		super(HeatmapPlot, self).mirrorProperties(plotToCopy)
@@ -134,9 +140,9 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 			self.emptyAxis()
 			return
 		elif len(featuresToPlot) > 1000 or len(profile.activeSamplesInGroups) > 1000:
-			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 			QtGui.QMessageBox.information(self, 'Too much data!', 'Heatmap plots are limited to 1000 samples and 1000 features.', QtGui.QMessageBox.Ok)
-			QtGui.QApplication.instance().restoreOverrideCursor()
+			QtWidgets.QApplication.instance().restoreOverrideCursor()
 			self.emptyAxis()
 			return
 
@@ -182,7 +188,7 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 			data = profile.getActiveFeatureFromActiveSamplesProportions(featuresToPlot)
 
 		matrix = []
-		for r in xrange(0, len(data)):
+		for r in range(0, len(data)):
 			row = []
 			for d in data[r]:
 				row += d
@@ -204,7 +210,7 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 
 		longestLabelLen = 0
 		longestRowLabel = ''
-		for i in xrange(0, len(rowHeaders)):
+		for i in range(0, len(rowHeaders)):
 			if bTruncate and len(rowHeaders[i]) > length + 3:
 				rowHeaders[i] = rowHeaders[i][0:length] + '...'
 
@@ -214,7 +220,7 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 
 		longestLabelLen = 0
 		longestColLabel = ''
-		for i in xrange(0, len(colHeaders)):
+		for i in range(0, len(colHeaders)):
 			if bTruncate and len(colHeaders[i]) > length + 3:
 				colHeaders[i] = colHeaders[i][0:length] + '...'
 
@@ -317,8 +323,8 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 		xCell = []
 		yCell = []
 		tooltips = []
-		for x in xrange(0, len(colHeaders)):
-			for y in xrange(0, len(rowHeaders)):
+		for x in range(0, len(colHeaders)):
+			for y in range(0, len(rowHeaders)):
 				xCell.append(x)
 				yCell.append(y)
 
@@ -380,11 +386,11 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 
 		# row and column labels
 		labelOffset = 0.5 * (yLabelBounds.height / cellSizeYPer)
-		for i in xrange(0, len(rowHeaders)):
+		for i in range(0, len(rowHeaders)):
 			axisHeatmap.text(matrix.shape[1] - 0.5, i - labelOffset, '  ' + rowHeaders[leafIndex1[i]], horizontalalignment="left")
 
 		labelOffset = 0.5 * (xLabelBounds.width / cellSizeXPer)
-		for i in xrange(0, len(colHeaders)):
+		for i in range(0, len(colHeaders)):
 			axisHeatmap.text(i - labelOffset, -0.5, '  ' + colHeaders[leafIndex2[i]], rotation='vertical', verticalalignment="top")
 
 		# plot colour map legend
@@ -400,10 +406,10 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 		colourBar.set_ticklabels(['%.1f' % minValue, '%.1f' % (0.5 * (maxValue - minValue) + minValue), '%.1f' % maxValue])
 
 		# plot column and row lines
-		for i in xrange(0, len(rowHeaders)):
+		for i in range(0, len(rowHeaders)):
 			axisHeatmap.plot([-0.5, len(colHeaders) - 0.5], [i - 0.5, i - 0.5], color='white', linestyle='-', linewidth=1.5)
 
-		for i in xrange(0, len(colHeaders)):
+		for i in range(0, len(colHeaders)):
 			axisHeatmap.plot([i - 0.5, i - 0.5], [-0.5, len(rowHeaders) - 0.5], color='white', linestyle='-', linewidth=1.5)
 
 		# plot legend
@@ -507,7 +513,7 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 			self.plot(profile, statsResults)
 
 if __name__ == "__main__":
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(HeatmapPlot)
 	testWindow.show()
 	sys.exit(app.exec_())

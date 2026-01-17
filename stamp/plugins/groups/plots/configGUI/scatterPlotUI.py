@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -155,22 +155,22 @@ class Ui_ScatterPlotDialog(object):
         QtCore.QMetaObject.connectSlotsByName(ScatterPlotDialog)
 
     def retranslateUi(self, ScatterPlotDialog):
-        ScatterPlotDialog.setWindowTitle(QtGui.QApplication.translate("ScatterPlotDialog", "Scatter plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("ScatterPlotDialog", "Figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("ScatterPlotDialog", "Width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("ScatterPlotDialog", "Height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("ScatterPlotDialog", "Histogram", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowHistogram.setText(QtGui.QApplication.translate("ScatterPlotDialog", "Show histograms", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("ScatterPlotDialog", "Bins:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("ScatterPlotDialog", "Height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("ScatterPlotDialog", "Spread:", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSpreadMethod.setItemText(0, QtGui.QApplication.translate("ScatterPlotDialog", "None", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSpreadMethod.setItemText(1, QtGui.QApplication.translate("ScatterPlotDialog", "standard deviation", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSpreadMethod.setItemText(2, QtGui.QApplication.translate("ScatterPlotDialog", "2 * standard deviation", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSpreadMethod.setItemText(3, QtGui.QApplication.translate("ScatterPlotDialog", "25th and 75th percentile", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSpreadMethod.setItemText(4, QtGui.QApplication.translate("ScatterPlotDialog", "9th and 91st percentile", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSpreadMethod.setItemText(5, QtGui.QApplication.translate("ScatterPlotDialog", "2nd and 98th percentile", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSpreadMethod.setItemText(6, QtGui.QApplication.translate("ScatterPlotDialog", "minimum and maximum", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("ScatterPlotDialog", "Marker size:", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowR2.setText(QtGui.QApplication.translate("ScatterPlotDialog", "Show R2 value", None, QtGui.QApplication.UnicodeUTF8))
+        ScatterPlotDialog.setWindowTitle(QtWidgets.QApplication.translate("ScatterPlotDialog", "Scatter plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtWidgets.QApplication.translate("ScatterPlotDialog", "Figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureWidth.setText(QtWidgets.QApplication.translate("ScatterPlotDialog", "Width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureHeight.setText(QtWidgets.QApplication.translate("ScatterPlotDialog", "Height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("ScatterPlotDialog", "Histogram", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowHistogram.setText(QtWidgets.QApplication.translate("ScatterPlotDialog", "Show histograms", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtWidgets.QApplication.translate("ScatterPlotDialog", "Bins:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtWidgets.QApplication.translate("ScatterPlotDialog", "Height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("ScatterPlotDialog", "Spread:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSpreadMethod.setItemText(0, QtWidgets.QApplication.translate("ScatterPlotDialog", "None", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSpreadMethod.setItemText(1, QtWidgets.QApplication.translate("ScatterPlotDialog", "standard deviation", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSpreadMethod.setItemText(2, QtWidgets.QApplication.translate("ScatterPlotDialog", "2 * standard deviation", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSpreadMethod.setItemText(3, QtWidgets.QApplication.translate("ScatterPlotDialog", "25th and 75th percentile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSpreadMethod.setItemText(4, QtWidgets.QApplication.translate("ScatterPlotDialog", "9th and 91st percentile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSpreadMethod.setItemText(5, QtWidgets.QApplication.translate("ScatterPlotDialog", "2nd and 98th percentile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSpreadMethod.setItemText(6, QtWidgets.QApplication.translate("ScatterPlotDialog", "minimum and maximum", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtWidgets.QApplication.translate("ScatterPlotDialog", "Marker size:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowR2.setText(QtWidgets.QApplication.translate("ScatterPlotDialog", "Show R2 value", None, QtWidgets.QApplication.UnicodeUTF8))
 

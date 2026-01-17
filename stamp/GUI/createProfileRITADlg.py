@@ -21,8 +21,8 @@
 
 import string
 
-from PyQt4 import QtGui, QtCore
-from createProfileRITA_UI import Ui_CreateProfileRITADlg
+from PyQt5 import QtGui, QtCore, QtWidgets
+from stamp.GUI.createProfileRITA_UI import Ui_CreateProfileRITADlg
 
 from stamp.GUI.customizeHeadingsDlg import CustomizeHeadingsDlg
 
@@ -31,9 +31,9 @@ class ProfileRow():
 		countData = []
 		hierarchy = []
 
-class CreateProfileRITADlg(QtGui.QDialog):
+class CreateProfileRITADlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None):
-		QtGui.QWidget.__init__(self, parent)
+		QWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_CreateProfileRITADlg()
@@ -100,7 +100,7 @@ class CreateProfileRITADlg(QtGui.QDialog):
 			
 			# add profile info
 			categories = set([])
-			for i in xrange(1, len(data)):
+			for i in range(1, len(data)):
 				line = data[i]
 				if line == "":
 						continue	# skip blank lines
@@ -158,9 +158,9 @@ class CreateProfileRITADlg(QtGui.QDialog):
 		for key in profileDict.keys():
 			row = profileDict[key]
 			hierarchy = row.hierarchy.split(';')
-			for h in xrange(len(hierarchy)-1, -1, -1):
+			for h in range(len(hierarchy)-1, -1, -1):
 				fout.write(hierarchy[h] + '\t')
-			for i in xrange(0, mostSpecificRankIndex-len(hierarchy)+1):
+			for i in range(0, mostSpecificRankIndex-len(hierarchy)+1):
 				fout.write('Unclassified' + '\t')
 			
 			fout.write(str(row.countData[0]))

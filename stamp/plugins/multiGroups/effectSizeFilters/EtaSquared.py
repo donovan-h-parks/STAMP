@@ -38,7 +38,7 @@ class EtaSquared(AbstractMultiGroupEffectSizePlugin):
 				
 		totalSum = 0.0
 		N = 0.0
-		for i in xrange(0, len(data)):
+		for i in range(0, len(data)):
 			for x in data[i]:
 				totalSum += x
 				N += 1
@@ -46,7 +46,7 @@ class EtaSquared(AbstractMultiGroupEffectSizePlugin):
 
 		totalSS = 0.0
 		betweenGroupSS = 0.0
-		for i in xrange(0, len(data)):
+		for i in range(0, len(data)):
 			groupSum = 0.0
 			for x in data[i]:
 				totalSS += (x - grandMean)*(x - grandMean)

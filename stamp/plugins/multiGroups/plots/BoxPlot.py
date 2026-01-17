@@ -23,7 +23,7 @@
 
 import sys
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 
 from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.multiGroups.plots.configGUI.BoxPlotUI import Ui_BoxPlotDialog
@@ -51,11 +51,12 @@ class BoxPlot(AbstractMultiGroupPlotPlugin):
 		self.type = 'Exploratory'
 		
 		self.settings = preferences['Settings']
-		self.figWidth = self.settings.value('multiple group: ' + self.name + '/width', 7.0).toDouble()[0]
-		self.figHeight = self.settings.value('multiple group: ' + self.name + '/height', 7.0).toDouble()[0]
-		self.fieldToPlot = self.settings.value('multiple group: ' + self.name + '/field to plot', 'Proportion of sequences (%)').toString()
-		self.bShowAverages = self.settings.value('multiple group: ' + self.name + '/show averages', True).toBool()
-		self.bShowPvalue = self.settings.value('multiple group: ' + self.name + '/show p-value', True).toBool()
+		self.figWidth = float(self.settings.value('multiple group: ' + self.name + '/width', 7.0))
+		self.figHeight = float(self.settings.value('multiple group: ' + self.name + '/height', 7.0))
+		self.fieldToPlot = str(
+			self.settings.value('multiple group: ' + self.name + '/field to plot', 'Proportion of sequences (%)'))
+		self.bShowAverages = bool(self.settings.value('multiple group: ' + self.name + '/show averages', True))
+		self.bShowPvalue = bool(self.settings.value('multiple group: ' + self.name + '/show p-value', True))
 
 	def mirrorProperties(self, plotToCopy):
 		super(BoxPlot, self).mirrorProperties(plotToCopy)
@@ -107,7 +108,7 @@ class BoxPlot(AbstractMultiGroupPlotPlugin):
 		for groupName in profile.activeGroupNames:
 			colours.append(str(self.preferences['Group colours'][groupName].name()))
 
-		for i in xrange(0, len(data)):
+		for i in range(0, len(data)):
 			# get box coordinates
 			box = bp['boxes'][i]
 			boxCoords = zip(box.get_xdata()[0:5],box.get_ydata()[0:5])
@@ -122,7 +123,7 @@ class BoxPlot(AbstractMultiGroupPlotPlugin):
 		
 		# mark average
 		if self.bShowAverages:
-			for i in xrange(0,len(data)):
+			for i in range(0,len(data)):
 				med = bp['medians'][i]
 				axesBoxPlot.plot([np.average(med.get_xdata())], [np.average(data[i])], color='w', marker='*', markeredgecolor='k')
 				
@@ -202,7 +203,7 @@ class BoxPlot(AbstractMultiGroupPlotPlugin):
 			self.plot(profile, statsResults)
 					
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(ProfileScatterPlot)
 	testWindow.show()
 	sys.exit(app.exec_())

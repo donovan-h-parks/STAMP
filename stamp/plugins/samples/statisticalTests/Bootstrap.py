@@ -44,7 +44,7 @@ class Bootstrap(AbstractSampleStatsTestPlugin):
 			pooledP = float(seq1 + seq2) / pooledN
 
 			diff = []
-			for dummy in xrange(0, replicates):
+			for dummy in range(0, replicates):
 				c1 = binomial(totalSeq1, pooledP)
 				c2 = binomial(totalSeq2, pooledP)
 					
@@ -78,4 +78,4 @@ class Bootstrap(AbstractSampleStatsTestPlugin):
 if __name__ == "__main__": 
 	bootstrap = Bootstrap()
 	pValueOneSided, pValueTwoSided = bootstrap.hypothesisTest(20, 1, 50, 50)
-	print pValueOneSided, pValueTwoSided
+	print(pValueOneSided, pValueTwoSided)

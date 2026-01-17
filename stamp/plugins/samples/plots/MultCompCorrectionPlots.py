@@ -24,7 +24,7 @@
 
 import sys
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 import numpy as np
 
 from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
@@ -41,14 +41,15 @@ class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 		self.name = 'Multiple comparison plots'
 		self.type = 'Statistical'
 		
-		self.settings = preferences['Settings']		
-		self.figWidth = self.settings.value(self.name + '/width', 7.0).toDouble()[0]
-		self.figHeight = self.settings.value(self.name + '/height', 3.5).toDouble()[0]
-		self.yAxisLogScale = self.settings.value(self.name + '/histogram log scale', False).toBool()
-		self.binWidth = self.settings.value(self.name + '/bin width', 0.01).toDouble()[0]
-		self.xLimitFig1 = self.settings.value(self.name + '/histogram x-axis limit', 0.1).toDouble()[0]
-		self.xLimitFig2 = self.settings.value(self.name + '/correction plot x-axis limit', 1.0).toDouble()[0]
-		self.xLimitFig3 = self.settings.value(self.name + '/significant features x-axis limit', 0.1).toDouble()[0]
+		self.settings = preferences['Settings']
+		self.figWidth = float(self.settings.value(self.name + '/width', 7.0))
+		self.figHeight = float(self.settings.value(self.name + '/height', 7.0))
+
+		self.yAxisLogScale = bool(self.settings.value(self.name + '/histogram log scale', False))
+		self.binWidth = float(self.settings.value(self.name + '/bin width', 0.01))
+		self.xLimitFig1 = float(self.settings.value(self.name + '/histogram x-axis limit', 0.1))
+		self.xLimitFig2 = float(self.settings.value(self.name + '/correction plot x-axis limit', 1.0))
+		self.xLimitFig3 = float(self.settings.value(self.name + '/significant features x-axis limit', 0.1))
 		
 		self.xMax = 0
 
@@ -262,7 +263,7 @@ class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 		self.configDlg.ui.spinXlimitFig3.setValue(self.xMax)
 
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(MultCompCorrectionPlots)
 	testWindow.show()
 	sys.exit(app.exec_())

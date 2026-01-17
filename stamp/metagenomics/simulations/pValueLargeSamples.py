@@ -19,7 +19,7 @@ def mean(x):
     return 0
     
   sum = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sum += x[i]
   return sum / len(x)
   
@@ -29,7 +29,7 @@ def stdDev(x):
     
   m = mean(x)
   sumsq = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sumsq += (x[i] - m)*(x[i] - m)
   return math.sqrt(sumsq / len(x))
   
@@ -38,12 +38,12 @@ fout = open('temp.txt','w')
 random.seed(0)
 
 for N in N_Values:
-  print N
+  print(N)
   totalSamples1 = int(N/2)
   totalSamples2 = int(N/2)
   
   for maxP in maxPositives:
-    print '  ' + str(maxP)
+    print('  ' + str(maxP))
     if maxP > totalSamples1:
       continue
     
@@ -51,8 +51,8 @@ for N in N_Values:
     gTestResults = []
     gTestYatesResults = []
     diffBetweenPropResults = []
-    for a in xrange(0, maxP+1):
-      for b in xrange(a, maxP+1):        
+    for a in range(0, maxP+1):
+      for b in range(a, maxP+1):        
         # calculate p-values
         fishersOneSided, fishersTwoSided = fishers.hypothesisTest(a, b, totalSamples1, totalSamples2)
         if (fishersTwoSided < 0.01 or fishersTwoSided > 0.1 or a <= 10 or b <= 10):
@@ -75,11 +75,11 @@ for N in N_Values:
           
       testResults = [gTestResults, gTestYatesResults, diffBetweenPropResults]
       method = ['G-test', 'G-test w/ Yates', 'Diff. between proportions']
-      for i in xrange(0, len(testResults)):
+      for i in range(0, len(testResults)):
         # calculate relative error and number of non-significant features
         results = []
         missedSignFeatures = 0
-        for j in xrange(0, len(testResults[i])):
+        for j in range(0, len(testResults[i])):
           results.append((testResults[i][j] - fishersResults[j]) / fishersResults[j])
           
           if fishersResults[j] < 0.05 and testResults[i][j] > 0.05:

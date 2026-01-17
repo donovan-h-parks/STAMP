@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -192,27 +192,27 @@ class Ui_SeqHistogramDialog(object):
         QtCore.QMetaObject.connectSlotsByName(SeqHistogramDialog)
 
     def retranslateUi(self, SeqHistogramDialog):
-        SeqHistogramDialog.setWindowTitle(QtGui.QApplication.translate("SeqHistogramDialog", "Sequence histogram", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("SeqHistogramDialog", "Figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_4.setTitle(QtGui.QApplication.translate("SeqHistogramDialog", "Histogram properties", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkCustomBinWidth.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Custom bin width", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblBinWidth.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Bin width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkLogScale.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Show y-axis as log scale", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("SeqHistogramDialog", "X-axis properties", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkCustomXaxis.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Custom x-axis extents", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Min. value:", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnXmin.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Min", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Max. value:", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnXmax.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Max", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_5.setTitle(QtGui.QApplication.translate("SeqHistogramDialog", "Legend position", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosNone.setText(QtGui.QApplication.translate("SeqHistogramDialog", "None", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperLeft.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Upper left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosCentreLeft.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Centre left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerLeft.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Lower left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosBest.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Best", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperRight.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Upper right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosCentreRight.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Centre right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerRight.setText(QtGui.QApplication.translate("SeqHistogramDialog", "Lower right", None, QtGui.QApplication.UnicodeUTF8))
+        SeqHistogramDialog.setWindowTitle(QtWidgets.QApplication.translate("SeqHistogramDialog", "Sequence histogram", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtWidgets.QApplication.translate("SeqHistogramDialog", "Figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureWidth.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureHeight.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_4.setTitle(QtWidgets.QApplication.translate("SeqHistogramDialog", "Histogram properties", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkCustomBinWidth.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Custom bin width", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblBinWidth.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Bin width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkLogScale.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Show y-axis as log scale", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("SeqHistogramDialog", "X-axis properties", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkCustomXaxis.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Custom x-axis extents", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Min. value:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnXmin.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Min", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Max. value:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnXmax.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Max", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_5.setTitle(QtWidgets.QApplication.translate("SeqHistogramDialog", "Legend position", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosNone.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "None", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosUpperLeft.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Upper left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosCentreLeft.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Centre left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerLeft.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Lower left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosBest.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Best", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosUpperRight.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Upper right", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosCentreRight.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Centre right", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerRight.setText(QtWidgets.QApplication.translate("SeqHistogramDialog", "Lower right", None, QtWidgets.QApplication.UnicodeUTF8))
 

@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -95,17 +95,17 @@ class Ui_CreateProfileDlg(object):
         QtCore.QMetaObject.connectSlotsByName(CreateProfileDlg)
 
     def retranslateUi(self, CreateProfileDlg):
-        CreateProfileDlg.setWindowTitle(QtGui.QApplication.translate("CreateProfileDlg", "Customize headings", None, QtGui.QApplication.UnicodeUTF8))
-        self.txtInfo.setStyleSheet(QtGui.QApplication.translate("CreateProfileDlg", "background-color: rgb(255, 255, 235);", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("CreateProfileDlg", "Level 1:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("CreateProfileDlg", "Level 2:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("CreateProfileDlg", "Level 3:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("CreateProfileDlg", "Level 4:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("CreateProfileDlg", "Level 5:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("CreateProfileDlg", "Level 6:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("CreateProfileDlg", "Level 7:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_8.setText(QtGui.QApplication.translate("CreateProfileDlg", "Level 8:", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnOK.setText(QtGui.QApplication.translate("CreateProfileDlg", "OK", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCancel.setText(QtGui.QApplication.translate("CreateProfileDlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
+        CreateProfileDlg.setWindowTitle(QtWidgets.QApplication.translate("CreateProfileDlg", "Customize headings", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.txtInfo.setStyleSheet(QtWidgets.QApplication.translate("CreateProfileDlg", "background-color: rgb(255, 255, 235);", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("CreateProfileDlg", "Level 1:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtWidgets.QApplication.translate("CreateProfileDlg", "Level 2:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtWidgets.QApplication.translate("CreateProfileDlg", "Level 3:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtWidgets.QApplication.translate("CreateProfileDlg", "Level 4:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtWidgets.QApplication.translate("CreateProfileDlg", "Level 5:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_6.setText(QtWidgets.QApplication.translate("CreateProfileDlg", "Level 6:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_7.setText(QtWidgets.QApplication.translate("CreateProfileDlg", "Level 7:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_8.setText(QtWidgets.QApplication.translate("CreateProfileDlg", "Level 8:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnOK.setText(QtWidgets.QApplication.translate("CreateProfileDlg", "OK", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCancel.setText(QtWidgets.QApplication.translate("CreateProfileDlg", "Cancel", None, QtWidgets.QApplication.UnicodeUTF8))
 
 import stamp.STAMP_rc

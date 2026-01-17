@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 class Ui_BarPlotDialog(object):
     def setupUi(self, BarPlotDialog):
@@ -136,22 +136,22 @@ class Ui_BarPlotDialog(object):
         QtCore.QMetaObject.connectSlotsByName(BarPlotDialog)
 
     def retranslateUi(self, BarPlotDialog):
-        BarPlotDialog.setWindowTitle(QtGui.QApplication.translate("BarPlotDialog", "Bar plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFieldToPlot.setText(QtGui.QApplication.translate("BarPlotDialog", "Field to plot:", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboFieldToPlot.setItemText(0, QtGui.QApplication.translate("BarPlotDialog", "Number of sequences", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboFieldToPlot.setItemText(1, QtGui.QApplication.translate("BarPlotDialog", "Proportion of sequences (%)", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("BarPlotDialog", "Figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("BarPlotDialog", "Height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("BarPlotDialog", "Column width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowAverage.setText(QtGui.QApplication.translate("BarPlotDialog", "Show average of each group", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowPvalue.setText(QtGui.QApplication.translate("BarPlotDialog", "Show p-value", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("BarPlotDialog", "Legend position", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosNone.setText(QtGui.QApplication.translate("BarPlotDialog", "None", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosBest.setText(QtGui.QApplication.translate("BarPlotDialog", "Best", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperRight.setText(QtGui.QApplication.translate("BarPlotDialog", "Upper right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosCentreRight.setText(QtGui.QApplication.translate("BarPlotDialog", "Centre right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerRight.setText(QtGui.QApplication.translate("BarPlotDialog", "Lower right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperLeft.setText(QtGui.QApplication.translate("BarPlotDialog", "Upper left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosCentreLeft.setText(QtGui.QApplication.translate("BarPlotDialog", "Centre left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerLeft.setText(QtGui.QApplication.translate("BarPlotDialog", "Lower left", None, QtGui.QApplication.UnicodeUTF8))
+        BarPlotDialog.setWindowTitle(QtWidgets.QApplication.translate("BarPlotDialog", "Bar plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFieldToPlot.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Field to plot:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboFieldToPlot.setItemText(0, QtWidgets.QApplication.translate("BarPlotDialog", "Number of sequences", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboFieldToPlot.setItemText(1, QtWidgets.QApplication.translate("BarPlotDialog", "Proportion of sequences (%)", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtWidgets.QApplication.translate("BarPlotDialog", "Figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureHeight.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureWidth.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Column width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowAverage.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Show average of each group", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowPvalue.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Show p-value", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("BarPlotDialog", "Legend position", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosNone.setText(QtWidgets.QApplication.translate("BarPlotDialog", "None", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosBest.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Best", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosUpperRight.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Upper right", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosCentreRight.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Centre right", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerRight.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Lower right", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosUpperLeft.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Upper left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosCentreLeft.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Centre left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerLeft.setText(QtWidgets.QApplication.translate("BarPlotDialog", "Lower left", None, QtWidgets.QApplication.UnicodeUTF8))
 

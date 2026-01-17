@@ -21,13 +21,13 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore , QtWidgets
 from stamp.metagenomics.fileIO.COG_IO import COG_IO
-from assignCOGUI import Ui_AssignCOGsDlg
+from stamp.GUI.assignCOGUI import Ui_AssignCOGsDlg
 
-class AssignCOGsDlg(QtGui.QDialog):
+class AssignCOGsDlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None):
-		QtGui.QWidget.__init__(self, parent)
+		QWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_AssignCOGsDlg()

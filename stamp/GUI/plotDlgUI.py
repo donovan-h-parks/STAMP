@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -29,8 +29,8 @@ class Ui_PlotDlg(object):
         PlotDlg.setWindowIcon(icon)
         PlotDlg.setFloating(True)
         PlotDlg.setAllowedAreas(QtCore.Qt.AllDockWidgetAreas)
-        PlotDlg.setWindowTitle(QtGui.QApplication.translate("PlotDlg", "Plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.dockWidgetContents = QtGui.QWidget()
+        PlotDlg.setWindowTitle(QtWidgets.QApplication.translate("PlotDlg", "Plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.dockWidgetContents = QWidgets.QWidget()
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
@@ -52,7 +52,7 @@ class Ui_PlotDlg(object):
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setAlignment(QtCore.Qt.AlignCenter)
         self.scrollArea.setObjectName(_fromUtf8("scrollArea"))
-        self.scrollLegend = QtGui.QWidget()
+        self.scrollLegend = QWidgets.QWidget()
         self.scrollLegend.setGeometry(QtCore.QRect(0, 0, 600, 378))
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(1)

@@ -63,7 +63,7 @@ class MyScatterPlot(AbstractSamplePlotPlugin):
 		
 		# Set visual properties of all points
 		colours = []
-		for i in xrange(0, len(field1)):
+		for i in range(0, len(field1)):
 			if field1[i] > field2[i]:
 				colours.append(profile1Colour)
 			else:

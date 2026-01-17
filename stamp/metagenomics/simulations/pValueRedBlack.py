@@ -24,7 +24,7 @@ fin.close()
 totalSamples1 = 0
 totalSamples2 = 0
 featureDict = {}
-for i in xrange(1, len(data)):
+for i in range(1, len(data)):
   lineSplit = data[i].split(',')
   
   feature = lineSplit[2]
@@ -52,7 +52,7 @@ bootstrapResults = []
 signFeatures = []
 
 for feature in featureDict:
-  print feature
+  print(feature)
   
   a = featureDict[feature][0]
   b = featureDict[feature][1]
@@ -90,10 +90,10 @@ for method in methods:
   fout.write(',' + method)
 fout.write('\n')
 
-for i in xrange(0, len(signFeatures)):
+for i in range(0, len(signFeatures)):
   fout.write(signFeatures[i])
         
-  for j in xrange(0, len(testResults)):   
+  for j in range(0, len(testResults)):   
     testResultStr = '%.2e' % testResults[j][i]
     
     if j == 0: 

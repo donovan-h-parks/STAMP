@@ -497,7 +497,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 		# Ground truth calculated explicitly
 		qValues = benjaminiHochbergFDR.correct(list(self.pValues), 0.05)
 		modifier = 1
-		for i in xrange(0, len(self.pValues)):
+		for i in range(0, len(self.pValues)):
 			self.assertAlmostEqual(qValues[i], self.pValues[i]*len(self.pValues) / modifier)
 			modifier += 1
 			
@@ -508,7 +508,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 		
 		# Ground truth calculated explicitly
 		correctedValues = bonferroni.correct(list(self.pValues), 0.05)
-		for i in xrange(0, len(self.pValues)):
+		for i in range(0, len(self.pValues)):
 			self.assertAlmostEqual(correctedValues[i], self.pValues[i]*len(self.pValues))
 			
 	def testHolmBonferroni(self):
@@ -532,7 +532,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 		
 		# Ground truth calculated explicitly
 		correctedValues = noCorrection.correct(list(self.pValues), 0.05)
-		for i in xrange(0, len(self.pValues)):
+		for i in range(0, len(self.pValues)):
 			self.assertAlmostEqual(correctedValues[i], self.pValues[i])
 			
 	def testSidak(self):
@@ -542,7 +542,7 @@ class VerifyMultipleComparisonCorrectionMethods(unittest.TestCase):
 		
 		# Ground truth calculated explicitly
 		correctedValues = sidak.correct(list(self.pValues), 0.05)
-		for i in xrange(0, len(self.pValues)):
+		for i in range(0, len(self.pValues)):
 			self.assertAlmostEqual(correctedValues[i], 1.0 - (1.0 - self.pValues[i])**len(self.pValues))
 			
 	def testStoreyFDR(self):

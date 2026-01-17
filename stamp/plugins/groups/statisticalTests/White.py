@@ -81,16 +81,16 @@ def detect_differentially_abundant_features(seqGroup1, seqGroup2, parentSeqGroup
 	
 	# convert to proportions
 	propGroup1 = []
-	for r in xrange(0, numFeatures):
+	for r in range(0, numFeatures):
 		row = []
-		for c in xrange(0, n1):
+		for c in range(0, n1):
 			row.append(float(seqGroup1[r][c]) / parentSeqGroup1[r][c])
 		propGroup1.append(row)
 			
 	propGroup2 = []
-	for r in xrange(0, numFeatures):
+	for r in range(0, numFeatures):
 		row = []
-		for c in xrange(0, n2):
+		for c in range(0, n2):
 			row.append(float(seqGroup2[r][c]) / parentSeqGroup2[r][c])
 		propGroup2.append(row)
 
@@ -105,7 +105,7 @@ def detect_differentially_abundant_features(seqGroup1, seqGroup2, parentSeqGroup
 	# generate p values for sparse data using fisher's exact test
 	fishers = Fishers(preferences)
 	diffBetweenProp = DiffBetweenPropAsymptoticCC(preferences)
-	for r in xrange(0, numFeatures):
+	for r in range(0, numFeatures):
 		if sum(seqGroup1[r]) < n1 and sum(seqGroup2[r]) < n2:
 			p1, p2, note = fishers.hypothesisTest(sum(seqGroup1[r]), sum(seqGroup2[r]), sum(parentSeqGroup1[r]), sum(parentSeqGroup2[r]))
 			l, u, es, note = diffBetweenProp.run(sum(seqGroup1[r]), sum(seqGroup2[r]), sum(parentSeqGroup1[r]), sum(parentSeqGroup2[r]), coverage)
@@ -133,7 +133,7 @@ def permuted_statistics(propGroup1, propGroup2, seqGroup1, seqGroup2, T_statisti
 	# calculate null distribution of the t-statistics using B permutations
 	permuted_ttests = []
 	permuted_effectSizes = []
-	for j in xrange(0, B):  
+	for j in range(0, B):  
 		if progress != None and progress != 'Verbose':
 			progressIndex += 1
 			progress.setValue(progressIndex)
@@ -156,7 +156,7 @@ def permuted_statistics(propGroup1, propGroup2, seqGroup1, seqGroup2, T_statisti
 		# pool just the frequently observed ts  
 		cleanedpermuted_ttests = permuted_ttests
 		highFreqIndices = []
-		for r in xrange(0, numFeatures): 
+		for r in range(0, numFeatures): 
 			if sum(seqGroup1[r]) >= n1 or sum(seqGroup2[r]) >= n2:
 				highFreqIndices.append(r)
 				
@@ -177,7 +177,7 @@ def permuted_statistics(propGroup1, propGroup2, seqGroup1, seqGroup2, T_statisti
 					
 			oneTailed = 0
 			twoTailed = 0
-			for i in xrange(0, B):
+			for i in range(0, B):
 				for hfIndex2 in highFreqIndices: 
 					if cleanedpermuted_ttests[i][hfIndex2] > T_statistics[hfIndex]:
 						oneTailed += 1
@@ -187,14 +187,14 @@ def permuted_statistics(propGroup1, propGroup2, seqGroup1, seqGroup2, T_statisti
 			pValuesOneSided[hfIndex] = (1.0/(B*len(highFreqIndices))) * oneTailed
 			pValuesTwoSided[hfIndex] = (1.0/(B*len(highFreqIndices))) * twoTailed
 	else:
-		print 'blah'
+		print('blah')
 		if progress != None:
 			progress.setMaximum(numFeatures*B)
 			
-		for r in xrange(0, numFeatures): 
+		for r in range(0, numFeatures): 
 			oneTailed = 0
 			twoTailed = 0
-			for i in xrange(0, B):
+			for i in range(0, B):
 				if progress != None and progress != 'Verbose':
 					progressIndex += 1
 					progress.setValue(progressIndex)
@@ -215,7 +215,7 @@ def permuted_statistics(propGroup1, propGroup2, seqGroup1, seqGroup2, T_statisti
 	# calculate difference in mean proportions confidence intervals using a bootstrapping procedure
 	lowerCIs = []
 	upperCIs = []
-	for r in xrange(0, numFeatures): 
+	for r in range(0, numFeatures): 
 		lowerCI, upperCI = bootstrapDiffOfMeanProp(propGroup1[r], propGroup2[r], coverage, replicates = B)
 		lowerCIs.append(lowerCI*100)
 		upperCIs.append(upperCI*100)
@@ -236,16 +236,16 @@ def permute_and_calc_ts(propGroup1, propGroup2, permVec):
 	# first permute the rows in the matrix
 	permPropGroup1 = []
 	permPropGroup2 = []
-	for r in xrange(0, numFeatures):
+	for r in range(0, numFeatures):
 		row = propGroup1[r] + propGroup2[r]
 		
 		group1 = []
-		for i in xrange(0, n1):
+		for i in range(0, n1):
 			group1.append(row[permVec[i]])
 		permPropGroup1.append(group1)
 		
 		group2 = []
-		for i in xrange(0, n2):
+		for i in range(0, n2):
 			group2.append(row[permVec[i+n1]])
 		permPropGroup2.append(group2)
 
@@ -260,7 +260,7 @@ def calc_twosample_ts(propGroup1, propGroup2):
 	T_statistics = []
 	effectSizes = []
 	notes = []
-	for r in xrange(0, numFeatures):
+	for r in range(0, numFeatures):
 		meanG1 = float(sum(propGroup1[r])) / n1
 		varG1 = var(propGroup1[r], ddof=1)
 		stdErrG1 = varG1 / n1

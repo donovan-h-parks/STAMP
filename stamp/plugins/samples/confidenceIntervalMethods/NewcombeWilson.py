@@ -46,7 +46,7 @@ class NewcombeWilson(AbstractSampleConfIntervMethod):
 		prevP = z*math.sqrt(value*(1.0-value) / totalSeq) - abs(value - float(seq) / totalSeq)
 		prevValue = value
 		roots = []
-		for dummy in xrange(0,steps):
+		for dummy in range(0,steps):
 			p = z*math.sqrt(value*(1.0-value) / totalSeq) - abs(value - float(seq) / totalSeq)
 			if p*prevP < 0 or (p == 0 and value == 0) or (p == 0 and value == 1.0):
 				# we have found a root since there is a sign change

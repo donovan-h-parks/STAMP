@@ -53,11 +53,11 @@ ciLengthNW = []
 ciLengthWoolf = []
 ciLengthGart = []
 ciLengthRP = []
-for a in xrange(aMin, aMax+1):
-  print a
+for a in range(aMin, aMax+1):
+  print(a)
   
-  for b in xrange(bMin, bMax+1):
-    print '  ' + str(b)
+  for b in range(bMin, bMax+1):
+    print(f'  ' + str(b))
     p1 = float(a) / N1
     p2 = float(b) / N2
     
@@ -74,7 +74,7 @@ for a in xrange(aMin, aMax+1):
     containedRepWoolf = 0   
     containedRepGart = 0   
     containedRepRP = 0   
-    for r in xrange(0, replicates):
+    for r in range(0, replicates):
       c1 = binomial(N1, p1)
       while c1 == 0 or c1 == N1:
         c1 = binomial(N1, p1)
@@ -125,7 +125,7 @@ results = [coverageListDP, coverageListDPCC, coverageListNW, coverageListWoolf, 
 lengths = [ciLengthDP,ciLengthDPCC,ciLengthNW,ciLengthWoolf,ciLengthGart,ciLengthRP]   
 methodNames = ['DP: Asymptotic', 'DP: Asymptotic-CC', 'Newcombe-Wilson', 'Woolf', 'Gart', 'RP: Asympototic']
 
-for i in xrange(0, len(results)):
+for i in range(0, len(results)):
   coverageMeanStr = '%.2f' % mean(results[i])
   coverageSdStr = '%.2f' % std(results[i])
   coverageMinStr = '%.2f' % min(results[i])

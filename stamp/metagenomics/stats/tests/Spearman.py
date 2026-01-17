@@ -34,13 +34,13 @@ class Spearman():
     data.sort()
     
     nextIndex = 0
-    for i in xrange(0,n):  
+    for i in range(0,n):  
       if i < nextIndex:
         continue
        
       # check for entries with same value
       end = i
-      for j in xrange(i+1, n):
+      for j in range(i+1, n):
         if data[i] == data[j]:
           end = j
         else:
@@ -48,7 +48,7 @@ class Spearman():
         
       # assign rank to each entry with the same value
       curRank = 0.5*(end + i) + 1
-      for j in xrange(i, end+1):
+      for j in range(i, end+1):
         rank[data[j]] = curRank
         
       # indicate next entry that needs to be processed
@@ -64,7 +64,7 @@ class Spearman():
     rankY = self.rank(list(dataY))
    
     rank = []
-    for i in xrange(0, n):
+    for i in range(0, n):
       rank.append([rankX[dataX[i]], rankY[dataY[i]]])
       
     # calculate Spearman's rank correlation coefficient    
@@ -73,7 +73,7 @@ class Spearman():
     sumY = 0
     sumXX = 0
     sumYY = 0
-    for i in xrange(0, n):
+    for i in range(0, n):
       sumXY += rank[i][0]*rank[i][1]
       sumX += rank[i][0]
       sumY += rank[i][1]
@@ -93,4 +93,4 @@ if __name__ == "__main__":
   dataY = [7,0,27,50,28,29,20,12,6,17]
   
   Rs = spearman.compute(dataX, dataY)
-  print Rs
+  print(Rs)

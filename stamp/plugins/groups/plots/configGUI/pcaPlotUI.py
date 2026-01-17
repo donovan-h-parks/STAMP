@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -168,23 +168,23 @@ class Ui_PcaPlotDialog(object):
         QtCore.QMetaObject.connectSlotsByName(PcaPlotDialog)
 
     def retranslateUi(self, PcaPlotDialog):
-        PcaPlotDialog.setWindowTitle(QtGui.QApplication.translate("PcaPlotDialog", "PCA plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("PcaPlotDialog", "Figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkFixedPixelsPerUnitDistance.setText(QtGui.QApplication.translate("PcaPlotDialog", "Fixed pixels per unit distance (recommended)", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("PcaPlotDialog", "Width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("PcaPlotDialog", "Height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("PcaPlotDialog", "Plots to show", None, QtGui.QApplication.UnicodeUTF8))
-        self.checkBox.setText(QtGui.QApplication.translate("PcaPlotDialog", "PC1 vs. PC2", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkPC3vsPC2.setText(QtGui.QApplication.translate("PcaPlotDialog", "PC3 vs. PC2", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkPC1vsPC3.setText(QtGui.QApplication.translate("PcaPlotDialog", "PC1 vs. PC3", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_6.setTitle(QtGui.QApplication.translate("PcaPlotDialog", "Legend position", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosNone.setText(QtGui.QApplication.translate("PcaPlotDialog", "None", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperLeft.setText(QtGui.QApplication.translate("PcaPlotDialog", "Upper left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperCentre.setText(QtGui.QApplication.translate("PcaPlotDialog", "Upper centre", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosUpperRight.setText(QtGui.QApplication.translate("PcaPlotDialog", "Upper right", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerLeft.setText(QtGui.QApplication.translate("PcaPlotDialog", "Lower left", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioLegendPosLowerRight.setText(QtGui.QApplication.translate("PcaPlotDialog", "Lower right", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("PcaPlotDialog", "Marker size:", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkUniqueShapes.setText(QtGui.QApplication.translate("PcaPlotDialog", "Assign unique shapes", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkRotateLabels.setText(QtGui.QApplication.translate("PcaPlotDialog", "Rotate PC3 labels", None, QtGui.QApplication.UnicodeUTF8))
+        PcaPlotDialog.setWindowTitle(QtWidgets.QApplication.translate("PcaPlotDialog", "PCA plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtWidgets.QApplication.translate("PcaPlotDialog", "Figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkFixedPixelsPerUnitDistance.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Fixed pixels per unit distance (recommended)", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureWidth.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureHeight.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("PcaPlotDialog", "Plots to show", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.checkBox.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "PC1 vs. PC2", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkPC3vsPC2.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "PC3 vs. PC2", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkPC1vsPC3.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "PC1 vs. PC3", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_6.setTitle(QtWidgets.QApplication.translate("PcaPlotDialog", "Legend position", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosNone.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "None", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosUpperLeft.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Upper left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosUpperCentre.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Upper centre", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosUpperRight.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Upper right", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerLeft.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Lower left", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.radioLegendPosLowerRight.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Lower right", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Marker size:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkUniqueShapes.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Assign unique shapes", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkRotateLabels.setText(QtWidgets.QApplication.translate("PcaPlotDialog", "Rotate PC3 labels", None, QtWidgets.QApplication.UnicodeUTF8))
 

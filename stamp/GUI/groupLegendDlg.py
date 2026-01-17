@@ -21,12 +21,17 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
-from groupLegendDlgUI import Ui_GroupLegendDlg
+from PyQt5 import QtGui, QtCore, QtWidgets
+from stamp.GUI.groupLegendDlgUI import Ui_GroupLegendDlg
 
-class GroupLegendDlg(QtGui.QDockWidget):
+class GroupLegendDlg(QtWidgets.QDockWidget):
+	# Signals MUST be defined at the class level (outside __init__)
+	legendItemChanged = QtCore.pyqtSignal()
+	legendFieldChanged = QtCore.pyqtSignal()
+	legendActiveGroupsChanged = QtCore.pyqtSignal()
+
 	def __init__(self, preferences, parent=None, info=None):
-		QtGui.QWidget.__init__(self, parent)
+		QtWidgets.QWidget.__init__(self, parent)
 
 		# initialize GUI
 		self.ui = Ui_GroupLegendDlg()
@@ -41,8 +46,8 @@ class GroupLegendDlg(QtGui.QDockWidget):
 		self.groupColourDict = {}
 		self.groupColourButtonsDict = {}
 		
-		self.ui.legendLayout = QtGui.QVBoxLayout(self.ui.scrollLegend)
-		self.ui.legendLayout.setSizeConstraint(QtGui.QLayout.SetMinAndMaxSize)
+		self.ui.legendLayout = QtWidgets.QVBoxLayout(self.ui.scrollLegend)
+		self.ui.legendLayout.setSizeConstraint(QtWidgets.QLayout.SetMinAndMaxSize)
 		
 		self.preferences = preferences
 		
@@ -103,7 +108,7 @@ class GroupLegendDlg(QtGui.QDockWidget):
 			samples = list(samples.intersection(set(self.metadata.activeSamples)))
 			
 			tooltip = ''
-			for i in xrange(0, len(samples)):
+			for i in range(0, len(samples)):
 				tooltip += samples[i]
 				if i != len(samples)-1:
 					tooltip += ', '

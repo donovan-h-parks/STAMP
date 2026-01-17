@@ -21,14 +21,14 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
-from preferencesUI import Ui_preferencesDlg
+from PyQt5 import QtGui, QtCore, QtWidgets
+from stamp.GUI.preferencesUI import Ui_preferencesDlg
 
 import math
 
-class PreferencesDlg(QtGui.QDialog):
+class PreferencesDlg(QtWidgets.QDialog):
 	def __init__(self, parent=None, info=None):
-		QtGui.QWidget.__init__(self, parent)
+		QWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_preferencesDlg()

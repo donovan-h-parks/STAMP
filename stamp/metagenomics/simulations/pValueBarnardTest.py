@@ -28,7 +28,7 @@ def mean(x):
     return 0
     
   sum = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sum += x[i]
   return sum / len(x)
   
@@ -38,7 +38,7 @@ def stdDev(x):
     
   m = mean(x)
   sumsq = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sumsq += (x[i] - m)*(x[i] - m)
   return math.sqrt(sumsq / len(x))
   
@@ -47,7 +47,7 @@ fout = open('pValueTest_Barnard.txt','w')
 random.seed(0)
 
 for N in sampleSizes:
-  print N
+  print(N)
   totalSamples1 = N
   totalSamples2 = 2*N
   
@@ -61,8 +61,8 @@ for N in sampleSizes:
   permutationResults = []
   diffBetweenPropResults = []
   bootstrapResults = []
-  for a in xrange(0, maxPositiveSeqs+1):
-    for b in xrange(a, maxPositiveSeqs+1):        
+  for a in range(0, maxPositiveSeqs+1):
+    for b in range(a, maxPositiveSeqs+1):        
       # calculate p-values
       barnardOneSided, barnardTwoSided = barnard.hypothesisTest(a, b, totalSamples1, totalSamples2)
       if (barnardTwoSided < 0.01 or barnardTwoSided > 0.1):
@@ -93,7 +93,7 @@ for N in sampleSizes:
   testResults = [fishersResults, chiSquareResults,chiSquareYatesResults, gTestResults, gTestYatesResults, permutationResults, diffBetweenPropResults, bootstrapResults]
   method = ['Fisher\'s exact test', 'Chi-square','Chi-square w/ Yates','G-test', 'G-test w/ Yates', 'Permutation', 'Diff. between proportions', 'Bootstrap']
   
-  for i in xrange(0, len(testResults)):
+  for i in range(0, len(testResults)):
     results = testResults[i]
     meanStr = "%.2f" % mean(results)
     sdStr = "%.2f" % stdDev(results)      

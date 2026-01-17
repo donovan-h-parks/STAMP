@@ -21,13 +21,12 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 
 import sys
 import math
 import numpy as np
-from mpl_toolkits.axes_grid import make_axes_locatable, Size
-
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.samples.plots.configGUI.extendedErrorBarUI import Ui_ExtendedErrorBarDialog
 from stamp.metagenomics import TableHelper
@@ -45,18 +44,19 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 		self.type = 'Statistical'
 		
 		self.settings = preferences['Settings']
-		self.figWidth = self.settings.value(self.name + '/width', 7.0).toDouble()[0]
-		self.figHeightPerRow = self.settings.value(self.name + '/row height', 0.2).toDouble()[0]
-		self.sortingField = self.settings.value(self.name + '/field', 'p-values').toString()
-		self.bShowBarPlot = self.settings.value(self.name + '/sequences subplot', True).toBool()
-		self.bShowPValueLabels = self.settings.value(self.name + '/p-value labels', True).toBool()
-		self.bShowCorrectedPvalues = self.settings.value(self.name + '/show corrected p-values', True).toBool()
-		self.bCustomLimits = self.settings.value(self.name + '/use custom limits', False).toBool()
-		self.minX = self.settings.value(self.name + '/minimum', 0.0).toDouble()[0]
-		self.maxX = self.settings.value(self.name + '/maximum', 1.0).toDouble()[0]
-		self.markerSize = self.settings.value(self.name + '/marker size', 30).toInt()[0]
-		self.percentageOrSeqCount = self.settings.value(self.name + '/percentage or seq count', 'Proportion (%)').toString()
-		self.legendPos = self.settings.value(self.name + '/legend position', -1).toInt()[0]
+		self.figWidth = float(self.settings.value(self.name + '/width', 7.0))
+		self.figHeightPerRow = float(self.settings.value(self.name + '/row height', 0.2))
+		self.sortingField = str(self.settings.value(self.name + '/field', 'p-values'))
+		self.bShowBarPlot = bool(self.settings.value(self.name + '/sequences subplot', True))
+		self.bShowPValueLabels = bool(self.settings.value(self.name + '/p-value labels', True))
+		self.bShowCorrectedPvalues = bool(self.settings.value(self.name + '/show corrected p-values', True))
+		self.bCustomLimits = bool(self.settings.value(self.name + '/use custom limits', False))
+		self.minX = float(self.settings.value(self.name + '/minimum', 0.0))
+		self.maxX = float(self.settings.value(self.name + '/maximum', 1.0))
+		self.markerSize = int(self.settings.value(self.name + '/marker size', 30))
+		self.percentageOrSeqCount = str(self.settings.value(self.name + '/percentage or seq count', 'Proportion (%)'))
+		self.legendPos = int(self.settings.value(self.name + '/legend position', -1))
+
 
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -88,11 +88,11 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 		
 		features = statsResults.getColumn('Features')
 		if len(features) > 200:
-			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 			reply = QtGui.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(features)) + ' features. ' +
 																		'It may take several seconds to generate this plot. We recommend filtering your profile first. ' + 
 																		'Do you wish to continue?', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
-			QtGui.QApplication.instance().restoreOverrideCursor()
+			QtWidgets.QApplication.instance().restoreOverrideCursor()
 			if reply == QtGui.QMessageBox.No:
 				self.emptyAxis()	
 				return
@@ -150,11 +150,11 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 		if self.preferences['Truncate feature names']:
 			length = self.preferences['Length of truncated feature names']
 			
-			for i in xrange(0, len(features)):
+			for i in range(0, len(features)):
 				if len(features[i]) > length+3:
 					features[i] = features[i][0:length] + '...'
 								
-			for i in xrange(0, len(highlightedFeatures)):
+			for i in range(0, len(highlightedFeatures)):
 				if len(highlightedFeatures[i]) > length+3:
 					highlightedFeatures[i] = highlightedFeatures[i][0:length] + '...'
 				
@@ -162,7 +162,7 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 		dominateInSample2 = []
 		percentage1 = []
 		percentage2 = []
-		for i in xrange(0, len(effectSizes)):
+		for i in range(0, len(effectSizes)):
 			percentage1.append(float(seqs1[i])*100 / parentSeqs1[i])
 			percentage2.append(float(seqs2[i])*100 / parentSeqs2[i])
 			
@@ -197,10 +197,10 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 		self.imageWidth = self.figWidth
 		self.imageHeight = plotHeight	+ heightBottomLabels + heightTopLabels
 		if self.imageWidth > 256 or self.imageHeight > 256:
-				QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+				QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 				self.emptyAxis()	
 				reply = QtGui.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
-				QtGui.QApplication.instance().restoreOverrideCursor()
+				QtWidgets.QApplication.instance().restoreOverrideCursor()
 				return
 		
 		self.fig.set_size_inches(self.imageWidth, self.imageHeight)	
@@ -425,7 +425,7 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 			self.configDlg.ui.radioLegendPosNone.setChecked(True)
 			
 		if self.configDlg.exec_() == QtGui.QDialog.Accepted:
-			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
 			
 			self.sortingField = str(self.configDlg.ui.cboSortingField.currentText())
 			
@@ -471,10 +471,10 @@ class ExtendedErrorBar(AbstractSamplePlotPlugin):
 
 			self.plot(profile, statsResults)		
 			
-			QtGui.QApplication.instance().restoreOverrideCursor()	 
+			QtWidgets.QApplication.instance().restoreOverrideCursor()	 
 
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(ExtendedErrorBar)
 	testWindow.show()
 	sys.exit(app.exec_())

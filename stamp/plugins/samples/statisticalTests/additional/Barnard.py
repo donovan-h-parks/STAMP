@@ -40,10 +40,10 @@ class Barnard(AbstractSampleStatsTestPlugin):
 		
 		# determine tables more extreme than the observed data
 		extremeTables = []
-		for a in xrange(0, totalSeq1+1):
+		for a in range(0, totalSeq1+1):
 			p1 = float(a) / totalSeq1
 			
-			for b in xrange(0, totalSeq2+1):				
+			for b in range(0, totalSeq2+1):				
 				if (a == 0 and b == 0) or (a == totalSeq1 and b == totalSeq2):
 					# difference in proportions is zero so this is not an extreme table
 					# but will cause a division by zero exception
@@ -72,7 +72,7 @@ class Barnard(AbstractSampleStatsTestPlugin):
 		dPi = 0.5 / float(steps)
 		pi = 0.0
 		pValueTwoSided = 0
-		for dummy in xrange(0,steps):
+		for dummy in range(0,steps):
 			pi += dPi
 			
 			pValue = 0
@@ -93,5 +93,5 @@ class Barnard(AbstractSampleStatsTestPlugin):
 if __name__ == "__main__": 
 	barnard = Barnard()
 	pValueOne, pValueTwo = barnard.hypothesisTest(8, 3, 100, 100)
-	print pValueTwo
+	print(pValueTwo)
 

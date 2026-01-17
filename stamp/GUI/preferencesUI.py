@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -131,16 +131,16 @@ class Ui_preferencesDlg(object):
         QtCore.QMetaObject.connectSlotsByName(preferencesDlg)
 
     def retranslateUi(self, preferencesDlg):
-        preferencesDlg.setWindowTitle(QtGui.QApplication.translate("preferencesDlg", "Preferences", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("preferencesDlg", "Statistical tests", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("preferencesDlg", "Pseudocount for unobserved data:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("preferencesDlg", "Bootstrap/permutation test replicates", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("preferencesDlg", "Plots", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkTruncateFeatureNames.setText(QtGui.QApplication.translate("preferencesDlg", "Truncate feature names to length:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("preferencesDlg", "Axis colour:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("preferencesDlg", "All other samples colour:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("preferencesDlg", "Minimum reported p-value, 10^x, x =", None, QtGui.QApplication.UnicodeUTF8))
-        self.spinMinPvalue.setPrefix(QtGui.QApplication.translate("preferencesDlg", "-", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnOK.setText(QtGui.QApplication.translate("preferencesDlg", "OK", None, QtGui.QApplication.UnicodeUTF8))
+        preferencesDlg.setWindowTitle(QtWidgets.QApplication.translate("preferencesDlg", "Preferences", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("preferencesDlg", "Statistical tests", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("preferencesDlg", "Pseudocount for unobserved data:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtWidgets.QApplication.translate("preferencesDlg", "Bootstrap/permutation test replicates", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_2.setTitle(QtWidgets.QApplication.translate("preferencesDlg", "Plots", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkTruncateFeatureNames.setText(QtWidgets.QApplication.translate("preferencesDlg", "Truncate feature names to length:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtWidgets.QApplication.translate("preferencesDlg", "Axis colour:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtWidgets.QApplication.translate("preferencesDlg", "All other samples colour:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtWidgets.QApplication.translate("preferencesDlg", "Minimum reported p-value, 10^x, x =", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.spinMinPvalue.setPrefix(QtWidgets.QApplication.translate("preferencesDlg", "-", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnOK.setText(QtWidgets.QApplication.translate("preferencesDlg", "OK", None, QtWidgets.QApplication.UnicodeUTF8))
 
 import stamp.STAMP_rc

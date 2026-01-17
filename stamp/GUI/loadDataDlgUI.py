@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -65,8 +65,8 @@ class Ui_loadDataDlg(object):
         QtCore.QMetaObject.connectSlotsByName(loadDataDlg)
 
     def retranslateUi(self, loadDataDlg):
-        loadDataDlg.setWindowTitle(QtGui.QApplication.translate("loadDataDlg", "Load data", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("loadDataDlg", "Profile file:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("loadDataDlg", "Group metadata file (optional):", None, QtGui.QApplication.UnicodeUTF8))
+        loadDataDlg.setWindowTitle(QtWidgets.QApplication.translate("loadDataDlg", "Load data", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("loadDataDlg", "Profile file:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtWidgets.QApplication.translate("loadDataDlg", "Group metadata file (optional):", None, QtWidgets.QApplication.UnicodeUTF8))
 
 import stamp.STAMP_rc

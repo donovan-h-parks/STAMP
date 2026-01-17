@@ -18,10 +18,10 @@ propInSS = [0.1]       # proportion of sequences in subsystem (SS) of interest
 sampleSize1 = [1000]    # sample size for community 1
 sampleSize2 = [2000]    # sample size for community 2
 
-for sampleSizeIndex in xrange(0, len(sampleSize1)):
-  print 'Considering communities with a sample size of: ' + str(sampleSize1[sampleSizeIndex]) + ' and ' + str(sampleSize2[sampleSizeIndex])
+for sampleSizeIndex in range(0, len(sampleSize1)):
+  print('Considering communities with a sample size of: ' + str(sampleSize1[sampleSizeIndex]) + ' and ' + str(sampleSize2[sampleSizeIndex]))
   for prop in propInSS:
-    print '  Proportion of sequences in subsystem of interest: ' + str(prop)
+    print('  Proportion of sequences in subsystem of interest: ' + str(prop))
           
     totalSamples1 = sampleSize1[sampleSizeIndex]
     totalSamples2 = sampleSize2[sampleSizeIndex]
@@ -30,14 +30,14 @@ for sampleSizeIndex in xrange(0, len(sampleSize1)):
     gTestResults = []
     gTestYatesResults = []
     diffBetweenPropResults = []
-    for r in xrange(0, numReplicates):
+    for r in range(0, numReplicates):
       if r % 1000 == 0:
-        print r
+        print(r)
       # draw samples w/o replacement for community 1
       samplesInSS = popSize*prop
       samplesNotInSS = popSize - samplesInSS
       inSS1 = 0
-      for s in xrange(0, sampleSize1[sampleSizeIndex]):
+      for s in range(0, sampleSize1[sampleSizeIndex]):
         rnd = random.random()
         
         if rnd <= float(samplesInSS) / popSize:
@@ -50,7 +50,7 @@ for sampleSizeIndex in xrange(0, len(sampleSize1)):
       samplesInSS = popSize*prop
       samplesNotInSS = popSize - samplesInSS      
       inSS2 = 0
-      for s in xrange(0, sampleSize2[sampleSizeIndex]):
+      for s in range(0, sampleSize2[sampleSizeIndex]):
         rnd = random.random()
         
         if rnd <= float(samplesInSS) / popSize:
@@ -74,12 +74,12 @@ for sampleSizeIndex in xrange(0, len(sampleSize1)):
     bins = {}
     numBins = 20
     binSize = 1.0 / numBins
-    for i in xrange(0,numBins):
+    for i in range(0,numBins):
       bins[i] = []
-      for j in xrange(0, len(pValues)):
+      for j in range(0, len(pValues)):
         bins[i].append(0)
       
-    for i in xrange(0, len(pValues)):
+    for i in range(0, len(pValues)):
       for value in pValues[i]:
         binIndex = int(value / binSize)
         
@@ -107,12 +107,12 @@ for sampleSizeIndex in xrange(0, len(sampleSize1)):
     
     fout = open('alphaTest_' + str(prop) + '_' + str(sampleSize1[sampleSizeIndex]) +  '.csv' ,'w')
     fout.write('Bin,Fishers,G-test,G-test w/ Yates, Diff. b/w prop.\n')
-    for i in xrange(0,numBins):
+    for i in range(0,numBins):
       fout.write(str(binSize*0.5 + i*binSize))
-      for j in xrange(0, len(pValues)):
+      for j in range(0, len(pValues)):
         fout.write(',' + str(float(bins[i][j]) / len(pValues[j])))
       fout.write('\n')
     fout.close()
       
-print 'Done'
+print('Done')
       

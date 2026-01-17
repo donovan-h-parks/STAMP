@@ -21,12 +21,17 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
-from selectFeaturesUI import Ui_SelectFeatureDlg
+from PyQt5 import QtGui, QtCore, QtWidgets
+from PyQt5.QtWidgets import QWidget
 
-class SelectFeaturesDlg(QtGui.QDialog):
+from stamp.GUI.selectFeaturesUI import Ui_SelectFeatureDlg
+
+
+#from selectFeaturesUI import Ui_SelectFeatureDlg
+
+class SelectFeaturesDlg(QtWidgets.QDialog):
   def __init__(self, statsTestResults, parent=None):
-    QtGui.QWidget.__init__(self, parent)
+    QWidgets.QWidget.__init__(self, parent)
     
     # initialize GUI
     self.ui = Ui_SelectFeatureDlg()

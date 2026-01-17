@@ -22,14 +22,14 @@ def pca(data, algorithm='eig'):
 	"""
 	
 	if False:	#scaling is disabled
-		for i in xrange(0, len(data[0])):
+		for i in range(0, len(data[0])):
 			freqs = []
-			for j in xrange(0, len(data)):
+			for j in range(0, len(data)):
 				freqs.append(data[j][i])
 			meanFreq = numpy.mean(freqs)
 			sdFreq = numpy.std(freqs)
 			
-			for j in xrange(0, len(data)):
+			for j in range(0, len(data)):
 				data[j][i] -= meanFreq
 				data[j][i] /= sdFreq
 		
@@ -45,7 +45,7 @@ def pca(data, algorithm='eig'):
 		raise RuntimeError('Algorithm %s not known.'%algorithm)
 	
 	sumVariances = sum(variances)
-	for i in xrange(0, len(variances)):
+	for i in range(0, len(variances)):
 		variances[i] /= sumVariances
 	
 	return positions, variances 

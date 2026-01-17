@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -49,9 +49,9 @@ class Ui_CreateProfileCoMetDlg(object):
         QtCore.QMetaObject.connectSlotsByName(CreateProfileCoMetDlg)
 
     def retranslateUi(self, CreateProfileCoMetDlg):
-        CreateProfileCoMetDlg.setWindowTitle(QtGui.QApplication.translate("CreateProfileCoMetDlg", "Create profile", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnLoadProfiles.setText(QtGui.QApplication.translate("CreateProfileCoMetDlg", "Load profiles", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCreateProfile.setText(QtGui.QApplication.translate("CreateProfileCoMetDlg", "Create STAMP profile", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCancel.setText(QtGui.QApplication.translate("CreateProfileCoMetDlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
+        CreateProfileCoMetDlg.setWindowTitle(QtWidgets.QApplication.translate("CreateProfileCoMetDlg", "Create profile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnLoadProfiles.setText(QtWidgets.QApplication.translate("CreateProfileCoMetDlg", "Load profiles", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCreateProfile.setText(QtWidgets.QApplication.translate("CreateProfileCoMetDlg", "Create STAMP profile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCancel.setText(QtWidgets.QApplication.translate("CreateProfileCoMetDlg", "Cancel", None, QtWidgets.QApplication.UnicodeUTF8))
         self.lstSelectedProfiles.setSortingEnabled(True)
 

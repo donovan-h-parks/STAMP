@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -18,7 +18,7 @@ class Ui_CreateProfileMothurDlg(object):
     def setupUi(self, CreateProfileMothurDlg):
         CreateProfileMothurDlg.setObjectName(_fromUtf8("CreateProfileMothurDlg"))
         CreateProfileMothurDlg.resize(396, 144)
-        CreateProfileMothurDlg.setWindowTitle(QtGui.QApplication.translate("CreateProfileMothurDlg", "Create profile", None, QtGui.QApplication.UnicodeUTF8))
+        CreateProfileMothurDlg.setWindowTitle(QtWidgets.QApplication.translate("CreateProfileMothurDlg", "Create profile", None, QtWidgets.QApplication.UnicodeUTF8))
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(_fromUtf8(":/icons/icons/programIcon.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         CreateProfileMothurDlg.setWindowIcon(icon)
@@ -27,7 +27,7 @@ class Ui_CreateProfileMothurDlg(object):
         self.formLayout = QtGui.QFormLayout()
         self.formLayout.setObjectName(_fromUtf8("formLayout"))
         self.lblTaxonomyFile = QtGui.QLabel(CreateProfileMothurDlg)
-        self.lblTaxonomyFile.setText(QtGui.QApplication.translate("CreateProfileMothurDlg", "Taxonomy file:", None, QtGui.QApplication.UnicodeUTF8))
+        self.lblTaxonomyFile.setText(QtWidgets.QApplication.translate("CreateProfileMothurDlg", "Taxonomy file:", None, QtWidgets.QApplication.UnicodeUTF8))
         self.lblTaxonomyFile.setObjectName(_fromUtf8("lblTaxonomyFile"))
         self.formLayout.setWidget(0, QtGui.QFormLayout.LabelRole, self.lblTaxonomyFile)
         self.horizontalLayout = QtGui.QHBoxLayout()
@@ -36,12 +36,12 @@ class Ui_CreateProfileMothurDlg(object):
         self.txtTaxonomyFile.setObjectName(_fromUtf8("txtTaxonomyFile"))
         self.horizontalLayout.addWidget(self.txtTaxonomyFile)
         self.btnTaxonomyFile = QtGui.QPushButton(CreateProfileMothurDlg)
-        self.btnTaxonomyFile.setText(QtGui.QApplication.translate("CreateProfileMothurDlg", "Load", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnTaxonomyFile.setText(QtWidgets.QApplication.translate("CreateProfileMothurDlg", "Load", None, QtWidgets.QApplication.UnicodeUTF8))
         self.btnTaxonomyFile.setObjectName(_fromUtf8("btnTaxonomyFile"))
         self.horizontalLayout.addWidget(self.btnTaxonomyFile)
         self.formLayout.setLayout(0, QtGui.QFormLayout.FieldRole, self.horizontalLayout)
         self.label_2 = QtGui.QLabel(CreateProfileMothurDlg)
-        self.label_2.setText(QtGui.QApplication.translate("CreateProfileMothurDlg", "Groups file:", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtWidgets.QApplication.translate("CreateProfileMothurDlg", "Groups file:", None, QtWidgets.QApplication.UnicodeUTF8))
         self.label_2.setObjectName(_fromUtf8("label_2"))
         self.formLayout.setWidget(1, QtGui.QFormLayout.LabelRole, self.label_2)
         self.horizontalLayout_2 = QtGui.QHBoxLayout()
@@ -50,12 +50,12 @@ class Ui_CreateProfileMothurDlg(object):
         self.txtGroupsFile.setObjectName(_fromUtf8("txtGroupsFile"))
         self.horizontalLayout_2.addWidget(self.txtGroupsFile)
         self.btnGroupsFile = QtGui.QPushButton(CreateProfileMothurDlg)
-        self.btnGroupsFile.setText(QtGui.QApplication.translate("CreateProfileMothurDlg", "Load", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnGroupsFile.setText(QtWidgets.QApplication.translate("CreateProfileMothurDlg", "Load", None, QtWidgets.QApplication.UnicodeUTF8))
         self.btnGroupsFile.setObjectName(_fromUtf8("btnGroupsFile"))
         self.horizontalLayout_2.addWidget(self.btnGroupsFile)
         self.formLayout.setLayout(1, QtGui.QFormLayout.FieldRole, self.horizontalLayout_2)
         self.label_3 = QtGui.QLabel(CreateProfileMothurDlg)
-        self.label_3.setText(QtGui.QApplication.translate("CreateProfileMothurDlg", "Names file (optional):", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtWidgets.QApplication.translate("CreateProfileMothurDlg", "Names file (optional):", None, QtWidgets.QApplication.UnicodeUTF8))
         self.label_3.setObjectName(_fromUtf8("label_3"))
         self.formLayout.setWidget(2, QtGui.QFormLayout.LabelRole, self.label_3)
         self.horizontalLayout_3 = QtGui.QHBoxLayout()
@@ -64,18 +64,18 @@ class Ui_CreateProfileMothurDlg(object):
         self.txtNamesFile.setObjectName(_fromUtf8("txtNamesFile"))
         self.horizontalLayout_3.addWidget(self.txtNamesFile)
         self.btnNamesFile = QtGui.QPushButton(CreateProfileMothurDlg)
-        self.btnNamesFile.setText(QtGui.QApplication.translate("CreateProfileMothurDlg", "Load", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnNamesFile.setText(QtWidgets.QApplication.translate("CreateProfileMothurDlg", "Load", None, QtWidgets.QApplication.UnicodeUTF8))
         self.btnNamesFile.setObjectName(_fromUtf8("btnNamesFile"))
         self.horizontalLayout_3.addWidget(self.btnNamesFile)
         self.formLayout.setLayout(2, QtGui.QFormLayout.FieldRole, self.horizontalLayout_3)
         self.horizontalLayout_4 = QtGui.QHBoxLayout()
         self.horizontalLayout_4.setObjectName(_fromUtf8("horizontalLayout_4"))
         self.btnCreateProfile = QtGui.QPushButton(CreateProfileMothurDlg)
-        self.btnCreateProfile.setText(QtGui.QApplication.translate("CreateProfileMothurDlg", "Create STAMP profile", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnCreateProfile.setText(QtWidgets.QApplication.translate("CreateProfileMothurDlg", "Create STAMP profile", None, QtWidgets.QApplication.UnicodeUTF8))
         self.btnCreateProfile.setObjectName(_fromUtf8("btnCreateProfile"))
         self.horizontalLayout_4.addWidget(self.btnCreateProfile)
         self.btnCancel = QtGui.QPushButton(CreateProfileMothurDlg)
-        self.btnCancel.setText(QtGui.QApplication.translate("CreateProfileMothurDlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnCancel.setText(QtWidgets.QApplication.translate("CreateProfileMothurDlg", "Cancel", None, QtWidgets.QApplication.UnicodeUTF8))
         self.btnCancel.setDefault(True)
         self.btnCancel.setObjectName(_fromUtf8("btnCancel"))
         self.horizontalLayout_4.addWidget(self.btnCancel)

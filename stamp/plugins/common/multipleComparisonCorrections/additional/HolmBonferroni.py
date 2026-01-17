@@ -45,7 +45,7 @@ class HolmBonferroni(AbstractMultCompCorrection):
     
     # determine significant features
     modifier = len(pValues)
-    for i in xrange(0, len(indexedList)):
+    for i in range(0, len(indexedList)):
       index = indexedList[i][1]     
       if pValues[index] > alpha / modifier:
         nonSignIndex = i
@@ -54,7 +54,7 @@ class HolmBonferroni(AbstractMultCompCorrection):
       
     self.numSignFeatures = nonSignIndex
       
-    for i in xrange(nonSignIndex, len(indexedList)):
+    for i in range(nonSignIndex, len(indexedList)):
       index = indexedList[i][1] 
       pValues[index] = float('inf')
   

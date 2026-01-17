@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 class Ui_SelectFeatureDlg(object):
     def setupUi(self, SelectFeatureDlg):
@@ -97,12 +97,12 @@ class Ui_SelectFeatureDlg(object):
         QtCore.QMetaObject.connectSlotsByName(SelectFeatureDlg)
 
     def retranslateUi(self, SelectFeatureDlg):
-        SelectFeatureDlg.setWindowTitle(QtGui.QApplication.translate("SelectFeatureDlg", "Select features", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("SelectFeatureDlg", "Hierarchical level:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("SelectFeatureDlg", "Selected features:", None, QtGui.QApplication.UnicodeUTF8))
+        SelectFeatureDlg.setWindowTitle(QtWidgets.QApplication.translate("SelectFeatureDlg", "Select features", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtWidgets.QApplication.translate("SelectFeatureDlg", "Hierarchical level:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("SelectFeatureDlg", "Selected features:", None, QtWidgets.QApplication.UnicodeUTF8))
         self.lstSelectedFeatures.setSortingEnabled(True)
-        self.label_2.setText(QtGui.QApplication.translate("SelectFeatureDlg", "Filtered features:", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtWidgets.QApplication.translate("SelectFeatureDlg", "Filtered features:", None, QtWidgets.QApplication.UnicodeUTF8))
         self.lstFilteredFeatures.setSortingEnabled(True)
-        self.label_4.setText(QtGui.QApplication.translate("SelectFeatureDlg", "Number of selected features:", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtWidgets.QApplication.translate("SelectFeatureDlg", "Number of selected features:", None, QtWidgets.QApplication.UnicodeUTF8))
 
 import stamp.STAMP_rc

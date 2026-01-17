@@ -81,5 +81,5 @@ class GTest(AbstractSampleStatsTestPlugin):
 if __name__ == "__main__": 
 	gTest = GTest()
 	pValueOne, pValueTwo = gTest.hypothesisTest(10, 20, 60, 50)
-	print pValueOne
-	print pValueTwo
+	print(pValueOne)
+	print(pValueTwo)

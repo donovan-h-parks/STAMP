@@ -21,15 +21,15 @@
 import gzip
 from os.path import splitext
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore, QtWidgets
 from biom.parse import parse_biom_table
 
-from createProfileBiomUI import Ui_CreateProfileBiomDlg
+from stamp.GUI.createProfileBiomUI import Ui_CreateProfileBiomDlg
 from stamp.metagenomics.StringHelper import isNumber
 
-class CreateProfileBiomDlg(QtGui.QDialog):
+class CreateProfileBiomDlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None):
-		QtGui.QWidget.__init__(self, parent)
+		QWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_CreateProfileBiomDlg()

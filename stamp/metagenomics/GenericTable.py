@@ -19,7 +19,7 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtCore
+from PyQt5 import QtCore
 
 from stamp.metagenomics.TableHelper import SortTableStrCol
 from stamp.metagenomics.TableHelper import SortTableNumericStrCol

@@ -26,7 +26,7 @@ fin.close()
 totalSamples1 = 0
 totalSamples2 = 0
 featureDict = {}
-for i in xrange(1, len(data)):
+for i in range(1, len(data)):
   lineSplit = data[i].split(',')
   
   feature = lineSplit[2]
@@ -52,7 +52,7 @@ permutationDict = {}
 diffBetweenPropDict = {}
 bootstrapDict = {}
 for feature in featureDict:
-  print feature
+  print(feature)
   
   a = featureDict[feature][0]
   b = featureDict[feature][1]
@@ -117,9 +117,9 @@ for name in testNames:
 fout.write('\n')
 
 spearman = Spearman()
-for i in xrange(0, len(testDict)):
+for i in range(0, len(testDict)):
   fout.write(testNames[i])
-  for j in xrange(0, len(testDict)):
+  for j in range(0, len(testDict)):
     test1 = testDict[i]
     test2 = testDict[j]
     

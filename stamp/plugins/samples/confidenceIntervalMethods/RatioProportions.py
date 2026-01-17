@@ -65,6 +65,6 @@ class RatioProportions(AbstractSampleConfIntervMethod):
 if __name__ == "__main__": 
 		ratioProp = RatioProportions()
 		lowerCI, upperCI, effectSize = ratioProp.run(14, 17, 23, 19,0.05)
-		print lowerCI
-		print upperCI
-		print effectSize
+		print(lowerCI)
+		print(upperCI)
+		print(effectSize)

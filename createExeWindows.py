@@ -77,7 +77,7 @@ setup(
 					"unbuffered": True,
 					"optimize": 2,
 					"skip_archive": True,
-					"includes": ["sip", "PyQt4", "sqlite3", "FileDialog"],
+					"includes": ["sip", "PyQt5", "sqlite3", "FileDialog"],
 					"packages": ["matplotlib","pytz","scipy","mpl_toolkits", "pyparsing", "biom", "pyqi", "h5py", "six"],
 					"dll_excludes": ["libgdk_pixbuf-2.0-0.dll","libgdk-win32-2.0-0.dll", "libgobject-2.0-0.dll", "tcl84.dll", "tk84.dll"],
 				}

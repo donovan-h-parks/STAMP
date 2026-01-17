@@ -45,7 +45,7 @@ class Permutation(AbstractSampleStatsTestPlugin):
 			permutationDiffs = []
 			posSeq = seq1+seq2
 			negSeq = totalSeq1+totalSeq2-posSeq
-			for dummy in xrange(0, replicates):
+			for dummy in range(0, replicates):
 				c1 = hypergeometric(posSeq, negSeq, totalSeq1)         
 				c2 = posSeq - c1 
 					
@@ -79,5 +79,5 @@ class Permutation(AbstractSampleStatsTestPlugin):
 if __name__ == "__main__": 
 	permutation = Permutation()
 	pValueOneSided, pValueTwoSided = permutation.hypothesisTest(11, 11, 30, 60)
-	print pValueOneSided
-	print pValueTwoSided
+	print(pValueOneSided)
+	print(pValueTwoSided)

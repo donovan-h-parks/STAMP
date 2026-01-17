@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 class Ui_pValueHistogramDialog(object):
     def setupUi(self, pValueHistogramDialog):
@@ -192,23 +192,23 @@ class Ui_pValueHistogramDialog(object):
         QtCore.QMetaObject.connectSlotsByName(pValueHistogramDialog)
 
     def retranslateUi(self, pValueHistogramDialog):
-        pValueHistogramDialog.setWindowTitle(QtGui.QApplication.translate("pValueHistogramDialog", "p-value histogram", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFieldToPlot.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Field to plot:", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboFieldToPlot.setItemText(0, QtGui.QApplication.translate("pValueHistogramDialog", "p-values", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboFieldToPlot.setItemText(1, QtGui.QApplication.translate("pValueHistogramDialog", "p-values (corrected)", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("pValueHistogramDialog", "Main figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_4.setTitle(QtGui.QApplication.translate("pValueHistogramDialog", "Main histogram properties", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblBinWidthh.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Bin width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkLogScale.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Show y-axis as log scale", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_7.setTitle(QtGui.QApplication.translate("pValueHistogramDialog", "Inset figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowInset.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Show inset", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblInsetWidth.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Width (%):", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblInsetHeight.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Height (%)", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_8.setTitle(QtGui.QApplication.translate("pValueHistogramDialog", "Inset histogram properties", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblBinWidth.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Bin width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("pValueHistogramDialog", "x-axis limit:", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnXmax.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Max", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkInsetLogScale.setText(QtGui.QApplication.translate("pValueHistogramDialog", "Show y-axis as log scale", None, QtGui.QApplication.UnicodeUTF8))
+        pValueHistogramDialog.setWindowTitle(QtWidgets.QApplication.translate("pValueHistogramDialog", "p-value histogram", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFieldToPlot.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Field to plot:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboFieldToPlot.setItemText(0, QtWidgets.QApplication.translate("pValueHistogramDialog", "p-values", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboFieldToPlot.setItemText(1, QtWidgets.QApplication.translate("pValueHistogramDialog", "p-values (corrected)", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtWidgets.QApplication.translate("pValueHistogramDialog", "Main figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureWidth.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureHeight.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_4.setTitle(QtWidgets.QApplication.translate("pValueHistogramDialog", "Main histogram properties", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblBinWidthh.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Bin width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkLogScale.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Show y-axis as log scale", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_7.setTitle(QtWidgets.QApplication.translate("pValueHistogramDialog", "Inset figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowInset.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Show inset", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblInsetWidth.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Width (%):", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblInsetHeight.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Height (%)", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_8.setTitle(QtWidgets.QApplication.translate("pValueHistogramDialog", "Inset histogram properties", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblBinWidth.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Bin width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "x-axis limit:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnXmax.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Max", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkInsetLogScale.setText(QtWidgets.QApplication.translate("pValueHistogramDialog", "Show y-axis as log scale", None, QtWidgets.QApplication.UnicodeUTF8))
 

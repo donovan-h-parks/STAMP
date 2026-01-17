@@ -24,7 +24,7 @@
 import sys
 import math
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.samples.plots.configGUI.seqHistogramUI import Ui_SeqHistogramDialog
@@ -41,15 +41,15 @@ class SeqHistogram(AbstractSamplePlotPlugin):
 		self.type = 'Exploratory'
 		
 		self.settings = preferences['Settings']
-		self.figWidth = self.settings.value(self.name + '/width', 7.0).toDouble()[0]
-		self.figHeight = self.settings.value(self.name + '/height', 7.0).toDouble()[0]
-		self.bCustomBinWidth = self.settings.value(self.name + '/custom bin width', False).toBool()
-		self.binWidth = self.settings.value(self.name + '/bin width', 100.0).toDouble()[0]
-		self.yAxisLogScale = self.settings.value(self.name + '/log scale', False).toBool()
-		self.bCustomXaxis = self.settings.value(self.name + '/custom x-axis extents', False).toBool()
-		self.xLimitLeft = self.settings.value(self.name + '/min value', 0.0).toDouble()[0]
-		self.xLimitRight = self.settings.value(self.name + '/max value', 1.0).toDouble()[0]
-		self.legendPos = self.settings.value(self.name + '/legend position', 0).toInt()[0]
+		self.figWidth = float(self.settings.value(self.name + '/width', 7.0))
+		self.figHeight = float(self.settings.value(self.name + '/height', 7.0))
+		self.bCustomBinWidth = bool(self.settings.value(self.name + '/custom bin width', False))
+		self.binWidth = float(self.settings.value(self.name + '/bin width', 100.0))
+		self.yAxisLogScale = bool(self.settings.value(self.name + '/log scale', False))
+		self.bCustomXaxis = bool(self.settings.value(self.name + '/custom x-axis extents', False))
+		self.xLimitLeft = float(self.settings.value(self.name + '/min value', 0.0))
+		self.xLimitRight = float(self.settings.value(self.name + '/max value', 1.0))
+		self.legendPos = int(self.settings.value(self.name + '/legend position', 0))
 		
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -253,7 +253,7 @@ class SeqHistogram(AbstractSamplePlotPlugin):
 		self.configDlg.ui.spinXmax.setValue(max(max(seqs1), max(seqs2)))
 
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(SeqHistogram)
 	testWindow.show()
 	sys.exit(app.exec_())

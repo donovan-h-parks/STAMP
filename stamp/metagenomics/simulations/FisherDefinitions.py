@@ -15,7 +15,7 @@ def mean(x):
     return 0
     
   sum = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sum += x[i]
   return sum / len(x)
   
@@ -25,7 +25,7 @@ def stdDev(x):
     
   m = mean(x)
   sumsq = 0.0
-  for i in xrange(0, len(x)):
+  for i in range(0, len(x)):
     sumsq += (x[i] - m)*(x[i] - m)
   return math.sqrt(sumsq / len(x))
   
@@ -34,14 +34,14 @@ fout = open('FishersTest.txt','w')
 random.seed()
 
 for C1 in C1s:
-  print C1
+  print(C1)
   totalSamples1 = C1
   totalSamples2 = C1*2
 
   relativelErrors = {}
-  for a in xrange(0, maxX1):
-    print a
-    for b in xrange(a, maxX1):        
+  for a in range(0, maxX1):
+    print(a)
+    for b in range(a, maxX1):        
       # calculate p-values
       fishersOneSided, fishersTwoSided = fishers.hypothesisTest(a, b, totalSamples1, totalSamples2)
       hypergeometricOneSided, hypergeometricTwoSided = hypergeometric.hypothesisTest(a, b, totalSamples1, totalSamples2)

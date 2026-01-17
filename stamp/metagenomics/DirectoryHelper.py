@@ -19,13 +19,15 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-import imp, sys
 import os.path
+import sys
 
 def runningExecutable():
-	return (hasattr(sys, "frozen") or # new py2exe
-					 hasattr(sys, "importers") # old py2exe
-					 or imp.is_frozen("__main__")) # tools/freeze
+    """
+    Returns True if the script is running as a frozen executable
+    (e.g., created by PyInstaller or cx_Freeze).
+    """
+    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
 	
 def getMainDir():
 	if runningExecutable():	

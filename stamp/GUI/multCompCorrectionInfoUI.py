@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -32,6 +32,6 @@ class Ui_multCompCorrectionInfoDlg(object):
         QtCore.QMetaObject.connectSlotsByName(multCompCorrectionInfoDlg)
 
     def retranslateUi(self, multCompCorrectionInfoDlg):
-        multCompCorrectionInfoDlg.setWindowTitle(QtGui.QApplication.translate("multCompCorrectionInfoDlg", "Additional info", None, QtGui.QApplication.UnicodeUTF8))
+        multCompCorrectionInfoDlg.setWindowTitle(QtWidgets.QApplication.translate("multCompCorrectionInfoDlg", "Additional info", None, QtWidgets.QApplication.UnicodeUTF8))
 
 import stamp.STAMP_rc

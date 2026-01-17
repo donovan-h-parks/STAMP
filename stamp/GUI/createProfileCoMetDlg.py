@@ -21,17 +21,17 @@
 
 import string
 
-from PyQt4 import QtGui, QtCore
-from createProfileCoMetUI import Ui_CreateProfileCoMetDlg
+from PyQt5 import QtGui, QtCore, QtWidgets
+from stamp.GUI.createProfileCoMetUI import Ui_CreateProfileCoMetDlg
 
 class ProfileRow():
 	def __init__(self):
 		countData = []
 		hierarchy = []
 
-class CreateProfileCoMetDlg(QtGui.QDialog):
+class CreateProfileCoMetDlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None):
-		QtGui.QWidget.__init__(self, parent)
+		QWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_CreateProfileCoMetDlg()

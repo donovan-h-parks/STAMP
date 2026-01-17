@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtCore
+from PyQt5 import QtCore
 
 import os
 import sys
@@ -77,9 +77,10 @@ class PlotsManager:
 				exploratoryPlots.append(key)
 			else:
 				statisticalPlots.append(key)
-				
-		exploratoryPlots.sort(lambda a,b:cmp(a.upper(), b.upper()))
-		statisticalPlots.sort(lambda a,b:cmp(a.upper(), b.upper()))
+
+		exploratoryPlots.sort(key=lambda x: x.upper())
+		statisticalPlots.sort(key=lambda x: x.upper())
+
 			
 		for plotName in exploratoryPlots:
 			self.cboPlots.addItem(plotName)

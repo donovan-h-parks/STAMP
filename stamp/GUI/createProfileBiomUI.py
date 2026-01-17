@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -70,14 +70,14 @@ class Ui_CreateProfileBiomDlg(object):
         QtCore.QMetaObject.connectSlotsByName(CreateProfileBiomDlg)
 
     def retranslateUi(self, CreateProfileBiomDlg):
-        CreateProfileBiomDlg.setWindowTitle(QtGui.QApplication.translate("CreateProfileBiomDlg", "Create profile", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblTaxonomyFile.setText(QtGui.QApplication.translate("CreateProfileBiomDlg", "BIOM file:", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnBiomFile.setText(QtGui.QApplication.translate("CreateProfileBiomDlg", "Load", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("CreateProfileBiomDlg", "Metadata field:", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboMetadataField.setItemText(0, QtGui.QApplication.translate("CreateProfileBiomDlg", "<observation ids>", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboMetadataField.setItemText(1, QtGui.QApplication.translate("CreateProfileBiomDlg", "COG_Category (PICRUSt COG analysis)", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboMetadataField.setItemText(2, QtGui.QApplication.translate("CreateProfileBiomDlg", "KEGG_Pathways (PICRUSt KEGG analysis)", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboMetadataField.setItemText(3, QtGui.QApplication.translate("CreateProfileBiomDlg", "taxonomy (QIIME OTU table)", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCreateProfile.setText(QtGui.QApplication.translate("CreateProfileBiomDlg", "Create STAMP profile", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCancel.setText(QtGui.QApplication.translate("CreateProfileBiomDlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
+        CreateProfileBiomDlg.setWindowTitle(QtWidgets.QApplication.translate("CreateProfileBiomDlg", "Create profile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblTaxonomyFile.setText(QtWidgets.QApplication.translate("CreateProfileBiomDlg", "BIOM file:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnBiomFile.setText(QtWidgets.QApplication.translate("CreateProfileBiomDlg", "Load", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtWidgets.QApplication.translate("CreateProfileBiomDlg", "Metadata field:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboMetadataField.setItemText(0, QtWidgets.QApplication.translate("CreateProfileBiomDlg", "<observation ids>", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboMetadataField.setItemText(1, QtWidgets.QApplication.translate("CreateProfileBiomDlg", "COG_Category (PICRUSt COG analysis)", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboMetadataField.setItemText(2, QtWidgets.QApplication.translate("CreateProfileBiomDlg", "KEGG_Pathways (PICRUSt KEGG analysis)", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboMetadataField.setItemText(3, QtWidgets.QApplication.translate("CreateProfileBiomDlg", "taxonomy (QIIME OTU table)", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCreateProfile.setText(QtWidgets.QApplication.translate("CreateProfileBiomDlg", "Create STAMP profile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCancel.setText(QtWidgets.QApplication.translate("CreateProfileBiomDlg", "Cancel", None, QtWidgets.QApplication.UnicodeUTF8))
 

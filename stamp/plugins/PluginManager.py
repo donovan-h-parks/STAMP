@@ -61,8 +61,7 @@ class PluginManager:
 		return d
 	
 	def populateComboBox(self, d, comboBox, defaultPlugin):
-		keys = d.keys()
-		keys.sort(lambda x,y: cmp(x.lower(), y.lower()))
+		keys = sorted(d.keys(), key=lambda x: x.lower())
 		for key in keys:
 			comboBox.addItem(key)
 		comboBox.setCurrentIndex(comboBox.findText(defaultPlugin))

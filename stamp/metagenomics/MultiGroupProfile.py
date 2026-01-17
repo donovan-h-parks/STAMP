@@ -77,7 +77,7 @@ class MultiGroupProfile:
 				self.activeGroupNames.append(groupName)
 				self.activeSamplesInGroups.append(self.samplesInGroups[groupIndex])
 				
-				for _ in xrange(0, len(self.samplesInGroups[groupIndex])):
+				for _ in range(0, len(self.samplesInGroups[groupIndex])):
 					self.activeColumns.append(colIndex)
 					colIndex += 1
 					
@@ -85,7 +85,7 @@ class MultiGroupProfile:
 				colIndex += len(self.samplesInGroups[groupIndex])
 
 			if self.groupNames[groupIndex] != groupName:
-				print 'Error: order of group names is incorrect.'
+				print('Error: order of group names is incorrect.')
 				
 			groupIndex += 1
 
@@ -111,7 +111,7 @@ class MultiGroupProfile:
 		return self.profileDict[feature].hierarchy
 	
 	def getSampleGroup(self, sampleId):
-		for i in xrange(0, len(self.samplesInGroups)):
+		for i in range(0, len(self.samplesInGroups)):
 			if sampleId in self.samplesInGroups[i]:
 				return self.groupNames[i]
 			
@@ -122,9 +122,9 @@ class MultiGroupProfile:
 		
 		sampleData = []
 		index = 0
-		for i in xrange(0, len(self.samplesInGroups)):
+		for i in range(0, len(self.samplesInGroups)):
 			data = []
-			for _ in xrange(0, len(self.samplesInGroups[i])):
+			for _ in range(0, len(self.samplesInGroups[i])):
 				data.append(profile.featureCounts[index])
 				index += 1
 			sampleData.append(data)
@@ -136,9 +136,9 @@ class MultiGroupProfile:
 		
 		sampleData = []
 		index = 0
-		for i in xrange(0, len(self.activeSamplesInGroups)):
+		for i in range(0, len(self.activeSamplesInGroups)):
 			data = []
-			for _ in xrange(0, len(self.activeSamplesInGroups[i])):
+			for _ in range(0, len(self.activeSamplesInGroups[i])):
 				data.append(profile.featureCounts[self.activeColumns[index]])
 				index += 1
 			sampleData.append(data)
@@ -166,9 +166,9 @@ class MultiGroupProfile:
 		
 		sampleData = []
 		index = 0
-		for i in xrange(0, len(self.samplesInGroups)):
+		for i in range(0, len(self.samplesInGroups)):
 			data = []
-			for _ in xrange(0, len(self.samplesInGroups[i])):
+			for _ in range(0, len(self.samplesInGroups[i])):
 				data.append(profile.parentCounts[index])
 				index += 1
 			sampleData.append(data)
@@ -180,9 +180,9 @@ class MultiGroupProfile:
 		
 		sampleData = []
 		index = 0
-		for i in xrange(0, len(self.activeSamplesInGroups)):
+		for i in range(0, len(self.activeSamplesInGroups)):
 			data = []
-			for _ in xrange(0, len(self.activeSamplesInGroups[i])):
+			for _ in range(0, len(self.activeSamplesInGroups[i])):
 				data.append(profile.parentCounts[self.activeColumns[index]])
 				index += 1
 			sampleData.append(data)
@@ -194,9 +194,9 @@ class MultiGroupProfile:
 		
 		sampleData = []
 		index = 0
-		for i in xrange(0, len(self.samplesInGroups)):
+		for i in range(0, len(self.samplesInGroups)):
 			data = []
-			for _ in xrange(0, len(self.samplesInGroups[i])):
+			for _ in range(0, len(self.samplesInGroups[i])):
 				data.append(float(profile.featureCounts[index])*100 / profile.parentCounts[index])
 				index += 1
 			sampleData.append(data)
@@ -208,9 +208,9 @@ class MultiGroupProfile:
 
 		sampleData = []
 		index = 0
-		for i in xrange(0, len(self.activeSamplesInGroups)):
+		for i in range(0, len(self.activeSamplesInGroups)):
 			data = []
-			for _ in xrange(0, len(self.activeSamplesInGroups[i])):
+			for _ in range(0, len(self.activeSamplesInGroups[i])):
 				fc = float(profile.featureCounts[self.activeColumns[index]])
 				pc = profile.parentCounts[self.activeColumns[index]]
 				if pc > 0:
@@ -243,26 +243,26 @@ class MultiGroupProfile:
 		numSamples = len(self.profileDict[self.profileDict.keys()[0]].featureCounts)
 		
 		featureMatrix = []
-		for i in xrange(0, numSamples):
+		for i in range(0, numSamples):
 				featureMatrix.append([])
 
 		for feature in self.profileDict:
 			data = self.profileDict[feature]
 			
-			for i in xrange(0, numSamples):
+			for i in range(0, numSamples):
 				featureMatrix[i].append(float(data.featureCounts[i]) / data.parentCounts[i])
 
 		return np.array(featureMatrix)
 		
 	def getActiveFeatureMatrix(self):
 		featureMatrix = []
-		for i in xrange(0, len(self.activeColumns)):
+		for i in range(0, len(self.activeColumns)):
 				featureMatrix.append([])
 
 		for feature in self.profileDict:
 			data = self.profileDict[feature]
 			
-			for i in xrange(0, len(self.activeColumns)):
+			for i in range(0, len(self.activeColumns)):
 				fc = float(data.featureCounts[self.activeColumns[i]])
 				pc = data.parentCounts[self.activeColumns[i]]
 				if pc > 0:

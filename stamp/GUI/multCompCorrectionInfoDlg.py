@@ -4,12 +4,12 @@ Dialog box used to select features which should be ignored.
 @author: Donovan Parks
 '''
 
-from PyQt4 import QtGui, QtCore
-from multCompCorrectionInfoUI import Ui_multCompCorrectionInfoDlg
+from PyQt5 import QtGui, QtCore , QtWidgets
+from stamp.GUI.multCompCorrectionInfoUI import Ui_multCompCorrectionInfoDlg
 
-class MultCompCorrectionInfoDlg(QtGui.QDialog):
+class MultCompCorrectionInfoDlg(QtWidgets.QDialog):
   def __init__(self, parent=None, info=None):
-    QtGui.QWidget.__init__(self, parent)
+    QWidgets.QWidget.__init__(self, parent)
     
     # initialize GUI
     self.ui = Ui_multCompCorrectionInfoDlg()

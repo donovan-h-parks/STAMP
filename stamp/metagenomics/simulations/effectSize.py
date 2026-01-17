@@ -9,7 +9,7 @@ sampleSizes = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100
 fout = open('effectSizeTest.txt' ,'w')
 
 for sampleSize in sampleSizes:
-  print sampleSize
+  print(sampleSize)
   a = sampleSize / 2
   b = sampleSize / 2
   

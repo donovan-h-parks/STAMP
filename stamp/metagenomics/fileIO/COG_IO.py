@@ -74,12 +74,12 @@ class COG_IO():
     fout.write('COG classes' + '\t' + 'COG category names' + '\t' + 'COG category codes'
                 + '\t' + 'COG annotations' + '\t' + 'COG IDs')
     
-    for i in xrange(2,len(headers)):
+    for i in range(2,len(headers)):
       fout.write('\t' + headers[i])
     fout.write('\n')
     
     # write out each row
-    for i in xrange(1, len(inputData)):
+    for i in range(1, len(inputData)):
       line = inputData[i].strip()
       lineSplit = line.split('\t')
       cogId = lineSplit[0]
@@ -89,14 +89,14 @@ class COG_IO():
       if multiCogTreatment == 'Treat multi-code COGs as features':
         cogClass, cogCategoryName = funcDict.get(cogCode, [cogCode, cogCode])
         fout.write(cogClass + '\t' + cogCategoryName + '\t' + cogCode + '\t' + cogAnnotation + '\t' + cogId)
-        for j in xrange(2, len(lineSplit)):
+        for j in range(2, len(lineSplit)):
           fout.write('\t' + lineSplit[j])
         fout.write('\n')
       elif multiCogTreatment == 'Assign sequence to each COG code':
         for ch in cogCode:
           cogClass, cogCategoryName = funcDict.get(ch, [cogCode, cogCode])
           fout.write(cogClass + '\t' + cogCategoryName + '\t' + ch + '\t' + cogAnnotation + '\t' + cogId)
-          for j in xrange(2, len(lineSplit)):
+          for j in range(2, len(lineSplit)):
             fout.write('\t' + lineSplit[j])
           fout.write('\n')
         

@@ -23,7 +23,7 @@
 
 import sys
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 
 from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.samples.plots.configGUI.scatterPlotUI import Ui_ScatterPlotDialog
@@ -52,14 +52,15 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 		self.type = 'Exploratory'
 
 		self.settings = preferences['Settings']
-		self.figWidth = self.settings.value(self.name + '/width', 7.0).toDouble()[0]
-		self.figHeight = self.settings.value(self.name + '/height', 7.0).toDouble()[0]
-		self.bShowCIs = self.settings.value(self.name + '/show CIs', True).toBool()
-		self.numBins = self.settings.value(self.name + '/bins', 30).toInt()[0]
-		self.histogramSize = self.settings.value(self.name + '/bin size', 0.5).toDouble()[0]
-		self.bShowHistograms = self.settings.value(self.name + '/show histograms', True).toBool()
-		self.markerSize = self.settings.value(self.name + '/marker size', 20).toInt()[0]
-		self.bShowR2 = self.settings.value(self.name + '/show R2', True).toBool()
+		self.figWidth = float(self.settings.value(self.name + '/width', 7.0))
+		self.figHeight = float(self.settings.value(self.name + '/height', 7.0))
+		self.bShowCIs = bool(self.settings.value(self.name + '/show CIs', True))
+		self.numBins = int(self.settings.value(self.name + '/bins', 30))
+		self.histogramSize = float(self.settings.value(self.name + '/bin size', 0.5))
+		self.bShowHistograms = bool(self.settings.value(self.name + '/show histograms', True))
+		self.markerSize = int(self.settings.value(self.name + '/marker size', 20))
+		self.bShowR2 = bool(self.settings.value(self.name + '/show R2', True))
+
 		
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -77,11 +78,11 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 			return
 
 		if len(profile.profileDict) > 10000:
-			QtGui.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 			reply = QtGui.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(profile.profileDict)) + ' features. ' +
 																		'It may take several seconds to generate this plot. Exploring the data at a higher hierarchy level is recommended. ' + 
 																		'Do you wish to continue?', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
-			QtGui.QApplication.instance().restoreOverrideCursor()
+			QtWidgets.QApplication.instance().restoreOverrideCursor()
 			if reply == QtGui.QMessageBox.No:
 				self.emptyAxis()	
 				return
@@ -140,7 +141,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 		
 		# *** Handle mouse events
 		tooltips = []
-		for i in xrange(0, len(field1)):
+		for i in range(0, len(field1)):
 			tooltip = features[i] + '\n\n'
 			tooltip += 'Sequences in ' + profile.sampleNames[0] + ': ' + str(tables[i][1]) + '\n'
 			tooltip += 'Sequences in ' + profile.sampleNames[1] + ': ' + str(tables[i][2]) + '\n\n' 
@@ -176,7 +177,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 		highlightedField1 = []
 		highlightedField2 = []
 		highlighColours = []
-		for i in xrange(0, len(field1)):
+		for i in range(0, len(field1)):
 			if field1[i] > field2[i]:
 				colours.append(profile1Colour)
 			else:
@@ -196,7 +197,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 		if self.bShowCIs:
 			xlist = []
 			ylist = []
-			for i in xrange(0, len(field1)):
+			for i in range(0, len(field1)):
 				# horizontal CIs
 				xlist.append(confInter1[i][0])
 				xlist.append(confInter1[i][1])
@@ -364,7 +365,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 			self.plot(profile, statsResults)
 					
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(ScatterPlot)
 	testWindow.show()
 	sys.exit(app.exec_())

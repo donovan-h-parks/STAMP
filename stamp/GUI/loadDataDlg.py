@@ -21,12 +21,12 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
-from loadDataDlgUI import Ui_loadDataDlg
+from PyQt5 import QtGui, QtCore,QtWidgets
+from stamp.GUI.loadDataDlgUI import Ui_loadDataDlg
 
-class LoadDataDlg(QtGui.QDialog):
+class LoadDataDlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None, info=None):
-		QtGui.QWidget.__init__(self, parent)
+		QWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_loadDataDlg()

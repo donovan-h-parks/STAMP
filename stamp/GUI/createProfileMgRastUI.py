@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -42,10 +42,10 @@ class Ui_CreateProfileMgRastDlg(object):
         QtCore.QMetaObject.connectSlotsByName(CreateProfileMgRastDlg)
 
     def retranslateUi(self, CreateProfileMgRastDlg):
-        CreateProfileMgRastDlg.setWindowTitle(QtGui.QApplication.translate("CreateProfileMgRastDlg", "Create profile", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnLoadProfiles.setText(QtGui.QApplication.translate("CreateProfileMgRastDlg", "Load profile", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCustomizeHeadings.setText(QtGui.QApplication.translate("CreateProfileMgRastDlg", "Customize headings", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCreateProfile.setText(QtGui.QApplication.translate("CreateProfileMgRastDlg", "Create STAMP profile", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCancel.setText(QtGui.QApplication.translate("CreateProfileMgRastDlg", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
+        CreateProfileMgRastDlg.setWindowTitle(QtWidgets.QApplication.translate("CreateProfileMgRastDlg", "Create profile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnLoadProfiles.setText(QtWidgets.QApplication.translate("CreateProfileMgRastDlg", "Load profile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCustomizeHeadings.setText(QtWidgets.QApplication.translate("CreateProfileMgRastDlg", "Customize headings", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCreateProfile.setText(QtWidgets.QApplication.translate("CreateProfileMgRastDlg", "Create STAMP profile", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.btnCancel.setText(QtWidgets.QApplication.translate("CreateProfileMgRastDlg", "Cancel", None, QtWidgets.QApplication.UnicodeUTF8))
 
 import stamp.STAMP_rc

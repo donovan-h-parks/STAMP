@@ -21,12 +21,12 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt4 import QtGui, QtCore
-from customizeHeadingsUI import Ui_CreateProfileDlg
+from PyQt5 import QtGui, QtCore, QtWidgets
+from stamp.GUI.customizeHeadingsUI import Ui_CreateProfileDlg
 
-class CustomizeHeadingsDlg(QtGui.QDialog):
+class CustomizeHeadingsDlg(QtWidgets.QDialog):
   def __init__(self, parent=None):
-    QtGui.QWidget.__init__(self, parent)
+    QWidgets.QWidget.__init__(self, parent)
     
     # initialize GUI
     self.ui = Ui_CreateProfileDlg()

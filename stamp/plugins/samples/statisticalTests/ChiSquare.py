@@ -113,5 +113,5 @@ class ChiSquare(AbstractSampleStatsTestPlugin):
 if __name__ == "__main__": 
   chiSquare = ChiSquare()
   pValueOne, pValueTwo = chiSquare.hypothesisTest(10, 20, 60, 50)
-  print pValueOne
-  print pValueTwo
+  print(pValueOne)
+  print(pValueTwo)

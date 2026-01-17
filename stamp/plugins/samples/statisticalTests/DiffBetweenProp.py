@@ -100,5 +100,5 @@ class DiffBetweenProp(AbstractSampleStatsTestPlugin):
 if __name__ == "__main__": 
 	diffBetweenProp = DiffBetweenProp()
 	pValueOne, pValueTwo = diffBetweenProp.hypothesisTest(23, 10, 13221, 2317)
-	print pValueOne
-	print pValueTwo
+	print(pValueOne)
+	print(pValueTwo)

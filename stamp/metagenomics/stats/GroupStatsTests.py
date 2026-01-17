@@ -180,7 +180,7 @@ class GroupStatTestResults(object):
 		pValues = self.getColumn('pValues', False)
 		pValuesCorrected = multCompCorrection.correct(pValues, self.alpha)
 		
-		for i in xrange(0, len(self.data)):
+		for i in range(0, len(self.data)):
 			self.data[i][index] = pValuesCorrected[i]
 			
 		self.multCompCorrectionInfo = multCompCorrection.additionalInfo()
@@ -295,7 +295,7 @@ class GroupStatsTests(object):
 		self.results.profile = profile
 		
 		if progress == 'Verbose':
-			print '  Processing feature:'
+			print('  Processing feature:')
 		 
 		self.results.data = []
 		index = 0
@@ -314,7 +314,7 @@ class GroupStatsTests(object):
 			# process features one at a time
 			for feature in profile.getFeatures():
 				if progress == 'Verbose':
-					print '    ' + feature
+					print('    ' + feature)
 				elif progress != None:
 					if progress.wasCanceled():
 						self.results.data = []
@@ -334,7 +334,7 @@ class GroupStatsTests(object):
 				elif testType == 'Two-sided':
 					pValue = pValueTwoSided
 				else:
-					print 'Error: Unknown test type.'
+					print('Error: Unknown test type.')
 
 				# record results
 				seqsGroup1.append(seqGroup1)
@@ -356,7 +356,7 @@ class GroupStatsTests(object):
 			parentSeqsGroup1, parentSeqsGroup2= profile.getParentFeatureCountsAll()
 			pValuesOneSided, pValuesTwoSided, lowerCIs, upperCIs, effectSizes, notes = statTest.runAll(seqsGroup1, seqsGroup2, parentSeqsGroup1, parentSeqsGroup2, confIntervMethod, coverage, progress)
 			if progress == 'Verbose':
-				print '    Processing all features...'
+				print('    Processing all features...')
 			elif progress != None and progress.wasCanceled():
 				self.results.data = []
 				return
@@ -366,13 +366,13 @@ class GroupStatsTests(object):
 			elif testType == 'Two-sided':
 				pValues = pValuesTwoSided
 			else:
-				print 'Error: Unknown test type.'
+				print('Error: Unknown test type.')
 				
 		# record statistics
 		features = profile.getFeatures()
-		for i in xrange(0, len(features)):
+		for i in range(0, len(features)):
 			propGroup1 = []
-			for j in xrange(0, len(seqsGroup1[i])):
+			for j in range(0, len(seqsGroup1[i])):
 				sg1 = seqsGroup1[i][j]
 				psg1 = parentSeqsGroup1[i][j]
 				
@@ -382,7 +382,7 @@ class GroupStatsTests(object):
 					propGroup1.append( 0.0 )
 			
 			propGroup2 = []
-			for j in xrange(0, len(seqsGroup2[i])):
+			for j in range(0, len(seqsGroup2[i])):
 				sg2 = seqsGroup2[i][j]
 				psg2 = parentSeqsGroup2[i][j]
 				
@@ -396,7 +396,7 @@ class GroupStatsTests(object):
 							float(pValues[i]),float(pValues[i]),float(effectSizes[i]),
 							float(lowerCIs[i]),float(upperCIs[i]), notes[i]]
 							
-			for j in xrange(0, len(seqsGroup1[i])):
+			for j in range(0, len(seqsGroup1[i])):
 				row.append(seqsGroup1[i][j])
 				row.append(parentSeqsGroup1[i][j])
 				if parentSeqsGroup1[i][j] > 0:
@@ -404,7 +404,7 @@ class GroupStatsTests(object):
 				else:
 					row.append(0.0)
 				
-			for j in xrange(0, len(seqsGroup2[i])):
+			for j in range(0, len(seqsGroup2[i])):
 				row.append(seqsGroup2[i][j])
 				row.append(parentSeqsGroup2[i][j])
 				if parentSeqsGroup2[i][j] > 0:

@@ -52,5 +52,5 @@ class ANOVA(AbstractMultiGroupStatsTestPlugin):
 if __name__ == "__main__": 
 	anova = ANOVA()
 	pValueOne, pValueTwo = anova.hypothesisTest([[10, 20, 30], [20, 30, 40], [10, 30, 50, 70]])
-	print pValueOne
-	print pValueTwo
+	print(pValueOne)
+	print(pValueTwo)

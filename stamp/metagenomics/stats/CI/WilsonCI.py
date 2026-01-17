@@ -77,4 +77,4 @@ class WilsonCI():
 if __name__ == "__main__": 
 	wilsonCI = WilsonCI()
 	lowerCI, upperCI, p = wilsonCI.run(10,100, 0.95, zScore(0.95))
-	print lowerCI, upperCI, p
+	print(lowerCI, upperCI, p)

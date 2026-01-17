@@ -22,7 +22,7 @@
 #=======================================================================
 
 import math
-from PyQt4 import QtGui
+from PyQt5 import QtGui
 
 class PlotEventHandler:
 	def __init__(self, xData, yData, toolTips, xtol=None, ytol=None):
@@ -67,12 +67,12 @@ class PlotEventHandler:
 class MultiPlotEventHandler:
 	def __init__(self, xData, yData, axes, toolTips):
 		self.data = []
-		for i in xrange(0, len(xData)):
+		for i in range(0, len(xData)):
 			self.data.append(zip(xData[i], yData[i], toolTips))
 		
 		self.xtol = []
 		self.ytol = []
-		for i in xrange(0, len(xData)):
+		for i in range(0, len(xData)):
 			self.xtol.append((max(xData[i]) - min(xData[i])) / 50)
 			self.ytol.append((max(yData[i]) - min(yData[i])) / 50)
 			
@@ -87,7 +87,7 @@ class MultiPlotEventHandler:
 
 		toolTips = []
 		if event.xdata != None and event.ydata != None:
-			for i in xrange(0, len(self.data)):
+			for i in range(0, len(self.data)):
 				if event.inaxes == self.axes[i]:
 					for x,y,tip in self.data[i]:
 						if (clickX - self.xtol[i] < x < clickX + self.xtol[i]) and (clickY - self.ytol[i] < y < clickY + self.ytol[i]):

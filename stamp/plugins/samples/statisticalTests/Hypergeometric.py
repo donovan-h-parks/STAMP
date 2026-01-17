@@ -54,7 +54,7 @@ class Hypergeometric(AbstractSampleStatsTestPlugin):
 	
 	def hypergeometricCDF(self, a,b,c,d):
 		cdf = 0
-		for i in xrange(0, int(a)+1):
+		for i in range(0, int(a)+1):
 			cdf += self.hypergeometricPDF(i,b+(a-i),c+(a-i),d-(a-i))
 			
 		if cdf > 1.0:
@@ -88,19 +88,19 @@ if __name__ == "__main__":
 	preferences = {}
 	hypergeometric = Hypergeometric(preferences)
 	pValueOneSided, pValueTwoSided = hypergeometric.hypothesisTest(10, 30, 100, 700)
-	print pValueOneSided
-	print pValueTwoSided
+	print(pValueOneSided)
+	print(pValueTwoSided)
 	
 	fout = open('HypergeometricTiming.csv', 'w')
 	
 	import time
-	for a in xrange(100, 10001, 100):
-		print a
+	for a in range(100, 10001, 100):
+		print(a)
 		start = time.time()
-		for i in xrange(0, 10):
+		for i in range(0, 10):
 			pValueOne, pValueTwo = hypergeometric.hypothesisTest(a/10, a/10, 1000000, 1000000)
 		elapsed = (time.time() - start) / 10
 		fout.write(str(a) + ',' + str(elapsed) + '\n')
-		print elapsed
+		print(elapsed)
 		
 	fout.close()

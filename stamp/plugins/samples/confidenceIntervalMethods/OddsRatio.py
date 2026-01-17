@@ -76,6 +76,6 @@ class OddsRatio(AbstractSampleConfIntervMethod):
 if __name__ == "__main__": 
 	oddsRatio = OddsRatio()
 	lowerCI, upperCI, effectSize = oddsRatio.run(141,420,928+141,13525+420,0.05)
-	print lowerCI
-	print upperCI
-	print effectSize
+	print(lowerCI)
+	print(upperCI)
+	print(effectSize)

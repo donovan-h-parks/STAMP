@@ -24,7 +24,7 @@
 import sys
 import math
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 
 from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.multiGroups.plots.configGUI.pcaPlotUI import Ui_PcaPlotDialog
@@ -39,7 +39,8 @@ from matplotlib import collections
 
 from matplotlib.patches import Rectangle
 
-from matplotlib.mlab import PCA
+from sklearn.decomposition import PCA
+import numpy as np
 
 from numpy.linalg import LinAlgError
 
@@ -57,15 +58,16 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		self.bPlotFeaturesIndividually = False
 		
 		self.settings = preferences['Settings']
-		self.figWidth = self.settings.value('multiple group: ' + self.name + '/width', 7.0).toDouble()[0]
-		self.figHeight = self.settings.value('multiple group: ' + self.name + '/height', 6.0).toDouble()[0]
-		self.bFixedPixelsPerUnitDistance = self.settings.value('multiple group: ' + self.name + '/fixed pixels per unit distance', True).toBool()
-		self.markerSize = self.settings.value('multiple group: ' + self.name + '/marker size', 30).toInt()[0]
-		self.bRotateLabels = self.settings.value('multiple group: ' + self.name + '/rotate pc3 labels', True).toBool()
-		self.bShowPC1vsPC3 = self.settings.value('multiple group: ' + self.name + '/showPC1vsPC3', True).toBool()
-		self.bShowPC3vsPC2 = self.settings.value('multiple group: ' + self.name + '/showPC3vsPC2', True).toBool()
-		self.legendPos = self.settings.value('multiple group: ' + self.name + '/legend position', -1).toInt()[0]
-		self.bUniqueShapes = self.settings.value('multiple group: ' + self.name + '/unique shapes', True).toBool()
+		self.figWidth = float(self.settings.value('multiple group: ' + self.name + '/width', 7.0))
+		self.figHeight = float(self.settings.value('multiple group: ' + self.name + '/height', 6.0))
+		self.bFixedPixelsPerUnitDistance = bool(
+			self.settings.value('multiple group: ' + self.name + '/fixed pixels per unit distance', True))
+		self.markerSize = int(self.settings.value('multiple group: ' + self.name + '/marker size', 30))
+		self.bRotateLabels = bool(self.settings.value('multiple group: ' + self.name + '/rotate pc3 labels', True))
+		self.bShowPC1vsPC3 = bool(self.settings.value('multiple group: ' + self.name + '/showPC1vsPC3', True))
+		self.bShowPC3vsPC2 = bool(self.settings.value('multiple group: ' + self.name + '/showPC3vsPC2', True))
+		self.legendPos = int(self.settings.value('multiple group: ' + self.name + '/legend position', -1))
+		self.bUniqueShapes = bool(self.settings.value('multiple group: ' + self.name + '/unique shapes', True))
 		
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -257,8 +259,8 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 			markers = ['o', 'o', 'o', 'o', 'o', 'o', 'o', 'o']
 				
 		colours = []
-		for i in xrange(0, len(profile.activeSamplesInGroups)):
-			for j in xrange(0, len(profile.activeSamplesInGroups[i])):
+		for i in range(0, len(profile.activeSamplesInGroups)):
+			for j in range(0, len(profile.activeSamplesInGroups[i])):
 				colours.append(str(self.preferences['Group colours'][profile.activeGroupNames[i]].name()))
 
 		# scatter plots
@@ -266,7 +268,7 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		
 		start = 0
 		end = 0
-		for i in xrange(0, len(profile.activeSamplesInGroups)):
+		for i in range(0, len(profile.activeSamplesInGroups)):
 			samplesInGroup = len(profile.activeSamplesInGroups[i])
 			end = start + samplesInGroup
 			try:
@@ -291,7 +293,7 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		if (bPlot2D == False) and self.bShowPC3vsPC2:
 			start = 0
 			end = 0
-			for i in xrange(0, len(profile.activeSamplesInGroups)):
+			for i in range(0, len(profile.activeSamplesInGroups)):
 				samplesInGroup = len(profile.activeSamplesInGroups[i])
 				end = start + samplesInGroup
 				try:
@@ -319,7 +321,7 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		if (bPlot2D == False) and self.bShowPC1vsPC3:
 			start = 0
 			end = 0
-			for i in xrange(0, len(profile.activeSamplesInGroups)):
+			for i in range(0, len(profile.activeSamplesInGroups)):
 				samplesInGroup = len(profile.activeSamplesInGroups[i])
 				end = start + samplesInGroup
 				try:
@@ -377,8 +379,8 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 
 		# *** Handle mouse events
 		tooltips = []
-		for i in xrange(0, len(profile.activeSamplesInGroups)):
-			for j in xrange(0, len(profile.activeSamplesInGroups[i])):
+		for i in range(0, len(profile.activeSamplesInGroups)):
+			for j in range(0, len(profile.activeSamplesInGroups[i])):
 				tooltip = profile.activeGroupNames[i] + ': ' + profile.activeSamplesInGroups[i][j]
 				tooltips.append(tooltip)
 			
@@ -389,7 +391,7 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		if self.legendPos != -1:
 			legendItems = []
 			groupNames = []
-			for i in xrange(0, len(profile.activeSamplesInGroups)):
+			for i in range(0, len(profile.activeSamplesInGroups)):
 				legendItem = Rectangle((0, 0), 1, 1, fc=str(self.preferences['Group colours'][profile.activeGroupNames[i]].name()))
 				legendItems.append(legendItem)
 				groupNames.append(profile.activeGroupNames[i])
@@ -478,7 +480,7 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 			self.plot(profile, statsResults)
 					
 if __name__ == "__main__": 
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(ProfileScatterPlot)
 	testWindow.show()
 	sys.exit(app.exec_())

@@ -208,7 +208,7 @@ class MultiGroupStatTestResults(object):
 		pValues = self.getColumn('pValues', False)
 		pValuesCorrected = multCompCorrection.correct(pValues, 0.05)
 		
-		for i in xrange(0, len(self.data)):
+		for i in range(0, len(self.data)):
 			self.data[i][index] = pValuesCorrected[i]
 			
 		self.multCompCorrectionInfo = multCompCorrection.additionalInfo()
@@ -264,12 +264,12 @@ class MultiGroupStatsTests(object):
 		self.results.profile = profile
 		
 		if progress == 'Verbose':
-			print '  Processing feature:'
+			print('  Processing feature:')
 		 
 		index = 0
 		for feature in profile.getFeatures():
 			if progress == 'Verbose':
-					print '    ' + feature
+					print('    ' + feature)
 			elif progress != None:
 				if progress.wasCanceled():
 					self.results.data = []
@@ -286,9 +286,9 @@ class MultiGroupStatsTests(object):
  
 			row = [feature, float(pValue), float(pValue), effectSize, note]
 			
-			for i in xrange(0, len(seqCount)):
+			for i in range(0, len(seqCount)):
 				propGroup = []
-				for j in xrange(0, len(seqCount[i])):
+				for j in range(0, len(seqCount[i])):
 					sc = seqCount[i][j]
 					pc = parentCount[i][j]
 					if pc > 0:
@@ -299,8 +299,8 @@ class MultiGroupStatsTests(object):
 				row.append(float(mean(propGroup)))
 				row.append(float(std(propGroup)))
 			
-			for i in xrange(0, len(seqCount)):
-				for j in xrange(0, len(seqCount[i])):
+			for i in range(0, len(seqCount)):
+				for j in range(0, len(seqCount[i])):
 					sc = seqCount[i][j]
 					pc = parentCount[i][j]
 					row.append(sc)
@@ -313,7 +313,7 @@ class MultiGroupStatsTests(object):
 			self.results.data.append(row)
 
 		headingsSampleStats = []
-		for i in xrange(0, len(profile.activeSamplesInGroups)):
+		for i in range(0, len(profile.activeSamplesInGroups)):
 			for sampleName in profile.activeSamplesInGroups[i]:
 				headingsSampleStats.append(sampleName)
 				headingsSampleStats.append(sampleName + ': parent seq. count')

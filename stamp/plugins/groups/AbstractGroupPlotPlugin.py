@@ -23,9 +23,10 @@
 
 import time
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore, QtWidgets
 
-from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 import matplotlib.transforms as mtransforms
 
@@ -44,8 +45,8 @@ class AbstractGroupPlotPlugin(FigureCanvas):
 		
 		self.setParent(parent)
 		FigureCanvas.setSizePolicy(self,
-														 QtGui.QSizePolicy.Fixed,
-														 QtGui.QSizePolicy.Fixed)
+														 QtWidgets.QSizePolicy.Fixed,
+														 QtWidgets.QSizePolicy.Fixed)
 		FigureCanvas.updateGeometry(self)
 		
 		self.cid = None
@@ -158,7 +159,7 @@ class AbstractGroupPlotPlugin(FigureCanvas):
 		emptyAxis.set_xticks([])
 		emptyAxis.set_title(title)
 		
-		for loc, spine in emptyAxis.spines.iteritems():
+		for loc, spine in emptyAxis.spines.items():
 			if loc in ['right','top']:
 					spine.set_color('none') 
 		
@@ -182,9 +183,9 @@ class AbstractGroupPlotPlugin(FigureCanvas):
 				
 		return formattedLabels
 	
-class ConfigureDialog(QtGui.QDialog):
+class ConfigureDialog(QtWidgets.QDialog):
 	def __init__(self, configDialogUI, parent=None):
-		QtGui.QWidget.__init__(self, parent)
+		QtWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = configDialogUI()
@@ -197,7 +198,7 @@ class ConfigureDialog(QtGui.QDialog):
 		size =	self.geometry()
 		self.move((screen.width()-size.width())/2, (screen.height()-size.height())/2)
 	
-class TestWindow(QtGui.QMainWindow):
+class TestWindow(QtWidgets.QMainWindow):
 	'''
 	Simple Qt window for testing plots.
 	'''
@@ -212,7 +213,7 @@ class TestWindow(QtGui.QMainWindow):
 		self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
 		self.setWindowTitle("Test Window")
 		
-		self.main_widget = QtGui.QWidget(self)
+		self.main_widget = QWidgets.QWidget(self)
 		
 		layout = QtGui.QVBoxLayout(self.main_widget)
 		testPlot = PlotClass(self.main_widget)

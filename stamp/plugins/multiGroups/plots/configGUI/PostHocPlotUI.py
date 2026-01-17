@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -193,25 +193,25 @@ class Ui_PostHocPlotDialog(object):
         QtCore.QMetaObject.connectSlotsByName(PostHocPlotDialog)
 
     def retranslateUi(self, PostHocPlotDialog):
-        PostHocPlotDialog.setWindowTitle(QtGui.QApplication.translate("PostHocPlotDialog", "Post-hoc plot", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_2.setTitle(QtGui.QApplication.translate("PostHocPlotDialog", "Sorting", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Field:", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSortingField.setItemText(0, QtGui.QApplication.translate("PostHocPlotDialog", "p-values", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSortingField.setItemText(1, QtGui.QApplication.translate("PostHocPlotDialog", "Effect sizes", None, QtGui.QApplication.UnicodeUTF8))
-        self.cboSortingField.setItemText(2, QtGui.QApplication.translate("PostHocPlotDialog", "Group labels", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_3.setTitle(QtGui.QApplication.translate("PostHocPlotDialog", "Figure size", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureWidth.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Width:", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblFigureHeight.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Row height:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_5.setTitle(QtGui.QApplication.translate("PostHocPlotDialog", "Error bar x-axis limits", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkCustomLimits.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Use custom limits", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Minimum:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Maximum:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox.setTitle(QtGui.QApplication.translate("PostHocPlotDialog", "Figure elements", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowBarPlot.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Show bar subplot", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkShowStdDev.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Show std. dev. on bar subplot", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("PostHocPlotDialog", "End cap size:", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkPValueLabels.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Show p-value labels", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Marker size:", None, QtGui.QApplication.UnicodeUTF8))
-        self.groupBox_4.setTitle(QtGui.QApplication.translate("PostHocPlotDialog", "Filter", None, QtGui.QApplication.UnicodeUTF8))
-        self.chkFilterPvalue.setText(QtGui.QApplication.translate("PostHocPlotDialog", "Filter rows above norminal level", None, QtGui.QApplication.UnicodeUTF8))
+        PostHocPlotDialog.setWindowTitle(QtWidgets.QApplication.translate("PostHocPlotDialog", "Post-hoc plot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_2.setTitle(QtWidgets.QApplication.translate("PostHocPlotDialog", "Sorting", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Field:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSortingField.setItemText(0, QtWidgets.QApplication.translate("PostHocPlotDialog", "p-values", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSortingField.setItemText(1, QtWidgets.QApplication.translate("PostHocPlotDialog", "Effect sizes", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.cboSortingField.setItemText(2, QtWidgets.QApplication.translate("PostHocPlotDialog", "Group labels", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtWidgets.QApplication.translate("PostHocPlotDialog", "Figure size", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureWidth.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Width:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.lblFigureHeight.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Row height:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_5.setTitle(QtWidgets.QApplication.translate("PostHocPlotDialog", "Error bar x-axis limits", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkCustomLimits.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Use custom limits", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Minimum:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Maximum:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("PostHocPlotDialog", "Figure elements", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowBarPlot.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Show bar subplot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkShowStdDev.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Show std. dev. on bar subplot", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "End cap size:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkPValueLabels.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Show p-value labels", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Marker size:", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.groupBox_4.setTitle(QtWidgets.QApplication.translate("PostHocPlotDialog", "Filter", None, QtWidgets.QApplication.UnicodeUTF8))
+        self.chkFilterPvalue.setText(QtWidgets.QApplication.translate("PostHocPlotDialog", "Filter rows above norminal level", None, QtWidgets.QApplication.UnicodeUTF8))
 
