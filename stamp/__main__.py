@@ -35,13 +35,23 @@ def main():
 
     # 1. Initialize the real Preferences dictionary
     # STAMP.py expects certain keys to exist right away (like colors)
+    # 2. Initialize the preferences dictionary with default values
+    # This prevents the KeyErrors you were seeing in STAMP.py
     preferences = {
-        'Sample 1 colour': QtGui.QColor(255, 0, 0),  # Red
-        'Sample 2 colour': QtGui.QColor(0, 0, 255),  # Blue
-        'All other samples colour': QtGui.QColor(200, 200, 200),  # Gray
-        'Settings': QtCore.QSettings("BeikoLab", "STAMP"),
+        'Pseudocount': 1.0,
+        'Replicates': 1000,
+        'Truncate feature names': True,
+        'Length of truncated feature names': 30,
+        'Minimum reported p-value exponent': 15,
+        'Axes colour': QtGui.QColor(0, 0, 0),
+        'All other samples colour': QtGui.QColor(200, 200, 200),
+        'Sample 1 colour': QtGui.QColor(0, 0, 255),  # Default Blue
+        'Sample 2 colour': QtGui.QColor(255, 0, 0),  # Default Red
         'Group colours': {},
+        'Selected group feature': '',
+        'Selected multiple group feature': '' # Prevents your recent KeyError
     }
+
 
     # preferences = {}
     #

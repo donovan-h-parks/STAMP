@@ -49,10 +49,16 @@ class MetadataTableDlg(QtWidgets.QDockWidget):
 		self.table = ''
 		
 		self.metadata = None
-		
+
 	def checkAll(self):
+		# rowCount() will be 0 if no data is loaded, safely skipping the loop
 		for r in range(0, self.ui.tableMetadata.rowCount()):
-			self.ui.tableMetadata.item(r,0).setCheckState(QtCore.Qt.Checked)
+			item = self.ui.tableMetadata.item(r, 0)
+
+			# This is the crucial safety check for Python 3
+			if item is not None:
+				item.setCheckState(QtCore.Qt.Checked)
+
 		self.updateActiveSamples()
 			
 	def uncheckAll(self):
@@ -128,12 +134,16 @@ class MetadataTableDlg(QtWidgets.QDockWidget):
 	def updateActiveSamples(self):
 		activeSamples = []
 		for r in range(0, self.ui.tableMetadata.rowCount()):
-			if self.ui.tableMetadata.item(r,0).checkState() == QtCore.Qt.Checked:
-				activeSamples.append(str(self.ui.tableMetadata.item(r,0).text()))
-				
-		self.metadata.activeSamples = activeSamples
-		
-		self.emit(QtCore.SIGNAL('activeSamplesChanged()'))
+			item = self.ui.tableMetadata.item(r, 0)
+
+			# Check if item exists before asking for its checkState
+			if item is not None and item.checkState() == QtCore.Qt.Checked:
+				activeSamples.append(str(item.text()))
+
+		# Only update if metadata object actually exists
+		if self.metadata is not None:
+			self.metadata.activeSamples = activeSamples
+			self.activeSamplesChanged.emit()
 
 	def setTable(self, metadata):
 		if metadata != None:
