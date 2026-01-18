@@ -77,9 +77,11 @@ from numpy import seterr
 
 class StampApp(QtWidgets.QMainWindow):
 	def __init__(self, preferences, parent=None):
+		print("DEBUG: STAMP Init started")
 		QtWidgets.QWidget.__init__(self, parent)
 
-		# setup default plot settings
+		# 1. Check if Matplotlib is causing a hang
+		print("DEBUG: Setting up Matplotlib")
 		mpl.rcParams['font.size'] = 8
 		mpl.rcParams['axes.titlesize'] = 8
 		mpl.rcParams['axes.labelsize'] = 8
@@ -87,18 +89,26 @@ class StampApp(QtWidgets.QMainWindow):
 		mpl.rcParams['ytick.labelsize'] = 8
 		mpl.rcParams['legend.fontsize'] = 8
 
-		# setup preferences and settings
+		# 2. Check Preferences
+		print("DEBUG: Setting up Settings")
 		self.preferences = preferences
 		self.settings = QtCore.QSettings("BeikoLab", "STAMP")
 		self.preferences['Settings'] = self.settings
 
-		# icons
-		self.refreshIcon = QtGui.QIcon()
-		self.refreshIcon.addPixmap(QtGui.QPixmap(":/icons/icons/refresh.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+		# 3. Check Icons (Common failure point)
+		print("DEBUG: Loading Icons")
+		try:
+			self.refreshIcon = QtGui.QIcon()
+			self.refreshIcon.addPixmap(QtGui.QPixmap(":/icons/icons/refresh.png"),
+									   QtGui.QIcon.Normal, QtGui.QIcon.Off)
+		except Exception as e:
+			print(f"DEBUG: Icon loading failed: {e}")
 
-		# initialize GUI
+		# 4. The big one: UI Initialization
+		print("DEBUG: Starting Ui_MainWindow setup")
 		self.ui = Ui_MainWindow()
 		self.ui.setupUi(self)
+		print("DEBUG: STAMP Init finished successfully")
 
 		# setup status bar
 		self.lblStatusBar = QtWidgets.QLabel()
@@ -202,8 +212,8 @@ class StampApp(QtWidgets.QMainWindow):
 			self.restoreState(state)
 
 		geometry = windowSettings.value("MainWindow/Geometry")
-		if geometry is not None:
-			bRestoredState = self.restoreGeometry(geometry)
+		# if geometry is not None:
+		# 	bRestoredState = self.restoreGeometry(geometry)
 
 		# If no geometry was saved (first run), set a default size
 		if not bRestoredState:
@@ -604,7 +614,7 @@ class StampApp(QtWidgets.QMainWindow):
 		preferencesDlg.setAxesButtonColour(self.preferences['Axes colour'])
 		preferencesDlg.setAllOtherSamplesButtonColour(self.preferences['All other samples colour'])
 
-		if preferencesDlg.exec_() == QtGui.QDialog.Accepted:
+		if preferencesDlg.exec_() == QtWidgets.QDialog.Accepted:
 			self.preferences['Pseudocount'] = preferencesDlg.ui.spinPseudoCount.value()
 			self.preferences['Replicates'] = preferencesDlg.ui.spinReplicates.value()
 			self.preferences['Truncate feature names'] = preferencesDlg.ui.chkTruncateFeatureNames.isChecked()
@@ -750,13 +760,16 @@ class StampApp(QtWidgets.QMainWindow):
 		createProfileBiomDlg = CreateProfileBiomDlg(self.preferences, self)
 		createProfileBiomDlg.exec_()
 
+
 	def loadProfile(self):
 		loadDataDlg = LoadDataDlg(self.preferences, self)
-		if loadDataDlg.exec_() == QtGui.QDialog.Accepted:
+		if loadDataDlg.exec_() == QtWidgets.QDialog.Accepted:
 			profileFile = loadDataDlg.getProfileFile()
-			if profileFile == '':
+			if not profileFile:
 				return
-			self.preferences['Last directory'] = profileFile[0:profileFile.lastIndexOf('/')]
+
+			# 1. Python 3 strings don't have lastIndexOf. Use os.path.dirname.
+			self.preferences['Last directory'] = os.path.dirname(profileFile)
 
 			metadataFile = loadDataDlg.getMetadataFile()
 
@@ -765,23 +778,28 @@ class StampApp(QtWidgets.QMainWindow):
 				stampIO = StampIO(self.preferences)
 				self.profileTree, errMsg = stampIO.read(profileFile)
 
-				if errMsg != None:
-					QtGui.QMessageBox.information(self, 'Error reading profile file', errMsg, QtGui.QMessageBox.Warning)
+				if errMsg is not None:
+					QtWidgets.QMessageBox.information(self, 'Error reading profile file', errMsg,
+													  QtWidgets.QMessageBox.Warning)
 					return
-			except:
-				QtGui.QMessageBox.information(self, 'Error reading profile file', 'Unknown parsing error.', QtGui.QMessageBox.Warning)
+
+			# 2. In Python 3, use 'except Exception as e' for better debugging
+			except Exception as e:
+				# Use the 'warning' method instead of 'information' to get the icon correctly
+				QtWidgets.QMessageBox.warning(self, 'Error reading profile file', f'Unknown parsing error: {str(e)}')
 				return
 
 			self.metadata = None
-			if metadataFile != '':
+			if metadataFile:
 				try:
 					metadataIO = MetadataIO(self.preferences)
 					self.metadata, warningMsg = metadataIO.read(metadataFile, self.profileTree)
 
-					if warningMsg != None:
-						QtGui.QMessageBox.information(self, 'Metadata warnings', warningMsg)
-				except:
-					QtGui.QMessageBox.information(self, 'Error reading metadata file', 'Unknown parsing error.', QtGui.QMessageBox.Warning)
+					if warningMsg is not None:
+						QtWidgets.QMessageBox.information(self, 'Metadata warnings', warningMsg)
+				except Exception as e:
+					QtWidgets.QMessageBox.information(self, 'Error reading metadata file',
+													  f'Unknown parsing error: {str(e)}', QtWidgets.QMessageBox.Warning)
 					return
 
 			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
@@ -792,17 +810,19 @@ class StampApp(QtWidgets.QMainWindow):
 			# populate hierarchy combo boxes
 			self.ui.cboParentalLevel.clear()
 			self.ui.cboParentalLevel.addItem('Entire sample')
+
+			# 3. Python 3: ensure hierarchyHeadings is a list/slice we can iterate over
 			for header in self.profileTree.hierarchyHeadings[0:-1]:
-				self.ui.cboParentalLevel.addItem(header)
+				self.ui.cboParentalLevel.addItem(str(header))
 			self.ui.cboParentalLevel.setCurrentIndex(0)
 
 			self.ui.cboProfileLevel.clear()
 			for header in self.profileTree.hierarchyHeadings:
-				self.ui.cboProfileLevel.addItem(header)
+				self.ui.cboProfileLevel.addItem(str(header))
 			self.ui.cboProfileLevel.setCurrentIndex(0)
 
 			# setup group legend
-			if self.metadata != None and len(self.metadata.getFeatures()) != 0:
+			if self.metadata is not None and len(self.metadata.getFeatures()) != 0:
 				self.groupLegendDlg.initLegend(self.profileTree, self.metadata, self.metadata.getFeatures()[0])
 				self.preferences['Group colours'] = self.groupLegendDlg.groupColourDict
 
@@ -811,14 +831,16 @@ class StampApp(QtWidgets.QMainWindow):
 
 			# indicate the hierarchical level of interest has changed
 			bGroupLegendVisibility = self.groupLegendDlg.isVisible()
-			if platform.system() != 'Windows' and bGroupLegendVisibility:
-				self.groupLegendDlg.setVisible(False)  # HACK: OS X crashes if this dialog is open when loading data for the first time!
+
+			# 4. Platform check: Python 3 uses 'Darwin' for macOS
+			if platform.system() == 'Darwin' and bGroupLegendVisibility:
+				self.groupLegendDlg.setVisible(False)
 
 			self.multiGroupHierarchicalLevelsChanged()
 			self.groupHierarchicalLevelsChanged()
 			self.sampleHierarchicalLevelsChanged()
 
-			if platform.system() != 'Windows' and bGroupLegendVisibility:
+			if platform.system() == 'Darwin' and bGroupLegendVisibility:
 				self.groupLegendDlg.setVisible(True)
 
 			# update tables
@@ -827,7 +849,6 @@ class StampApp(QtWidgets.QMainWindow):
 			self.metadataDlg.setTable(self.metadata)
 
 			QtWidgets.QApplication.instance().restoreOverrideCursor()
-
 	def populateGroupComboBoxes(self):
 		self.ui.cboGroup1.clear()
 		self.ui.cboGroup2.clear()
@@ -843,7 +864,7 @@ class StampApp(QtWidgets.QMainWindow):
 		parentDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboParentalLevel.currentText()))
 		profileDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboProfileLevel.currentText()))
 		if parentDepth >= profileDepth:
-			QtGui.QMessageBox.information(self, 'Invalid profile', 'The parent level must be higher in the hierarchy than the profile level.', QtGui.QMessageBox.Warning)
+			QtWidgets.QMessageBox.information(self, 'Invalid profile', 'The parent level must be higher in the hierarchy than the profile level.', QtWidgets.QMessageBox.Warning)
 			self.ui.cboParentalLevel.setCurrentIndex(0)
 
 		self.sampleHierarchicalLevelsChanged()
@@ -855,7 +876,7 @@ class StampApp(QtWidgets.QMainWindow):
 		profileDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboProfileLevel.currentText()))
 
 		if profileDepth <= parentDepth:
-			QtGui.QMessageBox.information(self, 'Invalid profile', 'The profile level must be deeper in the hierarchy than the parent level.', QtGui.QMessageBox.Warning)
+			QtWidgets.QMessageBox.information(self, 'Invalid profile', 'The profile level must be deeper in the hierarchy than the parent level.', QtWidgets.QMessageBox.Warning)
 			self.ui.cboProfileLevel.setCurrentIndex(len(self.profileTree.hierarchyHeadings) - 1)
 			return
 
@@ -996,9 +1017,11 @@ class StampApp(QtWidgets.QMainWindow):
 		self.ui.tableGroupFeatures.verticalHeader().setVisible(True)
 		self.ui.tableGroupFeatures.resizeColumnsToContents()
 
-		self.tableGroupSelectionModel = QtGui.QItemSelectionModel(self.groupFeatureTable, self.ui.tableGroupFeatures)
+		# QItemSelectionModel lives in QtCore now
+		self.tableGroupSelectionModel = QtCore.QItemSelectionModel(self.groupFeatureTable, self.ui.tableGroupFeatures)
 		self.ui.tableGroupFeatures.setSelectionModel(self.tableGroupSelectionModel)
-		self.connect(self.tableGroupSelectionModel, QtCore.SIGNAL('selectionChanged(const QItemSelection, const QItemSelection)'), self.groupTableFeatureChanged)
+		# PyQt5 New Style Connection
+		self.tableGroupSelectionModel.selectionChanged.connect(self.groupTableFeatureChanged)
 
 	def multiGroupFeaturesTableUpdate(self):
 		tableData = []
@@ -1026,9 +1049,10 @@ class StampApp(QtWidgets.QMainWindow):
 		self.ui.tableMultiGroupFeatures.verticalHeader().setVisible(True)
 		self.ui.tableMultiGroupFeatures.resizeColumnsToContents()
 
-		self.tableMultiGroupSelectionModel = QtGui.QItemSelectionModel(self.multiGroupFeatureTable, self.ui.tableMultiGroupFeatures)
+		self.tableMultiGroupSelectionModel = QtCore.QItemSelectionModel(self.multiGroupFeatureTable,
+																		self.ui.tableMultiGroupFeatures)
 		self.ui.tableMultiGroupFeatures.setSelectionModel(self.tableMultiGroupSelectionModel)
-		self.connect(self.tableMultiGroupSelectionModel, QtCore.SIGNAL('selectionChanged(const QItemSelection, const QItemSelection)'), self.multiGroupSideTableFeatureChanged)
+		self.tableMultiGroupSelectionModel.selectionChanged.connect(self.multiGroupSideTableFeatureChanged)
 
 	def groupTableFeatureChanged(self, selected, deselected):
 		selectedRow = selected.indexes()[0]
@@ -1057,7 +1081,7 @@ class StampApp(QtWidgets.QMainWindow):
 																		self.ui.cboUnclassified.currentText())
 
 			# show progress of test
-			progress = QtGui.QProgressDialog('Running two-sample statistical test...', 'Cancel', 0, len(self.sampleProfile.getFeatures()) + 1, self)
+			progress = QtWidgets.QProgressDialog('Running two-sample statistical test...', 'Cancel', 0, len(self.sampleProfile.getFeatures()) + 1, self)
 			progress.setWindowTitle('Progress')
 			progress.setWindowModality(QtCore.Qt.WindowModal)
 			progress.setVisible(True)
@@ -1212,21 +1236,21 @@ class StampApp(QtWidgets.QMainWindow):
 			multCompDlg = MultCompCorrectionInfoDlg(self, self.sampleStatsTest.results.multCompCorrectionInfo)
 			multCompDlg.exec_()
 		else:
-			QtGui.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtGui.QMessageBox.Ok)
+			QtWidgets.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtWidgets.QMessageBox.Ok)
 
 	def groupMultCompCorrectionInfo(self):
 		if self.groupStatsTest.results.multCompCorrection != None:
 			multCompDlg = MultCompCorrectionInfoDlg(self, self.groupStatsTest.results.multCompCorrectionInfo)
 			multCompDlg.exec_()
 		else:
-			QtGui.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtGui.QMessageBox.Ok)
+			QtWidgets.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtWidgets.QMessageBox.Ok)
 
 	def multiGroupMultCompCorrectionInfo(self):
 		if self.multiGroupStatsTest.results.multCompCorrection != None:
 			multCompDlg = MultCompCorrectionInfoDlg(self, self.multiGroupStatsTest.results.multCompCorrectionInfo)
 			multCompDlg.exec_()
 		else:
-			QtGui.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtGui.QMessageBox.Ok)
+			QtWidgets.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtWidgets.QMessageBox.Ok)
 
 	def sampleSeqFilterChanged(self):
 		if self.ui.cboSampleSeqFilter.currentText() == 'maximum':
@@ -1349,7 +1373,7 @@ class StampApp(QtWidgets.QMainWindow):
 	def sampleSelectFeaturesDlg(self):
 		selectFeatureDialog = SelectFeaturesDlg(self.sampleStatsTest.results, self)
 
-		if selectFeatureDialog.exec_() == QtGui.QDialog.Accepted:
+		if selectFeatureDialog.exec_() == QtWidgets.QDialog.Accepted:
 			selectedFeatures = selectFeatureDialog.getSelectedFeatures()
 			self.sampleStatsTest.results.setSelectedFeatures(selectedFeatures)
 			self.sampleFilteringPropChanged()
@@ -1360,7 +1384,7 @@ class StampApp(QtWidgets.QMainWindow):
 	def groupSelectFeaturesDlg(self):
 		selectFeatureDialog = SelectFeaturesDlg(self.groupStatsTest.results, self)
 
-		if selectFeatureDialog.exec_() == QtGui.QDialog.Accepted:
+		if selectFeatureDialog.exec_() == QtWidgets.QDialog.Accepted:
 			selectedFeatures = selectFeatureDialog.getSelectedFeatures()
 			self.groupStatsTest.results.setSelectedFeatures(selectedFeatures)
 			self.groupFilteringPropChanged()
@@ -1371,7 +1395,7 @@ class StampApp(QtWidgets.QMainWindow):
 	def multiGroupSelectFeaturesDlg(self):
 		selectFeatureDialog = SelectFeaturesDlg(self.multiGroupStatsTest.results, self)
 
-		if selectFeatureDialog.exec_() == QtGui.QDialog.Accepted:
+		if selectFeatureDialog.exec_() == QtWidgets.QDialog.Accepted:
 			selectedFeatures = selectFeatureDialog.getSelectedFeatures()
 			self.multiGroupStatsTest.results.setSelectedFeatures(selectedFeatures)
 			self.multiGroupFilteringPropChanged()
@@ -1690,10 +1714,10 @@ class StampApp(QtWidgets.QMainWindow):
 		elif stackedWidget.currentIndex() == 0:
 			plotToSave = self.multiGroupPlot
 		else:
-			QtGui.QMessageBox.information(self, 'Select plot', 'A plot tab must be active to save a plot.', QtGui.QMessageBox.Ok)
+			QtWidgets.QMessageBox.information(self, 'Select plot', 'A plot tab must be active to save a plot.', QtWidgets.QMessageBox.Ok)
 			return
 
-		f = QtGui.QFileDialog.getSaveFileName(self, 'Save plot...', self.preferences['Last directory'],
+		f = QtWidgets.QFileDialog.getSaveFileName(self, 'Save plot...', self.preferences['Last directory'],
 								'Portable Network Graphics (*.png);;' +
 								'Portable Document Format (*.pdf);;' +
 								'PostScript (*.ps);;' +
@@ -1710,7 +1734,7 @@ class StampApp(QtWidgets.QMainWindow):
 				else:
 					plotToSave.save(str(f))
 			except IOError:
-					QtGui.QMessageBox.information(self, 'Failed to save image', 'Write permission for file denied.', QtGui.QMessageBox.Ok)
+					QtWidgets.QMessageBox.information(self, 'Failed to save image', 'Write permission for file denied.', QtWidgets.QMessageBox.Ok)
 
 	def sendPlotToWindow(self):
 		if self.ui.stackedWidgetViews.currentIndex() == 2:
@@ -1749,7 +1773,7 @@ class StampApp(QtWidgets.QMainWindow):
 		self.lblStatusBar.setText(message)
 
 	def openAboutDlg(self):
-		QtGui.QMessageBox.about(self, 'About...',
+		QtWidgets.QMessageBox.about(self, 'About...',
 				'STAMP: statistical analysis of taxonomic and functional profiles\n\n'
 				'%s\n'
 				'%s\n'
@@ -1789,7 +1813,7 @@ def exceptHook(exc_type, exc_value, exc_traceback):
 	filename = os.path.basename(filename)
 	error = "%s: %s" % (exc_type.__name__, exc_value)
 
-	QtGui.QMessageBox.critical(None, "Unknown error...",
+	QtWidgets.QMessageBox.critical(None, "Unknown error...",
 		"<center>An error has occured:<br/><br/>"
 	+ "<b><i>%s</i></b><br/>" % error
 	+ "It occured at <b>line %d</b> of file <b>%s</b>.<br/>" % (line, filename)
@@ -1858,9 +1882,21 @@ def main():
 			##########################################
 			##########################################
 		else:
+			print('Starting STAMP...')
 			mainWindow = StampApp(preferences)
 
+		# 1. Force a default size in case the saved size is 0x0
+		mainWindow.resize(1200, 800)
+
+		# 2. Force it to show
 		mainWindow.show()
+
+		# 3. Use raise_() to bring it to the front of all other windows
+		mainWindow.raise_()
+
+		# 4. Optional: Print the geometry to the console to see where it is
+		print(f"Window is at: {mainWindow.geometry()}")
+
 		sys.exit(app.exec_())
 	else:
 		print('Failed to start STAMP.')

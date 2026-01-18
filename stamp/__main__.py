@@ -48,7 +48,11 @@ def main():
         'Sample 1 colour': QtGui.QColor(0, 0, 255),  # Default Blue
         'Sample 2 colour': QtGui.QColor(255, 0, 0),  # Default Red
         'Group colours': {},
+        'Highlighted sample features' : [],
+        'Highlighted group features':[],
+        'Highlighted multiple group features': [],
         'Selected group feature': '',
+        'Last directory': '',
         'Selected multiple group feature': '' # Prevents your recent KeyError
     }
 

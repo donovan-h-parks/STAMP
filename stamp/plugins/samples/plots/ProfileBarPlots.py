@@ -183,7 +183,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		if figWidth > 256 or figHeight > 256:
 				QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 				self.emptyAxis()	
-				QtGui.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
+				QtWidgets.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
 				QtWidgets.QApplication.instance().restoreOverrideCursor()
 				return
 
@@ -250,7 +250,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 			a.tick1On=False
 			a.tick2On=False
 			
-		for loc, spine in axesBar.spines.iteritems():
+		for loc, spine in axesBar.spines.items():
 			if loc in ['right','top']:
 				spine.set_color('none') 
 			else:
@@ -302,7 +302,7 @@ class ProfileBarPlots(AbstractSamplePlotPlugin):
 		configDlg.ui.chkShowPvalue.setChecked(self.bShowPvalue)
 		configDlg.ui.spinPvalueThreshold.setValue(self.pValueThreshold)
 		
-		if configDlg.exec_() == QtGui.QDialog.Accepted:	 
+		if configDlg.exec_() == QtWidgets.QDialog.Accepted:	 
 			self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
 			
 			self.figColWidth = configDlg.ui.spinFigColWidth.value()

@@ -26,7 +26,7 @@ from stamp.GUI.plotDlgUI import Ui_PlotDlg
 
 class PlotDlg(QtWidgets.QDockWidget):
 	def __init__(self, parent=None, info=None):
-		QWidgets.QWidget.__init__(self, parent)
+		QtWidgets.QWidget.__init__(self, parent)
 		
 		self.ui = Ui_PlotDlg()
 		self.ui.setupUi(self)

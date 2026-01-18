@@ -67,11 +67,11 @@ class Bar(AbstractSamplePlotPlugin):
 		features = statsResults.getColumn('Features')
 		if len(features) > 200:
 			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
-			reply = QtGui.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(features)) + ' features. ' +
+			reply = QtWidgets.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(features)) + ' features. ' +
 																		'It may take several seconds to generate this plot. We recommend filtering your profile first. ' + 
-																		'Do you wish to continue?', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+																		'Do you wish to continue?', QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
 			QtWidgets.QApplication.instance().restoreOverrideCursor()
-			if reply == QtGui.QMessageBox.No:
+			if reply == QtWidgets.QMessageBox.No:
 				self.emptyAxis()
 				return
 
@@ -218,7 +218,7 @@ class Bar(AbstractSamplePlotPlugin):
 		for line in axesBar.xaxis.get_ticklines(): 
 			line.set_color(axesColour)
 			
-		for loc, spine in axesBar.spines.iteritems():
+		for loc, spine in axesBar.spines.items():
 			if loc in ['right','top']:
 					spine.set_color('none') 
 			else:
@@ -265,7 +265,7 @@ class Bar(AbstractSamplePlotPlugin):
 		else:
 			configDlg.ui.radioLegendPosNone.setChecked(True)
 		
-		if configDlg.exec_() == QtGui.QDialog.Accepted:
+		if configDlg.exec_() == QtWidgets.QDialog.Accepted:
 			self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
 			self.bSortFeatures = configDlg.ui.chkSort.isChecked()
 			self.figWidth = configDlg.ui.spinFigWidth.value()

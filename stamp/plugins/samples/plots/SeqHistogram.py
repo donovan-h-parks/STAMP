@@ -142,7 +142,7 @@ class SeqHistogram(AbstractSamplePlotPlugin):
 		for line in axesHist.xaxis.get_ticklines(): 
 			line.set_color(axesColour)
 		
-		for loc, spine in axesHist.spines.iteritems():
+		for loc, spine in axesHist.spines.items():
 			if loc in ['right','top']:
 				spine.set_color('none') 
 			else:
@@ -193,7 +193,7 @@ class SeqHistogram(AbstractSamplePlotPlugin):
 		else:
 			self.configDlg.ui.radioLegendPosNone.setChecked(True)
 		
-		if self.configDlg.exec_() == QtGui.QDialog.Accepted:
+		if self.configDlg.exec_() == QtWidgets.QDialog.Accepted:
 			self.figWidth = self.configDlg.ui.spinFigWidth.value()
 			self.figHeight = self.configDlg.ui.spinFigHeight.value()
 

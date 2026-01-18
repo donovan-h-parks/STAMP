@@ -27,7 +27,7 @@ from stamp.GUI.assignCOGUI import Ui_AssignCOGsDlg
 
 class AssignCOGsDlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None):
-		QWidgets.QWidget.__init__(self, parent)
+		QtWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_AssignCOGsDlg()
@@ -44,7 +44,7 @@ class AssignCOGsDlg(QtWidgets.QDialog):
 		self.inputProfile = []
 		
 	def loadProfiles(self):
-		self.inputProfile = QtGui.QFileDialog.getOpenFileName(self, 'Load profile', self.preferences['Last directory'], 'IMG/M profiles (*.xls *.tsv);;All files (*.*)')
+		self.inputProfile = QtWidgets.QFileDialog.getOpenFileName(self, 'Load profile', self.preferences['Last directory'], 'IMG/M profiles (*.xls *.tsv);;All files (*.*)')
 		if self.inputProfile != '':
 			self.preferences['Last directory'] = self.inputProfile[0:self.inputProfile.lastIndexOf('/')]
 			self.ui.txtInputProfile.setText(self.inputProfile)
@@ -52,7 +52,7 @@ class AssignCOGsDlg(QtWidgets.QDialog):
 			
 	def createProfile(self):
 		# get filename to save STAMP profile to
-		stampFilename = QtGui.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')
+		stampFilename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')
 		if stampFilename == '':
 			return
 			
@@ -64,6 +64,6 @@ class AssignCOGsDlg(QtWidgets.QDialog):
 		self.accept()
 
 	def centerWindow(self):
-		screen = QtGui.QDesktopWidget().screenGeometry()
+		screen = QtWidgets.QDesktopWidget().screenGeometry()
 		size =	self.geometry()
-		self.move((screen.width()-size.width())/2, (screen.height()-size.height())/2)
+		self.move((screen.width()-size.width())//2, (screen.height()-size.height())//2)

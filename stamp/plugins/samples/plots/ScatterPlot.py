@@ -79,11 +79,11 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 
 		if len(profile.profileDict) > 10000:
 			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
-			reply = QtGui.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(profile.profileDict)) + ' features. ' +
+			reply = QtWidgets.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(profile.profileDict)) + ' features. ' +
 																		'It may take several seconds to generate this plot. Exploring the data at a higher hierarchy level is recommended. ' + 
-																		'Do you wish to continue?', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+																		'Do you wish to continue?', QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
 			QtWidgets.QApplication.instance().restoreOverrideCursor()
-			if reply == QtGui.QMessageBox.No:
+			if reply == QtWidgets.QMessageBox.No:
 				self.emptyAxis()	
 				return
 						
@@ -236,7 +236,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 		for line in axesScatter.xaxis.get_ticklines(): 
 			line.set_color(axesColour)
 			
-		for loc, spine in axesScatter.spines.iteritems():
+		for loc, spine in axesScatter.spines.items():
 			spine.set_color(axesColour)
 
 		# plot histograms
@@ -255,7 +255,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 			for line in axesScatter.xaxis.get_ticklines(): 
 				line.set_color(axesColour)
 
-			for loc, spine in axesScatter.spines.iteritems():
+			for loc, spine in axesScatter.spines.items():
 					if loc in ['right','top']:
 							spine.set_color('none')
 					else:
@@ -291,7 +291,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 				for line in axesTopHistogram.xaxis.get_ticklines(): 
 					line.set_color(axesColour)
 
-				for loc, spine in axesTopHistogram.spines.iteritems():
+				for loc, spine in axesTopHistogram.spines.items():
 						if loc in ['right','top']:
 								spine.set_color('none')
 						else:
@@ -311,7 +311,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 				for line in axesRightHistogram.xaxis.get_ticklines(): 
 					line.set_color(axesColour)
 
-				for loc, spine in axesRightHistogram.spines.iteritems():
+				for loc, spine in axesRightHistogram.spines.items():
 						if loc in ['right','top']:
 								spine.set_color('none') 
 						else:
@@ -339,7 +339,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 		
 		configDlg.ui.chkShowR2.setChecked(self.bShowR2)
 				
-		if configDlg.exec_() == QtGui.QDialog.Accepted:	 
+		if configDlg.exec_() == QtWidgets.QDialog.Accepted:	 
 			self.figWidth = configDlg.ui.spinFigWidth.value()
 			self.figHeight = configDlg.ui.spinFigHeight.value()
 			

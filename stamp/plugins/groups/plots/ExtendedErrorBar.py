@@ -94,11 +94,11 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 		features = statsResults.getColumn('Features')
 		if len(features) > 200:
 			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
-			reply = QtGui.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(features)) + ' features. ' +
+			reply = QtWidgets.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(features)) + ' features. ' +
 																		'It may take several seconds to generate this plot. We recommend filtering your profile first. ' + 
-																		'Do you wish to continue?', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+																		'Do you wish to continue?', QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
 			QtWidgets.QApplication.instance().restoreOverrideCursor()
-			if reply == QtGui.QMessageBox.No:
+			if reply == QtWidgets.QMessageBox.No:
 				self.emptyAxis()	
 				return
 
@@ -201,7 +201,7 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 		if self.imageWidth > 256 or self.imageHeight > 256:
 				QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 				self.emptyAxis()	
-				reply = QtGui.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
+				reply = QtWidgets.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
 				QtWidgets.QApplication.instance().restoreOverrideCursor()
 				return
 		
@@ -294,7 +294,7 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 			for line in axNumSeq.xaxis.get_ticklines(): 
 				line.set_color(axesColour)
 					
-			for loc, spine in axNumSeq.spines.iteritems():
+			for loc, spine in axNumSeq.spines.items():
 				if loc in ['left', 'right','top']:
 					spine.set_color('none') 
 				else:
@@ -352,7 +352,7 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 		for line in axErrorbar.xaxis.get_ticklines(): 
 			line.set_color(axesColour)
 
-		for loc, spine in axErrorbar.spines.iteritems():
+		for loc, spine in axErrorbar.spines.items():
 			if loc in ['left','right','top']:
 				spine.set_color('none') 
 			else:
@@ -370,7 +370,7 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 				a.tick1On=False
 				a.tick2On=False
 				
-			for loc, spine in axRight.spines.iteritems():
+			for loc, spine in axRight.spines.items():
 				spine.set_color('none') 
 				
 		# *** Legend
@@ -425,7 +425,7 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 		else:
 			self.configDlg.ui.radioLegendPosNone.setChecked(True)
 				
-		if self.configDlg.exec_() == QtGui.QDialog.Accepted:
+		if self.configDlg.exec_() == QtWidgets.QDialog.Accepted:
 			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
 			
 			self.sortingField = str(self.configDlg.ui.cboSortingField.currentText())

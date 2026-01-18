@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-import string
+import string, os
 
 from PyQt5 import QtGui, QtCore, QtWidgets
 from stamp.GUI.createProfileMgRastUI import Ui_CreateProfileMgRastDlg
@@ -35,7 +35,7 @@ class ProfileRow():
 
 class CreateProfileMgRastDlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None):
-		QWidgets.QWidget.__init__(self, parent)
+		QtWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_CreateProfileMgRastDlg()
@@ -44,40 +44,50 @@ class CreateProfileMgRastDlg(QtWidgets.QDialog):
 		self.centerWindow()
 		
 		self.preferences = preferences
-		
-		QtCore.QObject.connect(self.ui.btnLoadProfiles, QtCore.SIGNAL("clicked()"), self.loadProfiles)
-		QtCore.QObject.connect(self.ui.btnCustomizeHeadings, QtCore.SIGNAL("clicked()"), self.customizeHeadings)
-		QtCore.QObject.connect(self.ui.btnCreateProfile, QtCore.SIGNAL("clicked()"), self.createProfile)
-		QtCore.QObject.connect(self.ui.btnCancel, QtCore.SIGNAL("clicked()"), self.accept)
-		
+
+		self.ui.btnLoadProfiles.clicked.connect(self.loadProfiles)
+		self.ui.btnCustomizeHeadings.clicked.connect(self.customizeHeadings)
+		self.ui.btnCreateProfile.clicked.connect(self.createProfile)
+		self.ui.btnCancel.clicked.connect(self.accept)
+
 		self.headings = []
 		
 		self.selectedFile = ''
 
-	def loadProfiles(self):
-		self.selectedFile = QtGui.QFileDialog.getOpenFileName(self, 'Load profile', self.preferences['Last directory'], 'MG-RAST profile (*.tsv);;All files (*.*)')
+	import os  # Ensure this is at the top of the file
 
-		if self.selectedFile != '':
-			self.preferences['Last directory'] = self.selectedFile[0:self.selectedFile.lastIndexOf('/')]
-			
-			# read profile information from file
-			fin = open(self.selectedFile, 'U')
-			self.data = map(string.strip, fin.readlines())
-			fin.close()
+	def loadProfiles(self):
+		# 1. Unpack the tuple (PyQt5/6 returns (path, filter))
+		fileName, _ = QtWidgets.QFileDialog.getOpenFileName(
+			self, 'Load profile', self.preferences.get('Last directory', ''),
+			'MG-RAST profile (*.tsv);;All files (*.*)'
+		)
+
+		if fileName:
+			# 2. Use os.path.dirname instead of lastIndexOf
+			self.preferences['Last directory'] = os.path.dirname(fileName)
+			self.selectedFile = fileName
+
+			# 3. Modern Python 3 file reading (encoding helps with special chars)
+			# We replace 'U' with 'r' and use a context manager (with) for safety
+			with open(self.selectedFile, 'r', encoding='utf-8', errors='ignore') as fin:
+				# In Python 3, map returns an iterator, so we wrap it in list()
+				# to match the original Python 2 behavior.
+				self.data = [line.strip() for line in fin.readlines()]
 			
 			# get header data
 			self.header = self.data[0].split('\t')
 			
 			if self.header[0].strip() != 'metagenome':
-				QtGui.QMessageBox.information(self, 'Failed to parse MG-RAST profile', "This file does not appear to be a valid MG-RAST profile as it does not begin with a 'metagenome' column.", QtGui.QMessageBox.Ok)
+				QtWidgets.QMessageBox.information(self, 'Failed to parse MG-RAST profile', "This file does not appear to be a valid MG-RAST profile as it does not begin with a 'metagenome' column.", QtWidgets.QMessageBox.Ok)
 				return
 			
 			if 'abundance' not in self.header:
-				QtGui.QMessageBox.information(self, 'Failed to parse MG-RAST profile', "This file does not appear to be a valid MG-RAST profile as it does not contain an 'abundance' column.", QtGui.QMessageBox.Ok)
+				QtWidgets.QMessageBox.information(self, 'Failed to parse MG-RAST profile', "This file does not appear to be a valid MG-RAST profile as it does not contain an 'abundance' column.", QtWidgets.QMessageBox.Ok)
 				return
 			
 			if self.header[1] != 'level 1' and self.header[1] != 'source' and self.header[1] != 'domain': 
-				QtGui.QMessageBox.information(self, 'Failed to parse MG-RAST profile', "This file does not appear to be a valid MG-RAST profile as the second column is not 'level 1', 'source', or 'domain'.", QtGui.QMessageBox.Ok)
+				QtWidgets.QMessageBox.information(self, 'Failed to parse MG-RAST profile', "This file does not appear to be a valid MG-RAST profile as the second column is not 'level 1', 'source', or 'domain'.", QtWidgets.QMessageBox.Ok)
 				return
 				
 			if self.header[1] == 'level 1' or self.header[1] == 'domain':
@@ -111,7 +121,7 @@ class CreateProfileMgRastDlg(QtWidgets.QDialog):
 		customizeHeadingsDlg.ui.txtLevel7.setText(self.headings[6])
 		customizeHeadingsDlg.ui.txtLevel8.setText(self.headings[7])
 					 
-		if customizeHeadingsDlg.exec_() == QtGui.QDialog.Accepted:
+		if customizeHeadingsDlg.exec_() == QtWidgets.QDialog.Accepted:
 			self.headings[0] = customizeHeadingsDlg.ui.txtLevel1.text()
 			self.headings[1] = customizeHeadingsDlg.ui.txtLevel2.text()
 			self.headings[2] = customizeHeadingsDlg.ui.txtLevel3.text()
@@ -120,16 +130,26 @@ class CreateProfileMgRastDlg(QtWidgets.QDialog):
 			self.headings[5] = customizeHeadingsDlg.ui.txtLevel6.text()
 			self.headings[6] = customizeHeadingsDlg.ui.txtLevel7.text()
 			self.headings[7] = customizeHeadingsDlg.ui.txtLevel8.text()
-	
+
+	import os
+
 	def createProfile(self):
 		splitCh = '\t'
-	
-		# get filename to save STAMP profile to
-		stampFilename = QtGui.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'], 'STAMP profile file(*.spf);;All files(*.*)')
-		if stampFilename == '':
+
+		# 1. Unpack the PyQt5 tuple (filename, filter)
+		# Using 'get' for preferences prevents a KeyError if the key is missing
+		fileName, _ = QtWidgets.QFileDialog.getSaveFileName(
+			self, 'Save STAMP profile...',
+			self.preferences.get('Last directory', ''),
+			'STAMP profile file(*.spf);;All files(*.*)'
+		)
+
+		if not fileName:
 			return
-			
-		self.preferences['Last directory'] = stampFilename[0:stampFilename.lastIndexOf('/')]
+
+		# 2. Use os.path.dirname instead of lastIndexOf
+		self.preferences['Last directory'] = os.path.dirname(fileName)
+		stampFilename = fileName
 
 		# set profile specific parsing information
 		hierarchyStartIndex = self.startIndex
@@ -141,51 +161,52 @@ class CreateProfileMgRastDlg(QtWidgets.QDialog):
 			sampleId = self.data[i].split(splitCh)[0]
 			if sampleId not in sampleNames:
 				sampleNames.append(sampleId)
-				
+
 		# add profile info
 		profileDict = {}
-		
+
 		parentMap = {}
-		for i in range(1, dataIndex-hierarchyStartIndex):
+		for i in range(1, dataIndex - hierarchyStartIndex):
 			parentMap[i] = {}
-			
+
 		for i in range(1, len(self.data)):
 			if self.data[i] == "":
-				continue	# skip blank lines
-			
+				continue  # skip blank lines
+
 			lineSplit = self.data[i].split(splitCh)
 			if len(lineSplit) <= dataIndex:
-				QtGui.QMessageBox.information(self, 'Unrecognized file format', 'Your file does not appear to be a valid MG-RAST profile.')
+				QtWidgets.QMessageBox.information(self, 'Unrecognized file format',
+												  'Your file does not appear to be a valid MG-RAST profile.')
 				return
-			
+
 			count = int(lineSplit[dataIndex])
 			hierarchy = lineSplit[hierarchyStartIndex:dataIndex]
-			
+
 			# replace '-' categories with parent
 			for i in range(1, len(hierarchy)):
 				if hierarchy[i] == '-':
 					if self.header[1] == 'domain':
-						if 'Unclassified' not in hierarchy[i-1]:
-							hierarchy[i] = 'Unclassified ' + hierarchy[i-1]
+						if 'Unclassified' not in hierarchy[i - 1]:
+							hierarchy[i] = 'Unclassified ' + hierarchy[i - 1]
 						else:
-							hierarchy[i] = hierarchy[i-1]
+							hierarchy[i] = hierarchy[i - 1]
 					else:
-						hierarchy[i] = hierarchy[i-1]
-					
+						hierarchy[i] = hierarchy[i - 1]
+
 			# force MG-RAST profile to be strictly tree-like
-			for i in range(1, len(hierarchy)): 
+			for i in range(1, len(hierarchy)):
 				parent = '-'.join(hierarchy[0:i])
 				child = hierarchy[i]
-				
+
 				currentParentMap = parentMap[i]
 				parentList = currentParentMap.get(child, [])
 				if parent not in parentList:
 					parentList.append(parent)
 
 				parentMap[i][child] = parentList
-				
+
 				parentIndex = parentList.index(parent)
-				
+
 				if parentIndex != 0:
 					newChild = child + ' - #' + str(parentIndex)
 					hierarchy[i] = newChild
@@ -193,7 +214,7 @@ class CreateProfileMgRastDlg(QtWidgets.QDialog):
 			# add to profile
 			sampleId = lineSplit[0]
 			profileIndex = sampleNames.index(sampleId)
-			
+
 			row = profileDict.get(hierarchy[-1], None)
 			if row == None:
 				row = ProfileRow()
@@ -203,36 +224,40 @@ class CreateProfileMgRastDlg(QtWidgets.QDialog):
 
 			row.countData[profileIndex] += count
 
-		# write out STAMP profile
+		# 3. Write out STAMP profile - Use utf-8 encoding for Python 3
 		try:
-			fout = open(stampFilename, 'w')
+			# In Python 3, it's safer to explicitly set encoding
+			fout = open(stampFilename, 'w', encoding='utf-8')
 		except IOError:
-			QtGui.QMessageBox.information(self, 'Failed to save STAMP profile', 'Write permission for file denied.', QtGui.QMessageBox.Ok)
+			QtWidgets.QMessageBox.information(self, 'Failed to save STAMP profile', 'Write permission for file denied.',
+											  QtWidgets.QMessageBox.Ok)
 			return
 
 		fout.write(self.headings[0])
-		for heading in self.headings[1:(dataIndex-hierarchyStartIndex)]:
+		for heading in self.headings[1:(dataIndex - hierarchyStartIndex)]:
 			fout.write('\t' + heading)
-			
+
 		for sampleName in sampleNames:
 			fout.write('\t' + sampleName)
 		fout.write('\n')
-			
-		for key in profileDict.keys():
+
+		# 4. In Python 3, dict.keys() is a view, not a list.
+		# To maintain consistency or sort, you can wrap it in list() or just iterate directly.
+		for key in sorted(profileDict.keys()):
 			row = profileDict[key]
 			for h in row.hierarchy:
 				fout.write(h + '\t')
-			
+
 			fout.write(str(row.countData[0]))
 			for c in row.countData[1:]:
 				fout.write('\t' + str(c))
 			fout.write('\n')
-			
+
 		fout.close()
-				
+
 		self.accept()
 
 	def centerWindow(self):
-		screen = QtGui.QDesktopWidget().screenGeometry()
+		screen = QtWidgets.QDesktopWidget().screenGeometry()
 		size =	self.geometry()
-		self.move((screen.width()-size.width())/2, (screen.height()-size.height())/2)
+		self.move((screen.width() - size.width()) // 2, (screen.height() - size.height()) // 2)

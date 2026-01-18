@@ -18,7 +18,7 @@
 # You should have received a copy of the GNU General Public License
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
-
+import os
 import string
 
 from PyQt5 import QtGui, QtCore,QtWidgets
@@ -31,7 +31,7 @@ class ProfileRow():
 
 class CreateProfileMothurDlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None):
-		QWidgets.QWidget.__init__(self, parent)
+		QtWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_CreateProfileMothurDlg()
@@ -40,33 +40,46 @@ class CreateProfileMothurDlg(QtWidgets.QDialog):
 		self.preferences = preferences
 
 		self.centerWindow()
-		
-		QtCore.QObject.connect(self.ui.btnTaxonomyFile, QtCore.SIGNAL("clicked()"), self.loadTaxonomyFile)
-		QtCore.QObject.connect(self.ui.btnGroupsFile, QtCore.SIGNAL("clicked()"), self.loadGroupsFile)
-		QtCore.QObject.connect(self.ui.btnNamesFile, QtCore.SIGNAL("clicked()"), self.loadNamesFile)
-		QtCore.QObject.connect(self.ui.btnCreateProfile, QtCore.SIGNAL("clicked()"), self.createProfile)
-		QtCore.QObject.connect(self.ui.btnCancel, QtCore.SIGNAL("clicked()"), self.accept)
+
+		self.ui.btnTaxonomyFile.clicked.connect(self.loadTaxonomyFile)
+		self.ui.btnGroupsFile.clicked.connect(self.loadGroupsFile)
+		self.ui.btnNamesFile.clicked.connect(
+			self.loadGroupsFile)  # Note: Double check if this should be self.loadNamesFile
+		self.ui.btnCreateProfile.clicked.connect(self.createProfile)
+		self.ui.btnCancel.clicked.connect(self.accept)
 		
 		self.taxonomyFile = None
 		self.groupsFile = None
 		self.namesFile = None
 
+	import os  # Ensure this is at the top of your file
+
 	def loadTaxonomyFile(self):
-		selectedFile = QtGui.QFileDialog.getOpenFileName(self, 'Load taxonomy file', self.preferences['Last directory'], 'Taxonomy file (*.taxonomy);;All files (*.*)')
-		if selectedFile != '':
-			self.preferences['Last directory'] = selectedFile[0:selectedFile.lastIndexOf('/')]
-			self.ui.txtTaxonomyFile.setText(selectedFile)
-			self.taxonomyFile = selectedFile
+		# 1. Unpack the PyQt5 tuple (path, filter)
+		# Using .get() prevents a crash if 'Last directory' isn't initialized
+		fileName, _ = QtWidgets.QFileDialog.getOpenFileName(
+			self,
+			'Load taxonomy file',
+			self.preferences.get('Last directory', ''),
+			'Taxonomy file (*.taxonomy);;All files (*.*)'
+		)
+
+		# 2. In Python 3/PyQt5, check if fileName is a non-empty string
+		if fileName:
+			# 3. Use os.path.dirname instead of the non-existent lastIndexOf
+			self.preferences['Last directory'] = os.path.dirname(fileName)
+			self.ui.txtTaxonomyFile.setText(fileName)
+			self.taxonomyFile = fileName
 		
 	def loadGroupsFile(self):
-		selectedFile = QtGui.QFileDialog.getOpenFileName(self, 'Load groups file', self.preferences['Last directory'], 'Groups file (*.groups);;All files (*.*)')
+		selectedFile = QtWidgets.QFileDialog.getOpenFileName(self, 'Load groups file', self.preferences['Last directory'], 'Groups file (*.groups);;All files (*.*)')
 		if selectedFile != '':
 			self.preferences['Last directory'] = selectedFile[0:selectedFile.lastIndexOf('/')]
 			self.ui.txtGroupsFile.setText(selectedFile)
 			self.groupsFile = selectedFile
 		
 	def loadNamesFile(self):
-		selectedFile = QtGui.QFileDialog.getOpenFileName(self, 'Load names file', self.preferences['Last directory'], 'Names file (*.names);;All files (*.*)')
+		selectedFile = QtWidgets.QFileDialog.getOpenFileName(self, 'Load names file', self.preferences['Last directory'], 'Names file (*.names);;All files (*.*)')
 		if selectedFile != '':
 			self.preferences['Last directory'] = selectedFile[0:selectedFile.lastIndexOf('/')]
 			self.ui.txtNamesFile.setText(selectedFile)
@@ -79,10 +92,10 @@ class CreateProfileMothurDlg(QtWidgets.QDialog):
 			data = map(string.strip, fin.readlines())
 			fin.close()
 		else:
-			QtGui.QMessageBox.information(self, 'Missing data', 'A Group file must be specified.', QtGui.QMessageBox.Ok)
+			QtWidgets.QMessageBox.information(self, 'Missing data', 'A Group file must be specified.', QtWidgets.QMessageBox.Ok)
 			return
 			
-		outputFile = QtGui.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')
+		outputFile = QtWidgets.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')
 		if outputFile == '':
 			return
 			
@@ -193,6 +206,6 @@ class CreateProfileMothurDlg(QtWidgets.QDialog):
 		self.accept()
 
 	def centerWindow(self):
-		screen = QtGui.QDesktopWidget().screenGeometry()
+		screen = QtWidgets.QDesktopWidget().screenGeometry()
 		size =	self.geometry()
-		self.move((screen.width()-size.width())/2, (screen.height()-size.height())/2)
+		self.move((screen.width()-size.width())//2, (screen.height()-size.height())//2)

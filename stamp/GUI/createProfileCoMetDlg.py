@@ -31,7 +31,7 @@ class ProfileRow():
 
 class CreateProfileCoMetDlg(QtWidgets.QDialog):
 	def __init__(self, preferences, parent=None):
-		QWidgets.QWidget.__init__(self, parent)
+		QtWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_CreateProfileCoMetDlg()
@@ -48,7 +48,7 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 		self.selectedFiles = []
 			
 	def loadProfiles(self):
-		selectedFiles = QtGui.QFileDialog.getOpenFileNames(self, 'Load profiles', self.preferences['Last directory'], 'CoMet profiles (*.txt);;All files (*.*)')
+		selectedFiles = QtWidgets.QFileDialog.getOpenFileNames(self, 'Load profiles', self.preferences['Last directory'], 'CoMet profiles (*.txt);;All files (*.*)')
 
 		if len(selectedFiles) > 0:
 			self.preferences['Last directory'] = selectedFiles[0][0:selectedFiles[0].lastIndexOf('/')]
@@ -59,7 +59,7 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 	
 	def createProfile(self):
 		# get filename to save STAMP profile to
-		stampFilename = QtGui.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')
+		stampFilename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')
 		if stampFilename == '':
 			return
 		
@@ -89,7 +89,7 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 				closeParanethsisIndex = line.rfind(')')
 				
 				if firstSpaceIndex == -1 or lastSemiColonIndex == -1 or openParanethsisIndex == -1 or closeParanethsisIndex == -1:
-					QtGui.QMessageBox.information(self, 'Unrecognized file format', 'Your file does not appear to be a valid CoMet profile.')
+					QtWidgets.QMessageBox.information(self, 'Unrecognized file format', 'Your file does not appear to be a valid CoMet profile.')
 					return
 				
 				category = line[openParanethsisIndex+1:closeParanethsisIndex].strip()
@@ -112,7 +112,7 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 		try:
 			fout = open(stampFilename, 'w')
 		except IOError:
-			QtGui.QMessageBox.information(self, 'Failed to save STAMP profile', 'Write permission for file denied.', QtGui.QMessageBox.Ok)
+			QtWidgets.QMessageBox.information(self, 'Failed to save STAMP profile', 'Write permission for file denied.', QtWidgets.QMessageBox.Ok)
 			return
 
 		fout.write('Category')
@@ -136,6 +136,6 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 		self.accept()
 
 	def centerWindow(self):
-		screen = QtGui.QDesktopWidget().screenGeometry()
+		screen = QtWidgets.QDesktopWidget().screenGeometry()
 		size =	self.geometry()
-		self.move((screen.width()-size.width())/2, (screen.height()-size.height())/2)
+		self.move((screen.width()-size.width())//2, (screen.height()-size.height())//2)

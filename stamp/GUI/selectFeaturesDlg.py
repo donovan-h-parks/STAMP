@@ -31,7 +31,7 @@ from stamp.GUI.selectFeaturesUI import Ui_SelectFeatureDlg
 
 class SelectFeaturesDlg(QtWidgets.QDialog):
   def __init__(self, statsTestResults, parent=None):
-    QWidgets.QWidget.__init__(self, parent)
+    QtWidgets.QWidget.__init__(self, parent)
     
     # initialize GUI
     self.ui = Ui_SelectFeatureDlg()
@@ -144,6 +144,6 @@ class SelectFeaturesDlg(QtWidgets.QDialog):
     self.hierarchyChanged()
 
   def centerWindow(self):
-    screen = QtGui.QDesktopWidget().screenGeometry()
+    screen = QtWidgets.QDesktopWidget().screenGeometry()
     size =  self.geometry()
     self.move((screen.width()-size.width())/2, (screen.height()-size.height())/2)

@@ -9,7 +9,7 @@ from stamp.GUI.multCompCorrectionInfoUI import Ui_multCompCorrectionInfoDlg
 
 class MultCompCorrectionInfoDlg(QtWidgets.QDialog):
   def __init__(self, parent=None, info=None):
-    QWidgets.QWidget.__init__(self, parent)
+    QtWidgets.QWidget.__init__(self, parent)
     
     # initialize GUI
     self.ui = Ui_multCompCorrectionInfoDlg()
@@ -40,8 +40,8 @@ class MultCompCorrectionInfoDlg(QtWidgets.QDialog):
       pos = 1
        
     # add ok button to dialog
-    self.buttonBox = QtGui.QDialogButtonBox(self)
-    self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Ok)
+    self.buttonBox = QtWidgets.QDialogButtonBox(self)
+    self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Ok)
     self.ui.layout.setWidget(pos, QtGui.QFormLayout.FieldRole, self.buttonBox)
     QtCore.QObject.connect(self.buttonBox, QtCore.SIGNAL("accepted()"), self.accept)
     
@@ -50,7 +50,7 @@ class MultCompCorrectionInfoDlg(QtWidgets.QDialog):
     self.centerWindow()
     
   def centerWindow(self):
-    screen = QtGui.QDesktopWidget().screenGeometry()
+    screen = QtWidgets.QDesktopWidget().screenGeometry()
     size =  self.geometry()
     self.move((screen.width()-size.width())/2, (screen.height()-size.height())/2)
     

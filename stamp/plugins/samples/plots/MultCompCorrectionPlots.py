@@ -138,7 +138,7 @@ class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 		for line in ax1.xaxis.get_ticklines(): 
 			line.set_color(axesColour)
 			
-		for loc, spine in ax1.spines.iteritems():
+		for loc, spine in ax1.spines.items():
 			if loc in ['right','top']:
 				spine.set_color('none') 
 			else:
@@ -172,7 +172,7 @@ class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 		for line in ax2.xaxis.get_ticklines(): 
 			line.set_color(axesColour)
 			
-		for loc, spine in ax2.spines.iteritems():
+		for loc, spine in ax2.spines.items():
 			if loc in ['right','top']:
 				spine.set_color('none') 
 			else:
@@ -206,7 +206,7 @@ class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 		for line in ax3.xaxis.get_ticklines(): 
 			line.set_color(axesColour)
 			
-		for loc, spine in ax3.spines.iteritems():
+		for loc, spine in ax3.spines.items():
 			if loc in ['right','top']:
 				spine.set_color('none') 
 			else:
@@ -232,7 +232,7 @@ class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 		self.configDlg.ui.spinXlimitFig2.setValue(self.xLimitFig2)		
 		self.configDlg.ui.spinXlimitFig3.setValue(self.xLimitFig3)
 				
-		if self.configDlg.exec_() == QtGui.QDialog.Accepted:					
+		if self.configDlg.exec_() == QtWidgets.QDialog.Accepted:					
 			self.figWidth = self.configDlg.ui.spinFigWidth.value()
 			self.figHeight = self.configDlg.ui.spinFigHeight.value()
 

@@ -163,7 +163,7 @@ class GroupLegendDlg(QtWidgets.QDockWidget):
 			self.disconnect(sender, QtCore.SIGNAL('toggled(bool)'), self.setGroupActive)
 			sender.setChecked(False)
 			self.connect(sender, QtCore.SIGNAL('toggled(bool)'), self.setGroupActive)
-			QtGui.QMessageBox.information(None, 'Empty group', 'Groups with no active samples cannot be made active.', QtGui.QMessageBox.Warning)
+			QtWidgets.QMessageBox.information(None, 'Empty group', 'Groups with no active samples cannot be made active.', QtWidgets.QMessageBox.Warning)
 			return
 
 		self.profileTree.groupActive[str(sender.objectName())] = sender.isChecked()

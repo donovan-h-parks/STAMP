@@ -54,7 +54,7 @@ class PlotEventHandler:
 		if len(toolTips) > 0:
 			toolTips.sort()
 			distance, tip = toolTips[0]
-			msgBox = QtGui.QMessageBox()
+			msgBox = QtWidgets.QMessageBox()
 			
 			icon = QtGui.QIcon()
 			icon.addPixmap(QtGui.QPixmap(":/icons/icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
@@ -96,7 +96,7 @@ class MultiPlotEventHandler:
 		if len(toolTips) > 0:
 			toolTips.sort()
 			distance, tip = toolTips[0]
-			msgBox = QtGui.QMessageBox()
+			msgBox = QtWidgets.QMessageBox()
 			
 			icon = QtGui.QIcon()
 			icon.addPixmap(QtGui.QPixmap(":/icons/icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)

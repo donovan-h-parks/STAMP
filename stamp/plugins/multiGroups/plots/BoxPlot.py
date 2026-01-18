@@ -160,7 +160,7 @@ class BoxPlot(AbstractMultiGroupPlotPlugin):
 		for line in axesBoxPlot.xaxis.get_ticklines(): 
 			line.set_color(axesColour)
 			
-		for loc, spine in axesBoxPlot.spines.iteritems():
+		for loc, spine in axesBoxPlot.spines.items():
 			if loc in ['right','top']:
 				spine.set_color('none')
 			else:
@@ -184,7 +184,7 @@ class BoxPlot(AbstractMultiGroupPlotPlugin):
 		
 		configDlg.ui.chkShowPvalue.setChecked(self.bShowPvalue)
 				
-		if configDlg.exec_() == QtGui.QDialog.Accepted:	 
+		if configDlg.exec_() == QtWidgets.QDialog.Accepted:	 
 			self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
 			
 			self.figWidth = configDlg.ui.spinFigWidth.value()

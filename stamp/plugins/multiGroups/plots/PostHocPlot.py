@@ -91,11 +91,11 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 
 		if len(statsResults.postHocResults.pValues) > 200:
 			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
-			reply = QtGui.QMessageBox.question(self, 'Continue?', 'Plots contains ' + str(len(statsResults.postHocResults.pValues)) + ' rows. ' +
+			reply = QtWidgets.QMessageBox.question(self, 'Continue?', 'Plots contains ' + str(len(statsResults.postHocResults.pValues)) + ' rows. ' +
 																		'It may take several seconds to generate this plot. We recommend filtering the results first.' + 
-																		'Do you wish to continue?', QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+																		'Do you wish to continue?', QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
 			QtWidgets.QApplication.instance().restoreOverrideCursor()
-			if reply == QtGui.QMessageBox.No:
+			if reply == QtWidgets.QMessageBox.No:
 				self.emptyAxis('Too many rows.')	
 				return
 				
@@ -210,7 +210,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 		if self.imageWidth > 256 or self.imageHeight > 256:
 				QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 				self.emptyAxis()	
-				reply = QtGui.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
+				reply = QtWidgets.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
 				QtWidgets.QApplication.instance().restoreOverrideCursor()
 				return
 		
@@ -319,7 +319,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 			for line in axNumSeq.xaxis.get_ticklines(): 
 				line.set_color(axesColour)
 					
-			for loc, spine in axNumSeq.spines.iteritems():
+			for loc, spine in axNumSeq.spines.items():
 				if loc in ['left', 'right','top']:
 					spine.set_color('none') 
 				else:
@@ -374,7 +374,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 		for line in axErrorbar.xaxis.get_ticklines(): 
 			line.set_color(axesColour)
 
-		for loc, spine in axErrorbar.spines.iteritems():
+		for loc, spine in axErrorbar.spines.items():
 			if loc in ['left','right','top']:
 				spine.set_color('none') 
 			else:
@@ -392,7 +392,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 				a.tick1On=False
 				a.tick2On=False
 				
-			for loc, spine in axRight.spines.iteritems():
+			for loc, spine in axRight.spines.items():
 				spine.set_color('none') 
 
 		self.updateGeometry()
@@ -427,7 +427,7 @@ class PostHocPlot(AbstractMultiGroupPlotPlugin):
 		
 		self.configDlg.ui.chkFilterPvalue.setChecked(self.bPvalueFilter)
 		
-		if self.configDlg.exec_() == QtGui.QDialog.Accepted:
+		if self.configDlg.exec_() == QtWidgets.QDialog.Accepted:
 			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
 			
 			self.sortingField = str(self.configDlg.ui.cboSortingField.currentText())

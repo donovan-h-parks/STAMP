@@ -123,7 +123,7 @@ class pValueHistogram(AbstractSamplePlotPlugin):
 		for line in axesHist.xaxis.get_ticklines(): 
 			line.set_color(axesColour)
 			
-		for loc, spine in axesHist.spines.iteritems():
+		for loc, spine in axesHist.spines.items():
 			if loc in ['right','top']:
 				spine.set_color('none') 
 			else:
@@ -161,7 +161,7 @@ class pValueHistogram(AbstractSamplePlotPlugin):
 			for line in axins.xaxis.get_ticklines(): 
 				line.set_color(axesColour)
 				
-			for loc, spine in axins.spines.iteritems():
+			for loc, spine in axins.spines.items():
 				if loc in ['right','top']:
 					spine.set_color('none') 
 				else:
@@ -192,7 +192,7 @@ class pValueHistogram(AbstractSamplePlotPlugin):
 		self.configDlg.ui.spinXlimit.setValue(self.xLimit)
 		self.configDlg.ui.chkInsetLogScale.setChecked(self.insetLogScale)
 		
-		if self.configDlg.exec_() == QtGui.QDialog.Accepted:		 
+		if self.configDlg.exec_() == QtWidgets.QDialog.Accepted:		 
 			self.figWidth = self.configDlg.ui.spinFigWidth.value()
 			self.figHeight = self.configDlg.ui.spinFigHeight.value()
 

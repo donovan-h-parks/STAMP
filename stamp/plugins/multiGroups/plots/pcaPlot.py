@@ -370,7 +370,7 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 			for line in axes.xaxis.get_ticklines(): 
 				line.set_color(axesColour)
 				
-			for loc, spine in axes.spines.iteritems():
+			for loc, spine in axes.spines.items():
 				if loc in ['right','top']:
 					spine.set_color('none') 
 				else:
@@ -438,7 +438,7 @@ class pcaPlot(AbstractMultiGroupPlotPlugin):
 		
 		configDlg.ui.chkUniqueShapes.setChecked(self.bUniqueShapes)
 		
-		if configDlg.exec_() == QtGui.QDialog.Accepted:	 
+		if configDlg.exec_() == QtWidgets.QDialog.Accepted:	 
 			self.figWidth = configDlg.ui.spinFigWidth.value()
 			self.figHeight = configDlg.ui.spinFigHeight.value()
 			

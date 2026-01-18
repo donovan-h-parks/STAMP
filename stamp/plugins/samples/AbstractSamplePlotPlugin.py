@@ -209,7 +209,7 @@ class TestWindow(QtWidgets.QMainWindow):
 		self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
 		self.setWindowTitle("Test Window")
 		
-		self.main_widget = QWidgets.QWidget(self)
+		self.main_widget = QtWidgets.QWidget(self)
 		
 		layout = QtGui.QVBoxLayout(self.main_widget)
 		testPlot = PlotClass(self.main_widget)

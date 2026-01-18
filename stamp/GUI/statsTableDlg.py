@@ -62,14 +62,23 @@ class StatsTableDlg(QtWidgets.QDockWidget):
 				maxWidth = fm.width(tableHeadings[colIndex]) + 10
 				
 				for i in range(0, 100): # sample first 100 rows to estimate column width, this is strictly for efficiency	
-					width = fm.width(self.ui.tableStatisticalSummary.model().data(self.ui.tableStatisticalSummary.model().index(i,colIndex), QtCore.Qt.DisplayRole).toString()) + 10
+					# 1. Get the raw data (usually a string or float)
+					cell_data = self.ui.tableStatisticalSummary.model().data(
+						self.ui.tableStatisticalSummary.model().index(i, colIndex),
+						QtCore.Qt.DisplayRole
+					)
+
+					# 2. Convert to string and calculate width using horizontalAdvance
+					# We use str() to ensure it's a string, and handle None cases
+					text_value = str(cell_data) if cell_data is not None else ""
+					width = fm.horizontalAdvance(text_value) + 10
 					if  width > maxWidth:
 						maxWidth = width
 				
 				self.ui.tableStatisticalSummary.setColumnWidth(colIndex, maxWidth)
 		
 	def saveTable(self):
-		filename = QtGui.QFileDialog.getSaveFileName(self, 'Save table...', self.preferences['Last directory'],
+		filename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save table...', self.preferences['Last directory'],
 									'Tab-separated values (*.tsv);;' +
 									'Text file (*.txt);;' +
 									'All files (*.*)')
@@ -79,7 +88,7 @@ class StatsTableDlg(QtWidgets.QDockWidget):
 				if self.table != '':
 					self.table.save(filename)
 			except IOError:
-				QtGui.QMessageBox.information(self, 'Failed to save table', 'Write permission for file denied.', QtGui.QMessageBox.Ok)
+				QtWidgets.QMessageBox.information(self, 'Failed to save table', 'Write permission for file denied.', QtWidgets.QMessageBox.Ok)
 		
 if __name__ == "__main__": 
 	pass

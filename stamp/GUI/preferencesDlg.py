@@ -28,7 +28,7 @@ import math
 
 class PreferencesDlg(QtWidgets.QDialog):
 	def __init__(self, parent=None, info=None):
-		QWidgets.QWidget.__init__(self, parent)
+		QtWidgets.QWidget.__init__(self, parent)
 		
 		# initialize GUI
 		self.ui = Ui_preferencesDlg()
@@ -45,7 +45,7 @@ class PreferencesDlg(QtWidgets.QDialog):
 		self.connect(self.ui.btnAllOtherSamplesColour, QtCore.SIGNAL("clicked()"), self.setAllOtherSamplesColour)
 		
 	def centerWindow(self):
-		screen = QtGui.QDesktopWidget().screenGeometry()
+		screen = QtWidgets.QDesktopWidget().screenGeometry()
 		size =	self.geometry()
 		self.move((screen.width()-size.width())/2, (screen.height()-size.height())/2)
 				

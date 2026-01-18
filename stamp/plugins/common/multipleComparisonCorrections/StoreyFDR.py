@@ -110,7 +110,7 @@ class StoreyFDR(AbstractMultCompCorrection):
     if self.estimated_pi0_hat < 0.01:
       try:
         from PyQt4 import QtGui
-        QtGui.QMessageBox.information(None, 'Storey\'s FDR', 'P-values do not appear to be uniformly distributed. Consider using the Benjamini-Hochberg FDR approach.', QtGui.QMessageBox.Ok)
+        QtWidgets.QMessageBox.information(None, 'Storey\'s FDR', 'P-values do not appear to be uniformly distributed. Consider using the Benjamini-Hochberg FDR approach.', QtWidgets.QMessageBox.Ok)
       except ImportError: 
         print('Storey\'s FDR error: P-values do not appear to be uniformly distributed. Consider using the Benjamini-Hochberg FDR approach.')
         

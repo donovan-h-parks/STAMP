@@ -135,7 +135,7 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 			return
 		elif len(featuresToPlot) > 1000 or len(profile.samplesInGroup1) + len(profile.samplesInGroup2) > 1000:
 			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
-			QtGui.QMessageBox.information(self, 'Too much data!', 'Heatmap plots are limited to 1000 samples and 1000 features.', QtGui.QMessageBox.Ok)
+			QtWidgets.QMessageBox.information(self, 'Too much data!', 'Heatmap plots are limited to 1000 samples and 1000 features.', QtWidgets.QMessageBox.Ok)
 			QtWidgets.QApplication.instance().restoreOverrideCursor()
 			self.emptyAxis()
 			return
@@ -452,7 +452,7 @@ class HeatmapPlot(AbstractGroupPlotPlugin):
 		configDlg.ui.spinDendrogramRowWidth.setValue(self.dendrogramWidth)
 
 
-		if configDlg.exec_() == QtGui.QDialog.Accepted:
+		if configDlg.exec_() == QtWidgets.QDialog.Accepted:
 			self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
 			self.bPlotOnlyActiveFeatures = configDlg.ui.chkPlotOnlyActiveFeatures.isChecked()
 
