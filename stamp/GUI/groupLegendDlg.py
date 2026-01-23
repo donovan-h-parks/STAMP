@@ -21,179 +21,195 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
+# =======================================================================
+# Author: Donovan Parks / Python 3 conversion
+# =======================================================================
+
 from PyQt5 import QtGui, QtCore, QtWidgets
 from stamp.GUI.groupLegendDlgUI import Ui_GroupLegendDlg
 
+
 class GroupLegendDlg(QtWidgets.QDockWidget):
-	# Signals MUST be defined at the class level (outside __init__)
+	# Signals MUST be defined at the class level in PyQt5
 	legendItemChanged = QtCore.pyqtSignal()
 	legendFieldChanged = QtCore.pyqtSignal()
 	legendActiveGroupsChanged = QtCore.pyqtSignal()
 
 	def __init__(self, preferences, parent=None, info=None):
-		QtWidgets.QWidget.__init__(self, parent)
+		# Correctly call QDockWidget (the parent class) init
+		super(GroupLegendDlg, self).__init__(parent)
 
-		# initialize GUI
+		# Initialize GUI
 		self.ui = Ui_GroupLegendDlg()
 		self.ui.setupUi(self)
-		
-		self.groupColours = [QtGui.QColor(128, 177, 211), QtGui.QColor(253, 180, 98),
-								QtGui.QColor(179, 222, 105), QtGui.QColor(190, 186, 218), 
-								QtGui.QColor(141, 211, 199), QtGui.QColor(251, 128, 114),
-								QtGui.QColor(252, 205, 229),QtGui.QColor(127,127,127),
-								QtGui.QColor(188, 128, 189),QtGui.QColor(204, 235, 197)]
+
+		self.groupColours = [
+			QtGui.QColor(128, 177, 211), QtGui.QColor(253, 180, 98),
+			QtGui.QColor(179, 222, 105), QtGui.QColor(190, 186, 218),
+			QtGui.QColor(141, 211, 199), QtGui.QColor(251, 128, 114),
+			QtGui.QColor(252, 205, 229), QtGui.QColor(127, 127, 127),
+			QtGui.QColor(188, 128, 189), QtGui.QColor(204, 235, 197)
+		]
 
 		self.groupColourDict = {}
 		self.groupColourButtonsDict = {}
-		
+
+		# Setup layout for scroll area
 		self.ui.legendLayout = QtWidgets.QVBoxLayout(self.ui.scrollLegend)
 		self.ui.legendLayout.setSizeConstraint(QtWidgets.QLayout.SetMinAndMaxSize)
-		
+
 		self.preferences = preferences
-		
 		self.currentField = ''
-		
-	def deleteItems(self, layout): 
-		if layout is not None: 
-			while layout.count(): 
-				item = layout.takeAt(0) 
-				widget = item.widget() 
-				if widget is not None: 
-					widget.deleteLater() 
-				else: 
-					self.deleteItems(item.layout()) 
-		
+
+	def deleteItems(self, layout):
+		if layout is not None:
+			while layout.count():
+				item = layout.takeAt(0)
+				widget = item.widget()
+				if widget is not None:
+					widget.deleteLater()
+				else:
+					self.deleteItems(item.layout())
+
 	def initLegend(self, profileTree, metadata, field):
 		self.profileTree = profileTree
 		self.metadata = metadata
-		
+
 		if field != self.currentField:
 			self.metadata.setActiveField(field, self.profileTree)
 		self.currentField = field
-		
+
 		# remove any previous widgets
 		self.deleteItems(self.ui.legendLayout)
-			
-		# add widgets
+
+		# reset dictionaries
 		self.groupColourDict = {}
-		
-		# add combo box
-		horizontalLayout = QtGui.QHBoxLayout()
-		lblGroupField = QtGui.QLabel(self.ui.dockWidgetContents)
+		self.groupColourButtonsDict = {}
+
+		# Group field selection layout
+		horizontalLayout = QtWidgets.QHBoxLayout()
+		lblGroupField = QtWidgets.QLabel(self.ui.dockWidgetContents)
 		lblGroupField.setText('Group field: ')
 		horizontalLayout.addWidget(lblGroupField)
-		cboGroupField = QtGui.QComboBox(self.ui.dockWidgetContents)
-		cboGroupField.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToContents)
-		
+
+		cboGroupField = QtWidgets.QComboBox(self.ui.dockWidgetContents)
+		cboGroupField.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
+
 		for f in sorted(self.metadata.getFeatures()):
 			cboGroupField.addItem(f)
 		cboGroupField.setCurrentIndex(cboGroupField.findText(field))
-			
-		self.connect(cboGroupField, QtCore.SIGNAL('currentIndexChanged(QString)'), self.newGroupField)
-		
+
+		# PyQt5 New-style connection
+		cboGroupField.currentTextChanged.connect(self.newGroupField)
+
 		horizontalLayout.addWidget(cboGroupField)
 		horizontalLayout.addStretch()
 		self.ui.legendLayout.addLayout(horizontalLayout)
-		
-		# add horizontal line
-		line = QtGui.QFrame(self.ui.dockWidgetContents)
-		line.setFrameShape(QtGui.QFrame.HLine)
-		line.setFrameShadow(QtGui.QFrame.Sunken)
+
+		# Horizontal line
+		line = QtWidgets.QFrame(self.ui.dockWidgetContents)
+		line.setFrameShape(QtWidgets.QFrame.HLine)
+		line.setFrameShadow(QtWidgets.QFrame.Sunken)
 		self.ui.legendLayout.addWidget(line)
-		
-		# add legend items
+
+		# Add legend items
 		index = 0
-		for name in sorted(self.profileTree.groupDict.keys()):
-			samples = set(sorted(self.profileTree.groupDict[name]))
+		sorted_groups = sorted(self.profileTree.groupDict.keys())
+
+		for name in sorted_groups:
+			samples = set(self.profileTree.groupDict[name])
 			samples = list(samples.intersection(set(self.metadata.activeSamples)))
-			
-			tooltip = ''
-			for i in range(0, len(samples)):
-				tooltip += samples[i]
-				if i != len(samples)-1:
-					tooltip += ', '
-			
-			horizontalLayout = QtGui.QHBoxLayout()
-			
+
+			tooltip = ', '.join(samples)
+
+			horizontalLayout = QtWidgets.QHBoxLayout()
+
 			# force groups with no active samples to be inactive
 			if len(samples) == 0:
 				self.profileTree.groupActive[name] = False
-			
-			chkGroupActive = QtGui.QCheckBox(self.ui.dockWidgetContents)
-			chkGroupActive.setChecked(self.profileTree.groupActive[name])
+
+			chkGroupActive = QtWidgets.QCheckBox(self.ui.dockWidgetContents)
+			chkGroupActive.setChecked(self.profileTree.groupActive.get(name, False))
 			chkGroupActive.setObjectName(name)
 			chkGroupActive.setToolTip(tooltip)
-			self.connect(chkGroupActive, QtCore.SIGNAL('toggled(bool)'), self.setGroupActive)
+			# New-style connection
+			chkGroupActive.toggled.connect(self.setGroupActive)
 			horizontalLayout.addWidget(chkGroupActive)
-			
-			tbGroupColour = QtGui.QToolButton(self.ui.dockWidgetContents)
+
+			tbGroupColour = QtWidgets.QToolButton(self.ui.dockWidgetContents)
 			tbGroupColour.setMinimumSize(QtCore.QSize(22, 22))
 			tbGroupColour.setMaximumSize(QtCore.QSize(22, 22))
 			tbGroupColour.setObjectName(name)
 			tbGroupColour.setToolTip(tooltip)
-			self.connect(tbGroupColour, QtCore.SIGNAL('clicked()'), self.setColour)
+			# New-style connection
+			tbGroupColour.clicked.connect(self.setColour)
 			horizontalLayout.addWidget(tbGroupColour)
-			
-			lblGroupName = QtGui.QLabel(self.ui.dockWidgetContents)
-			lblGroupName.setText(name + ' (' + str(len(samples)) + ')')
+
+			lblGroupName = QtWidgets.QLabel(self.ui.dockWidgetContents)
+			lblGroupName.setText(f"{name} ({len(samples)})")
 			lblGroupName.setToolTip(tooltip)
 			horizontalLayout.addWidget(lblGroupName)
-			
+
 			horizontalLayout.addStretch()
 			self.ui.legendLayout.addLayout(horizontalLayout)
-			
-			if index == len(self.groupColours):
+
+			if index >= len(self.groupColours):
 				self.groupColours.append(QtGui.QColor(0, 0, 0))
-			
+
 			colour = self.groupColours[index]
 			self.groupColourDict[name] = colour
 			self.groupColourButtonsDict[name] = tbGroupColour
-			colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
-			tbGroupColour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
+
+			colourStr = f"{colour.red()},{colour.green()},{colour.blue()}"
+			tbGroupColour.setStyleSheet(f"background-color: rgb({colourStr});")
 
 			index += 1
-			
-		self.ui.legendLayout.addStretch()
 
+		self.ui.legendLayout.addStretch()
 		self.layout().update()
-		
+
 	def setGroupActive(self):
 		sender = self.sender()
-		if sender.toolTip() == '':	# make sure group has at least one sample
-			self.disconnect(sender, QtCore.SIGNAL('toggled(bool)'), self.setGroupActive)
+		if not sender.toolTip():  # check if tooltip is empty (no samples)
+			sender.blockSignals(True)
 			sender.setChecked(False)
-			self.connect(sender, QtCore.SIGNAL('toggled(bool)'), self.setGroupActive)
-			QtWidgets.QMessageBox.information(None, 'Empty group', 'Groups with no active samples cannot be made active.', QtWidgets.QMessageBox.Warning)
+			sender.blockSignals(False)
+			QtWidgets.QMessageBox.warning(None, 'Empty group', 'Groups with no active samples cannot be made active.')
 			return
 
-		self.profileTree.groupActive[str(sender.objectName())] = sender.isChecked()
-		self.emit(QtCore.SIGNAL('legendActiveGroupsChanged()'))
-		
+		group_name = sender.objectName()
+		self.profileTree.groupActive[group_name] = sender.isChecked()
+		self.legendActiveGroupsChanged.emit()
+
 	def setColour(self):
 		sender = self.sender()
-		
-		colour = QtGui.QColorDialog.getColor(self.groupColourDict[str(sender.objectName())], self, 'Set group colour')
-		
-		colourMapIndex = sorted(self.profileTree.groupDict.keys()).index(str(sender.objectName()))
-		self.groupColours[colourMapIndex] = colour
-		
+		group_name = sender.objectName()
+
+		initial_color = self.groupColourDict.get(group_name, QtGui.QColor(0, 0, 0))
+		colour = QtWidgets.QColorDialog.getColor(initial_color, self, 'Set group colour')
+
 		if colour.isValid():
-			self.updateLegend(str(sender.objectName()), colour)
-			
+			# Update the list and the dict
+			sorted_groups = sorted(self.profileTree.groupDict.keys())
+			if group_name in sorted_groups:
+				colourMapIndex = sorted_groups.index(group_name)
+				self.groupColours[colourMapIndex] = colour
+				self.updateLegend(group_name, colour)
+
 	def updateLegend(self, groupName, colour):
 		if self.groupColourDict:
-			colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
-			self.groupColourButtonsDict[groupName].setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
-			
+			colourStr = f"{colour.red()},{colour.green()},{colour.blue()}"
+			self.groupColourButtonsDict[groupName].setStyleSheet(f"background-color: rgb({colourStr});")
+
 			self.groupColourDict[groupName] = colour
 			self.preferences['Group colours'] = self.groupColourDict
-			
-			self.emit(QtCore.SIGNAL('legendItemChanged()'))
-			
-	def newGroupField(self, field):
-		self.initLegend(self.profileTree, self.metadata, str(field))
-		self.preferences['Group colours'] = self.groupColourDict
-		self.emit(QtCore.SIGNAL('legendFieldChanged()'))
+			self.legendItemChanged.emit()
 
-if __name__ == "__main__": 
+	def newGroupField(self, field):
+		self.initLegend(self.profileTree, self.metadata, field)
+		self.preferences['Group colours'] = self.groupColourDict
+		self.legendFieldChanged.emit()
+
+
+if __name__ == "__main__":
 	pass

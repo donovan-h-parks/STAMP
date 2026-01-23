@@ -1,4 +1,4 @@
-#=======================================================================
+# =======================================================================
 # Author: Donovan Parks
 #
 # Dialog box used to set program preferences.
@@ -19,172 +19,176 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with STAMP. If not, see <http://www.gnu.org/licenses/>.
-#=======================================================================
+# =======================================================================
 
 from PyQt5 import QtGui, QtCore, QtWidgets
 from stamp.GUI.metadataTableDlgUI import Ui_MetadataTableDlg
 
 from stamp.metagenomics.TableHelper import QTableWidgetNumericItem
 
+
 class MetadataTableDlg(QtWidgets.QDockWidget):
-	# 1. Declare the signal here (MUST be outside __init__)
-	activeSamplesChanged = QtCore.pyqtSignal()
+    # Define custom signals as class attributes
+    activeSamplesChanged = QtCore.pyqtSignal()
 
-	def __init__(self, preferences, parent=None, info=None):
-		QtWidgets.QDockWidget.__init__(self, parent)
-		
-		# initialize GUI
-		self.ui = Ui_MetadataTableDlg()
-		self.ui.setupUi(self)
-		
-		# setup signals
-		# Modern PyQt5 Syntax
-		self.ui.tbMetadataAddAll.clicked.connect(self.checkAll)
-		self.ui.tbMetadataRemoveAll.clicked.connect(self.uncheckAll)
-		self.ui.tbMetadataFilter.clicked.connect(self.filter)
-		self.ui.cboMetadataField.currentIndexChanged.connect(self.setValues)
+    def __init__(self, preferences, parent=None, info=None):
+        super(MetadataTableDlg, self).__init__(parent)
 
-		
-		self.preferences = preferences
-		self.table = ''
-		
-		self.metadata = None
+        # initialize GUI
+        self.ui = Ui_MetadataTableDlg()
+        self.ui.setupUi(self)
 
-	def checkAll(self):
-		# rowCount() will be 0 if no data is loaded, safely skipping the loop
-		for r in range(0, self.ui.tableMetadata.rowCount()):
-			item = self.ui.tableMetadata.item(r, 0)
+        # setup signals
+        self.ui.tbMetadataAddAll.clicked.connect(self.checkAll)
+        self.ui.tbMetadataRemoveAll.clicked.connect(self.uncheckAll)
+        self.ui.tbMetadataFilter.clicked.connect(self.filter)
+        self.ui.cboMetadataField.currentIndexChanged.connect(self.setValues)
 
-			# This is the crucial safety check for Python 3
-			if item is not None:
-				item.setCheckState(QtCore.Qt.Checked)
+        self.preferences = preferences
+        self.table = ''
 
-		self.updateActiveSamples()
-			
-	def uncheckAll(self):
-		for r in range(0, self.ui.tableMetadata.rowCount()):
-			self.ui.tableMetadata.item(r,0).setCheckState(QtCore.Qt.Unchecked)
-		self.updateActiveSamples()
-			
-	def checkSpecifiedSamples(self, sampleIds):
-		for r in range(0, self.ui.tableMetadata.rowCount()):
-			if str(self.ui.tableMetadata.item(r,0).text()) in sampleIds:
-				self.ui.tableMetadata.item(r,0).setCheckState(QtCore.Qt.Checked)
-		self.updateActiveSamples()
-				
-	def uncheckSpecifiedSamples(self, sampleIds):
-		for r in range(0, self.ui.tableMetadata.rowCount()):
-			if str(self.ui.tableMetadata.item(r,0).text()) in sampleIds:
-				self.ui.tableMetadata.item(r,0).setCheckState(QtCore.Qt.Unchecked)
-		self.updateActiveSamples()
-			
-	def filter(self):
-		addRemove = str(self.ui.cboMetadataAddRemove.currentText())
-		field = str(self.ui.cboMetadataField.currentText())
-		relationship = str(self.ui.cboMetadataRelationship.currentText())
-		value = str(self.ui.cboMetadataValue.currentText())
-		
-		isNumeric = self.metadata.isNumericalData(field)
-		
-		sampleIds = []
-		for sample in self.metadata.getSampleNames():
-			if isNumeric:
-				if relationship == '>' and float(self.metadata.getValue(sample, field)) > float(value):
-					sampleIds.append(sample)
-				elif relationship == '=' and float(self.metadata.getValue(sample, field)) == float(value):
-					sampleIds.append(sample)
-				elif relationship == '<' and float(self.metadata.getValue(sample, field)) < float(value):
-					sampleIds.append(sample)
-			else:
-				if relationship == '>' and self.metadata.getValue(sample, field) > value:
-					sampleIds.append(sample)
-				elif relationship == '=' and self.metadata.getValue(sample, field) == value:
-					sampleIds.append(sample)
-				elif relationship == '<' and self.metadata.getValue(sample, field) < value:
-					sampleIds.append(sample)
-					
-		if addRemove == 'Add':
-			self.checkSpecifiedSamples(sampleIds)
-		else:
-			self.uncheckSpecifiedSamples(sampleIds)
-		
-	def setFields(self, fields):
-		self.ui.cboMetadataField.clear()
-		self.ui.cboMetadataField.addItems(fields)
-		self.ui.cboMetadataField.updateGeometry()
-		
-	def setValues(self):
-		field = str(self.ui.cboMetadataField.currentText())
-		values = self.metadata.getUniqueValues(field)
+        self.metadata = None
 
-		if self.metadata.isNumericalData(field):
-			values.sort(lambda x, y: cmp(float(x), float(y)))
-		else:
-			values.sort(lambda x, y: cmp(x.lower(),y.lower()))
+    def checkAll(self):
+        for r in range(0, self.ui.tableMetadata.rowCount()):
+            self.ui.tableMetadata.item(r, 0).setCheckState(QtCore.Qt.Checked)
+        self.updateActiveSamples()
 
-		self.ui.cboMetadataValue.clear()
-		self.ui.cboMetadataValue.addItems(values)
-		
-		isNumeric = self.metadata.isNumericalData(field)
-		
-	def itemClicked(self, item):
-		if item.column() == 0:
-			self.updateActiveSamples()
+    def uncheckAll(self):
+        for r in range(0, self.ui.tableMetadata.rowCount()):
+            self.ui.tableMetadata.item(r, 0).setCheckState(QtCore.Qt.Unchecked)
+        self.updateActiveSamples()
 
-	def updateActiveSamples(self):
-		activeSamples = []
-		for r in range(0, self.ui.tableMetadata.rowCount()):
-			item = self.ui.tableMetadata.item(r, 0)
+    def checkSpecifiedSamples(self, sampleIds):
+        for r in range(0, self.ui.tableMetadata.rowCount()):
+            if str(self.ui.tableMetadata.item(r, 0).text()) in sampleIds:
+                self.ui.tableMetadata.item(r, 0).setCheckState(QtCore.Qt.Checked)
+        self.updateActiveSamples()
 
-			# Check if item exists before asking for its checkState
-			if item is not None and item.checkState() == QtCore.Qt.Checked:
-				activeSamples.append(str(item.text()))
+    def uncheckSpecifiedSamples(self, sampleIds):
+        for r in range(0, self.ui.tableMetadata.rowCount()):
+            if str(self.ui.tableMetadata.item(r, 0).text()) in sampleIds:
+                self.ui.tableMetadata.item(r, 0).setCheckState(QtCore.Qt.Unchecked)
+        self.updateActiveSamples()
 
-		# Only update if metadata object actually exists
-		if self.metadata is not None:
-			self.metadata.activeSamples = activeSamples
-			self.activeSamplesChanged.emit()
+    def filter(self):
+        addRemove = str(self.ui.cboMetadataAddRemove.currentText())
+        field = str(self.ui.cboMetadataField.currentText())
+        relationship = str(self.ui.cboMetadataRelationship.currentText())
+        value = str(self.ui.cboMetadataValue.currentText())
 
-	def setTable(self, metadata):
-		if metadata != None:
-			self.disconnect(self.ui.tableMetadata, QtCore.SIGNAL('itemClicked(QTableWidgetItem*)'), self.itemClicked)
-			
-			self.metadata = metadata
-			
-			table, headers = metadata.getTableData()
-			
-			self.setFields(headers[1:])
+        isNumeric = self.metadata.isNumericalData(field)
 
-			self.ui.tableMetadata.clear()
-			self.ui.tableMetadata.horizontalHeader().show()
-			self.ui.tableMetadata.setColumnCount(len(headers))
-			self.ui.tableMetadata.setHorizontalHeaderLabels(headers)
-			self.ui.tableMetadata.setRowCount(len(table))
-			self.ui.tableMetadata.verticalHeader().hide()
-			
-			isNumeric = [False]
-			for field in headers[1:]:
-				isNumeric.append(self.metadata.isNumericalData(field))
-			
-			for i in range(0, len(table)):
-				row = table[i]
+        sampleIds = []
+        for sample in self.metadata.getSampleNames():
+            if isNumeric:
+                sample_val = float(self.metadata.getValue(sample, field))
+                filter_val = float(value)
+                if relationship == '>' and sample_val > filter_val:
+                    sampleIds.append(sample)
+                elif relationship == '=' and sample_val == filter_val:
+                    sampleIds.append(sample)
+                elif relationship == '<' and sample_val < filter_val:
+                    sampleIds.append(sample)
+            else:
+                sample_val = self.metadata.getValue(sample, field)
+                if relationship == '>' and sample_val > value:
+                    sampleIds.append(sample)
+                elif relationship == '=' and sample_val == value:
+                    sampleIds.append(sample)
+                elif relationship == '<' and sample_val < value:
+                    sampleIds.append(sample)
 
-				for j in range(0, len(row)):
-					if isNumeric[j]:
-						item = QTableWidgetNumericItem(row[j])
-					else:
-						item = QtGui.QTableWidgetItem(row[j])
+        if addRemove == 'Add':
+            self.checkSpecifiedSamples(sampleIds)
+        else:
+            self.uncheckSpecifiedSamples(sampleIds)
 
-					if j == 0:
-						item.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
-						item.setCheckState(QtCore.Qt.Checked)
-					else:
-						item.setTextAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
-						
-					self.ui.tableMetadata.setItem(i, j, item)
-						
-			self.ui.tableMetadata.resizeColumnsToContents()
-			self.connect(self.ui.tableMetadata, QtCore.SIGNAL('itemClicked(QTableWidgetItem*)'), self.itemClicked)
+    def setFields(self, fields):
+        self.ui.cboMetadataField.clear()
+        self.ui.cboMetadataField.addItems(fields)
+        self.ui.cboMetadataField.updateGeometry()
 
-if __name__ == "__main__": 
-	pass
+    def setValues(self):
+        field = str(self.ui.cboMetadataField.currentText())
+
+        # --- FIX: Prevent crash if field is empty ---
+        if not field:
+            self.ui.cboMetadataValue.clear()
+            return
+        # --------------------------------------------
+
+        values = self.metadata.getUniqueValues(field)
+
+        # Python 3 sort uses key instead of cmp
+        if self.metadata.isNumericalData(field):
+            values.sort(key=lambda x: float(x))
+        else:
+            values.sort(key=lambda x: x.lower())
+
+        self.ui.cboMetadataValue.clear()
+        self.ui.cboMetadataValue.addItems(values)
+
+    def itemClicked(self, item):
+        if item.column() == 0:
+            self.updateActiveSamples()
+
+    def updateActiveSamples(self):
+        activeSamples = []
+        for r in range(0, self.ui.tableMetadata.rowCount()):
+            if self.ui.tableMetadata.item(r, 0).checkState() == QtCore.Qt.Checked:
+                activeSamples.append(str(self.ui.tableMetadata.item(r, 0).text()))
+
+        self.metadata.activeSamples = activeSamples
+
+        # Emit the custom signal
+        self.activeSamplesChanged.emit()
+
+    def setTable(self, metadata):
+        if metadata is not None:
+            # Safely disconnect if previously connected
+            try:
+                self.ui.tableMetadata.itemClicked.disconnect(self.itemClicked)
+            except TypeError:
+                pass  # Was not connected
+
+            self.metadata = metadata
+
+            table, headers = metadata.getTableData()
+
+            self.setFields(headers[1:])
+
+            self.ui.tableMetadata.clear()
+            self.ui.tableMetadata.horizontalHeader().show()
+            self.ui.tableMetadata.setColumnCount(len(headers))
+            self.ui.tableMetadata.setHorizontalHeaderLabels(headers)
+            self.ui.tableMetadata.setRowCount(len(table))
+            self.ui.tableMetadata.verticalHeader().hide()
+
+            isNumeric = [False]
+            for field in headers[1:]:
+                isNumeric.append(self.metadata.isNumericalData(field))
+
+            for i in range(0, len(table)):
+                row = table[i]
+
+                for j in range(0, len(row)):
+                    if isNumeric[j]:
+                        item = QTableWidgetNumericItem(row[j])
+                    else:
+                        item = QtWidgets.QTableWidgetItem(row[j])
+
+                    if j == 0:
+                        item.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+                        item.setCheckState(QtCore.Qt.Checked)
+                    else:
+                        item.setTextAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
+
+                    self.ui.tableMetadata.setItem(i, j, item)
+
+            self.ui.tableMetadata.resizeColumnsToContents()
+            self.ui.tableMetadata.itemClicked.connect(self.itemClicked)
+
+
+if __name__ == "__main__":
+    pass

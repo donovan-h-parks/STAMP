@@ -84,7 +84,7 @@ def main():
     # preferences['Last directory'] = ''
 
     # 2. Pass the real dictionary into the app
-    gui = STAMP.StampApp(preferences=preferences)
+    gui = STAMP.MainWindow(preferences=preferences)
 
     # 3. Start the event loop
     sys.exit(app.exec())

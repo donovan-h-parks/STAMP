@@ -1,4 +1,4 @@
-#=======================================================================
+# =======================================================================
 # Author: Donovan Parks
 #
 # Perform ANOVA statistical hypothesis test.
@@ -14,43 +14,51 @@
 #
 # STAMP is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
-#======================================================================='''
+# along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
+# =======================================================================
 
 import math
 from stamp.plugins.multiGroups.AbstractMultiGroupStatsTestPlugin import AbstractMultiGroupStatsTestPlugin
 
 from scipy.stats import f_oneway
 
-class ANOVA(AbstractMultiGroupStatsTestPlugin):
-	'''
-	Perform ANOVA statistical hypothesis test
-	'''
-	
-	def __init__(self, preferences):
-		AbstractMultiGroupStatsTestPlugin.__init__(self, preferences)
-		self.name = 'ANOVA'
-	
-	def hypothesisTest(self, data):
-		note = ''
-		for group in data:
-			if len(group) < 2:
-				note = 'degenerate case: at least one group contains less than 2 samples'
-				return 1.0, note
-				
-		F_value, pValue = apply(f_oneway, data)
-		if math.isnan(pValue):
-			pValue = 1.0 # invalid data for calculating p-value so assume large p-value
-			note = 'degenerate case: failed to calculate p-value'
-			
-		return pValue, note
 
-if __name__ == "__main__": 
-	anova = ANOVA()
-	pValueOne, pValueTwo = anova.hypothesisTest([[10, 20, 30], [20, 30, 40], [10, 30, 50, 70]])
-	print(pValueOne)
-	print(pValueTwo)
+class ANOVA(AbstractMultiGroupStatsTestPlugin):
+    '''
+    Perform ANOVA statistical hypothesis test
+    '''
+
+    def __init__(self, preferences):
+        super().__init__(preferences)
+        self.name = 'ANOVA'
+
+    def hypothesisTest(self, data):
+        note = ''
+        for group in data:
+            if len(group) < 2:
+                note = 'degenerate case: at least one group contains less than 2 samples'
+                return 1.0, note
+
+        try:
+            # Python 3: use * argument unpacking instead of apply()
+            F_value, pValue = f_oneway(*data)
+        except Exception:
+            return 1.0, 'degenerate case: failed to calculate p-value'
+
+        if math.isnan(pValue):
+            pValue = 1.0  # invalid data for calculating p-value so assume large p-value
+            note = 'degenerate case: failed to calculate p-value'
+
+        return pValue, note
+
+
+if __name__ == "__main__":
+    # Pass None for preferences if running directly for testing
+    anova = ANOVA(None)
+    pValue, note = anova.hypothesisTest([[10, 20, 30], [20, 30, 40], [10, 30, 50, 70]])
+    print(pValue)
+    print(note)

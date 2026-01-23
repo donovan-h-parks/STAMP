@@ -1,4 +1,4 @@
-#=======================================================================
+# =======================================================================
 # Author: Donovan Parks
 #
 # Bar plot for multiple groups.
@@ -19,261 +19,273 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
-#======================================================================='''
+# =======================================================================
 
 import sys
 
-from PyQt5 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore, QtWidgets
 import numpy as np
 
-from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, ConfigureDialog
+from stamp.plugins.multiGroups.AbstractMultiGroupPlotPlugin import AbstractMultiGroupPlotPlugin, TestWindow, \
+    ConfigureDialog
 from stamp.plugins.multiGroups.plots.configGUI.BarPlotUI import Ui_BarPlotDialog
 
 from stamp.metagenomics.stats.CI.WilsonCI import WilsonCI
 
+
 class BarPlot(AbstractMultiGroupPlotPlugin):
-	'''
-	Bar plot for multiple groups.
-	'''
-	def __init__(self, preferences, parent=None):
-		AbstractMultiGroupPlotPlugin.__init__(self, preferences, parent)
-		self.preferences = preferences
-	 
-		self.name = 'Bar plot'
-		self.type = 'Exploratory'
-		
-		self.settings = preferences['Settings']
-		self.figColWidth = float(self.settings.value('multiple group: ' + self.name + '/column width', 0.2))
-		self.figHeight = float(self.settings.value('multiple group: ' + self.name + '/height', 6.0))
-		self.fieldToPlot = str(
-			self.settings.value('multiple group: ' + self.name + '/field to plot', 'Proportion of sequences (%)'))
-		self.bShowAverages = bool(self.settings.value('multiple group: ' + self.name + '/show averages', True))
-		self.legendPos = int(self.settings.value('multiple group: ' + self.name + '/legend position', -1))
-		self.bShowPvalue = bool(self.settings.value('multiple group: ' + self.name + '/show p-value', True))
+    '''
+    Bar plot for multiple groups.
+    '''
 
-	def mirrorProperties(self, plotToCopy):
-		super(BarPlot, self).mirrorProperties(plotToCopy)
-		
-		self.figColWidth = plotToCopy.figColWidth
-		self.figHeight = plotToCopy.figHeight
-		
-		self.fieldToPlot = plotToCopy.fieldToPlot
-		self.legendPos = plotToCopy.legendPos
-		self.bShowAverage = plotToCopy.bShowAverages
-		
-		self.bShowPvalue = plotToCopy.bShowPvalue
-		
-	def plot(self, profile, statsResults):
-		if len(profile.profileDict) <= 0 or self.preferences['Selected multiple group feature'] == '':
-			self.emptyAxis()
-			return
-			
-		axesColour = str(self.preferences['Axes colour'].name())
-		
-		# *** Get data for each group
-		feature = self.preferences['Selected multiple group feature']
-		if self.fieldToPlot == "Number of sequences":
-			data = profile.getActiveFeatureCounts(feature)
-		else: # Proportion of sequences (%)
-			data = profile.getActiveFeatureProportions(feature)
-			
-		if data == []:
-			self.emptyAxis()
-			return
-		
-		sampleNames = []
-		for i in range(0, len(profile.activeSamplesInGroups )):
-			sampleNames += profile.activeSamplesInGroups[i]
+    def __init__(self, preferences, parent=None):
+        super(BarPlot, self).__init__(preferences, parent)
+        self.preferences = preferences
 
-		# *** Find longest label
-		bTruncate = False
-		if self.preferences['Truncate feature names']:
-			length = self.preferences['Length of truncated feature names']
-			bTruncate = True
-		
-		longestLabelLen = 0
-		for i in range(0, len(sampleNames)):
-			if bTruncate and len(sampleNames[i]) > length+3:
-				sampleNames[i] = sampleNames[i][0:length] + '...'
-				
-			if len(sampleNames[i]) > longestLabelLen:
-				longestLabelLen = len(sampleNames[i])
-				longestLabel = sampleNames[i]
+        self.name = 'Bar plot'
+        self.type = 'Exploratory'
 
-		# *** Set figure size
-		self.fig.clear()
-		figWidth = self.figColWidth*len(sampleNames)
-		figHeight = self.figHeight
-		if figWidth > 256 or figHeight > 256:
-				QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
-				self.emptyAxis()	
-				QtWidgets.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
-				QtWidgets.QApplication.instance().restoreOverrideCursor()
-				return
+        self.bPlotFeaturesIndividually = True
 
-		self.fig.set_size_inches(figWidth, figHeight)
-		
-		maxValue = 0
-		for i in range(0, len(data)):
-			curMax = max(data[i])
-			if curMax > maxValue:
-				maxValue = curMax
-		maxValueStr = '%.2f' % maxValue
-		
-		xLabelBounds, yLabelBounds = self.labelExtents([longestLabel], 8, 90, [maxValueStr], 8, 0)
-		padding = 0.3 # inches
-		newFigWidth = figWidth * (1.0+yLabelBounds.width) + 2*padding
-		
-		self.fig.set_size_inches(figWidth * (1.0+yLabelBounds.width) + 2*padding, figHeight)
+        # --- Flags required by STAMP.py MultiGroup logic ---
+        self.bRunPostHocTest = False
+        self.bSupportsHighlight = False
+        # ---------------------------------------------------
 
-		xOffsetFigSpace = (yLabelBounds.width*figWidth)/newFigWidth + padding/newFigWidth
-		yOffsetFigSpace = xLabelBounds.height + padding/figHeight
-		axesBar = self.fig.add_axes([xOffsetFigSpace, yOffsetFigSpace,
-																		1.0 - xOffsetFigSpace - padding/newFigWidth, 1.0 - yOffsetFigSpace - padding/figHeight])
+        self.settings = preferences['Settings']
 
-		# *** Plot data
-		colours = []
-		for groupName in profile.activeGroupNames:
-			colours.append(str(self.preferences['Group colours'][groupName].name()))
+        # Explicit type casting for PyQt5
+        self.figColWidth = float(self.settings.value('multiple group: ' + self.name + '/column width', 3.0))
+        self.figHeight = float(self.settings.value('multiple group: ' + self.name + '/height', 4.0))
+        self.fieldToPlot = str(
+            self.settings.value('multiple group: ' + self.name + '/field to plot', 'Proportion of sequences (%)'))
+        self.bShowAverages = self.settings.value('multiple group: ' + self.name + '/show averages', True, type=bool)
+        self.legendPos = int(self.settings.value('multiple group: ' + self.name + '/legend position', 0))
+        self.bShowPvalue = self.settings.value('multiple group: ' + self.name + '/show p-value', True, type=bool)
 
-		colWidth = self.figColWidth
-		barWidth = (colWidth*0.9) / 2
-		
-		theRects = []
-		start = 0
-		for i in range(0, len(data)):
-			rects = axesBar.bar(np.arange(len(data[i]))*colWidth + start*colWidth, data[i], width=barWidth, color=colours[i], zorder=5)
-			theRects.append(rects[0])
-			start += len(data[i])
+    def mirrorProperties(self, plotToCopy):
+        self.name = plotToCopy.name
+        self.figColWidth = plotToCopy.figColWidth
+        self.figHeight = plotToCopy.figHeight
+        self.fieldToPlot = plotToCopy.fieldToPlot
+        self.bShowAverages = plotToCopy.bShowAverages
+        self.legendPos = plotToCopy.legendPos
+        self.bShowPvalue = plotToCopy.bShowPvalue
 
-		axesBar.set_xticks(np.arange(len(sampleNames))*colWidth + barWidth)
-		axesBar.set_xlim([-0.25*colWidth, len(sampleNames)*colWidth - 0.25*colWidth])
-		axesBar.set_xticklabels(sampleNames)
-		
-		# *** Plot average lines
-		if self.bShowAverages:
-			start = 0
-			for i in range(0, len(data)):
-				avgGroup = float(sum(data[i])) / len(data[i])
-				axesBar.plot([start*colWidth - 0.25*colWidth, (start + len(data[i]))*colWidth - 0.25*colWidth], [avgGroup, avgGroup], color=colours[i], linestyle='-', zorder=1)
-				start += len(data[i])
-				
-		# *** P-value label
-		if self.bShowPvalue and statsResults.profile != None:
-			pValueStr = statsResults.getFeatureStatisticAsStr(feature, 'pValuesCorrected')
-			axesBar.text(1.0, 1.0, r'$p$ = ' + pValueStr, horizontalalignment='right', verticalalignment='bottom', transform=axesBar.transAxes)
+        if hasattr(plotToCopy, 'bSupportsHighlight'):
+            self.bSupportsHighlight = plotToCopy.bSupportsHighlight
+        if hasattr(plotToCopy, 'bRunPostHocTest'):
+            self.bRunPostHocTest = plotToCopy.bRunPostHocTest
 
-		# *** Prettify plot
-		if self.preferences['Truncate feature names']:
-			length = self.preferences['Length of truncated feature names']
-			if len(feature) > length+3:
-					feature = feature[0:length] + '...'
-					
-		axesBar.set_title(feature)
-		axesBar.set_ylabel(self.fieldToPlot)
-		
-		if self.legendPos != -1:
-			legend = axesBar.legend(theRects, profile.activeGroupNames, loc=self.legendPos)
-			legend.get_frame().set_linewidth(0)
+    def plot(self, profile, statsResults):
+        if len(profile.profileDict) <= 0:
+            self.emptyAxis()
+            return
 
-		for label in axesBar.get_xticklabels():
-			label.set_rotation(90)
+        # *** Colour of plot elements
+        axesColour = str(self.preferences['Axes colour'].name())
 
-		for a in axesBar.yaxis.majorTicks:
-			a.tick1On=False
-			a.tick2On=False
-				
-		for a in axesBar.xaxis.majorTicks:
-			a.tick1On=False
-			a.tick2On=False
-			
-		for line in axesBar.yaxis.get_ticklines(): 
-			line.set_color(axesColour)
-		
-		for line in axesBar.xaxis.get_ticklines(): 
-			line.set_color(axesColour)
-			
-		for loc, spine in axesBar.spines.items():
-			if loc in ['right','top']:
-				spine.set_color('none') 
-			else:
-				spine.set_color(axesColour)
+        # *** Create plot
+        self.fig.clear()
 
-		self.updateGeometry()
-		self.draw()
+        # get data
+        feature = statsResults.selectedFeatures[0]
 
-	def configure(self, profile, statsResults):
-		configDlg = ConfigureDialog(Ui_BarPlotDialog)
-		
-		configDlg.ui.cboFieldToPlot.setCurrentIndex(configDlg.ui.cboFieldToPlot.findText(self.fieldToPlot))
-				
-		configDlg.ui.spinFigColWidth.setValue(self.figColWidth)
-		configDlg.ui.spinFigHeight.setValue(self.figHeight)
-		
-		configDlg.ui.chkShowAverage.setChecked(self.bShowAverages)
+        vals = []
+        cis = []
 
-		# legend position
-		if self.legendPos == 0:
-			configDlg.ui.radioLegendPosBest.setDown(True)
-		elif self.legendPos == 1:
-			configDlg.ui.radioLegendPosUpperRight.setChecked(True)
-		elif self.legendPos == 7:
-			configDlg.ui.radioLegendPosCentreRight.setChecked(True)
-		elif self.legendPos == 4:
-			configDlg.ui.radioLegendPosLowerRight.setChecked(True)
-		elif self.legendPos == 2:
-			configDlg.ui.radioLegendPosUpperLeft.setChecked(True)
-		elif self.legendPos == 6:
-			configDlg.ui.radioLegendPosCentreLeft.setChecked(True)
-		elif self.legendPos == 3:
-			configDlg.ui.radioLegendPosLowerLeft.setChecked(True)
-		else:
-			configDlg.ui.radioLegendPosNone.setChecked(True)
-			
-		configDlg.ui.chkShowPvalue.setChecked(self.bShowPvalue)
-		
-		if configDlg.exec_() == QtWidgets.QDialog.Accepted:	 
-			self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
-			
-			self.figColWidth = configDlg.ui.spinFigColWidth.value()
-			self.figHeight = configDlg.ui.spinFigHeight.value()
-			
-			self.bShowAverages = configDlg.ui.chkShowAverage.isChecked()
-			
-			# legend position			
-			if configDlg.ui.radioLegendPosBest.isChecked() == True:
-				self.legendPos = 0
-			elif configDlg.ui.radioLegendPosUpperRight.isChecked() == True:
-				self.legendPos = 1
-			elif configDlg.ui.radioLegendPosCentreRight.isChecked() == True:
-				self.legendPos = 7
-			elif configDlg.ui.radioLegendPosLowerRight.isChecked() == True:
-				self.legendPos = 4
-			elif configDlg.ui.radioLegendPosUpperLeft.isChecked() == True:
-				self.legendPos = 2
-			elif configDlg.ui.radioLegendPosCentreLeft.isChecked() == True:
-				self.legendPos = 6
-			elif configDlg.ui.radioLegendPosLowerLeft.isChecked() == True:
-				self.legendPos = 3
-			else:
-				self.legendPos = -1
-				
-			self.bShowPvalue = configDlg.ui.chkShowPvalue.isChecked()
-				
-			self.settings.setValue('multiple group: ' + self.name + '/column width', self.figColWidth)
-			self.settings.setValue('multiple group: ' + self.name + '/height', self.figHeight)
-			self.settings.setValue('multiple group: ' + self.name + '/field to plot', self.fieldToPlot)
-			self.settings.setValue('multiple group: ' + self.name + '/show averages', self.bShowAverages)
-			self.settings.setValue('multiple group: ' + self.name + '/legend position', self.legendPos)
-			self.settings.setValue('multiple group: ' + self.name + '/show p-value', self.bShowPvalue)
-			
-			self.plot(profile, statsResults)
-					
-if __name__ == "__main__": 
-	app = QtWidgets.QApplication(sys.argv)
-	testWindow = TestWindow(ProfileBarPlots)
-	testWindow.show()
-	sys.exit(app.exec_())
+        # Retrieve counts for the selected feature across all active samples
+        # Returns: list of groups -> list of samples -> list of counts (one count per requested feature)
+        raw_feature_data = profile.getActiveFeatureFromActiveSamplesCounts([feature])
+
+        # Determine valid range to avoid IndexError
+        num_groups = min(len(profile.activeGroupNames), len(raw_feature_data))
+
+        # set plot dimensions based on valid groups
+        figWidth = max(num_groups * self.figColWidth, 1.0)
+        self.fig.set_size_inches(figWidth, self.figHeight)
+
+        plotRect = [0.2 / figWidth, 0.1 / self.figHeight, 1.0 - 0.3 / figWidth, 1.0 - 0.3 / self.figHeight]
+        axes = self.fig.add_axes(plotRect)
+
+        if self.fieldToPlot == "Number of sequences":
+            pass  # TODO: Implement if needed
+        else:  # Proportion of sequences (%)
+            # calculate proportions and CIs
+            ciCalc = WilsonCI()
+
+            # Safe loop using determined range
+            for i in range(num_groups):
+                groupName = profile.activeGroupNames[i]
+                group_samples_data = raw_feature_data[i]
+
+                # --- Calculate k (count of feature in this group) ---
+                # Sum the counts of the first (and only) feature for all samples in this group
+                k = sum([sample_counts[0] for sample_counts in group_samples_data])
+
+                # --- Calculate n (total sequences in this group) ---
+                n = 0
+                try:
+                    if hasattr(profile, 'numSequencesInGroup'):
+                        n = profile.numSequencesInGroup(groupName, profile.metadata)
+                    else:
+                        # Fallback: Sum parentCounts for active samples in this group
+                        # We need the indices of the samples to look up parentCounts
+                        feature_entry = profile.profileDict[feature]
+
+                        # Determine which sample index map to use
+                        sample_map = getattr(profile, 'sampleIndex', None)
+                        if sample_map is None and hasattr(profile, 'getSampleIndex'):
+                            # If getSampleIndex exists, we iterate samples and call it
+                            for sample in profile.activeSamplesInGroups[i]:
+                                idx = profile.getSampleIndex(sample)
+                                n += feature_entry.parentCounts[idx]
+                        elif sample_map:
+                            # Use the dictionary directly
+                            for sample in profile.activeSamplesInGroups[i]:
+                                idx = sample_map[sample]
+                                n += feature_entry.parentCounts[idx]
+                        else:
+                            pass
+
+                except Exception:
+                    n = 0
+                # ----------------------------------------------------
+
+                if n > 0:
+                    p = k * 100.0 / n
+                    vals.append(p)
+
+                    l, u = ciCalc.calc(k, n, 0.05)
+                    cis.append(u * 100.0 - p)
+                else:
+                    vals.append(0.0)
+                    cis.append(0.0)
+
+        # plot bars
+        ind = np.arange(len(vals))
+        width = 0.35
+
+        colours = []
+        for i in range(num_groups):
+            groupName = profile.activeGroupNames[i]
+            colours.append(str(self.preferences['Group colours'][groupName].name()))
+
+        if len(vals) > 0:
+            rects = axes.bar(ind, vals, width, color=colours, yerr=cis, ecolor='k')
+
+            # axis labels
+            axes.set_ylabel(self.fieldToPlot)
+            axes.set_xticks(ind + width / 2.0)
+
+            labels = []
+            for i in range(num_groups):
+                name = profile.activeGroupNames[i]
+                if len(name) > 12:
+                    labels.append(name[:10] + '...')
+                else:
+                    labels.append(name)
+            axes.set_xticklabels(labels)
+
+            # show p-value
+            if self.bShowPvalue:
+                pValue = statsResults.getFeatureStatisticAsStr(feature, 'pValuesCorrected')
+                if 'e' in pValue:
+                    pValStr = '$P = %s$' % (pValue.replace('e', '\\times 10^{') + '}')
+                else:
+                    pValStr = '$P = %s$' % (pValue)
+
+                axes.text(1.02, 0.5, pValStr, horizontalalignment='left', verticalalignment='center',
+                          transform=axes.transAxes)
+
+        # *** Prettify plot
+        for a in axes.yaxis.majorTicks:
+            a.tick1On = True
+            a.tick2On = False
+
+        for a in axes.xaxis.majorTicks:
+            a.tick1On = False
+            a.tick2On = False
+
+        for line in axes.yaxis.get_ticklines():
+            line.set_color(axesColour)
+
+        for loc, spine in axes.spines.items():
+            if loc in ['right', 'top']:
+                spine.set_color('none')
+            else:
+                spine.set_color(axesColour)
+
+        self.updateGeometry()
+        self.draw()
+
+    def configure(self, profile, statsResults):
+        configDlg = ConfigureDialog(Ui_BarPlotDialog)
+
+        configDlg.ui.spinFigColWidth.setValue(self.figColWidth)
+        configDlg.ui.spinFigHeight.setValue(self.figHeight)
+
+        configDlg.ui.cboFieldToPlot.setCurrentIndex(configDlg.ui.cboFieldToPlot.findText(self.fieldToPlot))
+
+        configDlg.ui.chkShowAverages.setChecked(self.bShowAverages)
+
+        if self.legendPos == 0:
+            configDlg.ui.radioLegendPosBest.setChecked(True)
+        elif self.legendPos == 1:
+            configDlg.ui.radioLegendPosUpperRight.setChecked(True)
+        elif self.legendPos == 7:
+            configDlg.ui.radioLegendPosCentreRight.setChecked(True)
+        elif self.legendPos == 4:
+            configDlg.ui.radioLegendPosLowerRight.setChecked(True)
+        elif self.legendPos == 2:
+            configDlg.ui.radioLegendPosUpperLeft.setChecked(True)
+        elif self.legendPos == 6:
+            configDlg.ui.radioLegendPosCentreLeft.setChecked(True)
+        elif self.legendPos == 3:
+            configDlg.ui.radioLegendPosLowerLeft.setChecked(True)
+        else:
+            configDlg.ui.radioLegendPosNone.setChecked(True)
+
+        configDlg.ui.chkShowPvalue.setChecked(self.bShowPvalue)
+
+        if configDlg.exec_() == QtWidgets.QDialog.Accepted:
+            self.figColWidth = configDlg.ui.spinFigColWidth.value()
+            self.figHeight = configDlg.ui.spinFigHeight.value()
+            self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
+            self.bShowAverages = configDlg.ui.chkShowAverages.isChecked()
+
+            # legend position
+            if configDlg.ui.radioLegendPosBest.isChecked():
+                self.legendPos = 0
+            elif configDlg.ui.radioLegendPosUpperRight.isChecked():
+                self.legendPos = 1
+            elif configDlg.ui.radioLegendPosCentreRight.isChecked():
+                self.legendPos = 7
+            elif configDlg.ui.radioLegendPosLowerRight.isChecked():
+                self.legendPos = 4
+            elif configDlg.ui.radioLegendPosUpperLeft.isChecked():
+                self.legendPos = 2
+            elif configDlg.ui.radioLegendPosCentreLeft.isChecked():
+                self.legendPos = 6
+            elif configDlg.ui.radioLegendPosLowerLeft.isChecked():
+                self.legendPos = 3
+            else:
+                self.legendPos = -1
+
+            self.bShowPvalue = configDlg.ui.chkShowPvalue.isChecked()
+
+            self.settings.setValue('multiple group: ' + self.name + '/column width', self.figColWidth)
+            self.settings.setValue('multiple group: ' + self.name + '/height', self.figHeight)
+            self.settings.setValue('multiple group: ' + self.name + '/field to plot', self.fieldToPlot)
+            self.settings.setValue('multiple group: ' + self.name + '/show averages', self.bShowAverages)
+            self.settings.setValue('multiple group: ' + self.name + '/legend position', self.legendPos)
+            self.settings.setValue('multiple group: ' + self.name + '/show p-value', self.bShowPvalue)
+
+            self.plot(profile, statsResults)
 
 
-				
+if __name__ == "__main__":
+    app = QtWidgets.QApplication(sys.argv)
+    testWindow = TestWindow(BarPlot)
+    testWindow.show()
+    sys.exit(app.exec_())

@@ -1,4 +1,4 @@
-#=======================================================================
+# =======================================================================
 # Author: Donovan Parks
 #
 # Copyright 2011 Donovan Parks
@@ -17,7 +17,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
-#=======================================================================
+# =======================================================================
 
 __author__ = 'Donovan Parks'
 __copyright__ = 'Copyright 2013'
@@ -35,10 +35,11 @@ import platform
 import string
 
 import stamp.Dependencies
-#from stamp.GUI.plotDlg import PlotDlg  # forward reference so py2app recognizes this file is required
+from stamp.GUI.plotDlg import PlotDlg
 
-from PyQt5 import QtGui, QtCore,QtWidgets
+from PyQt5 import QtGui, QtCore, QtWidgets
 
+from stamp.mainUI import Ui_MainWindow
 from stamp.GUI.selectFeaturesDlg import SelectFeaturesDlg
 from stamp.GUI.createProfileMgRastDlg import CreateProfileMgRastDlg
 from stamp.GUI.createProfileRITADlg import CreateProfileRITADlg
@@ -52,7 +53,6 @@ from stamp.GUI.multCompCorrectionInfoDlg import MultCompCorrectionInfoDlg
 from stamp.GUI.groupLegendDlg import GroupLegendDlg
 from stamp.GUI.statsTableDlg import StatsTableDlg
 from stamp.GUI.metadataTableDlg import MetadataTableDlg
-from stamp.mainUI import Ui_MainWindow
 
 from stamp.metagenomics.stats.SampleStatsTests import SampleStatsTests
 from stamp.metagenomics.stats.GroupStatsTests import GroupStatsTests
@@ -71,1836 +71,1856 @@ from stamp.plugins.PlotsManager import PlotsManager
 from stamp.plugins.PluginManager import PluginManager
 
 import matplotlib as mpl
+
 mpl.rcParams['svg.fonttype'] = 'none'
 
 from numpy import seterr
 
-class StampApp(QtWidgets.QMainWindow):
-	def __init__(self, preferences, parent=None):
-		print("DEBUG: STAMP Init started")
-		QtWidgets.QWidget.__init__(self, parent)
-
-		# 1. Check if Matplotlib is causing a hang
-		print("DEBUG: Setting up Matplotlib")
-		mpl.rcParams['font.size'] = 8
-		mpl.rcParams['axes.titlesize'] = 8
-		mpl.rcParams['axes.labelsize'] = 8
-		mpl.rcParams['xtick.labelsize'] = 8
-		mpl.rcParams['ytick.labelsize'] = 8
-		mpl.rcParams['legend.fontsize'] = 8
-
-		# 2. Check Preferences
-		print("DEBUG: Setting up Settings")
-		self.preferences = preferences
-		self.settings = QtCore.QSettings("BeikoLab", "STAMP")
-		self.preferences['Settings'] = self.settings
-
-		# 3. Check Icons (Common failure point)
-		print("DEBUG: Loading Icons")
-		try:
-			self.refreshIcon = QtGui.QIcon()
-			self.refreshIcon.addPixmap(QtGui.QPixmap(":/icons/icons/refresh.png"),
-									   QtGui.QIcon.Normal, QtGui.QIcon.Off)
-		except Exception as e:
-			print(f"DEBUG: Icon loading failed: {e}")
-
-		# 4. The big one: UI Initialization
-		print("DEBUG: Starting Ui_MainWindow setup")
-		self.ui = Ui_MainWindow()
-		self.ui.setupUi(self)
-		print("DEBUG: STAMP Init finished successfully")
-
-		# setup status bar
-		self.lblStatusBar = QtWidgets.QLabel()
-		self.ui.statusBar.addPermanentWidget(self.lblStatusBar)
-
-		self.btnAutoRecalculation = QtWidgets.QPushButton('Recalculate statistics and plots')
-		self.btnAutoRecalculation.setCheckable(True)
-		self.btnAutoRecalculation.setChecked(True)
-		self.btnAutoRecalculation.setFixedHeight(20)
-		self.ui.statusBar.addPermanentWidget(self.btnAutoRecalculation)
-		self.btnAutoRecalculation.toggled.connect(self.autoRecalculateChanged)
-		self.bAutoRecalculate = True
-
-		# initialize class variables
-		self.profileTree = ProfileTree()
-		self.sampleProfile = SampleProfile()
-		self.groupProfile = GroupProfile()
-		self.multiGroupProfile = MultiGroupProfile()
-
-		# setup view STAMP properties menu item
-		self.ui.dockProperties.toggleViewAction().setShortcut("Ctrl+P")
-		self.ui.dockProperties.toggleViewAction().setToolTip("Show/hide properties window")
-		self.ui.dockProperties.toggleViewAction().setStatusTip("Show/hide properties window")
-		self.ui.menuView.addAction(self.ui.dockProperties.toggleViewAction())
-
-		# setup group legend
-		self.ui.menuView.addSeparator()
-		self.groupLegendDlg = GroupLegendDlg(self.preferences, self)
-		self.groupLegendDlg.setObjectName("groupLegendDlg");
-		self.groupLegendDlg.setVisible(True)
-		self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.groupLegendDlg)
-		self.groupLegendDlg.setFloating(False)
-
-		self.groupLegendDlg.toggleViewAction().setShortcut("Ctrl+L")
-		self.groupLegendDlg.toggleViewAction().setToolTip("Show/hide group legend window")
-		self.groupLegendDlg.toggleViewAction().setStatusTip("Show/hide group legend window")
-		self.ui.menuView.addAction(self.groupLegendDlg.toggleViewAction())
-
-		self.groupLegendDlg.legendItemChanged.connect(self.legendItemChanged)
-		self.groupLegendDlg.legendFieldChanged.connect(self.legendFieldChanged)
-		self.groupLegendDlg.legendActiveGroupsChanged.connect(self.legendActiveGroupsChanged)
-
-
-		# setup metadata window
-		self.ui.menuView.addSeparator()
-		self.metadataDlg = MetadataTableDlg(self)
-		self.metadataDlg.setObjectName("metadataDlg");
-		self.metadataDlg.setVisible(True)
-		self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.metadataDlg)
-		self.metadataDlg.setFloating(False)
-
-		self.metadataDlg.toggleViewAction().setShortcut("Ctrl+M")
-		self.metadataDlg.toggleViewAction().setToolTip("Show/hide metadata table")
-		self.metadataDlg.toggleViewAction().setStatusTip("Show/hide metadata table")
-		self.ui.menuView.addAction(self.metadataDlg.toggleViewAction())
-
-		self.metadataDlg.activeSamplesChanged.connect(self.activeSamplesChanged)
-
-		# connect menu items signals to slots
-		self.ui.mnuFileOpenProfile.triggered.connect(self.loadProfile)
-		self.ui.mnuFileMgRast.triggered.connect(self.createProfileMgRast)
-		self.ui.mnuFileRITA.triggered.connect(self.createProfileRita)
-		self.ui.mnuFileCoMet.triggered.connect(self.createProfileComet)
-		self.ui.mnuFileMothur.triggered.connect(self.createProfileMothur)
-		self.ui.mnuFileBIOM.triggered.connect(self.createProfileBIOM)
-		self.ui.mnuFileAppendCategoryCOG.triggered.connect(self.appendCategoriesCOG)
-		self.ui.mnuFileSavePlot.triggered.connect(self.saveImageDlg)
-		self.ui.mnuFileExit.triggered.connect(self.close)  # Using the method directly
-
-		self.ui.mnuViewSendPlotToWindow.triggered.connect(self.sendPlotToWindow)
-		self.ui.mnuSettingsPreferences.triggered.connect(self.prefrencesDlg)
-		self.ui.mnuHelpAbout.triggered.connect(self.openAboutDlg)
-
-		# connect profile level combo box signals to slots
-		self.ui.cboProfileLevel.activated[str].connect(self.profileLevelChanged)
-		self.ui.cboParentalLevel.activated[str].connect(self.parentLevelChanged)
-		self.ui.cboUnclassified.activated[str].connect(self.unclassifiedTreatmentChanged)
-
-
-		self.setupSampleWidgets()
-		self.setupGroupWidgets()
-		self.setupMultiGroupWidgets()
-
-		# load multiple test correction methods
-		pluginManager = PluginManager(self.preferences)
-		self.multCompDict = pluginManager.loadPlugins('stamp/plugins/common/multipleComparisonCorrections/')
-		pluginManager.populateComboBox(self.multCompDict, self.ui.cboSampleMultCompMethod, 'No correction')
-		pluginManager.populateComboBox(self.multCompDict, self.ui.cboGroupMultCompMethod, 'No correction')
-		pluginManager.populateComboBox(self.multCompDict, self.ui.cboMultiGroupMultCompMethod, 'No correction')
-
-		# connect tab widget signals to slots
-		self.ui.tabWidgetProperties.currentChanged.connect(self.propertiesTabChanged)
-
-		# restore previous window states
-		windowSettings = QtCore.QSettings("BeikoLab", "STAMP")
-		bRestoredState = False  # Initialize fallback
-
-		state = windowSettings.value("MainWindow/State")
-		if state is not None:
-			# In PyQt5, state is often returned as a QByteArray or bytes
-			self.restoreState(state)
-
-		geometry = windowSettings.value("MainWindow/Geometry")
-		# if geometry is not None:
-		# 	bRestoredState = self.restoreGeometry(geometry)
-
-		# If no geometry was saved (first run), set a default size
-		if not bRestoredState:
-			self.resize(800, 600)
-			self.showMaximized()
-
-		self.metadata = None
-
-		# self.loadProfile() # *** For debugging purposes
-
-	def propertiesTabChanged(self, currentIndex):
-		self.ui.stackedWidgetViews.setCurrentIndex(currentIndex)
-		self.updateStatusBar()
-
-	def setupSampleWidgets(self):
-		self.sampleStatsTest = SampleStatsTests(self.preferences)
-
-		# initialize statistical summary tables
-		self.ui.menuView.addSeparator()
-		self.sampleTable = StatsTableDlg(self.preferences, self)
-		self.sampleTable.setWindowTitle('Two sample statistics table')
-		self.sampleTable.setVisible(False)
-		self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.sampleTable)
-		self.sampleTable.setFloating(True)
-
-		self.sampleTable.toggleViewAction().setShortcut("Ctrl+T")
-		self.sampleTable.toggleViewAction().setToolTip("Show/hide two sample statistical table")
-		self.sampleTable.toggleViewAction().setStatusTip("Show/hide two sample statistical table")
-		self.ui.menuView.addAction(self.sampleTable.toggleViewAction())
-
-		# load plot plugins
-		self.samplePlot = PlotsManager(self.ui.cboSamplePlots, self.ui.plotSampleScrollArea, 'Scatter plot')
-		self.samplePlot.loadPlots(self.preferences, 'stamp/plugins/samples/plots/')
-
-		# load statistical technique plugins
-		pluginManager = PluginManager(self.preferences)
-		self.sampleStatTestDict = pluginManager.loadPlugins('stamp/plugins/samples/statisticalTests/')
-		pluginManager.populateComboBox(self.sampleStatTestDict, self.ui.cboSampleStatTests, 'G-test (w/ Yates\') + Fisher\'s')
-
-		self.sampleConfIntervMethodDict = pluginManager.loadPlugins('stamp/plugins/samples/confidenceIntervalMethods/')
-		pluginManager.populateComboBox(self.sampleConfIntervMethodDict, self.ui.cboSampleConfIntervMethods, 'DP: Asymptotic-CC')
-
-		# load effect size filters
-		self.sampleEffectSizeDict = pluginManager.loadPlugins('stamp/plugins/samples/effectSizeFilters/')
-		pluginManager.populateComboBox(self.sampleEffectSizeDict, self.ui.cboSampleEffectSizeMeasure1, 'Difference between proportions')
-		pluginManager.populateComboBox(self.sampleEffectSizeDict, self.ui.cboSampleEffectSizeMeasure2, 'Ratio of proportions')
-
-		# widget controls in sidebar
-		self.ui.btnSampleProfileTab.clicked.connect(self.sampleProfileTabClicked)
-		self.ui.btnSampleProfileArrow.clicked.connect(self.sampleProfileTabClicked)
-		self.ui.btnSampleStatisticsTab.clicked.connect(self.samplePropTabClicked)
-		self.ui.btnSampleStatisticsArrow.clicked.connect(self.samplePropTabClicked)
-		self.ui.btnSampleFilteringTab.clicked.connect(self.sampleFilteringTabClicked)
-		self.ui.btnSampleFilteringArrow.clicked.connect(self.sampleFilteringTabClicked)
-
-		# connect profile widget signals to slots
-		self.ui.cboSample1.activated[str].connect(self.sampleHierarchicalLevelsChanged)
-		self.ui.cboSample2.activated[str].connect(self.sampleHierarchicalLevelsChanged)
-		self.ui.btnSample1Colour.clicked.connect(self.sample1ColourDlg)
-		self.ui.btnSample2Colour.clicked.connect(self.sample2ColourDlg)
-
-		# connect statistical test widget signals to slots
-		self.ui.cboSampleStatTests.activated[str].connect(self.sampleRunTest)
-		self.ui.cboSampleSignTestType.activated[str].connect(self.sampleRunTest)
-		self.ui.cboSampleConfIntervMethods.activated[str].connect(self.sampleRunTest)
-		self.ui.cboSampleNominalCoverage.activated[str].connect(self.sampleRunTest)
-		self.ui.cboSampleMultCompMethod.activated[str].connect(self.sampleMultCompCorrectionChanged)
-		self.ui.btnSampleMultCompCorrectionInfo.clicked.connect(self.sampleMultCompCorrectionInfo)
-		# connect filtering test widget signals to slots
-		self.ui.chkSampleSelectFeatures.toggled.connect(self.sampleSelectFeaturesCheckbox)
-		self.ui.btnSampleSelectFeatures.clicked.connect(self.sampleSelectFeaturesDlg)
-
-		self.ui.chkSampleEnableSignLevelFilter.toggled.connect(self.sampleFilteringPropChanged)
-		self.ui.spinSampleSignLevelFilter.editingFinished.connect(self.sampleFilteringPropChanged)
-
-		self.ui.cboSampleSeqFilter.activated[str].connect(self.sampleSeqFilterChanged)
-		self.ui.chkSampleEnableSeqFilter.toggled.connect(self.sampleFilteringPropChanged)
-		self.ui.spinSampleFilterSample1.editingFinished.connect(self.sampleFilteringPropChanged)
-		self.ui.spinSampleFilterSample2.editingFinished.connect(self.sampleFilteringPropChanged)
-
-		self.ui.cboSampleParentSeqFilter.activated[str].connect(self.sampleParentSeqFilterChanged)
-		self.ui.chkSampleEnableParentSeqFilter.toggled.connect(self.sampleFilteringPropChanged)
-		self.ui.spinSampleParentFilterSample1.editingFinished.connect(self.sampleFilteringPropChanged)
-		self.ui.spinSampleParentFilterSample2.editingFinished.connect(self.sampleFilteringPropChanged)
-
-		self.ui.radioSampleOR.clicked.connect(self.sampleFilteringPropChanged)
-		self.ui.radioSampleAND.clicked.connect(self.sampleFilteringPropChanged)
-
-		self.ui.cboSampleEffectSizeMeasure1.activated[str].connect(self.sampleChangeEffectSizeMeasure)
-		self.ui.cboSampleEffectSizeMeasure2.activated[str].connect(self.sampleChangeEffectSizeMeasure)
-		self.ui.spinSampleMinEffectSize1.editingFinished.connect(self.sampleFilteringPropChanged)
-		self.ui.spinSampleMinEffectSize2.editingFinished.connect(self.sampleFilteringPropChanged)
-		self.ui.chkSampleEnableEffectSizeFilter1.toggled.connect(self.sampleFilteringPropChanged)
-		self.ui.chkSampleEnableEffectSizeFilter2.toggled.connect(self.sampleFilteringPropChanged)
-
-		# connect statistical plot page widget signals to slots
-		self.ui.cboSamplePlots.activated[str].connect(self.samplePlotUpdate)
-		self.ui.btnSampleConfigurePlot.clicked.connect(self.samplePlotConfigure)
-		self.ui.cboSampleHighlightHierarchy.activated[str].connect(self.sampleHighlightHierarchyChanged)
-		self.ui.cboSampleHighlightFeature.activated[str].connect(self.sampleHighlightFeatureChanged)
-
-		# initialize dynamic GUI elements
-		self.setSample1Colour(self.preferences['Sample 1 colour'])
-		self.setSample2Colour(self.preferences['Sample 2 colour'])
-
-	def setupGroupWidgets(self):
-		self.groupStatsTest = GroupStatsTests(self.preferences)
-
-		# initialize statistical summary tables
-		self.groupTable = StatsTableDlg(self.preferences, self)
-		self.groupTable.setWindowTitle('Two group statistics table')
-		self.groupTable.setVisible(False)
-		self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.groupTable)
-		self.groupTable.setFloating(True)
-
-		self.groupTable.toggleViewAction().setShortcut("Ctrl+G")
-		self.groupTable.toggleViewAction().setToolTip("Show/hide two group statistical table")
-		self.groupTable.toggleViewAction().setStatusTip("Show/hide two group statistical table")
-		self.ui.menuView.addAction(self.groupTable.toggleViewAction())
-
-		# load plot plugins
-		self.groupPlot = PlotsManager(self.ui.cboGroupPlots, self.ui.plotGroupScrollArea, 'PCA plot')
-		self.groupPlot.loadPlots(self.preferences, 'stamp/plugins/groups/plots/')
-
-		# load statistical technique plugins
-		pluginManager = PluginManager(self.preferences)
-		self.groupStatTestDict = pluginManager.loadPlugins('stamp/plugins/groups/statisticalTests/')
-		pluginManager.populateComboBox(self.groupStatTestDict, self.ui.cboGroupStatTests, "Welch's t-test")
-
-		# load effect size filters
-		self.groupEffectSizeDict = pluginManager.loadPlugins('stamp/plugins/groups/effectSizeFilters/')
-		pluginManager.populateComboBox(self.groupEffectSizeDict, self.ui.cboGroupEffectSizeMeasure1, 'Difference between proportions')
-		pluginManager.populateComboBox(self.groupEffectSizeDict, self.ui.cboGroupEffectSizeMeasure2, 'Ratio of proportions')
-
-		# widget controls in sidebar
-		self.ui.btnGroupProfileTab.clicked.connect(self.groupProfileTabClicked)
-		self.ui.btnGroupProfileArrow.clicked.connect(self.groupProfileTabClicked)
-		self.ui.btnGroupStatisticsTab.clicked.connect(self.groupPropTabClicked)
-		self.ui.btnGroupStatisticsArrow.clicked.connect(self.groupPropTabClicked)
-		self.ui.btnGroupFilteringTab.clicked.connect(self.groupFilteringTabClicked)
-		self.ui.btnGroupFilteringArrow.clicked.connect(self.groupFilteringTabClicked)
-
-		# connect profile widget signals to slots
-		self.ui.cboGroup1.activated[str].connect(self.groupHierarchicalLevelsChanged)
-		self.ui.cboGroup2.activated[str].connect(self.groupHierarchicalLevelsChanged)
-		self.ui.btnGroup1Colour.clicked.connect(self.group1ColourDlg)
-		self.ui.btnGroup2Colour.clicked.connect(self.group2ColourDlg)
-
-		# connect statistical test widget signals to slots
-		self.ui.cboGroupStatTests.activated[str].connect(self.groupRunTest)
-		self.ui.cboGroupSignTestType.activated[str].connect(self.groupRunTest)
-		self.ui.cboGroupConfIntervMethods.activated[str].connect(self.groupRunTest)
-		self.ui.cboGroupNominalCoverage.activated[str].connect(self.groupRunTest)
-		self.ui.cboGroupMultCompMethod.activated[str].connect(self.groupMultCompCorrectionChanged)
-		self.ui.btnGroupMultCompCorrectionInfo.clicked.connect(self.groupMultCompCorrectionInfo)
-
-		# connect filtering test widget signals to slots
-		self.ui.chkGroupSelectFeatures.toggled.connect(self.groupSelectFeaturesCheckbox)
-		self.ui.btnGroupSelectFeatures.clicked.connect(self.groupSelectFeaturesDlg)
-
-		self.ui.chkGroupEnableSignLevelFilter.toggled.connect(self.groupFilteringPropChanged)
-		self.ui.spinGroupSignLevelFilter.editingFinished.connect(self.groupFilteringPropChanged)
-
-		self.ui.cboGroupSeqFilter.activated[str].connect(self.groupSeqFilterChanged)
-		self.ui.chkGroupEnableSeqFilter.toggled.connect(self.groupFilteringPropChanged)
-		self.ui.spinGroupFilter1.editingFinished.connect(self.groupFilteringPropChanged)
-		self.ui.spinGroupFilter2.editingFinished.connect(self.groupFilteringPropChanged)
-
-		self.ui.cboGroupParentSeqFilter.activated[str].connect(self.groupParentSeqFilterChanged)
-		self.ui.chkGroupEnableParentSeqFilter.toggled.connect(self.groupFilteringPropChanged)
-		self.ui.spinGroupParentFilter1.editingFinished.connect(self.groupFilteringPropChanged)
-		self.ui.spinGroupParentFilter2.editingFinished.connect(self.groupFilteringPropChanged)
-
-		self.ui.radioGroupOR.clicked.connect(self.groupFilteringPropChanged)
-		self.ui.radioGroupAND.clicked.connect(self.groupFilteringPropChanged)
-
-		self.ui.cboGroupEffectSizeMeasure1.activated[str].connect(self.groupChangeEffectSizeMeasure)
-		self.ui.cboGroupEffectSizeMeasure2.activated[str].connect(self.groupChangeEffectSizeMeasure)
-		self.ui.spinGroupMinEffectSize1.editingFinished.connect(self.groupFilteringPropChanged)
-		self.ui.spinGroupMinEffectSize2.editingFinished.connect(self.groupFilteringPropChanged)
-		self.ui.chkGroupEnableEffectSizeFilter1.toggled.connect(self.groupFilteringPropChanged)
-		self.ui.chkGroupEnableEffectSizeFilter2.toggled.connect(self.groupFilteringPropChanged)
-
-		self.ui.chkShowActiveFeaturesGroupTable.clicked.connect(self.groupFeaturesTableUpdate)
-
-		# connect statistical plot page widget signals to slots
-		self.ui.cboGroupPlots.activated[str].connect(self.groupPlotUpdate)
-		self.ui.btnGroupConfigurePlot.clicked.connect(self.groupPlotConfigure)
-		self.ui.cboGroupHighlightHierarchy.activated[str].connect(self.groupHighlightHierarchyChanged)
-		self.ui.cboGroupHighlightFeature.activated[str].connect(self.groupHighlightFeatureChanged)
-
-
-		# initialize dynamic GUI elements
-		self.setGroup1Colour(self.groupLegendDlg.groupColours[0], False)
-		self.setGroup2Colour(self.groupLegendDlg.groupColours[1], False)
-
-		self.groupTestConfIntervMethods()
-
-	def setupMultiGroupWidgets(self):
-		self.multiGroupStatsTest = MultiGroupStatsTests(self.preferences)
-
-		# initialize statistical summary tables
-		self.multiGroupTable = StatsTableDlg(self.preferences, self)
-		self.multiGroupTable.setWindowTitle('Multiple group statistics table')
-		self.multiGroupTable.setVisible(False)
-		self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.multiGroupTable)
-		self.multiGroupTable.setFloating(True)
-
-		self.multiGroupTable.toggleViewAction().setShortcut("Ctrl+M")
-		self.multiGroupTable.toggleViewAction().setToolTip("Show/hide multiple group statistical table")
-		self.multiGroupTable.toggleViewAction().setStatusTip("Show/hide multiple group statistical table")
-		self.ui.menuView.addAction(self.multiGroupTable.toggleViewAction())
-
-		# load plot plugins
-		self.multiGroupPlot = PlotsManager(self.ui.cboMultiGroupPlots, self.ui.plotMultiGroupScrollArea, 'PCA plot')
-		self.multiGroupPlot.loadPlots(self.preferences, 'stamp/plugins/multiGroups/plots/')
-
-		# load statistical technique plugins
-		pluginManager = PluginManager(self.preferences)
-		self.multiGroupStatTestDict = pluginManager.loadPlugins('stamp/plugins/multiGroups/statisticalTests/')
-		pluginManager.populateComboBox(self.multiGroupStatTestDict, self.ui.cboMultiGroupStatTests, 'ANOVA')
-
-		self.postHocTestDict = pluginManager.loadPlugins('stamp/plugins/multiGroups/postHoc/')
-		pluginManager.populateComboBox(self.postHocTestDict, self.ui.cboPostHocTest, 'Tukey-Kramer')
-
-		# load effect size filters
-		self.multiGroupEffectSizeDict = pluginManager.loadPlugins('stamp/plugins/multiGroups/effectSizeFilters/')
-		pluginManager.populateComboBox(self.multiGroupEffectSizeDict, self.ui.cboMultiGroupEffectSizeMeasure, 'Eta-squared')
-
-		# widget controls in sidebar
-		self.ui.btnMultiGroupStatisticsTab.clicked.connect(self.multiGroupPropTabClicked)
-		self.ui.btnMultiGroupStatisticsArrow.clicked.connect(self.multiGroupPropTabClicked)
-		self.ui.btnMultiGroupFilteringTab.clicked.connect(self.multiGroupFilteringTabClicked)
-		self.ui.btnMultiGroupFilteringArrow.clicked.connect(self.multiGroupFilteringTabClicked)
-
-		# connect statistical test widget signals to slots
-		self.ui.cboMultiGroupStatTests.activated[str].connect(self.multiGroupRunTest)
-		self.ui.cboMultiGroupMultCompMethod.activated[str].connect(self.multiGroupMultCompCorrectionChanged)
-		self.ui.btnMultiGroupMultCompCorrectionInfo.clicked.connect(self.multiGroupMultCompCorrectionInfo)
-		self.ui.cboPostHocTest.activated[str].connect(self.multiGroupPlotUpdate)
-		self.ui.cboMultiGroupNominalCoverage.activated[str].connect(self.multiGroupPlotUpdate)
-
-		# connect filtering test widget signals to slots
-		self.ui.chkMultiGroupSelectFeatures.toggled.connect(self.multiGroupSelectFeaturesCheckbox)
-		self.ui.btnMultiGroupSelectFeatures.clicked.connect(self.multiGroupSelectFeaturesDlg)
-
-		self.ui.chkMultiGroupEnableSignLevelFilter.toggled.connect(self.multiGroupFilteringPropChanged)
-		self.ui.spinMultiGroupSignLevelFilter.editingFinished.connect(self.multiGroupFilteringPropChanged)
-
-		self.ui.spinMultiGroupMinEffectSize.editingFinished.connect(self.multiGroupFilteringPropChanged)
-		self.ui.chkMultiGroupEnableEffectSizeFilter.toggled.connect(self.multiGroupFilteringPropChanged)
-
-		self.ui.chkShowActiveFeaturesMultiGroupTable.clicked.connect(self.multiGroupFeaturesTableUpdate)
-
-		# connect statistical plot page widget signals to slots
-		self.ui.cboMultiGroupPlots.activated[str].connect(self.multiGroupPlotUpdate)
-		self.ui.btnMultiGroupConfigurePlot.clicked.connect(self.multiGroupPlotConfigure)
-		self.ui.cboMultiGroupHighlightHierarchy.activated[str].connect(self.multiGroupHighlightHierarchyChanged)
-		self.ui.cboMultiGroupHighlightFeature.activated[str].connect(self.multiGroupHighlightFeatureChanged)
-
-	def autoRecalculateChanged(self, checked):
-		self.bAutoRecalculate = checked
-
-		if self.bAutoRecalculate == True:
-			self.sampleRunTest()
-			self.groupRunTest()
-			self.multiGroupRunTest()
-
-	def activeSamplesChanged(self):
-		self.populateSampleComboBoxes()
-		self.sampleRunTest()
-
-		self.groupLegendDlg.initLegend(self.profileTree, self.metadata, self.metadata.activeField)
-		self.groupRunTest()
-		self.multiGroupRunTest()
-
-	def populateSampleComboBoxes(self):
-		# cache currently selected samples
-		sampleName1 = str(self.ui.cboSample1.currentText())
-		sampleName2 = str(self.ui.cboSample2.currentText())
-
-		self.ui.cboSample1.clear()
-		self.ui.cboSample2.clear()
-		for name in sorted(self.profileTree.sampleNames):
-			if self.metadata == None or name in self.metadata.activeSamples:
-				self.ui.cboSample1.addItem(name)
-				self.ui.cboSample2.addItem(name)
-
-		if self.ui.cboSample1.findText(sampleName1) != -1:
-			self.ui.cboSample1.setCurrentIndex(self.ui.cboSample1.findText(sampleName1))
-		else:
-			self.ui.cboSample1.setCurrentIndex(0)
-
-		if self.ui.cboSample2.findText(sampleName2) != -1:
-			self.ui.cboSample2.setCurrentIndex(self.ui.cboSample2.findText(sampleName2))
-		else:
-			self.ui.cboSample2.setCurrentIndex(1)
-
-	def legendActiveGroupsChanged(self):
-		group1 = self.ui.cboGroup1.currentText()
-		group2 = self.ui.cboGroup2.currentText()
-
-		self.ui.cboGroup1.clear()
-		self.ui.cboGroup2.clear()
-		for name, bActive in sorted(self.profileTree.groupActive.items()):
-			if bActive:
-				self.ui.cboGroup1.addItem(name)
-				self.ui.cboGroup2.addItem(name)
-		self.ui.cboGroup2.addItem('<All other samples>')
-
-		index = self.ui.cboGroup1.findText(group1)
-		if index != -1:
-			self.ui.cboGroup1.setCurrentIndex(index)
-		else:
-			self.ui.cboGroup1.setCurrentIndex(0)
-
-		index = self.ui.cboGroup2.findText(group2)
-		if index != -1:
-			self.ui.cboGroup2.setCurrentIndex(index)
-		else:
-			if self.ui.cboGroup2.count() >= 2:
-				self.ui.cboGroup2.setCurrentIndex(1)
-			else:
-				self.ui.cboGroup2.setCurrentIndex(0)
-
-		self.multiGroupRunTest()
-		self.groupRunTest()
-
-	def legendFieldChanged(self):
-		self.multiGroupRunTest()
-
-		self.populateGroupComboBoxes()
-		self.groupRunTest()
-
-	def legendItemChanged(self):
-		self.setGroup1Colour(self.groupLegendDlg.groupColourDict[str(self.ui.cboGroup1.currentText())], False)
-
-		if self.ui.cboGroup2.currentText() != '<All other samples>':
-			self.setGroup2Colour(self.groupLegendDlg.groupColourDict[str(self.ui.cboGroup2.currentText())], False)
-		else:
-			self.setGroup2Colour(self.preferences['All other samples colour'])
-
-		self.groupPlotUpdate()
-		self.multiGroupPlotUpdate()
-
-	def appendCategoriesCOG(self):
-		assignCOGsDlg = AssignCOGsDlg(self.preferences, self)
-		assignCOGsDlg.exec_()
-
-	def sampleProfileTabClicked(self):
-		self.ui.widgetSampleProfile.setVisible(not self.ui.widgetSampleProfile.isVisible())
-		self.updateSideBarTabIcon(self.ui.widgetSampleProfile, self.ui.btnSampleProfileArrow)
-
-	def samplePropTabClicked(self):
-		self.ui.widgetSampleStatisticalProp.setVisible(not self.ui.widgetSampleStatisticalProp.isVisible())
-		self.updateSideBarTabIcon(self.ui.widgetSampleStatisticalProp, self.ui.btnSampleStatisticsArrow)
-
-	def sampleFilteringTabClicked(self):
-		self.ui.widgetSampleFilter.setVisible(not self.ui.widgetSampleFilter.isVisible())
-		self.updateSideBarTabIcon(self.ui.widgetSampleFilter, self.ui.btnSampleFilteringArrow)
-
-	def groupProfileTabClicked(self):
-		self.ui.widgetGroupProfile.setVisible(not self.ui.widgetGroupProfile.isVisible())
-		self.updateSideBarTabIcon(self.ui.widgetGroupProfile, self.ui.btnGroupProfileArrow)
-
-	def groupPropTabClicked(self):
-		self.ui.widgetGroupStatisticalProp.setVisible(not self.ui.widgetGroupStatisticalProp.isVisible())
-		self.updateSideBarTabIcon(self.ui.widgetGroupStatisticalProp, self.ui.btnGroupStatisticsArrow)
-
-	def groupFilteringTabClicked(self):
-		self.ui.widgetGroupFilter.setVisible(not self.ui.widgetGroupFilter.isVisible())
-		self.updateSideBarTabIcon(self.ui.widgetGroupFilter, self.ui.btnGroupFilteringArrow)
-
-	def multiGroupPropTabClicked(self):
-		self.ui.widgetMultiGroupStatisticalProp.setVisible(not self.ui.widgetMultiGroupStatisticalProp.isVisible())
-		self.updateSideBarTabIcon(self.ui.widgetMultiGroupStatisticalProp, self.ui.btnMultiGroupStatisticsArrow)
-
-	def multiGroupFilteringTabClicked(self):
-		self.ui.widgetMultiGroupFiltering.setVisible(not self.ui.widgetMultiGroupFiltering.isVisible())
-		self.updateSideBarTabIcon(self.ui.widgetMultiGroupFiltering, self.ui.btnMultiGroupFilteringArrow)
-
-	def updateSideBarTabIcon(self, tab, arrowButton):
-		icon = QtGui.QIcon()
-		if tab.isVisible():
-			icon.addPixmap(QtGui.QPixmap(":/icons/icons/downArrow.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-		else:
-			icon.addPixmap(QtGui.QPixmap(":/icons/icons/rightArrow.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-		arrowButton.setIcon(icon)
-
-	def prefrencesDlg(self):
-		preferencesDlg = PreferencesDlg(self)
-
-		preferencesDlg.ui.spinPseudoCount.setValue(self.preferences['Pseudocount'])
-		preferencesDlg.ui.spinReplicates.setValue(self.preferences['Replicates'])
-		preferencesDlg.ui.chkTruncateFeatureNames.setChecked(self.preferences['Truncate feature names'])
-		preferencesDlg.ui.spinFeatureNameLength.setValue(self.preferences['Length of truncated feature names'])
-		preferencesDlg.setMinimumReportedPValue(self.preferences['Minimum reported p-value exponent'])
-		preferencesDlg.setAxesButtonColour(self.preferences['Axes colour'])
-		preferencesDlg.setAllOtherSamplesButtonColour(self.preferences['All other samples colour'])
-
-		if preferencesDlg.exec_() == QtWidgets.QDialog.Accepted:
-			self.preferences['Pseudocount'] = preferencesDlg.ui.spinPseudoCount.value()
-			self.preferences['Replicates'] = preferencesDlg.ui.spinReplicates.value()
-			self.preferences['Truncate feature names'] = preferencesDlg.ui.chkTruncateFeatureNames.isChecked()
-			self.preferences['Length of truncated feature names'] = preferencesDlg.ui.spinFeatureNameLength.value()
-			self.preferences['Minimum reported p-value exponent'] = preferencesDlg.getMinimumReportedPValue()
-
-			self.preferences['Axes colour'] = preferencesDlg.getAxesColour()
-
-			if self.preferences['All other samples colour'] != preferencesDlg.getAllOtherSamplesColour():
-				self.preferences['All other samples colour'] = preferencesDlg.getAllOtherSamplesColour()
-				self.setGroup2Colour(self.preferences['All other samples colour'], False)
-
-		self.samplePlotUpdate()
-		self.groupPlotUpdate()
-		self.multiGroupPlotUpdate()
-
-	def samplePlotUpdate(self):
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-		if self.sampleStatsTest.results.data != []:
-			self.samplePlot.update(self.sampleProfile, self.sampleStatsTest.results)
-		else:
-			self.samplePlot.update(None, None)
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-	def groupPlotUpdate(self):
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		# update plot
-		if self.groupStatsTest.results.data != []:
-			self.groupPlot.update(self.groupProfile, self.groupStatsTest.results)
-		else:
-			self.groupPlot.update(None, None)
-
-		self.ui.cboGroupHighlightHierarchy.setEnabled(self.groupPlot.currentPlot.bSupportsHighlight)
-		self.ui.cboGroupHighlightFeature.setEnabled(self.groupPlot.currentPlot.bSupportsHighlight)
-		self.ui.frameGroupTable.setVisible(self.groupPlot.currentPlot.bPlotFeaturesIndividually)
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-	def multiGroupPlotUpdate(self):
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		# update plot
-		if self.multiGroupStatsTest.results.data != []:
-			if self.multiGroupPlot.checkFlags().bRunPostHocTest:
-				coverage = float(self.ui.cboMultiGroupNominalCoverage.currentText())
-				postHocTest = self.postHocTestDict[unicode(self.ui.cboPostHocTest.currentText(), 'latin-1')]
-				self.multiGroupStatsTest.runPostHocTest(postHocTest, self.multiGroupProfile, self.preferences['Selected multiple group feature'], coverage)
-
-			self.multiGroupPlot.update(self.multiGroupProfile, self.multiGroupStatsTest.results)
-		else:
-			self.multiGroupPlot.update(None, None)
-
-		self.ui.cboMultiGroupHighlightHierarchy.setEnabled(self.multiGroupPlot.currentPlot.bSupportsHighlight)
-		self.ui.cboMultiGroupHighlightFeature.setEnabled(self.multiGroupPlot.currentPlot.bSupportsHighlight)
-		self.ui.frameMultiGroupTable.setVisible(self.multiGroupPlot.currentPlot.bPlotFeaturesIndividually)
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-	def samplePlotConfigure(self):
-		self.samplePlot.configure(self.sampleProfile, self.sampleStatsTest.results)
-
-	def groupPlotConfigure(self):
-		self.groupPlot.configure(self.groupProfile, self.groupStatsTest.results)
-
-	def multiGroupPlotConfigure(self):
-		self.multiGroupPlot.configure(self.multiGroupProfile, self.multiGroupStatsTest.results)
-
-	def sample1ColourDlg(self):
-		colour = QtGui.QColorDialog.getColor(self.preferences['Sample 1 colour'], self, 'Colour for sample 1')
-
-		if colour.isValid():
-			self.preferences['Sample 1 colour'] = colour
-			self.setSample1Colour(colour)
-
-	def setSample1Colour(self, colour):
-		colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
-		self.ui.btnSample1Colour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
-		self.samplePlotUpdate()
-
-	def sample2ColourDlg(self):
-		colour = QtGui.QColorDialog.getColor(self.preferences['Sample 2 colour'], self, 'Colour for sample 2')
-
-		if colour.isValid():
-			self.preferences['Sample 2 colour'] = colour
-			self.setSample2Colour(colour)
-
-	def setSample2Colour(self, colour):
-		colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
-		self.ui.btnSample2Colour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
-		self.samplePlotUpdate()
-
-	def group1ColourDlg(self):
-		colour = QtGui.QColorDialog.getColor(self.preferences['Group colours'][self.groupProfile.groupName1], self, 'Colour for group 1')
-
-		if colour.isValid():
-			self.setGroup1Colour(colour)
-
-	def setGroup1Colour(self, colour, bUpdatePlot=True):
-		colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
-		self.ui.btnGroup1Colour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
-		self.preferences['Group colours'][self.groupProfile.groupName1] = colour
-
-		if bUpdatePlot:
-			self.groupLegendDlg.updateLegend(self.groupProfile.groupName1, colour)
-			self.groupPlotUpdate()
-
-	def group2ColourDlg(self):
-		colour = QtGui.QColorDialog.getColor(self.preferences['Group colours'][self.groupProfile.groupName2], self, 'Colour for group 2')
-
-		if colour.isValid():
-			self.setGroup2Colour(colour)
-
-	def setGroup2Colour(self, colour, bUpdatePlot=True):
-		colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
-		self.ui.btnGroup2Colour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
-		self.preferences['Group colours'][self.groupProfile.groupName2] = colour
-
-		if bUpdatePlot:
-			if self.groupProfile.groupName2 != '<All other samples>':
-				self.groupLegendDlg.updateLegend(self.groupProfile.groupName2, colour)
-			else:
-				self.preferences['All other samples colour'] = colour
-			self.groupPlotUpdate()
-
-	def createProfileMgRast(self):
-		createProfileMgRastDlg = CreateProfileMgRastDlg(self.preferences, self)
-		createProfileMgRastDlg.exec_()
-
-	def createProfileRita(self):
-		createProfileRITADlg = CreateProfileRITADlg(self.preferences, self)
-		createProfileRITADlg.exec_()
-
-	def createProfileComet(self):
-		createProfileCoMetDlg = CreateProfileCoMetDlg(self.preferences, self)
-		createProfileCoMetDlg.exec_()
-
-	def createProfileMothur(self):
-		createProfileMothurDlg = CreateProfileMothurDlg(self.preferences, self)
-		createProfileMothurDlg.exec_()
-
-	def createProfileBIOM(self):
-		createProfileBiomDlg = CreateProfileBiomDlg(self.preferences, self)
-		createProfileBiomDlg.exec_()
-
-
-	def loadProfile(self):
-		loadDataDlg = LoadDataDlg(self.preferences, self)
-		if loadDataDlg.exec_() == QtWidgets.QDialog.Accepted:
-			profileFile = loadDataDlg.getProfileFile()
-			if not profileFile:
-				return
-
-			# 1. Python 3 strings don't have lastIndexOf. Use os.path.dirname.
-			self.preferences['Last directory'] = os.path.dirname(profileFile)
-
-			metadataFile = loadDataDlg.getMetadataFile()
-
-			# read profiles from file
-			try:
-				stampIO = StampIO(self.preferences)
-				self.profileTree, errMsg = stampIO.read(profileFile)
-
-				if errMsg is not None:
-					QtWidgets.QMessageBox.information(self, 'Error reading profile file', errMsg,
-													  QtWidgets.QMessageBox.Warning)
-					return
-
-			# 2. In Python 3, use 'except Exception as e' for better debugging
-			except Exception as e:
-				# Use the 'warning' method instead of 'information' to get the icon correctly
-				QtWidgets.QMessageBox.warning(self, 'Error reading profile file', f'Unknown parsing error: {str(e)}')
-				return
-
-			self.metadata = None
-			if metadataFile:
-				try:
-					metadataIO = MetadataIO(self.preferences)
-					self.metadata, warningMsg = metadataIO.read(metadataFile, self.profileTree)
-
-					if warningMsg is not None:
-						QtWidgets.QMessageBox.information(self, 'Metadata warnings', warningMsg)
-				except Exception as e:
-					QtWidgets.QMessageBox.information(self, 'Error reading metadata file',
-													  f'Unknown parsing error: {str(e)}', QtWidgets.QMessageBox.Warning)
-					return
-
-			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-			# populate sample combo boxes
-			self.populateSampleComboBoxes()
-
-			# populate hierarchy combo boxes
-			self.ui.cboParentalLevel.clear()
-			self.ui.cboParentalLevel.addItem('Entire sample')
-
-			# 3. Python 3: ensure hierarchyHeadings is a list/slice we can iterate over
-			for header in self.profileTree.hierarchyHeadings[0:-1]:
-				self.ui.cboParentalLevel.addItem(str(header))
-			self.ui.cboParentalLevel.setCurrentIndex(0)
-
-			self.ui.cboProfileLevel.clear()
-			for header in self.profileTree.hierarchyHeadings:
-				self.ui.cboProfileLevel.addItem(str(header))
-			self.ui.cboProfileLevel.setCurrentIndex(0)
-
-			# setup group legend
-			if self.metadata is not None and len(self.metadata.getFeatures()) != 0:
-				self.groupLegendDlg.initLegend(self.profileTree, self.metadata, self.metadata.getFeatures()[0])
-				self.preferences['Group colours'] = self.groupLegendDlg.groupColourDict
-
-			# populate group combo box
-			self.populateGroupComboBoxes()
-
-			# indicate the hierarchical level of interest has changed
-			bGroupLegendVisibility = self.groupLegendDlg.isVisible()
-
-			# 4. Platform check: Python 3 uses 'Darwin' for macOS
-			if platform.system() == 'Darwin' and bGroupLegendVisibility:
-				self.groupLegendDlg.setVisible(False)
-
-			self.multiGroupHierarchicalLevelsChanged()
-			self.groupHierarchicalLevelsChanged()
-			self.sampleHierarchicalLevelsChanged()
-
-			if platform.system() == 'Darwin' and bGroupLegendVisibility:
-				self.groupLegendDlg.setVisible(True)
-
-			# update tables
-			self.groupFeaturesTableUpdate()
-			self.multiGroupFeaturesTableUpdate()
-			self.metadataDlg.setTable(self.metadata)
-
-			QtWidgets.QApplication.instance().restoreOverrideCursor()
-	def populateGroupComboBoxes(self):
-		self.ui.cboGroup1.clear()
-		self.ui.cboGroup2.clear()
-		for name, bActive in sorted(self.profileTree.groupActive.items()):
-			if bActive:
-				self.ui.cboGroup1.addItem(name)
-				self.ui.cboGroup2.addItem(name)
-		self.ui.cboGroup2.addItem('<All other samples>')
-		self.ui.cboGroup1.setCurrentIndex(0)
-		self.ui.cboGroup2.setCurrentIndex(1)
-
-	def parentLevelChanged(self):
-		parentDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboParentalLevel.currentText()))
-		profileDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboProfileLevel.currentText()))
-		if parentDepth >= profileDepth:
-			QtWidgets.QMessageBox.information(self, 'Invalid profile', 'The parent level must be higher in the hierarchy than the profile level.', QtWidgets.QMessageBox.Warning)
-			self.ui.cboParentalLevel.setCurrentIndex(0)
-
-		self.sampleHierarchicalLevelsChanged()
-		self.groupHierarchicalLevelsChanged()
-		self.multiGroupHierarchicalLevelsChanged()
-
-	def profileLevelChanged(self):
-		parentDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboParentalLevel.currentText()))
-		profileDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboProfileLevel.currentText()))
-
-		if profileDepth <= parentDepth:
-			QtWidgets.QMessageBox.information(self, 'Invalid profile', 'The profile level must be deeper in the hierarchy than the parent level.', QtWidgets.QMessageBox.Warning)
-			self.ui.cboProfileLevel.setCurrentIndex(len(self.profileTree.hierarchyHeadings) - 1)
-			return
-
-		self.sampleHierarchicalLevelsChanged()
-
-		self.preferences['Selected group feature'] = ''
-		self.groupHierarchicalLevelsChanged()
-
-		self.preferences['Selected multiple group feature'] = ''
-		self.multiGroupHierarchicalLevelsChanged()
-
-	def unclassifiedTreatmentChanged(self):
-		self.sampleRunTest()
-
-		if self.preferences['Selected group feature'].lower() == 'unclassified':
-			self.preferences['Selected group feature'] = ''
-		self.groupRunTest()
-
-		if self.preferences['Selected multiple group feature'].lower() == 'unclassified':
-			self.preferences['Selected multiple group feature'] = ''
-		self.multiGroupRunTest()
-
-	def sampleHierarchicalLevelsChanged(self):
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		# populate highlight hierarchy combo box
-		profileHeading = str(self.ui.cboProfileLevel.currentText())
-		profileIndex = self.profileTree.hierarchyHeadings.index(profileHeading)
-		self.ui.cboSampleHighlightHierarchy.clear()
-		self.ui.cboSampleHighlightHierarchy.addItem('None')
-		for header in self.profileTree.hierarchyHeadings[0:profileIndex + 1]:
-			self.ui.cboSampleHighlightHierarchy.addItem(header)
-		self.ui.cboSampleHighlightHierarchy.setCurrentIndex(0)
-
-		self.ui.cboSampleHighlightFeature.clear()
-
-		# keep selected features
-		selectedFeatures = self.sampleStatsTest.results.getSelectedFeatures()
-		self.sampleStatsTest = SampleStatsTests(self.preferences)
-		self.sampleStatsTest.results.setSelectedFeatures(selectedFeatures)
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-		# run statistics
-		self.sampleRunTest()
-
-		self.updateStatusBar()
-
-	def groupHierarchicalLevelsChanged(self):
-		if self.metadata == None:
-			return
-
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		# set group colours
-		groupName1 = str(self.ui.cboGroup1.currentText())
-		groupName2 = str(self.ui.cboGroup2.currentText())
-
-		if groupName1 == '' or groupName2 == '':
-			QtWidgets.QApplication.instance().restoreOverrideCursor()
-			return
-
-		# populate highlight hierarchy combo box
-		profileHeading = str(self.ui.cboProfileLevel.currentText())
-		profileIndex = self.profileTree.hierarchyHeadings.index(profileHeading)
-		self.ui.cboGroupHighlightHierarchy.clear()
-		self.ui.cboGroupHighlightHierarchy.addItem('None')
-		for header in self.profileTree.hierarchyHeadings[0:profileIndex + 1]:
-			self.ui.cboGroupHighlightHierarchy.addItem(header)
-		self.ui.cboGroupHighlightHierarchy.setCurrentIndex(0)
-
-		self.ui.cboGroupHighlightFeature.clear()
-
-		# keep selected features
-		selectedFeatures = self.groupStatsTest.results.getSelectedFeatures()
-		self.groupStatsTest = GroupStatsTests(self.preferences)
-		self.groupStatsTest.results.setSelectedFeatures(selectedFeatures)
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-		# run statistics
-		self.groupRunTest()
-
-		self.updateStatusBar()
-
-	def multiGroupHierarchicalLevelsChanged(self):
-		if self.metadata == None:
-			return
-
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		# populate highlight hierarchy combo box
-		profileHeading = str(self.ui.cboProfileLevel.currentText())
-		profileIndex = self.profileTree.hierarchyHeadings.index(profileHeading)
-		self.ui.cboMultiGroupHighlightHierarchy.clear()
-		self.ui.cboMultiGroupHighlightHierarchy.addItem('None')
-		for header in self.profileTree.hierarchyHeadings[0:profileIndex + 1]:
-			self.ui.cboMultiGroupHighlightHierarchy.addItem(header)
-		self.ui.cboMultiGroupHighlightHierarchy.setCurrentIndex(0)
-
-		self.ui.cboMultiGroupHighlightFeature.clear()
-
-		# keep selected features
-		selectedFeatures = self.multiGroupStatsTest.results.getSelectedFeatures()
-		self.multiGroupStatsTest = MultiGroupStatsTests(self.preferences)
-		self.multiGroupStatsTest.results.setSelectedFeatures(selectedFeatures)
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-		# run test
-		self.multiGroupRunTest()
-
-		self.updateStatusBar()
-
-	def groupFeaturesTableUpdate(self):
-		tableData = []
-
-		bActiveFeatures = self.ui.chkShowActiveFeaturesGroupTable.isChecked()
-
-		features = self.groupStatsTest.results.getColumn('Features', bActiveFeatures)
-		if len(features) != 0:
-			effectSizes = self.groupStatsTest.results.getColumnAsFloatStr('EffectSize', bActiveFeatures)
-			pValues = self.groupStatsTest.results.getColumnAsStr('pValues', bActiveFeatures)
-			pValuesCorrected = self.groupStatsTest.results.getColumnAsStr('pValuesCorrected', bActiveFeatures)
-			notes = self.groupStatsTest.results.getColumn('Note', bActiveFeatures)
-
-			for i in range(0, len(features)):
-				tableData.append([features[i], effectSizes[i], pValues[i], pValuesCorrected[i], notes[i]])
-
-		if self.preferences['Selected group feature'] not in features:
-			self.preferences['Selected group feature'] = ''
-
-		self.groupFeatureTable = GenericTable(tableData, ['Feature', 'Diff. between means', 'p-value', 'Corrected p-value', 'Note'], self)
-		self.groupFeatureTable.sort(0, QtCore.Qt.AscendingOrder)  # start with features in alphabetical order
-
-		self.ui.tableGroupFeatures.horizontalHeader().setStretchLastSection(True)
-		self.ui.tableGroupFeatures.setModel(self.groupFeatureTable)
-		self.ui.tableGroupFeatures.verticalHeader().setVisible(True)
-		self.ui.tableGroupFeatures.resizeColumnsToContents()
-
-		# QItemSelectionModel lives in QtCore now
-		self.tableGroupSelectionModel = QtCore.QItemSelectionModel(self.groupFeatureTable, self.ui.tableGroupFeatures)
-		self.ui.tableGroupFeatures.setSelectionModel(self.tableGroupSelectionModel)
-		# PyQt5 New Style Connection
-		self.tableGroupSelectionModel.selectionChanged.connect(self.groupTableFeatureChanged)
-
-	def multiGroupFeaturesTableUpdate(self):
-		tableData = []
-
-		bActiveFeatures = self.ui.chkShowActiveFeaturesMultiGroupTable.isChecked()
-
-		features = self.multiGroupStatsTest.results.getColumn('Features', bActiveFeatures)
-		if len(features) != 0:
-			effectSizes = self.multiGroupStatsTest.results.getColumnAsFloatStr('EffectSize', bActiveFeatures)
-			pValues = self.multiGroupStatsTest.results.getColumnAsStr('pValues', bActiveFeatures)
-			pValuesCorrected = self.multiGroupStatsTest.results.getColumnAsStr('pValuesCorrected', bActiveFeatures)
-			notes = self.multiGroupStatsTest.results.getColumn('Note', bActiveFeatures)
-
-			for i in range(0, len(features)):
-				tableData.append([features[i], effectSizes[i], pValues[i], pValuesCorrected[i], notes[i]])
-
-		if self.preferences['Selected multiple group feature'] not in features:
-			self.preferences['Selected multiple group feature'] = ''
-
-		self.multiGroupFeatureTable = GenericTable(tableData, ['Feature', 'Eta-squared', 'p-value', 'Corrected p-value', 'Note'], self)
-		self.multiGroupFeatureTable.sort(0, QtCore.Qt.AscendingOrder)  # start with features in alphabetical order
-
-		self.ui.tableMultiGroupFeatures.horizontalHeader().setStretchLastSection(True)
-		self.ui.tableMultiGroupFeatures.setModel(self.multiGroupFeatureTable)
-		self.ui.tableMultiGroupFeatures.verticalHeader().setVisible(True)
-		self.ui.tableMultiGroupFeatures.resizeColumnsToContents()
-
-		self.tableMultiGroupSelectionModel = QtCore.QItemSelectionModel(self.multiGroupFeatureTable,
-																		self.ui.tableMultiGroupFeatures)
-		self.ui.tableMultiGroupFeatures.setSelectionModel(self.tableMultiGroupSelectionModel)
-		self.tableMultiGroupSelectionModel.selectionChanged.connect(self.multiGroupSideTableFeatureChanged)
-
-	def groupTableFeatureChanged(self, selected, deselected):
-		selectedRow = selected.indexes()[0]
-		self.preferences['Selected group feature'] = str(selectedRow.data(QtCore.Qt.DisplayRole).toString())
-		self.groupPlotUpdate()
-
-	def multiGroupSideTableFeatureChanged(self, selected, deselected):
-		selectedRow = selected.indexes()[0]
-		self.preferences['Selected multiple group feature'] = str(selectedRow.data(QtCore.Qt.DisplayRole).toString())
-		self.multiGroupPlotUpdate()
-
-	def sampleRunTest(self):
-		if self.bAutoRecalculate == False:
-			return
-
-		sampleName1 = str(self.ui.cboSample1.currentText())
-		sampleName2 = str(self.ui.cboSample2.currentText())
-
-		if sampleName1 != '' and sampleName2 != '':
-			# create new profile
-			parentHeading = str(self.ui.cboParentalLevel.currentText())
-			profileHeading = str(self.ui.cboProfileLevel.currentText())
-
-			self.sampleProfile = self.profileTree.createSampleProfile(sampleName1, sampleName2,
-																		parentHeading, profileHeading,
-																		self.ui.cboUnclassified.currentText())
-
-			# show progress of test
-			progress = QtWidgets.QProgressDialog('Running two-sample statistical test...', 'Cancel', 0, len(self.sampleProfile.getFeatures()) + 1, self)
-			progress.setWindowTitle('Progress')
-			progress.setWindowModality(QtCore.Qt.WindowModal)
-			progress.setVisible(True)
-
-			# run significance test
-			test = self.sampleStatTestDict[str(self.ui.cboSampleStatTests.currentText())]
-			testType = str(self.ui.cboSampleSignTestType.currentText())
-			confIntervMethod = self.sampleConfIntervMethodDict[str(self.ui.cboSampleConfIntervMethods.currentText())]
-			coverage = float(self.ui.cboSampleNominalCoverage.currentText())
-			self.sampleStatsTest.run(test, testType, confIntervMethod, coverage, self.sampleProfile, progress)
-
-			if not progress.wasCanceled():
-				# apply multiple test correction
-				multCompClass = self.multCompDict[str(self.ui.cboSampleMultCompMethod.currentText())]
-				self.sampleStatsTest.results.performMultCompCorrection(multCompClass)
-
-				# apply filters
-				self.sampleApplyFilters()
-		else:
-			self.sampleStatsTest.results.data = []
-			self.sampleApplyFilters()
-
-	def groupRunTest(self):
-		self.groupTestConfIntervMethods()
-
-		if self.metadata == None or self.bAutoRecalculate == False:
-			return
-
-		groupName1 = str(self.ui.cboGroup1.currentText())
-		groupName2 = str(self.ui.cboGroup2.currentText())
-
-		if groupName1 != '' and groupName2 != '':
-			# create new profile
-			parentHeading = str(self.ui.cboParentalLevel.currentText())
-			profileHeading = str(self.ui.cboProfileLevel.currentText())
-
-			self.groupProfile = self.profileTree.createGroupProfile(groupName1, groupName2,
-																																	parentHeading, profileHeading, self.metadata,
-																																	self.ui.cboUnclassified.currentText())
-
-			self.setGroup1Colour(self.preferences['Group colours'][groupName1], False)
-			if groupName2 != '<All other samples>':
-				self.setGroup2Colour(self.preferences['Group colours'][groupName2], False)
-			else:
-				self.setGroup2Colour(self.preferences['All other samples colour'])
-
-			# show progress of test
-			progress = QtGui.QProgressDialog('Running two-group statistical test...', 'Cancel', 0, len(self.groupProfile.getFeatures()) + 1, self)
-			progress.setWindowTitle('Progress')
-			progress.setWindowModality(QtCore.Qt.WindowModal)
-			progress.setVisible(True)
-
-			# run significance test
-			test = self.groupStatTestDict[str(self.ui.cboGroupStatTests.currentText())]
-			testType = str(self.ui.cboGroupSignTestType.currentText())
-			confIntervMethod = self.ui.cboGroupConfIntervMethods.currentText()
-			coverage = float(self.ui.cboGroupNominalCoverage.currentText())
-			self.groupStatsTest.run(test, testType, confIntervMethod, coverage, self.groupProfile, progress)
-
-			if not progress.wasCanceled():
-				# apply multiple test correction
-				multCompClass = self.multCompDict[str(self.ui.cboGroupMultCompMethod.currentText())]
-				self.groupStatsTest.results.performMultCompCorrection(multCompClass)
-
-				# apply filters
-				self.groupApplyFilters()
-		else:
-			self.groupStatsTest.results.data = []
-			self.groupApplyFilters()
-
-	def multiGroupRunTest(self):
-		if self.metadata == None or self.bAutoRecalculate == False:
-			return
-
-		# create new profile
-		parentHeading = str(self.ui.cboParentalLevel.currentText())
-		profileHeading = str(self.ui.cboProfileLevel.currentText())
-
-		self.multiGroupProfile = self.profileTree.createMultiGroupProfile(self.profileTree.groupDict.keys(),
-																			parentHeading, profileHeading, self.metadata,
-																			self.ui.cboUnclassified.currentText())
-
-		# set active groups
-		self.multiGroupProfile.setActiveGroups(self.profileTree.groupActive)
-
-		if len(self.multiGroupProfile.activeGroupNames) >= 2:
-			# show progress of test
-			progress = QtGui.QProgressDialog('Running multiple groups statistical test...', 'Cancel', 0, len(self.multiGroupProfile.getFeatures()) + 1, self)
-			progress.setWindowTitle('Progress')
-			progress.setWindowModality(QtCore.Qt.WindowModal)
-			progress.setVisible(True)
-
-			# run significance test
-			hypothesisTest = self.multiGroupStatTestDict[str(self.ui.cboMultiGroupStatTests.currentText())]
-			effectSizeMeasure = self.multiGroupEffectSizeDict[str(self.ui.cboMultiGroupEffectSizeMeasure.currentText())]
-			self.multiGroupStatsTest.run(hypothesisTest, effectSizeMeasure, self.multiGroupProfile, progress)
-
-			if self.multiGroupStatsTest.results.data != []:
-				# apply multiple test correction
-				multCompClass = self.multCompDict[str(self.ui.cboMultiGroupMultCompMethod.currentText())]
-				self.multiGroupStatsTest.results.performMultCompCorrection(multCompClass)
-
-				# apply filters
-				self.multiGroupApplyFilters()
-		else:
-			self.multiGroupStatsTest.results.data = []
-			self.multiGroupApplyFilters()
-
-	def groupTestConfIntervMethods(self):
-		# populate combo box with CI methods compatible with current hypothesis test
-		test = self.groupStatTestDict[str(self.ui.cboGroupStatTests.currentText())]
-		self.ui.cboGroupConfIntervMethods.clear()
-		self.ui.cboGroupConfIntervMethods.insertItems(len(test.confIntervMethods), test.confIntervMethods)
-		self.ui.cboGroupConfIntervMethods.setCurrentIndex(0)
-		self.ui.cboGroupConfIntervMethods.adjustSize()
-
-		index = self.ui.cboGroupNominalCoverage.currentIndex()
-		self.ui.cboGroupNominalCoverage.clear()
-		if test.confIntervMethods[0] == '<none>':
-			self.ui.cboGroupNominalCoverage.insertItems(1, ['0.0'])
-		else:
-			self.ui.cboGroupNominalCoverage.insertItems(5, ['0.90', '0.95', '0.98', '0.99', '0.999'])
-			self.ui.cboGroupNominalCoverage.setCurrentIndex(index)
-
-	def sampleMultCompCorrectionChanged(self):
-		multCompClass = self.multCompDict[str(self.ui.cboSampleMultCompMethod.currentText())]
-		if multCompClass.method == 'False discovery rate':
-			self.ui.lblSampleSignLevelFilter.setText('q-value filter (>):')
-		else:
-			self.ui.lblSampleSignLevelFilter.setText('p-value filter (>):')
-		self.sampleRunTest()
-
-	def groupMultCompCorrectionChanged(self):
-		multCompClass = self.multCompDict[str(self.ui.cboGroupMultCompMethod.currentText())]
-		if multCompClass.method == 'False discovery rate':
-			self.ui.lblGroupSignLevelFilter.setText('q-value filter (>):')
-		else:
-			self.ui.lblGroupSignLevelFilter.setText('p-value filter (>):')
-
-		self.groupRunTest()
-
-	def multiGroupMultCompCorrectionChanged(self):
-		multCompClass = self.multCompDict[str(self.ui.cboMultiGroupMultCompMethod.currentText())]
-		if multCompClass.method == 'False discovery rate':
-			self.ui.lblMultiGroupSignLevelFilter.setText('q-value filter (>):')
-		else:
-			self.ui.lblMultiGroupSignLevelFilter.setText('p-value filter (>):')
-		self.multiGroupRunTest()
-
-	def sampleMultCompCorrectionInfo(self):
-		if self.sampleStatsTest.results.multCompCorrection != None:
-			multCompDlg = MultCompCorrectionInfoDlg(self, self.sampleStatsTest.results.multCompCorrectionInfo)
-			multCompDlg.exec_()
-		else:
-			QtWidgets.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtWidgets.QMessageBox.Ok)
-
-	def groupMultCompCorrectionInfo(self):
-		if self.groupStatsTest.results.multCompCorrection != None:
-			multCompDlg = MultCompCorrectionInfoDlg(self, self.groupStatsTest.results.multCompCorrectionInfo)
-			multCompDlg.exec_()
-		else:
-			QtWidgets.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtWidgets.QMessageBox.Ok)
-
-	def multiGroupMultCompCorrectionInfo(self):
-		if self.multiGroupStatsTest.results.multCompCorrection != None:
-			multCompDlg = MultCompCorrectionInfoDlg(self, self.multiGroupStatsTest.results.multCompCorrectionInfo)
-			multCompDlg.exec_()
-		else:
-			QtWidgets.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtWidgets.QMessageBox.Ok)
-
-	def sampleSeqFilterChanged(self):
-		if self.ui.cboSampleSeqFilter.currentText() == 'maximum':
-			self.ui.lblSampleSeqFilterSample1.setText('Maximum (<):')
-
-		elif self.ui.cboSampleSeqFilter.currentText() == 'minimum':
-			self.ui.lblSampleSeqFilterSample1.setText('Minimum (<):')
-
-		elif self.ui.cboSampleSeqFilter.currentText() == 'independent':
-			self.ui.lblSampleSeqFilterSample1.setText('Sample 1 (<):')
-
-		self.sampleFilteringPropChanged()
-
-	def sampleParentSeqFilterChanged(self):
-		if self.ui.cboSampleParentSeqFilter.currentText() == 'maximum':
-			self.ui.lblSampleParentSeqFilterSample1.setText('Maximum (<):')
-
-		elif self.ui.cboSampleParentSeqFilter.currentText() == 'minimum':
-			self.ui.lblSampleParentSeqFilterSample1.setText('Minimum (<):')
-
-		elif self.ui.cboSampleParentSeqFilter.currentText() == 'independent':
-			self.ui.lblSampleParentSeqFilterSample1.setText('Sample 1 (<):')
-
-		self.sampleFilteringPropChanged()
-
-	def groupSeqFilterChanged(self):
-		if self.ui.cboGroupSeqFilter.currentText() == 'maximum':
-			self.ui.lblGroupSeqFilter1.setText('Maximum (<):')
-		elif self.ui.cboGroupSeqFilter.currentText() == 'minimum':
-			self.ui.lblGroupSeqFilter1.setText('Minimum (<):')
-		elif self.ui.cboGroupSeqFilter.currentText() == 'independent, maximum':
-			self.ui.lblGroupSeqFilter1.setText('Max. group 1 (<):')
-			self.ui.lblGroupSeqFilter2.setText('Max. group 2 (<):')
-		elif self.ui.cboGroupSeqFilter.currentText() == 'independent, minimum':
-			self.ui.lblGroupSeqFilter1.setText('Min. group 1 (<):')
-			self.ui.lblGroupSeqFilter2.setText('Min. group 2 (<):')
-
-		self.groupFilteringPropChanged()
-
-	def groupParentSeqFilterChanged(self):
-		if self.ui.cboGroupParentSeqFilter.currentText() == 'maximum':
-			self.ui.lblGroupParentSeqFilter1.setText('Maximum (<):')
-		elif self.ui.cboGroupParentSeqFilter.currentText() == 'minimum':
-			self.ui.lblGroupParentSeqFilter1.setText('Minimum (<):')
-		elif self.ui.cboGroupParentSeqFilter.currentText() == 'independent, maximum':
-			self.ui.lblGroupParentSeqFilter1.setText('Max. group 1 (<):')
-			self.ui.lblGroupParentSeqFilter2.setText('Max. group 2 (<):')
-		elif self.ui.cboGroupParentSeqFilter.currentText() == 'independent, minimum':
-			self.ui.lblGroupParentSeqFilter1.setText('Min. group 1 (<):')
-			self.ui.lblGroupParentSeqFilter2.setText('Min. group 2 (<):')
-
-		self.groupFilteringPropChanged()
-
-	def sampleChangeEffectSizeMeasure(self):
-		self.sampleFilteringPropChanged()
-
-	def groupChangeEffectSizeMeasure(self):
-		self.groupFilteringPropChanged()
-
-	def sampleFilteringPropChanged(self):
-		# indicate that profile information has changed
-		self.ui.btnSampleSelectFeatures.setEnabled(self.ui.chkSampleSelectFeatures.isChecked())
-
-		self.ui.spinSampleSignLevelFilter.setEnabled(self.ui.chkSampleEnableSignLevelFilter.isChecked())
-
-		self.ui.cboSampleSeqFilter.setEnabled(self.ui.chkSampleEnableSeqFilter.isChecked())
-		self.ui.spinSampleFilterSample1.setEnabled(self.ui.chkSampleEnableSeqFilter.isChecked())
-		self.ui.spinSampleFilterSample2.setEnabled(self.ui.chkSampleEnableSeqFilter.isChecked() and self.ui.cboSampleSeqFilter.currentText() == 'independent')
-		self.ui.lblSampleSeqFilterSample2.setEnabled(self.ui.cboSampleSeqFilter.currentText() == 'independent')
-
-		self.ui.cboSampleParentSeqFilter.setEnabled(self.ui.chkSampleEnableParentSeqFilter.isChecked())
-		self.ui.spinSampleParentFilterSample1.setEnabled(self.ui.chkSampleEnableParentSeqFilter.isChecked())
-		self.ui.spinSampleParentFilterSample2.setEnabled(self.ui.chkSampleEnableParentSeqFilter.isChecked() and self.ui.cboSampleParentSeqFilter.currentText() == 'independent')
-		self.ui.lblSampleParentSeqFilterSample2.setEnabled(self.ui.cboSampleParentSeqFilter.currentText() == 'independent')
-
-		self.ui.cboSampleEffectSizeMeasure1.setEnabled(self.ui.chkSampleEnableEffectSizeFilter1.isChecked())
-		self.ui.spinSampleMinEffectSize1.setEnabled(self.ui.chkSampleEnableEffectSizeFilter1.isChecked())
-
-		self.ui.cboSampleEffectSizeMeasure2.setEnabled(self.ui.chkSampleEnableEffectSizeFilter2.isChecked())
-		self.ui.spinSampleMinEffectSize2.setEnabled(self.ui.chkSampleEnableEffectSizeFilter2.isChecked())
-
-		self.sampleApplyFilters()
-
-	def groupFilteringPropChanged(self):
-		# indicate that profile information has changed
-		self.ui.btnGroupSelectFeatures.setEnabled(self.ui.chkGroupSelectFeatures.isChecked())
-
-		self.ui.spinGroupSignLevelFilter.setEnabled(self.ui.chkGroupEnableSignLevelFilter.isChecked())
-
-		bIndependent = (self.ui.cboGroupSeqFilter.currentText() == 'independent, maximum' or self.ui.cboGroupSeqFilter.currentText() == 'independent, minimum')
-		self.ui.cboGroupSeqFilter.setEnabled(self.ui.chkGroupEnableSeqFilter.isChecked())
-		self.ui.spinGroupFilter1.setEnabled(self.ui.chkGroupEnableSeqFilter.isChecked())
-		self.ui.spinGroupFilter2.setEnabled(self.ui.chkGroupEnableSeqFilter.isChecked() and bIndependent)
-		self.ui.lblGroupSeqFilter2.setEnabled(bIndependent)
-
-		bParentIndependent = (self.ui.cboGroupParentSeqFilter.currentText() == 'independent, maximum' or self.ui.cboGroupParentSeqFilter.currentText() == 'independent, minimum')
-		self.ui.cboGroupParentSeqFilter.setEnabled(self.ui.chkGroupEnableParentSeqFilter.isChecked())
-		self.ui.spinGroupParentFilter1.setEnabled(self.ui.chkGroupEnableParentSeqFilter.isChecked())
-		self.ui.spinGroupParentFilter2.setEnabled(self.ui.chkGroupEnableParentSeqFilter.isChecked() and bParentIndependent)
-		self.ui.lblGroupParentSeqFilter2.setEnabled(bParentIndependent)
-
-		self.ui.cboGroupEffectSizeMeasure1.setEnabled(self.ui.chkGroupEnableEffectSizeFilter1.isChecked())
-		self.ui.spinGroupMinEffectSize1.setEnabled(self.ui.chkGroupEnableEffectSizeFilter1.isChecked())
-
-		self.ui.cboGroupEffectSizeMeasure2.setEnabled(self.ui.chkGroupEnableEffectSizeFilter2.isChecked())
-		self.ui.spinGroupMinEffectSize2.setEnabled(self.ui.chkGroupEnableEffectSizeFilter2.isChecked())
-
-		self.groupApplyFilters()
-
-	def multiGroupFilteringPropChanged(self):
-		# indicate that profile information has changed
-		self.ui.btnMultiGroupSelectFeatures.setEnabled(self.ui.chkMultiGroupSelectFeatures.isChecked())
-		self.ui.spinMultiGroupSignLevelFilter.setEnabled(self.ui.chkMultiGroupEnableSignLevelFilter.isChecked())
-		self.ui.spinMultiGroupMinEffectSize.setEnabled(self.ui.chkMultiGroupEnableEffectSizeFilter.isChecked())
-		self.multiGroupApplyFilters()
-
-	def sampleSelectFeaturesCheckbox(self):
-		self.sampleFilteringPropChanged()
-
-	def sampleSelectFeaturesDlg(self):
-		selectFeatureDialog = SelectFeaturesDlg(self.sampleStatsTest.results, self)
-
-		if selectFeatureDialog.exec_() == QtWidgets.QDialog.Accepted:
-			selectedFeatures = selectFeatureDialog.getSelectedFeatures()
-			self.sampleStatsTest.results.setSelectedFeatures(selectedFeatures)
-			self.sampleFilteringPropChanged()
-
-	def groupSelectFeaturesCheckbox(self):
-		self.groupFilteringPropChanged()
-
-	def groupSelectFeaturesDlg(self):
-		selectFeatureDialog = SelectFeaturesDlg(self.groupStatsTest.results, self)
-
-		if selectFeatureDialog.exec_() == QtWidgets.QDialog.Accepted:
-			selectedFeatures = selectFeatureDialog.getSelectedFeatures()
-			self.groupStatsTest.results.setSelectedFeatures(selectedFeatures)
-			self.groupFilteringPropChanged()
-
-	def multiGroupSelectFeaturesCheckbox(self):
-		self.multiGroupFilteringPropChanged()
-
-	def multiGroupSelectFeaturesDlg(self):
-		selectFeatureDialog = SelectFeaturesDlg(self.multiGroupStatsTest.results, self)
-
-		if selectFeatureDialog.exec_() == QtWidgets.QDialog.Accepted:
-			selectedFeatures = selectFeatureDialog.getSelectedFeatures()
-			self.multiGroupStatsTest.results.setSelectedFeatures(selectedFeatures)
-			self.multiGroupFilteringPropChanged()
-
-	def sampleApplyFilters(self):
-		if self.bAutoRecalculate == False:
-			return
-
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		if not self.ui.chkSampleSelectFeatures.isChecked():
-			self.sampleStatsTest.results.selectAllFeautres()
-
-		# perform filtering
-		signLevelFilter = self.ui.spinSampleSignLevelFilter.value()
-		if not self.ui.chkSampleEnableSignLevelFilter.isChecked():
-			signLevelFilter = None
-
-		# sequence filtering
-		seqFilter = str(self.ui.cboSampleSeqFilter.currentText())
-		sample1Filter = int(self.ui.spinSampleFilterSample1.value())
-		sample2Filter = int(self.ui.spinSampleFilterSample2.value())
-		if not self.ui.chkSampleEnableSeqFilter.isChecked():
-			seqFilter = None
-			sample1Filter = None
-			sample2Filter = None
-
-		parentSeqFilter = str(self.ui.cboSampleParentSeqFilter.currentText())
-		parentSample1Filter = int(self.ui.spinSampleParentFilterSample1.value())
-		parentSample2Filter = int(self.ui.spinSampleParentFilterSample2.value())
-		if not self.ui.chkSampleEnableParentSeqFilter.isChecked():
-			parentSeqFilter = None
-			parentSample1Filter = None
-			parentSample2Filter = None
-
-		# effect size filters
-		if self.ui.chkSampleEnableEffectSizeFilter1.isChecked():
-			effectSizeMeasure1 = self.sampleEffectSizeDict[str(self.ui.cboSampleEffectSizeMeasure1.currentText())]
-			minEffectSize1 = float(self.ui.spinSampleMinEffectSize1.value())
-		else:
-			effectSizeMeasure1 = None
-			minEffectSize1 = None
-
-		if self.ui.chkSampleEnableEffectSizeFilter2.isChecked():
-			effectSizeMeasure2 = self.sampleEffectSizeDict[str(self.ui.cboSampleEffectSizeMeasure2.currentText())]
-			minEffectSize2 = float(self.ui.spinSampleMinEffectSize2.value())
-		else:
-			effectSizeMeasure2 = None
-			minEffectSize2 = None
-
-		if self.ui.radioSampleOR.isChecked():
-			effectSizeOperator = 'OR'
-		else:
-			effectSizeOperator = 'AND'
-
-		self.sampleStatsTest.results.filterFeatures(signLevelFilter, seqFilter, sample1Filter, sample2Filter,
-																							parentSeqFilter, parentSample1Filter, parentSample2Filter,
-																							effectSizeMeasure1, minEffectSize1, effectSizeOperator,
-																							effectSizeMeasure2, minEffectSize2)
-
-		# update table summarizing statistical results
-		self.sampleUpdateFilterInfo()
-		self.sampleTable.updateTable(self.sampleStatsTest)
-
-		# update plots
-		self.samplePlotUpdate()
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-	def groupApplyFilters(self):
-		if self.metadata == None or self.bAutoRecalculate == False:
-			return
-
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		if not self.ui.chkGroupSelectFeatures.isChecked():
-			self.groupStatsTest.results.selectAllFeautres()
-
-		# perform filtering
-		signLevelFilter = self.ui.spinGroupSignLevelFilter.value()
-		if not self.ui.chkGroupEnableSignLevelFilter.isChecked():
-			signLevelFilter = None
-
-		# sequence filtering
-		seqFilter = str(self.ui.cboGroupSeqFilter.currentText())
-		group1Filter = int(self.ui.spinGroupFilter1.value())
-		group2Filter = int(self.ui.spinGroupFilter2.value())
-		if not self.ui.chkGroupEnableSeqFilter.isChecked():
-			seqFilter = None
-			group1Filter = None
-			group2Filter = None
-
-		parentSeqFilter = str(self.ui.cboGroupParentSeqFilter.currentText())
-		parentGroup1Filter = int(self.ui.spinGroupParentFilter1.value())
-		parentGroup2Filter = int(self.ui.spinGroupParentFilter2.value())
-		if not self.ui.chkGroupEnableParentSeqFilter.isChecked():
-			parentSeqFilter = None
-			parentGroup1Filter = None
-			parentGroup2Filter = None
-
-		# effect size filters
-		if self.ui.chkGroupEnableEffectSizeFilter1.isChecked():
-			effectSizeMeasure1 = self.groupEffectSizeDict[str(self.ui.cboGroupEffectSizeMeasure1.currentText())]
-			minEffectSize1 = float(self.ui.spinGroupMinEffectSize1.value())
-		else:
-			effectSizeMeasure1 = None
-			minEffectSize1 = None
-
-		if self.ui.chkGroupEnableEffectSizeFilter2.isChecked():
-			effectSizeMeasure2 = self.groupEffectSizeDict[str(self.ui.cboGroupEffectSizeMeasure2.currentText())]
-			minEffectSize2 = float(self.ui.spinGroupMinEffectSize2.value())
-		else:
-			effectSizeMeasure2 = None
-			minEffectSize2 = None
-
-		if self.ui.radioGroupOR.isChecked():
-			effectSizeOperator = 'OR'
-		else:
-			effectSizeOperator = 'AND'
-
-		self.groupStatsTest.results.filterFeatures(signLevelFilter, seqFilter, group1Filter, group2Filter,
-																							parentSeqFilter, parentGroup1Filter, parentGroup2Filter,
-																							effectSizeMeasure1, minEffectSize1, effectSizeOperator,
-																							effectSizeMeasure2, minEffectSize2)
-
-		# update table summarizing statistical results
-		self.groupUpdateFilterInfo()
-		self.groupFeaturesTableUpdate()
-		self.groupTable.updateTable(self.groupStatsTest)
-
-		# update plots
-		self.groupPlotUpdate()
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-	def multiGroupApplyFilters(self):
-		if self.metadata == None or self.bAutoRecalculate == False:
-			return
-
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		if not self.ui.chkMultiGroupSelectFeatures.isChecked():
-			self.multiGroupStatsTest.results.selectAllFeautres()
-
-		# perform filtering
-		signLevelFilter = self.ui.spinMultiGroupSignLevelFilter.value()
-		if not self.ui.chkMultiGroupEnableSignLevelFilter.isChecked():
-			signLevelFilter = None
-
-		if self.ui.chkMultiGroupEnableEffectSizeFilter.isChecked():
-			effectSizeMeasure = self.multiGroupEffectSizeDict[str(self.ui.cboMultiGroupEffectSizeMeasure.currentText())]
-			minEffectSize = float(self.ui.spinMultiGroupMinEffectSize.value())
-		else:
-			effectSizeMeasure = None
-			minEffectSize = None
-
-		self.multiGroupStatsTest.results.filterFeatures(signLevelFilter, effectSizeMeasure, minEffectSize)
-
-		# update table summarizing statistical results
-		self.multiGroupUpdateFilterInfo()
-		self.multiGroupFeaturesTableUpdate()
-		self.multiGroupTable.updateTable(self.multiGroupStatsTest)
-
-		# update plots
-		self.multiGroupPlotUpdate()
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-	def sampleUpdateFilterInfo(self):
-		self.ui.txtSampleNumActiveFeatures.setText(str(len(self.sampleStatsTest.results.getActiveFeatures())))
-
-	def groupUpdateFilterInfo(self):
-		self.ui.txtGroupNumActiveFeatures.setText(str(len(self.groupStatsTest.results.getActiveFeatures())))
-
-	def multiGroupUpdateFilterInfo(self):
-		self.ui.txtMultiGroupNumActiveFeatures.setText(str(len(self.multiGroupStatsTest.results.getActiveFeatures())))
-
-	def sampleHighlightHierarchyChanged(self):
-		index = self.ui.cboSampleHighlightHierarchy.currentIndex() - 1
-		if index == -1:
-			self.preferences['Highlighted sample features'] = []
-			self.ui.cboSampleHighlightFeature.clear()
-			self.samplePlotUpdate()
-			return
-
-		features = set([])
-		for feature in self.sampleProfile.profileDict.keys():
-			hierarchy = self.sampleProfile.getHierarchy(feature)
-			features.add(hierarchy[index])
-
-		features = list(features)
-		features.sort(key=string.lower)
-
-		featureStrList = QtCore.QStringList()
-		for feature in features:
-			featureStrList.append(feature)
-
-		self.ui.cboSampleHighlightFeature.clear()
-		self.ui.cboSampleHighlightFeature.insertItems(len(featureStrList), featureStrList)
-		self.ui.cboSampleHighlightFeature.setCurrentIndex(0)
-
-		self.ui.cboSampleHighlightFeature.adjustSize()
-
-		self.sampleHighlightFeatureChanged()
-
-	def groupHighlightHierarchyChanged(self):
-		index = self.ui.cboGroupHighlightHierarchy.currentIndex() - 1
-		if index == -1:
-			self.preferences['Highlighted group features'] = []
-			self.ui.cboGroupHighlightFeature.clear()
-			self.groupPlotUpdate()
-			return
-
-		features = set([])
-		for feature in self.groupProfile.profileDict.keys():
-			hierarchy = self.groupProfile.getHierarchy(feature)
-			features.add(hierarchy[index])
-
-		features = list(features)
-		features.sort(key=string.lower)
-
-		featureStrList = QtCore.QStringList()
-		for feature in features:
-			featureStrList.append(feature)
-
-		self.ui.cboGroupHighlightFeature.clear()
-		self.ui.cboGroupHighlightFeature.insertItems(len(featureStrList), featureStrList)
-		self.ui.cboGroupHighlightFeature.setCurrentIndex(0)
-
-		self.ui.cboGroupHighlightFeature.adjustSize()
-
-		self.groupHighlightFeatureChanged()
-
-	def multiGroupHighlightHierarchyChanged(self):
-		index = self.ui.cboMultiGroupHighlightHierarchy.currentIndex() - 1
-		if index == -1:
-			self.preferences['Highlighted multiple group features'] = []
-			self.ui.cboMultiGroupHighlightFeature.clear()
-			self.multiGroupPlotUpdate()
-			return
-
-		features = set([])
-		for feature in self.multiGroupProfile.profileDict.keys():
-			hierarchy = self.multiGroupProfile.getHierarchy(feature)
-			features.add(hierarchy[index])
-
-		features = list(features)
-		features.sort(key=string.lower)
-
-		featureStrList = QtCore.QStringList()
-		for feature in features:
-			featureStrList.append(feature)
-
-		self.ui.cboMultiGroupHighlightFeature.clear()
-		self.ui.cboMultiGroupHighlightFeature.insertItems(len(featureStrList), featureStrList)
-		self.ui.cboMultiGroupHighlightFeature.setCurrentIndex(0)
-
-		self.ui.cboMultiGroupHighlightFeature.adjustSize()
-
-		self.multiGroupHighlightFeatureChanged()
-
-	def sampleHighlightFeatureChanged(self):
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		index = self.ui.cboSampleHighlightHierarchy.currentIndex() - 1
-		selectedFeature = self.ui.cboSampleHighlightFeature.currentText()
-
-		self.preferences['Highlighted sample features'] = []
-		for feature in self.sampleProfile.profileDict.keys():
-			hierarchy = self.sampleProfile.getHierarchy(feature)
-			if hierarchy[index] == selectedFeature:
-				self.preferences['Highlighted sample features'].append(feature)
-
-		self.samplePlotUpdate()
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-	def groupHighlightFeatureChanged(self):
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		index = self.ui.cboGroupHighlightHierarchy.currentIndex() - 1
-		selectedFeature = self.ui.cboGroupHighlightFeature.currentText()
-
-		self.preferences['Highlighted group features'] = []
-		for feature in self.groupProfile.profileDict.keys():
-			hierarchy = self.groupProfile.getHierarchy(feature)
-			if hierarchy[index] == selectedFeature:
-				self.preferences['Highlighted group features'].append(feature)
-
-		self.groupPlotUpdate()
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-	def multiGroupHighlightFeatureChanged(self):
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-
-		index = self.ui.cboMultiGroupHighlightHierarchy.currentIndex() - 1
-		selectedFeature = self.ui.cboMultiGroupHighlightFeature.currentText()
-
-		self.preferences['Highlighted multiple group features'] = []
-		for feature in self.multiGroupProfile.profileDict.keys():
-			hierarchy = self.multiGroupProfile.getHierarchy(feature)
-			if hierarchy[index] == selectedFeature:
-				self.preferences['Highlighted multiple group features'].append(feature)
-
-		self.multiGroupPlotUpdate()
-
-		QtWidgets.QApplication.instance().restoreOverrideCursor()
-
-	def saveImageDlg(self):
-		stackedWidget = self.ui.stackedWidgetViews
-		if stackedWidget.currentIndex() == 2:
-			plotToSave = self.samplePlot
-		elif stackedWidget.currentIndex() == 1:
-			plotToSave = self.groupPlot
-		elif stackedWidget.currentIndex() == 0:
-			plotToSave = self.multiGroupPlot
-		else:
-			QtWidgets.QMessageBox.information(self, 'Select plot', 'A plot tab must be active to save a plot.', QtWidgets.QMessageBox.Ok)
-			return
-
-		f = QtWidgets.QFileDialog.getSaveFileName(self, 'Save plot...', self.preferences['Last directory'],
-								'Portable Network Graphics (*.png);;' +
-								'Portable Document Format (*.pdf);;' +
-								'PostScript (*.ps);;' +
-								'Encapsulated PostScript (*.eps);;' +
-								'Scalable Vector Graphics (*.svg)')
-
-		if f != '':
-			self.preferences['Last directory'] = f[0:f.lastIndexOf('/')]
-			try:
-				if f[len(f) - 3:len(f)] == 'png' or f[len(f) - 3:len(f)] == 'PNG':
-					dpi, ok = QtGui.QInputDialog.getInteger(self, 'Desired resolution', 'Enter desired resolution (DPI) of image:', 300)
-					if ok:
-						plotToSave.save(str(f), dpi)
-				else:
-					plotToSave.save(str(f))
-			except IOError:
-					QtWidgets.QMessageBox.information(self, 'Failed to save image', 'Write permission for file denied.', QtWidgets.QMessageBox.Ok)
-
-	def sendPlotToWindow(self):
-		if self.ui.stackedWidgetViews.currentIndex() == 2:
-			self.samplePlot.sendToNewWindow(self, self.sampleProfile, self.sampleStatsTest.results)
-		elif self.ui.stackedWidgetViews.currentIndex() == 1:
-			self.groupPlot.sendToNewWindow(self, self.groupProfile, self.groupStatsTest.results)
-		elif self.ui.stackedWidgetViews.currentIndex() == 0:
-			self.multiGroupPlot.sendToNewWindow(self, self.multiGroupProfile, self.multiGroupStatsTest.results)
-
-	def updateStatusBar(self):
-		if self.ui.tabWidgetProperties.tabText(self.ui.tabWidgetProperties.currentIndex()) == 'Two samples':
-			sampleName1 = str(self.ui.cboSample1.currentText())
-			sampleName2 = str(self.ui.cboSample2.currentText())
-
-			message = 'Parent categories: ' + str(self.sampleProfile.getNumParentCategories());
-			message += ', Features: ' + str(self.sampleProfile.getNumFeatures())
-			message += ', Sequences in sample 1: ' + str(self.profileTree.numSequencesInSample(sampleName1))
-			message += ', Sequences in sample 2: ' + str(self.profileTree.numSequencesInSample(sampleName2))
-
-		elif self.ui.tabWidgetProperties.tabText(self.ui.tabWidgetProperties.currentIndex()) == 'Two groups':
-			groupName1 = str(self.ui.cboGroup1.currentText())
-			groupName2 = str(self.ui.cboGroup2.currentText())
-
-			message = 'Parent categories: ' + str(self.groupProfile.getNumParentCategories());
-			message += ', Features: ' + str(self.groupProfile.getNumFeatures())
-			message += ', Sequences in group 1: ' + str(self.profileTree.numSequencesInGroup(groupName1, self.metadata))
-
-			if groupName2 != '<All other samples>':
-				message += ', Sequences in group 2: ' + str(self.profileTree.numSequencesInGroup(groupName2, self.metadata))
-			else:
-				message += ', Sequences in group2: ' + str(self.profileTree.numSequences(self.metadata) - self.profileTree.numSequencesInGroup(groupName1, self.metadata))
-		else:
-			message = 'Parent categories: ' + str(self.multiGroupProfile.getNumParentCategories());
-			message += ', Features: ' + str(self.multiGroupProfile.getNumFeatures())
-
-		self.lblStatusBar.setText(message)
-
-	def openAboutDlg(self):
-		QtWidgets.QMessageBox.about(self, 'About...',
-				'STAMP: statistical analysis of taxonomic and functional profiles\n\n'
-				'%s\n'
-				'%s\n'
-				'%s\n\n'
-				'%s' % ('Donovan Parks and Robert Beiko', __version__, __date__, 'Program icon by Caihua (http://commons.wikimedia.org/wiki/File:Fairytale_colors.png)'))
-
-	def closeEvent(self, event):
-		# save size and location of main window and all dock widgets
-		settings = QtCore.QSettings("BeikoLab", "STAMP")
-		settings.setValue("MainWindow/State", self.saveState())
-		settings.setValue("MainWindow/Geometry", self.saveGeometry())
-
-		# save preferences
-		settings.setValue('Preferences/Pseudocount', self.preferences['Pseudocount'])
-		settings.setValue('Preferences/Replicates', self.preferences['Replicates'])
-		settings.setValue('Preferences/Truncate feature names', self.preferences['Truncate feature names'])
-		settings.setValue('Preferences/Length of truncated feature names', self.preferences['Length of truncated feature names'])
-		settings.setValue('Preferences/Axes colour', self.preferences['Axes colour'].name())
-		settings.setValue('Preferences/All other samples colour', self.preferences['All other samples colour'].name())
-		settings.setValue('Preferences/Minimum reported p-value exponent', self.preferences['Minimum reported p-value exponent'])
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self, preferences, parent=None):
+        super(MainWindow, self).__init__(parent)
+
+        # setup default plot settings
+        mpl.rcParams['font.size'] = 8
+        mpl.rcParams['axes.titlesize'] = 8
+        mpl.rcParams['axes.labelsize'] = 8
+        mpl.rcParams['xtick.labelsize'] = 8
+        mpl.rcParams['ytick.labelsize'] = 8
+        mpl.rcParams['legend.fontsize'] = 8
+
+        # setup preferences and settings
+        self.preferences = preferences
+        self.settings = QtCore.QSettings("BeikoLab", "STAMP")
+        self.preferences['Settings'] = self.settings
+
+        # icons
+        self.refreshIcon = QtGui.QIcon()
+        self.refreshIcon.addPixmap(QtGui.QPixmap(":/icons/icons/refresh.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+
+        # initialize GUI
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
+
+        # setup status bar
+        self.lblStatusBar = QtWidgets.QLabel()
+        self.ui.statusBar.addPermanentWidget(self.lblStatusBar)
+
+        self.btnAutoRecalculation = QtWidgets.QPushButton('Recalculate statistics and plots')
+        self.btnAutoRecalculation.setCheckable(True)
+        self.btnAutoRecalculation.setChecked(True)
+        self.btnAutoRecalculation.setFixedHeight(20)
+        self.ui.statusBar.addPermanentWidget(self.btnAutoRecalculation)
+
+        self.btnAutoRecalculation.toggled.connect(self.autoRecalculateChanged)
+        self.bAutoRecalculate = True
+
+        # initialize class variables
+        self.profileTree = ProfileTree()
+        self.sampleProfile = SampleProfile()
+        self.groupProfile = GroupProfile()
+        self.multiGroupProfile = MultiGroupProfile()
+
+        # setup view STAMP properties menu item
+        self.ui.dockProperties.toggleViewAction().setShortcut("Ctrl+P")
+        self.ui.dockProperties.toggleViewAction().setToolTip(r"Show\hide properties window")
+        self.ui.dockProperties.toggleViewAction().setStatusTip(r"Show\hide properties window")
+        self.ui.menuView.addAction(self.ui.dockProperties.toggleViewAction())
+
+        # setup group legend
+        self.ui.menuView.addSeparator()
+        self.groupLegendDlg = GroupLegendDlg(self.preferences, self)
+        self.groupLegendDlg.setObjectName("groupLegendDlg")
+        self.groupLegendDlg.setVisible(True)
+        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.groupLegendDlg)
+        self.groupLegendDlg.setFloating(False)
+
+        self.groupLegendDlg.toggleViewAction().setShortcut("Ctrl+L")
+        self.groupLegendDlg.toggleViewAction().setToolTip(r"Show\hide group legend window")
+        self.groupLegendDlg.toggleViewAction().setStatusTip(r"Show\hide group legend window")
+        self.ui.menuView.addAction(self.groupLegendDlg.toggleViewAction())
+
+        self.groupLegendDlg.legendItemChanged.connect(self.legendItemChanged)
+        self.groupLegendDlg.legendFieldChanged.connect(self.legendFieldChanged)
+        self.groupLegendDlg.legendActiveGroupsChanged.connect(self.legendActiveGroupsChanged)
+
+        # setup metadata window
+        self.ui.menuView.addSeparator()
+        self.metadataDlg = MetadataTableDlg(self)
+        self.metadataDlg.setObjectName("metadataDlg")
+        self.metadataDlg.setVisible(True)
+        self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.metadataDlg)
+        self.metadataDlg.setFloating(False)
+
+        self.metadataDlg.toggleViewAction().setShortcut("Ctrl+M")
+        self.metadataDlg.toggleViewAction().setToolTip(r"Show\hide metadata table")
+        self.metadataDlg.toggleViewAction().setStatusTip(r"Show\hide metadata table")
+        self.ui.menuView.addAction(self.metadataDlg.toggleViewAction())
+
+        self.metadataDlg.activeSamplesChanged.connect(self.activeSamplesChanged)
+
+        # connect menu items signals to slots
+        self.ui.mnuFileOpenProfile.triggered.connect(self.loadProfile)
+        self.ui.mnuFileMgRast.triggered.connect(self.createProfileMgRast)
+        self.ui.mnuFileRITA.triggered.connect(self.createProfileRita)
+        self.ui.mnuFileCoMet.triggered.connect(self.createProfileComet)
+        self.ui.mnuFileMothur.triggered.connect(self.createProfileMothur)
+        self.ui.mnuFileBIOM.triggered.connect(self.createProfileBIOM)
+        self.ui.mnuFileAppendCategoryCOG.triggered.connect(self.appendCategoriesCOG)
+        self.ui.mnuFileSavePlot.triggered.connect(self.saveImageDlg)
+        self.ui.mnuFileExit.triggered.connect(self.close)
+
+        self.ui.mnuViewSendPlotToWindow.triggered.connect(self.sendPlotToWindow)
+        self.ui.mnuSettingsPreferences.triggered.connect(self.prefrencesDlg)
+        self.ui.mnuHelpAbout.triggered.connect(self.openAboutDlg)
+
+        # connect profile level combo box signals to slots
+        self.ui.cboProfileLevel.activated[str].connect(self.profileLevelChanged)
+        self.ui.cboParentalLevel.activated[str].connect(self.parentLevelChanged)
+        self.ui.cboUnclassified.activated[str].connect(self.unclassifiedTreatmentChanged)
+
+        self.setupSampleWidgets()
+        self.setupGroupWidgets()
+        self.setupMultiGroupWidgets()
+
+        # load multiple test correction methods
+        pluginManager = PluginManager(self.preferences)
+        self.multCompDict = pluginManager.loadPlugins('stamp/plugins/common/multipleComparisonCorrections/')
+        pluginManager.populateComboBox(self.multCompDict, self.ui.cboSampleMultCompMethod, 'No correction')
+        pluginManager.populateComboBox(self.multCompDict, self.ui.cboGroupMultCompMethod, 'No correction')
+        pluginManager.populateComboBox(self.multCompDict, self.ui.cboMultiGroupMultCompMethod, 'No correction')
+
+        # connect tab widget signals to slots
+        self.ui.tabWidgetProperties.currentChanged.connect(self.propertiesTabChanged)
+
+        # --- FIX FOR 0x0 WINDOW SIZE START ---
+        # restore previous window states
+        windowSettings = QtCore.QSettings("BeikoLab", "STAMP")
+        state = windowSettings.value("MainWindow/State")
+        if state:
+            self.restoreState(state)
+
+        geom = windowSettings.value("MainWindow/Geometry")
+        bRestoredState = False
+        #if geom:
+        #    bRestoredState = self.restoreGeometry(geom)
+
+        # Safety Check: If dimensions are too small (e.g. 0x0), force a default size
+        #if self.width() < 100 or self.height() < 100:
+        #    bRestoredState = False
+
+        if not bRestoredState:
+            self.resize(1024, 768)
+            self.showMaximized()
+        # --- FIX FOR 0x0 WINDOW SIZE END ---
+
+        self.metadata = None
+
+    def propertiesTabChanged(self, currentIndex):
+        self.ui.stackedWidgetViews.setCurrentIndex(currentIndex)
+        self.updateStatusBar()
+
+    def setupSampleWidgets(self):
+        self.sampleStatsTest = SampleStatsTests(self.preferences)
+
+        # initialize statistical summary tables
+        self.ui.menuView.addSeparator()
+        self.sampleTable = StatsTableDlg(self.preferences, self)
+        self.sampleTable.setWindowTitle('Two sample statistics table')
+        self.sampleTable.setVisible(False)
+        self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.sampleTable)
+        self.sampleTable.setFloating(True)
+
+        self.sampleTable.toggleViewAction().setShortcut("Ctrl+T")
+        self.sampleTable.toggleViewAction().setToolTip(r"Show\hide two sample statistical table")
+        self.sampleTable.toggleViewAction().setStatusTip(r"Show\hide two sample statistical table")
+        self.ui.menuView.addAction(self.sampleTable.toggleViewAction())
+
+        # load plot plugins
+        self.samplePlot = PlotsManager(self.ui.cboSamplePlots, self.ui.plotSampleScrollArea, 'Scatter plot')
+        self.samplePlot.loadPlots(self.preferences, 'stamp/plugins/samples/plots/')
+
+        # load statistical technique plugins
+        pluginManager = PluginManager(self.preferences)
+        self.sampleStatTestDict = pluginManager.loadPlugins('stamp/plugins/samples/statisticalTests/')
+        pluginManager.populateComboBox(self.sampleStatTestDict, self.ui.cboSampleStatTests,
+                                       'G-test (w/ Yates\') + Fisher\'s')
+
+        self.sampleConfIntervMethodDict = pluginManager.loadPlugins('stamp/plugins/samples/confidenceIntervalMethods/')
+        pluginManager.populateComboBox(self.sampleConfIntervMethodDict, self.ui.cboSampleConfIntervMethods,
+                                       'DP: Asymptotic-CC')
+
+        # load effect size filters
+        self.sampleEffectSizeDict = pluginManager.loadPlugins('stamp/plugins/samples/effectSizeFilters/')
+        pluginManager.populateComboBox(self.sampleEffectSizeDict, self.ui.cboSampleEffectSizeMeasure1,
+                                       'Difference between proportions')
+        pluginManager.populateComboBox(self.sampleEffectSizeDict, self.ui.cboSampleEffectSizeMeasure2,
+                                       'Ratio of proportions')
+
+        # widget controls in sidebar
+        self.ui.btnSampleProfileTab.clicked.connect(self.sampleProfileTabClicked)
+        self.ui.btnSampleProfileArrow.clicked.connect(self.sampleProfileTabClicked)
+        self.ui.btnSampleStatisticsTab.clicked.connect(self.samplePropTabClicked)
+        self.ui.btnSampleStatisticsArrow.clicked.connect(self.samplePropTabClicked)
+        self.ui.btnSampleFilteringTab.clicked.connect(self.sampleFilteringTabClicked)
+        self.ui.btnSampleFilteringArrow.clicked.connect(self.sampleFilteringTabClicked)
+
+        # connect profile widget signals to slots
+        self.ui.cboSample1.activated[str].connect(self.sampleHierarchicalLevelsChanged)
+        self.ui.cboSample2.activated[str].connect(self.sampleHierarchicalLevelsChanged)
+        self.ui.btnSample1Colour.clicked.connect(self.sample1ColourDlg)
+        self.ui.btnSample2Colour.clicked.connect(self.sample2ColourDlg)
+
+        # connect statistical test widget signals to slots
+        self.ui.cboSampleStatTests.activated[str].connect(self.sampleRunTest)
+        self.ui.cboSampleSignTestType.activated[str].connect(self.sampleRunTest)
+        self.ui.cboSampleConfIntervMethods.activated[str].connect(self.sampleRunTest)
+        self.ui.cboSampleNominalCoverage.activated[str].connect(self.sampleRunTest)
+        self.ui.cboSampleMultCompMethod.activated[str].connect(self.sampleMultCompCorrectionChanged)
+        self.ui.btnSampleMultCompCorrectionInfo.clicked.connect(self.sampleMultCompCorrectionInfo)
+
+        # connect filtering test widget signals to slots
+        self.ui.chkSampleSelectFeatures.toggled.connect(self.sampleSelectFeaturesCheckbox)
+        self.ui.btnSampleSelectFeatures.clicked.connect(self.sampleSelectFeaturesDlg)
+
+        self.ui.chkSampleEnableSignLevelFilter.toggled.connect(self.sampleFilteringPropChanged)
+        self.ui.spinSampleSignLevelFilter.editingFinished.connect(self.sampleFilteringPropChanged)
+
+        self.ui.cboSampleSeqFilter.activated[str].connect(self.sampleSeqFilterChanged)
+        self.ui.chkSampleEnableSeqFilter.toggled.connect(self.sampleFilteringPropChanged)
+        self.ui.spinSampleFilterSample1.editingFinished.connect(self.sampleFilteringPropChanged)
+        self.ui.spinSampleFilterSample2.editingFinished.connect(self.sampleFilteringPropChanged)
+
+        self.ui.cboSampleParentSeqFilter.activated[str].connect(self.sampleParentSeqFilterChanged)
+        self.ui.chkSampleEnableParentSeqFilter.toggled.connect(self.sampleFilteringPropChanged)
+        self.ui.spinSampleParentFilterSample1.editingFinished.connect(self.sampleFilteringPropChanged)
+        self.ui.spinSampleParentFilterSample2.editingFinished.connect(self.sampleFilteringPropChanged)
+
+        self.ui.radioSampleOR.clicked.connect(self.sampleFilteringPropChanged)
+        self.ui.radioSampleAND.clicked.connect(self.sampleFilteringPropChanged)
+
+        self.ui.cboSampleEffectSizeMeasure1.activated[str].connect(self.sampleChangeEffectSizeMeasure)
+        self.ui.cboSampleEffectSizeMeasure2.activated[str].connect(self.sampleChangeEffectSizeMeasure)
+        self.ui.spinSampleMinEffectSize1.editingFinished.connect(self.sampleFilteringPropChanged)
+        self.ui.spinSampleMinEffectSize2.editingFinished.connect(self.sampleFilteringPropChanged)
+        self.ui.chkSampleEnableEffectSizeFilter1.toggled.connect(self.sampleFilteringPropChanged)
+        self.ui.chkSampleEnableEffectSizeFilter2.toggled.connect(self.sampleFilteringPropChanged)
+
+        # connect statistical plot page widget signals to slots
+        self.ui.cboSamplePlots.activated[str].connect(self.samplePlotUpdate)
+        self.ui.btnSampleConfigurePlot.clicked.connect(self.samplePlotConfigure)
+        self.ui.cboSampleHighlightHierarchy.activated[str].connect(self.sampleHighlightHierarchyChanged)
+        self.ui.cboSampleHighlightFeature.activated[str].connect(self.sampleHighlightFeatureChanged)
+
+        # initialize dynamic GUI elements
+        self.setSample1Colour(self.preferences['Sample 1 colour'])
+        self.setSample2Colour(self.preferences['Sample 2 colour'])
+
+    def setupGroupWidgets(self):
+        self.groupStatsTest = GroupStatsTests(self.preferences)
+
+        # initialize statistical summary tables
+        self.groupTable = StatsTableDlg(self.preferences, self)
+        self.groupTable.setWindowTitle('Two group statistics table')
+        self.groupTable.setVisible(False)
+        self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.groupTable)
+        self.groupTable.setFloating(True)
+
+        self.groupTable.toggleViewAction().setShortcut("Ctrl+G")
+        self.groupTable.toggleViewAction().setToolTip(r"Show\hide two group statistical table")
+        self.groupTable.toggleViewAction().setStatusTip(r"Show\hide two group statistical table")
+        self.ui.menuView.addAction(self.groupTable.toggleViewAction())
+
+        # load plot plugins
+        self.groupPlot = PlotsManager(self.ui.cboGroupPlots, self.ui.plotGroupScrollArea, 'PCA plot')
+        self.groupPlot.loadPlots(self.preferences, 'stamp/plugins/groups/plots/')
+
+        # load statistical technique plugins
+        pluginManager = PluginManager(self.preferences)
+        self.groupStatTestDict = pluginManager.loadPlugins('stamp/plugins/groups/statisticalTests/')
+        pluginManager.populateComboBox(self.groupStatTestDict, self.ui.cboGroupStatTests, "Welch's t-test")
+
+        # load effect size filters
+        self.groupEffectSizeDict = pluginManager.loadPlugins('stamp/plugins/groups/effectSizeFilters/')
+        pluginManager.populateComboBox(self.groupEffectSizeDict, self.ui.cboGroupEffectSizeMeasure1,
+                                       'Difference between proportions')
+        pluginManager.populateComboBox(self.groupEffectSizeDict, self.ui.cboGroupEffectSizeMeasure2,
+                                       'Ratio of proportions')
+
+        # widget controls in sidebar
+        self.ui.btnGroupProfileTab.clicked.connect(self.groupProfileTabClicked)
+        self.ui.btnGroupProfileArrow.clicked.connect(self.groupProfileTabClicked)
+        self.ui.btnGroupStatisticsTab.clicked.connect(self.groupPropTabClicked)
+        self.ui.btnGroupStatisticsArrow.clicked.connect(self.groupPropTabClicked)
+        self.ui.btnGroupFilteringTab.clicked.connect(self.groupFilteringTabClicked)
+        self.ui.btnGroupFilteringArrow.clicked.connect(self.groupFilteringTabClicked)
+
+        # connect profile widget signals to slots
+        self.ui.cboGroup1.activated[str].connect(self.groupHierarchicalLevelsChanged)
+        self.ui.cboGroup2.activated[str].connect(self.groupHierarchicalLevelsChanged)
+        self.ui.btnGroup1Colour.clicked.connect(self.group1ColourDlg)
+        self.ui.btnGroup2Colour.clicked.connect(self.group2ColourDlg)
+
+        # connect statistical test widget signals to slots
+        self.ui.cboGroupStatTests.activated[str].connect(self.groupRunTest)
+        self.ui.cboGroupSignTestType.activated[str].connect(self.groupRunTest)
+        self.ui.cboGroupConfIntervMethods.activated[str].connect(self.groupRunTest)
+        self.ui.cboGroupNominalCoverage.activated[str].connect(self.groupRunTest)
+        self.ui.cboGroupMultCompMethod.activated[str].connect(self.groupMultCompCorrectionChanged)
+        self.ui.btnGroupMultCompCorrectionInfo.clicked.connect(self.groupMultCompCorrectionInfo)
+
+        # connect filtering test widget signals to slots
+        self.ui.chkGroupSelectFeatures.toggled.connect(self.groupSelectFeaturesCheckbox)
+        self.ui.btnGroupSelectFeatures.clicked.connect(self.groupSelectFeaturesDlg)
+
+        self.ui.chkGroupEnableSignLevelFilter.toggled.connect(self.groupFilteringPropChanged)
+        self.ui.spinGroupSignLevelFilter.editingFinished.connect(self.groupFilteringPropChanged)
+
+        self.ui.cboGroupSeqFilter.activated[str].connect(self.groupSeqFilterChanged)
+        self.ui.chkGroupEnableSeqFilter.toggled.connect(self.groupFilteringPropChanged)
+        self.ui.spinGroupFilter1.editingFinished.connect(self.groupFilteringPropChanged)
+        self.ui.spinGroupFilter2.editingFinished.connect(self.groupFilteringPropChanged)
+
+        self.ui.cboGroupParentSeqFilter.activated[str].connect(self.groupParentSeqFilterChanged)
+        self.ui.chkGroupEnableParentSeqFilter.toggled.connect(self.groupFilteringPropChanged)
+        self.ui.spinGroupParentFilter1.editingFinished.connect(self.groupFilteringPropChanged)
+        self.ui.spinGroupParentFilter2.editingFinished.connect(self.groupFilteringPropChanged)
+
+        self.ui.radioGroupOR.clicked.connect(self.groupFilteringPropChanged)
+        self.ui.radioGroupAND.clicked.connect(self.groupFilteringPropChanged)
+
+        self.ui.cboGroupEffectSizeMeasure1.activated[str].connect(self.groupChangeEffectSizeMeasure)
+        self.ui.cboGroupEffectSizeMeasure2.activated[str].connect(self.groupChangeEffectSizeMeasure)
+        self.ui.spinGroupMinEffectSize1.editingFinished.connect(self.groupFilteringPropChanged)
+        self.ui.spinGroupMinEffectSize2.editingFinished.connect(self.groupFilteringPropChanged)
+        self.ui.chkGroupEnableEffectSizeFilter1.toggled.connect(self.groupFilteringPropChanged)
+        self.ui.chkGroupEnableEffectSizeFilter2.toggled.connect(self.groupFilteringPropChanged)
+
+        self.ui.chkShowActiveFeaturesGroupTable.clicked.connect(self.groupFeaturesTableUpdate)
+
+        # connect statistical plot page widget signals to slots
+        self.ui.cboGroupPlots.activated[str].connect(self.groupPlotUpdate)
+        self.ui.btnGroupConfigurePlot.clicked.connect(self.groupPlotConfigure)
+        self.ui.cboGroupHighlightHierarchy.activated[str].connect(self.groupHighlightHierarchyChanged)
+        self.ui.cboGroupHighlightFeature.activated[str].connect(self.groupHighlightFeatureChanged)
+
+        # initialize dynamic GUI elements
+        self.setGroup1Colour(self.groupLegendDlg.groupColours[0], False)
+        self.setGroup2Colour(self.groupLegendDlg.groupColours[1], False)
+
+        self.groupTestConfIntervMethods()
+
+    def setupMultiGroupWidgets(self):
+        self.multiGroupStatsTest = MultiGroupStatsTests(self.preferences)
+
+        # initialize statistical summary tables
+        self.multiGroupTable = StatsTableDlg(self.preferences, self)
+        self.multiGroupTable.setWindowTitle('Multiple group statistics table')
+        self.multiGroupTable.setVisible(False)
+        self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.multiGroupTable)
+        self.multiGroupTable.setFloating(True)
+
+        self.multiGroupTable.toggleViewAction().setShortcut("Ctrl+M")
+        self.multiGroupTable.toggleViewAction().setToolTip(r"Show\hide multiple group statistical table")
+        self.multiGroupTable.toggleViewAction().setStatusTip(r"Show\hide multiple group statistical table")
+        self.ui.menuView.addAction(self.multiGroupTable.toggleViewAction())
+
+        # load plot plugins
+        self.multiGroupPlot = PlotsManager(self.ui.cboMultiGroupPlots, self.ui.plotMultiGroupScrollArea, 'PCA plot')
+        self.multiGroupPlot.loadPlots(self.preferences, 'stamp/plugins/multiGroups/plots/')
+
+        # load statistical technique plugins
+        pluginManager = PluginManager(self.preferences)
+        self.multiGroupStatTestDict = pluginManager.loadPlugins('stamp/plugins/multiGroups/statisticalTests/')
+        pluginManager.populateComboBox(self.multiGroupStatTestDict, self.ui.cboMultiGroupStatTests, 'ANOVA')
+
+        self.postHocTestDict = pluginManager.loadPlugins('stamp/plugins/multiGroups/postHoc/')
+        pluginManager.populateComboBox(self.postHocTestDict, self.ui.cboPostHocTest, 'Tukey-Kramer')
+
+        # load effect size filters
+        self.multiGroupEffectSizeDict = pluginManager.loadPlugins('stamp/plugins/multiGroups/effectSizeFilters/')
+        pluginManager.populateComboBox(self.multiGroupEffectSizeDict, self.ui.cboMultiGroupEffectSizeMeasure,
+                                       'Eta-squared')
+
+        # widget controls in sidebar
+        self.ui.btnMultiGroupStatisticsTab.clicked.connect(self.multiGroupPropTabClicked)
+        self.ui.btnMultiGroupStatisticsArrow.clicked.connect(self.multiGroupPropTabClicked)
+        self.ui.btnMultiGroupFilteringTab.clicked.connect(self.multiGroupFilteringTabClicked)
+        self.ui.btnMultiGroupFilteringArrow.clicked.connect(self.multiGroupFilteringTabClicked)
+
+        # connect statistical test widget signals to slots
+        self.ui.cboMultiGroupStatTests.activated[str].connect(self.multiGroupRunTest)
+        self.ui.cboMultiGroupMultCompMethod.activated[str].connect(self.multiGroupMultCompCorrectionChanged)
+        self.ui.btnMultiGroupMultCompCorrectionInfo.clicked.connect(self.multiGroupMultCompCorrectionInfo)
+        self.ui.cboPostHocTest.activated[str].connect(self.multiGroupPlotUpdate)
+        self.ui.cboMultiGroupNominalCoverage.activated[str].connect(self.multiGroupPlotUpdate)
+
+        # connect filtering test widget signals to slots
+        self.ui.chkMultiGroupSelectFeatures.toggled.connect(self.multiGroupSelectFeaturesCheckbox)
+        self.ui.btnMultiGroupSelectFeatures.clicked.connect(self.multiGroupSelectFeaturesDlg)
+
+        self.ui.chkMultiGroupEnableSignLevelFilter.toggled.connect(self.multiGroupFilteringPropChanged)
+        self.ui.spinMultiGroupSignLevelFilter.editingFinished.connect(self.multiGroupFilteringPropChanged)
+
+        self.ui.spinMultiGroupMinEffectSize.editingFinished.connect(self.multiGroupFilteringPropChanged)
+        self.ui.chkMultiGroupEnableEffectSizeFilter.toggled.connect(self.multiGroupFilteringPropChanged)
+
+        self.ui.chkShowActiveFeaturesMultiGroupTable.clicked.connect(self.multiGroupFeaturesTableUpdate)
+
+        # connect statistical plot page widget signals to slots
+        self.ui.cboMultiGroupPlots.activated[str].connect(self.multiGroupPlotUpdate)
+        self.ui.btnMultiGroupConfigurePlot.clicked.connect(self.multiGroupPlotConfigure)
+        self.ui.cboMultiGroupHighlightHierarchy.activated[str].connect(self.multiGroupHighlightHierarchyChanged)
+        self.ui.cboMultiGroupHighlightFeature.activated[str].connect(self.multiGroupHighlightFeatureChanged)
+
+    def autoRecalculateChanged(self, checked):
+        self.bAutoRecalculate = checked
+
+        if self.bAutoRecalculate == True:
+            self.sampleRunTest()
+            self.groupRunTest()
+            self.multiGroupRunTest()
+
+    def activeSamplesChanged(self):
+        self.populateSampleComboBoxes()
+        self.sampleRunTest()
+
+        self.groupLegendDlg.initLegend(self.profileTree, self.metadata, self.metadata.activeField)
+        self.groupRunTest()
+        self.multiGroupRunTest()
+
+    def populateSampleComboBoxes(self):
+        # cache currently selected samples
+        sampleName1 = str(self.ui.cboSample1.currentText())
+        sampleName2 = str(self.ui.cboSample2.currentText())
+
+        self.ui.cboSample1.clear()
+        self.ui.cboSample2.clear()
+        for name in sorted(self.profileTree.sampleNames):
+            if self.metadata == None or name in self.metadata.activeSamples:
+                self.ui.cboSample1.addItem(name)
+                self.ui.cboSample2.addItem(name)
+
+        if self.ui.cboSample1.findText(sampleName1) != -1:
+            self.ui.cboSample1.setCurrentIndex(self.ui.cboSample1.findText(sampleName1))
+        else:
+            self.ui.cboSample1.setCurrentIndex(0)
+
+        if self.ui.cboSample2.findText(sampleName2) != -1:
+            self.ui.cboSample2.setCurrentIndex(self.ui.cboSample2.findText(sampleName2))
+        else:
+            self.ui.cboSample2.setCurrentIndex(1)
+
+    def legendActiveGroupsChanged(self):
+        group1 = self.ui.cboGroup1.currentText()
+        group2 = self.ui.cboGroup2.currentText()
+
+        self.ui.cboGroup1.clear()
+        self.ui.cboGroup2.clear()
+        for name, bActive in sorted(self.profileTree.groupActive.items()):
+            if bActive:
+                self.ui.cboGroup1.addItem(name)
+                self.ui.cboGroup2.addItem(name)
+        self.ui.cboGroup2.addItem('<All other samples>')
+
+        index = self.ui.cboGroup1.findText(group1)
+        if index != -1:
+            self.ui.cboGroup1.setCurrentIndex(index)
+        else:
+            self.ui.cboGroup1.setCurrentIndex(0)
+
+        index = self.ui.cboGroup2.findText(group2)
+        if index != -1:
+            self.ui.cboGroup2.setCurrentIndex(index)
+        else:
+            if self.ui.cboGroup2.count() >= 2:
+                self.ui.cboGroup2.setCurrentIndex(1)
+            else:
+                self.ui.cboGroup2.setCurrentIndex(0)
+
+        self.multiGroupRunTest()
+        self.groupRunTest()
+
+    def legendFieldChanged(self):
+        self.multiGroupRunTest()
+
+        self.populateGroupComboBoxes()
+        self.groupRunTest()
+
+    def legendItemChanged(self):
+        self.setGroup1Colour(self.groupLegendDlg.groupColourDict[str(self.ui.cboGroup1.currentText())], False)
+
+        if self.ui.cboGroup2.currentText() != '<All other samples>':
+            self.setGroup2Colour(self.groupLegendDlg.groupColourDict[str(self.ui.cboGroup2.currentText())], False)
+        else:
+            self.setGroup2Colour(self.preferences['All other samples colour'])
+
+        self.groupPlotUpdate()
+        self.multiGroupPlotUpdate()
+
+    def appendCategoriesCOG(self):
+        assignCOGsDlg = AssignCOGsDlg(self.preferences, self)
+        assignCOGsDlg.exec_()
+
+    def sampleProfileTabClicked(self):
+        self.ui.widgetSampleProfile.setVisible(not self.ui.widgetSampleProfile.isVisible())
+        self.updateSideBarTabIcon(self.ui.widgetSampleProfile, self.ui.btnSampleProfileArrow)
+
+    def samplePropTabClicked(self):
+        self.ui.widgetSampleStatisticalProp.setVisible(not self.ui.widgetSampleStatisticalProp.isVisible())
+        self.updateSideBarTabIcon(self.ui.widgetSampleStatisticalProp, self.ui.btnSampleStatisticsArrow)
+
+    def sampleFilteringTabClicked(self):
+        self.ui.widgetSampleFilter.setVisible(not self.ui.widgetSampleFilter.isVisible())
+        self.updateSideBarTabIcon(self.ui.widgetSampleFilter, self.ui.btnSampleFilteringArrow)
+
+    def groupProfileTabClicked(self):
+        self.ui.widgetGroupProfile.setVisible(not self.ui.widgetGroupProfile.isVisible())
+        self.updateSideBarTabIcon(self.ui.widgetGroupProfile, self.ui.btnGroupProfileArrow)
+
+    def groupPropTabClicked(self):
+        self.ui.widgetGroupStatisticalProp.setVisible(not self.ui.widgetGroupStatisticalProp.isVisible())
+        self.updateSideBarTabIcon(self.ui.widgetGroupStatisticalProp, self.ui.btnGroupStatisticsArrow)
+
+    def groupFilteringTabClicked(self):
+        self.ui.widgetGroupFilter.setVisible(not self.ui.widgetGroupFilter.isVisible())
+        self.updateSideBarTabIcon(self.ui.widgetGroupFilter, self.ui.btnGroupFilteringArrow)
+
+    def multiGroupPropTabClicked(self):
+        self.ui.widgetMultiGroupStatisticalProp.setVisible(not self.ui.widgetMultiGroupStatisticalProp.isVisible())
+        self.updateSideBarTabIcon(self.ui.widgetMultiGroupStatisticalProp, self.ui.btnMultiGroupStatisticsArrow)
+
+    def multiGroupFilteringTabClicked(self):
+        self.ui.widgetMultiGroupFiltering.setVisible(not self.ui.widgetMultiGroupFiltering.isVisible())
+        self.updateSideBarTabIcon(self.ui.widgetMultiGroupFiltering, self.ui.btnMultiGroupFilteringArrow)
+
+    def updateSideBarTabIcon(self, tab, arrowButton):
+        icon = QtGui.QIcon()
+        if tab.isVisible():
+            icon.addPixmap(QtGui.QPixmap(":/icons/icons/downArrow.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        else:
+            icon.addPixmap(QtGui.QPixmap(":/icons/icons/rightArrow.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        arrowButton.setIcon(icon)
+
+    def prefrencesDlg(self):
+        preferencesDlg = PreferencesDlg(self)
+
+        preferencesDlg.ui.spinPseudoCount.setValue(self.preferences['Pseudocount'])
+        preferencesDlg.ui.spinReplicates.setValue(self.preferences['Replicates'])
+        preferencesDlg.ui.chkTruncateFeatureNames.setChecked(self.preferences['Truncate feature names'])
+        preferencesDlg.ui.spinFeatureNameLength.setValue(self.preferences['Length of truncated feature names'])
+        preferencesDlg.setMinimumReportedPValue(self.preferences['Minimum reported p-value exponent'])
+        preferencesDlg.setAxesButtonColour(self.preferences['Axes colour'])
+        preferencesDlg.setAllOtherSamplesButtonColour(self.preferences['All other samples colour'])
+
+        if preferencesDlg.exec_() == QtWidgets.QDialog.Accepted:
+            self.preferences['Pseudocount'] = preferencesDlg.ui.spinPseudoCount.value()
+            self.preferences['Replicates'] = preferencesDlg.ui.spinReplicates.value()
+            self.preferences['Truncate feature names'] = preferencesDlg.ui.chkTruncateFeatureNames.isChecked()
+            self.preferences['Length of truncated feature names'] = preferencesDlg.ui.spinFeatureNameLength.value()
+            self.preferences['Minimum reported p-value exponent'] = preferencesDlg.getMinimumReportedPValue()
+
+            self.preferences['Axes colour'] = preferencesDlg.getAxesColour()
+
+            if self.preferences['All other samples colour'] != preferencesDlg.getAllOtherSamplesColour():
+                self.preferences['All other samples colour'] = preferencesDlg.getAllOtherSamplesColour()
+                self.setGroup2Colour(self.preferences['All other samples colour'], False)
+
+        self.samplePlotUpdate()
+        self.groupPlotUpdate()
+        self.multiGroupPlotUpdate()
+
+    def samplePlotUpdate(self):
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+        if self.sampleStatsTest.results.data != []:
+            self.samplePlot.update(self.sampleProfile, self.sampleStatsTest.results)
+        else:
+            self.samplePlot.update(None, None)
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+    def groupPlotUpdate(self):
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        # update plot
+        if self.groupStatsTest.results.data != []:
+            self.groupPlot.update(self.groupProfile, self.groupStatsTest.results)
+        else:
+            self.groupPlot.update(None, None)
+
+        self.ui.cboGroupHighlightHierarchy.setEnabled(self.groupPlot.currentPlot.bSupportsHighlight)
+        self.ui.cboGroupHighlightFeature.setEnabled(self.groupPlot.currentPlot.bSupportsHighlight)
+        self.ui.frameGroupTable.setVisible(self.groupPlot.currentPlot.bPlotFeaturesIndividually)
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+    def multiGroupPlotUpdate(self):
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        # update plot
+        if self.multiGroupStatsTest.results.data != []:
+            if self.multiGroupPlot.checkFlags().bRunPostHocTest:
+                coverage = float(self.ui.cboMultiGroupNominalCoverage.currentText())
+                # Python 3 strings are unicode; 'latin-1' decode not usually needed unless working with bytes
+                postHocTest = self.postHocTestDict[str(self.ui.cboPostHocTest.currentText())]
+                self.multiGroupStatsTest.runPostHocTest(postHocTest, self.multiGroupProfile,
+                                                        self.preferences['Selected multiple group feature'], coverage)
+
+            self.multiGroupPlot.update(self.multiGroupProfile, self.multiGroupStatsTest.results)
+        else:
+            self.multiGroupPlot.update(None, None)
+
+        self.ui.cboMultiGroupHighlightHierarchy.setEnabled(self.multiGroupPlot.currentPlot.bSupportsHighlight)
+        self.ui.cboMultiGroupHighlightFeature.setEnabled(self.multiGroupPlot.currentPlot.bSupportsHighlight)
+        self.ui.frameMultiGroupTable.setVisible(self.multiGroupPlot.currentPlot.bPlotFeaturesIndividually)
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+    def samplePlotConfigure(self):
+        self.samplePlot.configure(self.sampleProfile, self.sampleStatsTest.results)
+
+    def groupPlotConfigure(self):
+        self.groupPlot.configure(self.groupProfile, self.groupStatsTest.results)
+
+    def multiGroupPlotConfigure(self):
+        self.multiGroupPlot.configure(self.multiGroupProfile, self.multiGroupStatsTest.results)
+
+    def sample1ColourDlg(self):
+        colour = QtWidgets.QColorDialog.getColor(self.preferences['Sample 1 colour'], self, 'Colour for sample 1')
+
+        if colour.isValid():
+            self.preferences['Sample 1 colour'] = colour
+            self.setSample1Colour(colour)
+
+    def setSample1Colour(self, colour):
+        colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
+        self.ui.btnSample1Colour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
+        self.samplePlotUpdate()
+
+    def sample2ColourDlg(self):
+        colour = QtWidgets.QColorDialog.getColor(self.preferences['Sample 2 colour'], self, 'Colour for sample 2')
+
+        if colour.isValid():
+            self.preferences['Sample 2 colour'] = colour
+            self.setSample2Colour(colour)
+
+    def setSample2Colour(self, colour):
+        colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
+        self.ui.btnSample2Colour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
+        self.samplePlotUpdate()
+
+    def group1ColourDlg(self):
+        colour = QtWidgets.QColorDialog.getColor(self.preferences['Group colours'][self.groupProfile.groupName1], self,
+                                                 'Colour for group 1')
+
+        if colour.isValid():
+            self.setGroup1Colour(colour)
+
+    def setGroup1Colour(self, colour, bUpdatePlot=True):
+        colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
+        self.ui.btnGroup1Colour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
+        self.preferences['Group colours'][self.groupProfile.groupName1] = colour
+
+        if bUpdatePlot:
+            self.groupLegendDlg.updateLegend(self.groupProfile.groupName1, colour)
+            self.groupPlotUpdate()
+
+    def group2ColourDlg(self):
+        colour = QtWidgets.QColorDialog.getColor(self.preferences['Group colours'][self.groupProfile.groupName2], self,
+                                                 'Colour for group 2')
+
+        if colour.isValid():
+            self.setGroup2Colour(colour)
+
+    def setGroup2Colour(self, colour, bUpdatePlot=True):
+        colourStr = str(colour.red()) + ',' + str(colour.green()) + ',' + str(colour.blue())
+        self.ui.btnGroup2Colour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
+        self.preferences['Group colours'][self.groupProfile.groupName2] = colour
+
+        if bUpdatePlot:
+            if self.groupProfile.groupName2 != '<All other samples>':
+                self.groupLegendDlg.updateLegend(self.groupProfile.groupName2, colour)
+            else:
+                self.preferences['All other samples colour'] = colour
+            self.groupPlotUpdate()
+
+    def createProfileMgRast(self):
+        createProfileMgRastDlg = CreateProfileMgRastDlg(self.preferences, self)
+        createProfileMgRastDlg.exec_()
+
+    def createProfileRita(self):
+        createProfileRITADlg = CreateProfileRITADlg(self.preferences, self)
+        createProfileRITADlg.exec_()
+
+    def createProfileComet(self):
+        createProfileCoMetDlg = CreateProfileCoMetDlg(self.preferences, self)
+        createProfileCoMetDlg.exec_()
+
+    def createProfileMothur(self):
+        createProfileMothurDlg = CreateProfileMothurDlg(self.preferences, self)
+        createProfileMothurDlg.exec_()
+
+    def createProfileBIOM(self):
+        createProfileBiomDlg = CreateProfileBiomDlg(self.preferences, self)
+        createProfileBiomDlg.exec_()
+
+    def loadProfile(self):
+        loadDataDlg = LoadDataDlg(self.preferences, self)
+        if loadDataDlg.exec_() == QtWidgets.QDialog.Accepted:
+            profileFile = loadDataDlg.getProfileFile()
+            if profileFile == '':
+                return
+            # String handling in Python 3
+            self.preferences['Last directory'] = os.path.dirname(profileFile)
+
+            metadataFile = loadDataDlg.getMetadataFile()
+
+            # read profiles from file
+            try:
+                stampIO = StampIO(self.preferences)
+                self.profileTree, errMsg = stampIO.read(profileFile)
+
+                if errMsg != None:
+                    # FIX: Use warning method instead of information with warning icon
+                    QtWidgets.QMessageBox.warning(self, 'Error reading profile file', errMsg)
+                    return
+            except:
+                # FIX: Use warning method
+                QtWidgets.QMessageBox.warning(self, 'Error reading profile file', 'Unknown parsing error.')
+                return
+
+            self.metadata = None
+            if metadataFile != '':
+                try:
+                    metadataIO = MetadataIO(self.preferences)
+                    self.metadata, warningMsg = metadataIO.read(metadataFile, self.profileTree)
+
+                    if warningMsg != None:
+                        QtWidgets.QMessageBox.information(self, 'Metadata warnings', warningMsg)
+                except:
+                    # FIX: Use warning method
+                    QtWidgets.QMessageBox.warning(self, 'Error reading metadata file', 'Unknown parsing error.')
+                    return
+
+            QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+            # populate sample combo boxes
+            self.populateSampleComboBoxes()
+
+            # populate hierarchy combo boxes
+            self.ui.cboParentalLevel.clear()
+            self.ui.cboParentalLevel.addItem('Entire sample')
+            for header in self.profileTree.hierarchyHeadings[0:-1]:
+                self.ui.cboParentalLevel.addItem(header)
+            self.ui.cboParentalLevel.setCurrentIndex(0)
+
+            self.ui.cboProfileLevel.clear()
+            for header in self.profileTree.hierarchyHeadings:
+                self.ui.cboProfileLevel.addItem(header)
+            self.ui.cboProfileLevel.setCurrentIndex(0)
+
+            # setup group legend
+            if self.metadata != None and len(self.metadata.getFeatures()) != 0:
+                self.groupLegendDlg.initLegend(self.profileTree, self.metadata, self.metadata.getFeatures()[0])
+                self.preferences['Group colours'] = self.groupLegendDlg.groupColourDict
+
+            # populate group combo box
+            self.populateGroupComboBoxes()
+
+            # indicate the hierarchical level of interest has changed
+            bGroupLegendVisibility = self.groupLegendDlg.isVisible()
+            if platform.system() != 'Windows' and bGroupLegendVisibility:
+                self.groupLegendDlg.setVisible(
+                    False)  # HACK: OS X crashes if this dialog is open when loading data for the first time!
+
+            self.multiGroupHierarchicalLevelsChanged()
+            self.groupHierarchicalLevelsChanged()
+            self.sampleHierarchicalLevelsChanged()
+
+            if platform.system() != 'Windows' and bGroupLegendVisibility:
+                self.groupLegendDlg.setVisible(True)
+
+            # update tables
+            self.groupFeaturesTableUpdate()
+            self.multiGroupFeaturesTableUpdate()
+            self.metadataDlg.setTable(self.metadata)
+
+            QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+    def populateGroupComboBoxes(self):
+        self.ui.cboGroup1.clear()
+        self.ui.cboGroup2.clear()
+        for name, bActive in sorted(self.profileTree.groupActive.items()):
+            if bActive:
+                self.ui.cboGroup1.addItem(name)
+                self.ui.cboGroup2.addItem(name)
+        self.ui.cboGroup2.addItem('<All other samples>')
+        self.ui.cboGroup1.setCurrentIndex(0)
+        self.ui.cboGroup2.setCurrentIndex(1)
+
+    def parentLevelChanged(self):
+        parentDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboParentalLevel.currentText()))
+        profileDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboProfileLevel.currentText()))
+        if parentDepth >= profileDepth:
+            # FIX: Use warning method
+            QtWidgets.QMessageBox.warning(self, 'Invalid profile',
+                                          'The parent level must be higher in the hierarchy than the profile level.')
+            self.ui.cboParentalLevel.setCurrentIndex(0)
+
+        self.sampleHierarchicalLevelsChanged()
+        self.groupHierarchicalLevelsChanged()
+        self.multiGroupHierarchicalLevelsChanged()
+
+    def profileLevelChanged(self):
+        parentDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboParentalLevel.currentText()))
+        profileDepth = self.profileTree.getHierarchicalLevelDepth(str(self.ui.cboProfileLevel.currentText()))
+
+        if profileDepth <= parentDepth:
+            # FIX: Use warning method
+            QtWidgets.QMessageBox.warning(self, 'Invalid profile',
+                                          'The profile level must be deeper in the hierarchy than the parent level.')
+            self.ui.cboProfileLevel.setCurrentIndex(len(self.profileTree.hierarchyHeadings) - 1)
+            return
+
+        self.sampleHierarchicalLevelsChanged()
+
+        self.preferences['Selected group feature'] = ''
+        self.groupHierarchicalLevelsChanged()
+
+        self.preferences['Selected multiple group feature'] = ''
+        self.multiGroupHierarchicalLevelsChanged()
+
+    def unclassifiedTreatmentChanged(self):
+        self.sampleRunTest()
+
+        if self.preferences['Selected group feature'].lower() == 'unclassified':
+            self.preferences['Selected group feature'] = ''
+        self.groupRunTest()
+
+        if self.preferences['Selected multiple group feature'].lower() == 'unclassified':
+            self.preferences['Selected multiple group feature'] = ''
+        self.multiGroupRunTest()
+
+    def sampleHierarchicalLevelsChanged(self):
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        # populate highlight hierarchy combo box
+        profileHeading = str(self.ui.cboProfileLevel.currentText())
+        profileIndex = self.profileTree.hierarchyHeadings.index(profileHeading)
+        self.ui.cboSampleHighlightHierarchy.clear()
+        self.ui.cboSampleHighlightHierarchy.addItem('None')
+        for header in self.profileTree.hierarchyHeadings[0:profileIndex + 1]:
+            self.ui.cboSampleHighlightHierarchy.addItem(header)
+        self.ui.cboSampleHighlightHierarchy.setCurrentIndex(0)
+
+        self.ui.cboSampleHighlightFeature.clear()
+
+        # keep selected features
+        selectedFeatures = self.sampleStatsTest.results.getSelectedFeatures()
+        self.sampleStatsTest = SampleStatsTests(self.preferences)
+        self.sampleStatsTest.results.setSelectedFeatures(selectedFeatures)
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+        # run statistics
+        self.sampleRunTest()
+
+        self.updateStatusBar()
+
+    def groupHierarchicalLevelsChanged(self):
+        if self.metadata == None:
+            return
+
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        # set group colours
+        groupName1 = str(self.ui.cboGroup1.currentText())
+        groupName2 = str(self.ui.cboGroup2.currentText())
+
+        if groupName1 == '' or groupName2 == '':
+            QtWidgets.QApplication.instance().restoreOverrideCursor()
+            return
+
+        # populate highlight hierarchy combo box
+        profileHeading = str(self.ui.cboProfileLevel.currentText())
+        profileIndex = self.profileTree.hierarchyHeadings.index(profileHeading)
+        self.ui.cboGroupHighlightHierarchy.clear()
+        self.ui.cboGroupHighlightHierarchy.addItem('None')
+        for header in self.profileTree.hierarchyHeadings[0:profileIndex + 1]:
+            self.ui.cboGroupHighlightHierarchy.addItem(header)
+        self.ui.cboGroupHighlightHierarchy.setCurrentIndex(0)
+
+        self.ui.cboGroupHighlightFeature.clear()
+
+        # keep selected features
+        selectedFeatures = self.groupStatsTest.results.getSelectedFeatures()
+        self.groupStatsTest = GroupStatsTests(self.preferences)
+        self.groupStatsTest.results.setSelectedFeatures(selectedFeatures)
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+        # run statistics
+        self.groupRunTest()
+
+        self.updateStatusBar()
+
+    def multiGroupHierarchicalLevelsChanged(self):
+        if self.metadata == None:
+            return
+
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        # populate highlight hierarchy combo box
+        profileHeading = str(self.ui.cboProfileLevel.currentText())
+        profileIndex = self.profileTree.hierarchyHeadings.index(profileHeading)
+        self.ui.cboMultiGroupHighlightHierarchy.clear()
+        self.ui.cboMultiGroupHighlightHierarchy.addItem('None')
+        for header in self.profileTree.hierarchyHeadings[0:profileIndex + 1]:
+            self.ui.cboMultiGroupHighlightHierarchy.addItem(header)
+        self.ui.cboMultiGroupHighlightHierarchy.setCurrentIndex(0)
+
+        self.ui.cboMultiGroupHighlightFeature.clear()
+
+        # keep selected features
+        selectedFeatures = self.multiGroupStatsTest.results.getSelectedFeatures()
+        self.multiGroupStatsTest = MultiGroupStatsTests(self.preferences)
+        self.multiGroupStatsTest.results.setSelectedFeatures(selectedFeatures)
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+        # run test
+        self.multiGroupRunTest()
+
+        self.updateStatusBar()
+
+    def groupFeaturesTableUpdate(self):
+        tableData = []
+
+        bActiveFeatures = self.ui.chkShowActiveFeaturesGroupTable.isChecked()
+
+        features = self.groupStatsTest.results.getColumn('Features', bActiveFeatures)
+        if len(features) != 0:
+            effectSizes = self.groupStatsTest.results.getColumnAsFloatStr('EffectSize', bActiveFeatures)
+            pValues = self.groupStatsTest.results.getColumnAsStr('pValues', bActiveFeatures)
+            pValuesCorrected = self.groupStatsTest.results.getColumnAsStr('pValuesCorrected', bActiveFeatures)
+            notes = self.groupStatsTest.results.getColumn('Note', bActiveFeatures)
+
+            for i in range(0, len(features)):
+                tableData.append([features[i], effectSizes[i], pValues[i], pValuesCorrected[i], notes[i]])
+
+        if self.preferences['Selected group feature'] not in features:
+            self.preferences['Selected group feature'] = ''
+
+        self.groupFeatureTable = GenericTable(tableData,
+                                              ['Feature', 'Diff. between means', 'p-value', 'Corrected p-value',
+                                               'Note'], self)
+        self.groupFeatureTable.sort(0, QtCore.Qt.AscendingOrder)  # start with features in alphabetical order
+
+        self.ui.tableGroupFeatures.horizontalHeader().setStretchLastSection(True)
+        self.ui.tableGroupFeatures.setModel(self.groupFeatureTable)
+        self.ui.tableGroupFeatures.verticalHeader().setVisible(True)
+        self.ui.tableGroupFeatures.resizeColumnsToContents()
+
+        self.tableGroupSelectionModel = QtCore.QItemSelectionModel(self.groupFeatureTable, self.ui.tableGroupFeatures)
+        self.ui.tableGroupFeatures.setSelectionModel(self.tableGroupSelectionModel)
+        # New signal syntax
+        self.tableGroupSelectionModel.selectionChanged.connect(self.groupTableFeatureChanged)
+
+    def multiGroupFeaturesTableUpdate(self):
+        tableData = []
+
+        bActiveFeatures = self.ui.chkShowActiveFeaturesMultiGroupTable.isChecked()
+
+        features = self.multiGroupStatsTest.results.getColumn('Features', bActiveFeatures)
+        if len(features) != 0:
+            effectSizes = self.multiGroupStatsTest.results.getColumnAsFloatStr('EffectSize', bActiveFeatures)
+            pValues = self.multiGroupStatsTest.results.getColumnAsStr('pValues', bActiveFeatures)
+            pValuesCorrected = self.multiGroupStatsTest.results.getColumnAsStr('pValuesCorrected', bActiveFeatures)
+            notes = self.multiGroupStatsTest.results.getColumn('Note', bActiveFeatures)
+
+            for i in range(0, len(features)):
+                tableData.append([features[i], effectSizes[i], pValues[i], pValuesCorrected[i], notes[i]])
+
+        if self.preferences['Selected multiple group feature'] not in features:
+            self.preferences['Selected multiple group feature'] = ''
+
+        self.multiGroupFeatureTable = GenericTable(tableData,
+                                                   ['Feature', 'Eta-squared', 'p-value', 'Corrected p-value', 'Note'],
+                                                   self)
+        self.multiGroupFeatureTable.sort(0, QtCore.Qt.AscendingOrder)  # start with features in alphabetical order
+
+        self.ui.tableMultiGroupFeatures.horizontalHeader().setStretchLastSection(True)
+        self.ui.tableMultiGroupFeatures.setModel(self.multiGroupFeatureTable)
+        self.ui.tableMultiGroupFeatures.verticalHeader().setVisible(True)
+        self.ui.tableMultiGroupFeatures.resizeColumnsToContents()
+
+        self.tableMultiGroupSelectionModel = QtCore.QItemSelectionModel(self.multiGroupFeatureTable,
+                                                                        self.ui.tableMultiGroupFeatures)
+        self.ui.tableMultiGroupFeatures.setSelectionModel(self.tableMultiGroupSelectionModel)
+        self.tableMultiGroupSelectionModel.selectionChanged.connect(self.multiGroupSideTableFeatureChanged)
+
+    def groupTableFeatureChanged(self, selected, deselected):
+        if not selected.indexes():
+            return
+        selectedRow = selected.indexes()[0]
+        self.preferences['Selected group feature'] = str(selectedRow.data(QtCore.Qt.DisplayRole))
+        self.groupPlotUpdate()
+
+    def multiGroupSideTableFeatureChanged(self, selected, deselected):
+        if not selected.indexes():
+            return
+        selectedRow = selected.indexes()[0]
+        self.preferences['Selected multiple group feature'] = str(selectedRow.data(QtCore.Qt.DisplayRole))
+        self.multiGroupPlotUpdate()
+
+    def sampleRunTest(self):
+        if self.bAutoRecalculate == False:
+            return
+
+        sampleName1 = str(self.ui.cboSample1.currentText())
+        sampleName2 = str(self.ui.cboSample2.currentText())
+
+        if sampleName1 != '' and sampleName2 != '':
+            # create new profile
+            parentHeading = str(self.ui.cboParentalLevel.currentText())
+            profileHeading = str(self.ui.cboProfileLevel.currentText())
+
+            self.sampleProfile = self.profileTree.createSampleProfile(sampleName1, sampleName2,
+                                                                      parentHeading, profileHeading,
+                                                                      self.ui.cboUnclassified.currentText())
+
+            # show progress of test
+            progress = QtWidgets.QProgressDialog('Running two-sample statistical test...', 'Cancel', 0,
+                                                 len(self.sampleProfile.getFeatures()) + 1, self)
+            progress.setWindowTitle('Progress')
+            progress.setWindowModality(QtCore.Qt.WindowModal)
+            progress.setVisible(True)
+
+            # run significance test
+            test = self.sampleStatTestDict[str(self.ui.cboSampleStatTests.currentText())]
+            testType = str(self.ui.cboSampleSignTestType.currentText())
+            confIntervMethod = self.sampleConfIntervMethodDict[str(self.ui.cboSampleConfIntervMethods.currentText())]
+            coverage = float(self.ui.cboSampleNominalCoverage.currentText())
+            self.sampleStatsTest.run(test, testType, confIntervMethod, coverage, self.sampleProfile, progress)
+
+            if not progress.wasCanceled():
+                # apply multiple test correction
+                multCompClass = self.multCompDict[str(self.ui.cboSampleMultCompMethod.currentText())]
+                self.sampleStatsTest.results.performMultCompCorrection(multCompClass)
+
+                # apply filters
+                self.sampleApplyFilters()
+        else:
+            self.sampleStatsTest.results.data = []
+            self.sampleApplyFilters()
+
+    def groupRunTest(self):
+        self.groupTestConfIntervMethods()
+
+        if self.metadata == None or self.bAutoRecalculate == False:
+            return
+
+        groupName1 = str(self.ui.cboGroup1.currentText())
+        groupName2 = str(self.ui.cboGroup2.currentText())
+
+        if groupName1 != '' and groupName2 != '':
+            # create new profile
+            parentHeading = str(self.ui.cboParentalLevel.currentText())
+            profileHeading = str(self.ui.cboProfileLevel.currentText())
+
+            self.groupProfile = self.profileTree.createGroupProfile(groupName1, groupName2,
+                                                                    parentHeading, profileHeading, self.metadata,
+                                                                    self.ui.cboUnclassified.currentText())
+
+            self.setGroup1Colour(self.preferences['Group colours'][groupName1], False)
+            if groupName2 != '<All other samples>':
+                self.setGroup2Colour(self.preferences['Group colours'][groupName2], False)
+            else:
+                self.setGroup2Colour(self.preferences['All other samples colour'])
+
+            # show progress of test
+            progress = QtWidgets.QProgressDialog('Running two-group statistical test...', 'Cancel', 0,
+                                                 len(self.groupProfile.getFeatures()) + 1, self)
+            progress.setWindowTitle('Progress')
+            progress.setWindowModality(QtCore.Qt.WindowModal)
+            progress.setVisible(True)
+
+            # run significance test
+            test = self.groupStatTestDict[str(self.ui.cboGroupStatTests.currentText())]
+            testType = str(self.ui.cboGroupSignTestType.currentText())
+            confIntervMethod = self.ui.cboGroupConfIntervMethods.currentText()
+            coverage = float(self.ui.cboGroupNominalCoverage.currentText())
+            self.groupStatsTest.run(test, testType, confIntervMethod, coverage, self.groupProfile, progress)
+
+            if not progress.wasCanceled():
+                # apply multiple test correction
+                multCompClass = self.multCompDict[str(self.ui.cboGroupMultCompMethod.currentText())]
+                self.groupStatsTest.results.performMultCompCorrection(multCompClass)
+
+                # apply filters
+                self.groupApplyFilters()
+        else:
+            self.groupStatsTest.results.data = []
+            self.groupApplyFilters()
+
+    def multiGroupRunTest(self):
+        if self.metadata == None or self.bAutoRecalculate == False:
+            return
+
+        # create new profile
+        parentHeading = str(self.ui.cboParentalLevel.currentText())
+        profileHeading = str(self.ui.cboProfileLevel.currentText())
+
+        # In Python 3, dict.keys() returns a view. Convert to list if needed.
+        self.multiGroupProfile = self.profileTree.createMultiGroupProfile(list(self.profileTree.groupDict.keys()),
+                                                                          parentHeading, profileHeading, self.metadata,
+                                                                          self.ui.cboUnclassified.currentText())
+
+        # set active groups
+        self.multiGroupProfile.setActiveGroups(self.profileTree.groupActive)
+
+        if len(self.multiGroupProfile.activeGroupNames) >= 2:
+            # show progress of test
+            progress = QtWidgets.QProgressDialog('Running multiple groups statistical test...', 'Cancel', 0,
+                                                 len(self.multiGroupProfile.getFeatures()) + 1, self)
+            progress.setWindowTitle('Progress')
+            progress.setWindowModality(QtCore.Qt.WindowModal)
+            progress.setVisible(True)
+
+            # run significance test
+            hypothesisTest = self.multiGroupStatTestDict[str(self.ui.cboMultiGroupStatTests.currentText())]
+            effectSizeMeasure = self.multiGroupEffectSizeDict[str(self.ui.cboMultiGroupEffectSizeMeasure.currentText())]
+            self.multiGroupStatsTest.run(hypothesisTest, effectSizeMeasure, self.multiGroupProfile, progress)
+
+            if self.multiGroupStatsTest.results.data != []:
+                # apply multiple test correction
+                multCompClass = self.multCompDict[str(self.ui.cboMultiGroupMultCompMethod.currentText())]
+                self.multiGroupStatsTest.results.performMultCompCorrection(multCompClass)
+
+                # apply filters
+                self.multiGroupApplyFilters()
+        else:
+            self.multiGroupStatsTest.results.data = []
+            self.multiGroupApplyFilters()
+
+    def groupTestConfIntervMethods(self):
+        # populate combo box with CI methods compatible with current hypothesis test
+        test = self.groupStatTestDict[str(self.ui.cboGroupStatTests.currentText())]
+        self.ui.cboGroupConfIntervMethods.clear()
+        self.ui.cboGroupConfIntervMethods.insertItems(len(test.confIntervMethods), test.confIntervMethods)
+        self.ui.cboGroupConfIntervMethods.setCurrentIndex(0)
+        self.ui.cboGroupConfIntervMethods.adjustSize()
+
+        index = self.ui.cboGroupNominalCoverage.currentIndex()
+        self.ui.cboGroupNominalCoverage.clear()
+        if test.confIntervMethods[0] == '<none>':
+            self.ui.cboGroupNominalCoverage.insertItems(1, ['0.0'])
+        else:
+            self.ui.cboGroupNominalCoverage.insertItems(5, ['0.90', '0.95', '0.98', '0.99', '0.999'])
+            self.ui.cboGroupNominalCoverage.setCurrentIndex(index)
+
+    def sampleMultCompCorrectionChanged(self):
+        multCompClass = self.multCompDict[str(self.ui.cboSampleMultCompMethod.currentText())]
+        if multCompClass.method == 'False discovery rate':
+            self.ui.lblSampleSignLevelFilter.setText('q-value filter (>):')
+        else:
+            self.ui.lblSampleSignLevelFilter.setText('p-value filter (>):')
+        self.sampleRunTest()
+
+    def groupMultCompCorrectionChanged(self):
+        multCompClass = self.multCompDict[str(self.ui.cboGroupMultCompMethod.currentText())]
+        if multCompClass.method == 'False discovery rate':
+            self.ui.lblGroupSignLevelFilter.setText('q-value filter (>):')
+        else:
+            self.ui.lblGroupSignLevelFilter.setText('p-value filter (>):')
+
+        self.groupRunTest()
+
+    def multiGroupMultCompCorrectionChanged(self):
+        multCompClass = self.multCompDict[str(self.ui.cboMultiGroupMultCompMethod.currentText())]
+        if multCompClass.method == 'False discovery rate':
+            self.ui.lblMultiGroupSignLevelFilter.setText('q-value filter (>):')
+        else:
+            self.ui.lblMultiGroupSignLevelFilter.setText('p-value filter (>):')
+        self.multiGroupRunTest()
+
+    def sampleMultCompCorrectionInfo(self):
+        if self.sampleStatsTest.results.multCompCorrection != None:
+            multCompDlg = MultCompCorrectionInfoDlg(self, self.sampleStatsTest.results.multCompCorrectionInfo)
+            multCompDlg.exec_()
+        else:
+            QtWidgets.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtWidgets.QMessageBox.Ok)
+
+    def groupMultCompCorrectionInfo(self):
+        if self.groupStatsTest.results.multCompCorrection != None:
+            multCompDlg = MultCompCorrectionInfoDlg(self, self.groupStatsTest.results.multCompCorrectionInfo)
+            multCompDlg.exec_()
+        else:
+            QtWidgets.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtWidgets.QMessageBox.Ok)
+
+    def multiGroupMultCompCorrectionInfo(self):
+        if self.multiGroupStatsTest.results.multCompCorrection != None:
+            multCompDlg = MultCompCorrectionInfoDlg(self, self.multiGroupStatsTest.results.multCompCorrectionInfo)
+            multCompDlg.exec_()
+        else:
+            QtWidgets.QMessageBox.information(self, 'Run test', 'Run hypothesis test first.', QtWidgets.QMessageBox.Ok)
+
+    def sampleSeqFilterChanged(self):
+        if self.ui.cboSampleSeqFilter.currentText() == 'maximum':
+            self.ui.lblSampleSeqFilterSample1.setText('Maximum (<):')
+
+        elif self.ui.cboSampleSeqFilter.currentText() == 'minimum':
+            self.ui.lblSampleSeqFilterSample1.setText('Minimum (<):')
+
+        elif self.ui.cboSampleSeqFilter.currentText() == 'independent':
+            self.ui.lblSampleSeqFilterSample1.setText('Sample 1 (<):')
+
+        self.sampleFilteringPropChanged()
+
+    def sampleParentSeqFilterChanged(self):
+        if self.ui.cboSampleParentSeqFilter.currentText() == 'maximum':
+            self.ui.lblSampleParentSeqFilterSample1.setText('Maximum (<):')
+
+        elif self.ui.cboSampleParentSeqFilter.currentText() == 'minimum':
+            self.ui.lblSampleParentSeqFilterSample1.setText('Minimum (<):')
+
+        elif self.ui.cboSampleParentSeqFilter.currentText() == 'independent':
+            self.ui.lblSampleParentSeqFilterSample1.setText('Sample 1 (<):')
+
+        self.sampleFilteringPropChanged()
+
+    def groupSeqFilterChanged(self):
+        if self.ui.cboGroupSeqFilter.currentText() == 'maximum':
+            self.ui.lblGroupSeqFilter1.setText('Maximum (<):')
+        elif self.ui.cboGroupSeqFilter.currentText() == 'minimum':
+            self.ui.lblGroupSeqFilter1.setText('Minimum (<):')
+        elif self.ui.cboGroupSeqFilter.currentText() == 'independent, maximum':
+            self.ui.lblGroupSeqFilter1.setText('Max. group 1 (<):')
+            self.ui.lblGroupSeqFilter2.setText('Max. group 2 (<):')
+        elif self.ui.cboGroupSeqFilter.currentText() == 'independent, minimum':
+            self.ui.lblGroupSeqFilter1.setText('Min. group 1 (<):')
+            self.ui.lblGroupSeqFilter2.setText('Min. group 2 (<):')
+
+        self.groupFilteringPropChanged()
+
+    def groupParentSeqFilterChanged(self):
+        if self.ui.cboGroupParentSeqFilter.currentText() == 'maximum':
+            self.ui.lblGroupParentSeqFilter1.setText('Maximum (<):')
+        elif self.ui.cboGroupParentSeqFilter.currentText() == 'minimum':
+            self.ui.lblGroupParentSeqFilter1.setText('Minimum (<):')
+        elif self.ui.cboGroupParentSeqFilter.currentText() == 'independent, maximum':
+            self.ui.lblGroupParentSeqFilter1.setText('Max. group 1 (<):')
+            self.ui.lblGroupParentSeqFilter2.setText('Max. group 2 (<):')
+        elif self.ui.cboGroupParentSeqFilter.currentText() == 'independent, minimum':
+            self.ui.lblGroupParentSeqFilter1.setText('Min. group 1 (<):')
+            self.ui.lblGroupParentSeqFilter2.setText('Min. group 2 (<):')
+
+        self.groupFilteringPropChanged()
+
+    def sampleChangeEffectSizeMeasure(self):
+        self.sampleFilteringPropChanged()
+
+    def groupChangeEffectSizeMeasure(self):
+        self.groupFilteringPropChanged()
+
+    def sampleFilteringPropChanged(self):
+        # indicate that profile information has changed
+        self.ui.btnSampleSelectFeatures.setEnabled(self.ui.chkSampleSelectFeatures.isChecked())
+
+        self.ui.spinSampleSignLevelFilter.setEnabled(self.ui.chkSampleEnableSignLevelFilter.isChecked())
+
+        self.ui.cboSampleSeqFilter.setEnabled(self.ui.chkSampleEnableSeqFilter.isChecked())
+        self.ui.spinSampleFilterSample1.setEnabled(self.ui.chkSampleEnableSeqFilter.isChecked())
+        self.ui.spinSampleFilterSample2.setEnabled(
+            self.ui.chkSampleEnableSeqFilter.isChecked() and self.ui.cboSampleSeqFilter.currentText() == 'independent')
+        self.ui.lblSampleSeqFilterSample2.setEnabled(self.ui.cboSampleSeqFilter.currentText() == 'independent')
+
+        self.ui.cboSampleParentSeqFilter.setEnabled(self.ui.chkSampleEnableParentSeqFilter.isChecked())
+        self.ui.spinSampleParentFilterSample1.setEnabled(self.ui.chkSampleEnableParentSeqFilter.isChecked())
+        self.ui.spinSampleParentFilterSample2.setEnabled(
+            self.ui.chkSampleEnableParentSeqFilter.isChecked() and self.ui.cboSampleParentSeqFilter.currentText() == 'independent')
+        self.ui.lblSampleParentSeqFilterSample2.setEnabled(
+            self.ui.cboSampleParentSeqFilter.currentText() == 'independent')
+
+        self.ui.cboSampleEffectSizeMeasure1.setEnabled(self.ui.chkSampleEnableEffectSizeFilter1.isChecked())
+        self.ui.spinSampleMinEffectSize1.setEnabled(self.ui.chkSampleEnableEffectSizeFilter1.isChecked())
+
+        self.ui.cboSampleEffectSizeMeasure2.setEnabled(self.ui.chkSampleEnableEffectSizeFilter2.isChecked())
+        self.ui.spinSampleMinEffectSize2.setEnabled(self.ui.chkSampleEnableEffectSizeFilter2.isChecked())
+
+        self.sampleApplyFilters()
+
+    def groupFilteringPropChanged(self):
+        # indicate that profile information has changed
+        self.ui.btnGroupSelectFeatures.setEnabled(self.ui.chkGroupSelectFeatures.isChecked())
+
+        self.ui.spinGroupSignLevelFilter.setEnabled(self.ui.chkGroupEnableSignLevelFilter.isChecked())
+
+        bIndependent = (
+                    self.ui.cboGroupSeqFilter.currentText() == 'independent, maximum' or self.ui.cboGroupSeqFilter.currentText() == 'independent, minimum')
+        self.ui.cboGroupSeqFilter.setEnabled(self.ui.chkGroupEnableSeqFilter.isChecked())
+        self.ui.spinGroupFilter1.setEnabled(self.ui.chkGroupEnableSeqFilter.isChecked())
+        self.ui.spinGroupFilter2.setEnabled(self.ui.chkGroupEnableSeqFilter.isChecked() and bIndependent)
+        self.ui.lblGroupSeqFilter2.setEnabled(bIndependent)
+
+        bParentIndependent = (
+                    self.ui.cboGroupParentSeqFilter.currentText() == 'independent, maximum' or self.ui.cboGroupParentSeqFilter.currentText() == 'independent, minimum')
+        self.ui.cboGroupParentSeqFilter.setEnabled(self.ui.chkGroupEnableParentSeqFilter.isChecked())
+        self.ui.spinGroupParentFilter1.setEnabled(self.ui.chkGroupEnableParentSeqFilter.isChecked())
+        self.ui.spinGroupParentFilter2.setEnabled(
+            self.ui.chkGroupEnableParentSeqFilter.isChecked() and bParentIndependent)
+        self.ui.lblGroupParentSeqFilter2.setEnabled(bParentIndependent)
+
+        self.ui.cboGroupEffectSizeMeasure1.setEnabled(self.ui.chkGroupEnableEffectSizeFilter1.isChecked())
+        self.ui.spinGroupMinEffectSize1.setEnabled(self.ui.chkGroupEnableEffectSizeFilter1.isChecked())
+
+        self.ui.cboGroupEffectSizeMeasure2.setEnabled(self.ui.chkGroupEnableEffectSizeFilter2.isChecked())
+        self.ui.spinGroupMinEffectSize2.setEnabled(self.ui.chkGroupEnableEffectSizeFilter2.isChecked())
+
+        self.groupApplyFilters()
+
+    def multiGroupFilteringPropChanged(self):
+        # indicate that profile information has changed
+        self.ui.btnMultiGroupSelectFeatures.setEnabled(self.ui.chkMultiGroupSelectFeatures.isChecked())
+        self.ui.spinMultiGroupSignLevelFilter.setEnabled(self.ui.chkMultiGroupEnableSignLevelFilter.isChecked())
+        self.ui.spinMultiGroupMinEffectSize.setEnabled(self.ui.chkMultiGroupEnableEffectSizeFilter.isChecked())
+        self.multiGroupApplyFilters()
+
+    def sampleSelectFeaturesCheckbox(self):
+        self.sampleFilteringPropChanged()
+
+    def sampleSelectFeaturesDlg(self):
+        selectFeatureDialog = SelectFeaturesDlg(self.sampleStatsTest.results, self)
+
+        if selectFeatureDialog.exec_() == QtWidgets.QDialog.Accepted:
+            selectedFeatures = selectFeatureDialog.getSelectedFeatures()
+            self.sampleStatsTest.results.setSelectedFeatures(selectedFeatures)
+            self.sampleFilteringPropChanged()
+
+    def groupSelectFeaturesCheckbox(self):
+        self.groupFilteringPropChanged()
+
+    def groupSelectFeaturesDlg(self):
+        selectFeatureDialog = SelectFeaturesDlg(self.groupStatsTest.results, self)
+
+        if selectFeatureDialog.exec_() == QtWidgets.QDialog.Accepted:
+            selectedFeatures = selectFeatureDialog.getSelectedFeatures()
+            self.groupStatsTest.results.setSelectedFeatures(selectedFeatures)
+            self.groupFilteringPropChanged()
+
+    def multiGroupSelectFeaturesCheckbox(self):
+        self.multiGroupFilteringPropChanged()
+
+    def multiGroupSelectFeaturesDlg(self):
+        selectFeatureDialog = SelectFeaturesDlg(self.multiGroupStatsTest.results, self)
+
+        if selectFeatureDialog.exec_() == QtWidgets.QDialog.Accepted:
+            selectedFeatures = selectFeatureDialog.getSelectedFeatures()
+            self.multiGroupStatsTest.results.setSelectedFeatures(selectedFeatures)
+            self.multiGroupFilteringPropChanged()
+
+    def sampleApplyFilters(self):
+        if self.bAutoRecalculate == False:
+            return
+
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        if not self.ui.chkSampleSelectFeatures.isChecked():
+            self.sampleStatsTest.results.selectAllFeautres()
+
+        # perform filtering
+        signLevelFilter = self.ui.spinSampleSignLevelFilter.value()
+        if not self.ui.chkSampleEnableSignLevelFilter.isChecked():
+            signLevelFilter = None
+
+        # sequence filtering
+        seqFilter = str(self.ui.cboSampleSeqFilter.currentText())
+        sample1Filter = int(self.ui.spinSampleFilterSample1.value())
+        sample2Filter = int(self.ui.spinSampleFilterSample2.value())
+        if not self.ui.chkSampleEnableSeqFilter.isChecked():
+            seqFilter = None
+            sample1Filter = None
+            sample2Filter = None
+
+        parentSeqFilter = str(self.ui.cboSampleParentSeqFilter.currentText())
+        parentSample1Filter = int(self.ui.spinSampleParentFilterSample1.value())
+        parentSample2Filter = int(self.ui.spinSampleParentFilterSample2.value())
+        if not self.ui.chkSampleEnableParentSeqFilter.isChecked():
+            parentSeqFilter = None
+            parentSample1Filter = None
+            parentSample2Filter = None
+
+        # effect size filters
+        if self.ui.chkSampleEnableEffectSizeFilter1.isChecked():
+            effectSizeMeasure1 = self.sampleEffectSizeDict[str(self.ui.cboSampleEffectSizeMeasure1.currentText())]
+            minEffectSize1 = float(self.ui.spinSampleMinEffectSize1.value())
+        else:
+            effectSizeMeasure1 = None
+            minEffectSize1 = None
+
+        if self.ui.chkSampleEnableEffectSizeFilter2.isChecked():
+            effectSizeMeasure2 = self.sampleEffectSizeDict[str(self.ui.cboSampleEffectSizeMeasure2.currentText())]
+            minEffectSize2 = float(self.ui.spinSampleMinEffectSize2.value())
+        else:
+            effectSizeMeasure2 = None
+            minEffectSize2 = None
+
+        if self.ui.radioSampleOR.isChecked():
+            effectSizeOperator = 'OR'
+        else:
+            effectSizeOperator = 'AND'
+
+        self.sampleStatsTest.results.filterFeatures(signLevelFilter, seqFilter, sample1Filter, sample2Filter,
+                                                    parentSeqFilter, parentSample1Filter, parentSample2Filter,
+                                                    effectSizeMeasure1, minEffectSize1, effectSizeOperator,
+                                                    effectSizeMeasure2, minEffectSize2)
+
+        # update table summarizing statistical results
+        self.sampleUpdateFilterInfo()
+        self.sampleTable.updateTable(self.sampleStatsTest)
+
+        # update plots
+        self.samplePlotUpdate()
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+    def groupApplyFilters(self):
+        if self.metadata == None or self.bAutoRecalculate == False:
+            return
+
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        if not self.ui.chkGroupSelectFeatures.isChecked():
+            self.groupStatsTest.results.selectAllFeautres()
+
+        # perform filtering
+        signLevelFilter = self.ui.spinGroupSignLevelFilter.value()
+        if not self.ui.chkGroupEnableSignLevelFilter.isChecked():
+            signLevelFilter = None
+
+        # sequence filtering
+        seqFilter = str(self.ui.cboGroupSeqFilter.currentText())
+        group1Filter = int(self.ui.spinGroupFilter1.value())
+        group2Filter = int(self.ui.spinGroupFilter2.value())
+        if not self.ui.chkGroupEnableSeqFilter.isChecked():
+            seqFilter = None
+            group1Filter = None
+            group2Filter = None
+
+        parentSeqFilter = str(self.ui.cboGroupParentSeqFilter.currentText())
+        parentGroup1Filter = int(self.ui.spinGroupParentFilter1.value())
+        parentGroup2Filter = int(self.ui.spinGroupParentFilter2.value())
+        if not self.ui.chkGroupEnableParentSeqFilter.isChecked():
+            parentSeqFilter = None
+            parentGroup1Filter = None
+            parentGroup2Filter = None
+
+        # effect size filters
+        if self.ui.chkGroupEnableEffectSizeFilter1.isChecked():
+            effectSizeMeasure1 = self.groupEffectSizeDict[str(self.ui.cboGroupEffectSizeMeasure1.currentText())]
+            minEffectSize1 = float(self.ui.spinGroupMinEffectSize1.value())
+        else:
+            effectSizeMeasure1 = None
+            minEffectSize1 = None
+
+        if self.ui.chkGroupEnableEffectSizeFilter2.isChecked():
+            effectSizeMeasure2 = self.groupEffectSizeDict[str(self.ui.cboGroupEffectSizeMeasure2.currentText())]
+            minEffectSize2 = float(self.ui.spinGroupMinEffectSize2.value())
+        else:
+            effectSizeMeasure2 = None
+            minEffectSize2 = None
+
+        if self.ui.radioGroupOR.isChecked():
+            effectSizeOperator = 'OR'
+        else:
+            effectSizeOperator = 'AND'
+
+        self.groupStatsTest.results.filterFeatures(signLevelFilter, seqFilter, group1Filter, group2Filter,
+                                                   parentSeqFilter, parentGroup1Filter, parentGroup2Filter,
+                                                   effectSizeMeasure1, minEffectSize1, effectSizeOperator,
+                                                   effectSizeMeasure2, minEffectSize2)
+
+        # update table summarizing statistical results
+        self.groupUpdateFilterInfo()
+        self.groupFeaturesTableUpdate()
+        self.groupTable.updateTable(self.groupStatsTest)
+
+        # update plots
+        self.groupPlotUpdate()
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+    def multiGroupApplyFilters(self):
+        if self.metadata == None or self.bAutoRecalculate == False:
+            return
+
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        if not self.ui.chkMultiGroupSelectFeatures.isChecked():
+            self.multiGroupStatsTest.results.selectAllFeautres()
+
+        # perform filtering
+        signLevelFilter = self.ui.spinMultiGroupSignLevelFilter.value()
+        if not self.ui.chkMultiGroupEnableSignLevelFilter.isChecked():
+            signLevelFilter = None
+
+        if self.ui.chkMultiGroupEnableEffectSizeFilter.isChecked():
+            effectSizeMeasure = self.multiGroupEffectSizeDict[str(self.ui.cboMultiGroupEffectSizeMeasure.currentText())]
+            minEffectSize = float(self.ui.spinMultiGroupMinEffectSize.value())
+        else:
+            effectSizeMeasure = None
+            minEffectSize = None
+
+        self.multiGroupStatsTest.results.filterFeatures(signLevelFilter, effectSizeMeasure, minEffectSize)
+
+        # update table summarizing statistical results
+        self.multiGroupUpdateFilterInfo()
+        self.multiGroupFeaturesTableUpdate()
+        self.multiGroupTable.updateTable(self.multiGroupStatsTest)
+
+        # update plots
+        self.multiGroupPlotUpdate()
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+    def sampleUpdateFilterInfo(self):
+        self.ui.txtSampleNumActiveFeatures.setText(str(len(self.sampleStatsTest.results.getActiveFeatures())))
+
+    def groupUpdateFilterInfo(self):
+        self.ui.txtGroupNumActiveFeatures.setText(str(len(self.groupStatsTest.results.getActiveFeatures())))
+
+    def multiGroupUpdateFilterInfo(self):
+        self.ui.txtMultiGroupNumActiveFeatures.setText(str(len(self.multiGroupStatsTest.results.getActiveFeatures())))
+
+    def sampleHighlightHierarchyChanged(self):
+        index = self.ui.cboSampleHighlightHierarchy.currentIndex() - 1
+        if index == -1:
+            self.preferences['Highlighted sample features'] = []
+            self.ui.cboSampleHighlightFeature.clear()
+            self.samplePlotUpdate()
+            return
+
+        features = set([])
+        # Python 3: keys() returns a view
+        for feature in self.sampleProfile.profileDict.keys():
+            hierarchy = self.sampleProfile.getHierarchy(feature)
+            features.add(hierarchy[index])
+
+        features = list(features)
+        features.sort(key=str.lower)
+
+        # QStringList is not available in PyQt5, use standard list of strings
+        featureStrList = []
+        for feature in features:
+            featureStrList.append(feature)
+
+        self.ui.cboSampleHighlightFeature.clear()
+        self.ui.cboSampleHighlightFeature.insertItems(len(featureStrList), featureStrList)
+        self.ui.cboSampleHighlightFeature.setCurrentIndex(0)
+
+        self.ui.cboSampleHighlightFeature.adjustSize()
+
+        self.sampleHighlightFeatureChanged()
+
+    def groupHighlightHierarchyChanged(self):
+        index = self.ui.cboGroupHighlightHierarchy.currentIndex() - 1
+        if index == -1:
+            self.preferences['Highlighted group features'] = []
+            self.ui.cboGroupHighlightFeature.clear()
+            self.groupPlotUpdate()
+            return
+
+        features = set([])
+        for feature in self.groupProfile.profileDict.keys():
+            hierarchy = self.groupProfile.getHierarchy(feature)
+            features.add(hierarchy[index])
+
+        features = list(features)
+        features.sort(key=str.lower)
+
+        featureStrList = []
+        for feature in features:
+            featureStrList.append(feature)
+
+        self.ui.cboGroupHighlightFeature.clear()
+        self.ui.cboGroupHighlightFeature.insertItems(len(featureStrList), featureStrList)
+        self.ui.cboGroupHighlightFeature.setCurrentIndex(0)
+
+        self.ui.cboGroupHighlightFeature.adjustSize()
+
+        self.groupHighlightFeatureChanged()
+
+    def multiGroupHighlightHierarchyChanged(self):
+        index = self.ui.cboMultiGroupHighlightHierarchy.currentIndex() - 1
+        if index == -1:
+            self.preferences['Highlighted multiple group features'] = []
+            self.ui.cboMultiGroupHighlightFeature.clear()
+            self.multiGroupPlotUpdate()
+            return
+
+        features = set([])
+        for feature in self.multiGroupProfile.profileDict.keys():
+            hierarchy = self.multiGroupProfile.getHierarchy(feature)
+            features.add(hierarchy[index])
+
+        features = list(features)
+        features.sort(key=str.lower)
+
+        featureStrList = []
+        for feature in features:
+            featureStrList.append(feature)
+
+        self.ui.cboMultiGroupHighlightFeature.clear()
+        self.ui.cboMultiGroupHighlightFeature.insertItems(len(featureStrList), featureStrList)
+        self.ui.cboMultiGroupHighlightFeature.setCurrentIndex(0)
+
+        self.ui.cboMultiGroupHighlightFeature.adjustSize()
+
+        self.multiGroupHighlightFeatureChanged()
+
+    def sampleHighlightFeatureChanged(self):
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        index = self.ui.cboSampleHighlightHierarchy.currentIndex() - 1
+        selectedFeature = self.ui.cboSampleHighlightFeature.currentText()
+
+        self.preferences['Highlighted sample features'] = []
+        for feature in self.sampleProfile.profileDict.keys():
+            hierarchy = self.sampleProfile.getHierarchy(feature)
+            if hierarchy[index] == selectedFeature:
+                self.preferences['Highlighted sample features'].append(feature)
+
+        self.samplePlotUpdate()
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+    def groupHighlightFeatureChanged(self):
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        index = self.ui.cboGroupHighlightHierarchy.currentIndex() - 1
+        selectedFeature = self.ui.cboGroupHighlightFeature.currentText()
+
+        self.preferences['Highlighted group features'] = []
+        for feature in self.groupProfile.profileDict.keys():
+            hierarchy = self.groupProfile.getHierarchy(feature)
+            if hierarchy[index] == selectedFeature:
+                self.preferences['Highlighted group features'].append(feature)
+
+        self.groupPlotUpdate()
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+    def multiGroupHighlightFeatureChanged(self):
+        QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+
+        index = self.ui.cboMultiGroupHighlightHierarchy.currentIndex() - 1
+        selectedFeature = self.ui.cboMultiGroupHighlightFeature.currentText()
+
+        self.preferences['Highlighted multiple group features'] = []
+        for feature in self.multiGroupProfile.profileDict.keys():
+            hierarchy = self.multiGroupProfile.getHierarchy(feature)
+            if hierarchy[index] == selectedFeature:
+                self.preferences['Highlighted multiple group features'].append(feature)
+
+        self.multiGroupPlotUpdate()
+
+        QtWidgets.QApplication.instance().restoreOverrideCursor()
+
+    def saveImageDlg(self):
+        stackedWidget = self.ui.stackedWidgetViews
+        if stackedWidget.currentIndex() == 2:
+            plotToSave = self.samplePlot
+        elif stackedWidget.currentIndex() == 1:
+            plotToSave = self.groupPlot
+        elif stackedWidget.currentIndex() == 0:
+            plotToSave = self.multiGroupPlot
+        else:
+            QtWidgets.QMessageBox.information(self, 'Select plot', 'A plot tab must be active to save a plot.',
+                                              QtWidgets.QMessageBox.Ok)
+            return
+
+        # PyQt5 uses getSaveFileName which returns (fileName, selectedFilter)
+        f, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save plot...', self.preferences['Last directory'],
+                                                     'Portable Network Graphics (*.png);;' +
+                                                     'Portable Document Format (*.pdf);;' +
+                                                     'PostScript (*.ps);;' +
+                                                     'Encapsulated PostScript (*.eps);;' +
+                                                     'Scalable Vector Graphics (*.svg)')
+
+        if f != '':
+            self.preferences['Last directory'] = os.path.dirname(f)
+            try:
+                if f.lower().endswith('png'):
+                    dpi, ok = QtWidgets.QInputDialog.getInt(self, 'Desired resolution',
+                                                            'Enter desired resolution (DPI) of image:', 300)
+                    if ok:
+                        plotToSave.save(str(f), dpi)
+                else:
+                    plotToSave.save(str(f))
+            except IOError:
+                QtWidgets.QMessageBox.information(self, 'Failed to save image', 'Write permission for file denied.',
+                                                  QtWidgets.QMessageBox.Ok)
+
+    def sendPlotToWindow(self):
+        if self.ui.stackedWidgetViews.currentIndex() == 2:
+            self.samplePlot.sendToNewWindow(self, self.sampleProfile, self.sampleStatsTest.results)
+        elif self.ui.stackedWidgetViews.currentIndex() == 1:
+            self.groupPlot.sendToNewWindow(self, self.groupProfile, self.groupStatsTest.results)
+        elif self.ui.stackedWidgetViews.currentIndex() == 0:
+            self.multiGroupPlot.sendToNewWindow(self, self.multiGroupProfile, self.multiGroupStatsTest.results)
+
+    def updateStatusBar(self):
+        if self.ui.tabWidgetProperties.tabText(self.ui.tabWidgetProperties.currentIndex()) == 'Two samples':
+            sampleName1 = str(self.ui.cboSample1.currentText())
+            sampleName2 = str(self.ui.cboSample2.currentText())
+
+            message = 'Parent categories: ' + str(self.sampleProfile.getNumParentCategories())
+            message += ', Features: ' + str(self.sampleProfile.getNumFeatures())
+            message += ', Sequences in sample 1: ' + str(self.profileTree.numSequencesInSample(sampleName1))
+            message += ', Sequences in sample 2: ' + str(self.profileTree.numSequencesInSample(sampleName2))
+
+        elif self.ui.tabWidgetProperties.tabText(self.ui.tabWidgetProperties.currentIndex()) == 'Two groups':
+            groupName1 = str(self.ui.cboGroup1.currentText())
+            groupName2 = str(self.ui.cboGroup2.currentText())
+
+            message = 'Parent categories: ' + str(self.groupProfile.getNumParentCategories())
+            message += ', Features: ' + str(self.groupProfile.getNumFeatures())
+            message += ', Sequences in group 1: ' + str(self.profileTree.numSequencesInGroup(groupName1, self.metadata))
+
+            if groupName2 != '<All other samples>':
+                message += ', Sequences in group 2: ' + str(
+                    self.profileTree.numSequencesInGroup(groupName2, self.metadata))
+            else:
+                message += ', Sequences in group2: ' + str(
+                    self.profileTree.numSequences(self.metadata) - self.profileTree.numSequencesInGroup(groupName1,
+                                                                                                        self.metadata))
+        else:
+            message = 'Parent categories: ' + str(self.multiGroupProfile.getNumParentCategories())
+            message += ', Features: ' + str(self.multiGroupProfile.getNumFeatures())
+
+        self.lblStatusBar.setText(message)
+
+    def openAboutDlg(self):
+        QtWidgets.QMessageBox.about(self, 'About...',
+                                    'STAMP: statistical analysis of taxonomic and functional profiles\n\n'
+                                    '%s\n'
+                                    '%s\n'
+                                    '%s\n\n'
+                                    '%s' % ('Donovan Parks and Robert Beiko', __version__, __date__,
+                                            'Program icon by Caihua (http://commons.wikimedia.org/wiki/File:Fairytale_colors.png)'))
+
+    def closeEvent(self, event):
+        # save size and location of main window and all dock widgets
+        settings = QtCore.QSettings("BeikoLab", "STAMP")
+        settings.setValue("MainWindow/State", self.saveState())
+        settings.setValue("MainWindow/Geometry", self.saveGeometry())
+
+        # save preferences
+        settings.setValue('Preferences/Pseudocount', self.preferences['Pseudocount'])
+        settings.setValue('Preferences/Replicates', self.preferences['Replicates'])
+        settings.setValue('Preferences/Truncate feature names', self.preferences['Truncate feature names'])
+        settings.setValue('Preferences/Length of truncated feature names',
+                          self.preferences['Length of truncated feature names'])
+        settings.setValue('Preferences/Axes colour', self.preferences['Axes colour'].name())
+        settings.setValue('Preferences/All other samples colour', self.preferences['All other samples colour'].name())
+        settings.setValue('Preferences/Minimum reported p-value exponent',
+                          self.preferences['Minimum reported p-value exponent'])
+
 
 def exceptHook(exc_type, exc_value, exc_traceback):
-	# # Copyright (c) 2002-2007 Pascal Varet <p.varet@gmail.com>
-	# #
-	# # Originally part of Spyrit.
+    # # Copyright (c) 2002-2007 Pascal Varet <p.varet@gmail.com>
+    # #
+    # # Originally part of Spyrit.
 
-	import traceback
+    import traceback
 
-	# # KeyboardInterrupt is a special case.
-	# # We don't raise the error dialog when it occurs.
-	if issubclass(exc_type, KeyboardInterrupt):
-		if qApp():
-			qApp().quit()
-		return
+    # # KeyboardInterrupt is a special case.
+    # # We don't raise the error dialog when it occurs.
+    if issubclass(exc_type, KeyboardInterrupt):
+        if QtWidgets.qApp:
+            QtWidgets.qApp.quit()
+        return
 
-	filename, line, dummy, dummy = traceback.extract_tb(exc_traceback).pop()
-	filename = os.path.basename(filename)
-	error = "%s: %s" % (exc_type.__name__, exc_value)
+    filename, line, dummy, dummy = traceback.extract_tb(exc_traceback).pop()
+    filename = os.path.basename(filename)
+    error = "%s: %s" % (exc_type.__name__, exc_value)
 
-	QtWidgets.QMessageBox.critical(None, "Unknown error...",
-		"<center>An error has occured:<br/><br/>"
-	+ "<b><i>%s</i></b><br/>" % error
-	+ "It occured at <b>line %d</b> of file <b>%s</b>.<br/>" % (line, filename)
-	+ "</center>")
+    QtWidgets.QMessageBox.critical(None, "Unknown error...",
+                                   "<center>An error has occured:<br/><br/>"
+                                   + "<b><i>%s</i></b><br/>" % error
+                                   + "It occured at <b>line %d</b> of file <b>%s</b>.<br/>" % (line, filename)
+                                   + "</center>")
+
 
 def main():
-	# ignore numpy warnings as invalid results are handled within STAMP
-	seterr(all='ignore')
+    # ignore numpy warnings as invalid results are handled within STAMP
+    seterr(all='ignore')
 
-	# add main directory to the path
-	sys.path.insert(0, getMainDir())
-	os.chdir(getMainDir())
+    # add main directory to the path
+    sys.path.insert(0, getMainDir())
+    os.chdir(getMainDir())
 
-	# initialize preferences
-	settings = QtCore.QSettings("BeikoLab", "STAMP")
-	preferences = {}
+    # initialize preferences
+    settings = QtCore.QSettings("BeikoLab", "STAMP")
+    preferences = {}
 
-	preferences['Pseudocount'] = settings.value('Preferences/Pseudocount', 0.5).toDouble()[0]
-	preferences['Replicates'] = settings.value('Preferences/Replicates', 1000).toInt()[0]
-	preferences['Truncate feature names'] = settings.value('Preferences/Truncate feature names', True).toBool()
-	preferences['Length of truncated feature names'] = settings.value('Preferences/Length of truncated feature names', 50).toInt()[0]
-	preferences['Axes colour'] = QtGui.QColor(settings.value('Preferences/Axes colour', '#7f7f7f'))
-	preferences['All other samples colour'] = QtGui.QColor(settings.value('Preferences/All other samples colour', '#7f7f7f'))
-	preferences['Minimum reported p-value exponent'] = settings.value('Preferences/Minimum reported p-value exponent', -15).toDouble()[0]
+    preferences['Pseudocount'] = float(settings.value('Preferences/Pseudocount', 0.5))
+    preferences['Replicates'] = int(settings.value('Preferences/Replicates', 1000))
+    # QSettings.value returns str 'true'/'false' sometimes if stored that way, or bool.
+    # PyQt5 handles native types well, but robust conversion:
+    val = settings.value('Preferences/Truncate feature names', True, type=bool)
+    preferences['Truncate feature names'] = val
 
-	preferences['Sample 1 colour'] = QtGui.QColor(128, 177, 211)
-	preferences['Sample 2 colour'] = QtGui.QColor(253, 180, 98)
-	preferences['Group colours'] = {}
-	preferences['Highlighted sample features'] = []
-	preferences['Highlighted group features'] = []
-	preferences['Highlighted multiple group features'] = []
-	preferences['Selected group feature'] = ''
-	preferences['Selected multiple group feature'] = ''
+    preferences['Length of truncated feature names'] = int(
+        settings.value('Preferences/Length of truncated feature names', 50))
+    preferences['Axes colour'] = QtGui.QColor(settings.value('Preferences/Axes colour', '#7f7f7f'))
+    preferences['All other samples colour'] = QtGui.QColor(
+        settings.value('Preferences/All other samples colour', '#7f7f7f'))
+    preferences['Minimum reported p-value exponent'] = float(
+        settings.value('Preferences/Minimum reported p-value exponent', -15))
 
-	# set the current working directory
-	workingDir = getMainDir()
-	preferences['Last directory'] = ''
-	if 'STAMP.app/Contents/Resources' in workingDir:
-		workingDir = workingDir[0:len(workingDir) - len('/STAMP.app/Contents/Resources')]
-		preferences['Last directory'] = workingDir
-		os.chdir(workingDir)
+    preferences['Sample 1 colour'] = QtGui.QColor(128, 177, 211)
+    preferences['Sample 2 colour'] = QtGui.QColor(253, 180, 98)
+    preferences['Group colours'] = {}
+    preferences['Highlighted sample features'] = []
+    preferences['Highlighted group features'] = []
+    preferences['Highlighted multiple group features'] = []
+    preferences['Selected group feature'] = ''
+    preferences['Selected multiple group feature'] = ''
 
-	if platform.system() == 'Windows' and platform.release() == 'post2008Server':
-		# We are running under windows, so indicate that this is a new app
-		# and should not be considered as running under Python. This ensures
-		# the program icon is displayed in the taskbar instead of the generic
-		# Python icon.
-		import ctypes
-		myappid = 'beikolab.software.stamp.2'  # arbitrary string
-		ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    # set the current working directory
+    workingDir = getMainDir()
+    preferences['Last directory'] = ''
+    if 'STAMP.app/Contents/Resources' in workingDir:
+        workingDir = workingDir[0:len(workingDir) - len('/STAMP.app/Contents/Resources')]
+        preferences['Last directory'] = workingDir
+        os.chdir(workingDir)
 
-	if (platform.system() == 'Windows' and len(sys.argv) == 1) or (platform.system() != 'Windows' and len(sys.argv) <= 2):
-		sys.excepthook = exceptHook
-		app = QtWidgets.QApplication(sys.argv)
+    if platform.system() == 'Windows' and platform.release() == 'post2008Server':
+        # We are running under windows, so indicate that this is a new app
+        # and should not be considered as running under Python. This ensures
+        # the program icon is displayed in the taskbar instead of the generic
+        # Python icon.
+        import ctypes
+        myappid = 'beikolab.software.stamp.2'  # arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
-		if(False):  # profile code
-			import cProfile
-			cProfile.run('mainWindow = MainWindow(preferences)', 'profile.txt')
-			##########################################
-			##########################################
-			# Use this in python console!
-			# import pstats
-			# p = pstats.Stats('profile.txt')
-			# p.sort_stats('cumulative').print_stats(10)
-			# p.sort_stats('time').print_stats(10)
-			##########################################
-			##########################################
-		else:
-			print('Starting STAMP...')
-			mainWindow = StampApp(preferences)
+    if (platform.system() == 'Windows' and len(sys.argv) == 1) or (
+            platform.system() != 'Windows' and len(sys.argv) <= 2):
+        sys.excepthook = exceptHook
+        app = QtWidgets.QApplication(sys.argv)
 
-		# 1. Force a default size in case the saved size is 0x0
-		mainWindow.resize(1200, 800)
+        if (False):  # profile code
+            import cProfile
+            cProfile.run('mainWindow = MainWindow(preferences)', 'profile.txt')
+        else:
+            mainWindow = MainWindow(preferences)
 
-		# 2. Force it to show
-		mainWindow.show()
+        mainWindow.show()
+        sys.exit(app.exec_())
+    else:
+        print('Failed to start STAMP.')
+        sys.exit()
 
-		# 3. Use raise_() to bring it to the front of all other windows
-		mainWindow.raise_()
-
-		# 4. Optional: Print the geometry to the console to see where it is
-		print(f"Window is at: {mainWindow.geometry()}")
-
-		sys.exit(app.exec_())
-	else:
-		print('Failed to start STAMP.')
-		sys.exit()
 
 if __name__ == "__main__":
-	main()
+    main()
