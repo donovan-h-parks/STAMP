@@ -27,12 +27,12 @@ Storey false discovery rate method.
 Specifically, this implements the method discussed in Storey, 2003 except the proportion of features
 that are truly null is estimated using the bootstrap procedure from Storey et al., 2004.
 
-Storey JD and Tibshirani R. (2003) Statistical significance for genome-wide experiments. 
-Proceeding of the National Academy of Sciences, 100: 9440-9445. 
+Storey JD and Tibshirani R. (2003) Statistical significance for genome-wide experiments.
+Proceeding of the National Academy of Sciences, 100: 9440-9445.
 
-Storey  JD,  Taylor  JE,  and  Siegmund  D.  (2004)  Strong  control,  conservative  point 
-estimation, and simultaneous conservative consistency of false discovery rates: A unified 
-approach. Journal of the Royal Statistical Society, Series B, 66:187-205. 
+Storey  JD,  Taylor  JE,  and  Siegmund  D.  (2004)  Strong  control,  conservative  point
+estimation, and simultaneous conservative consistency of false discovery rates: A unified
+approach. Journal of the Royal Statistical Society, Series B, 66:187-205.
 '''
 
 from stamp.plugins.common.AbstractMultCompCorrection import AbstractMultCompCorrection
@@ -58,11 +58,12 @@ class StoreyFDR(AbstractMultCompCorrection):
             return []
 
         # Find minimum pi0_hat value (i.e. proportion of features that are truly null)
+        # Replaced scipy.arange with numpy.arange
         testPts = numpy.arange(0.0, 0.951, 0.05)
         min_pi0_hat = 1
         for testPt in testPts:
             numerator = [pValue for pValue in pValues if pValue > testPt]
-            # Avoid division by zero if testPt is 1 (though range stops at 0.95)
+            # Avoid division by zero
             denom = numPvalues * (1.0 - testPt)
             if denom > 0:
                 pi0 = float(len(numerator)) / denom
@@ -81,9 +82,7 @@ class StoreyFDR(AbstractMultCompCorrection):
             mse = 0
             for dummy in range(bootstraps):
                 bootstrapPvalues = []
-                # Modern numpy choice is often faster, but maintaining logic:
-                # bootstrapPvalues = numpy.random.choice(pValues, numPvalues, replace=True)
-                # Using original logic loop for exact behavior replication:
+                # Modern numpy choice is faster, but logic preserved
                 for i in range(numPvalues):
                     rnd = numpy.random.randint(0, numPvalues)
                     bootstrapPvalues.append(pValues[rnd])
@@ -94,7 +93,7 @@ class StoreyFDR(AbstractMultCompCorrection):
                 if denom > 0:
                     bootstrap_pi0_hat = float(len(numerator)) / denom
                 else:
-                    bootstrap_pi0_hat = 1.0  # Fallback
+                    bootstrap_pi0_hat = 1.0
 
                 mse += (bootstrap_pi0_hat - min_pi0_hat) ** 2
 

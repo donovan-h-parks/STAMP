@@ -38,7 +38,7 @@ class SelectFeaturesDlg(QtWidgets.QDialog):
 
         self.init(statsTestResults)
 
-        # setup signals (New Syntax)
+        # setup signals
         self.ui.btnFilterFeature.clicked.connect(self.filterFeature)
         self.ui.btnAddFeature.clicked.connect(self.addFeature)
         self.ui.cboHierarchicalLevel.activated[str].connect(self.hierarchyChanged)
@@ -142,5 +142,4 @@ class SelectFeaturesDlg(QtWidgets.QDialog):
     def centerWindow(self):
         screen = QtWidgets.QDesktopWidget().screenGeometry()
         size = self.geometry()
-        # Python 3: Use // for integer division to avoid float errors in move()
         self.move((screen.width() - size.width()) // 2, (screen.height() - size.height()) // 2)

@@ -17,23 +17,24 @@ class MultCompCorrectionInfoDlg(QtWidgets.QDialog):
 
     # add info to dialog
     pos = 0
-    for item in info:
-      label = str(item[0]) + ':'
-      data = str(item[1])
+    if info:
+        for item in info:
+            label = str(item[0]) + ':'
+            data = str(item[1])
 
-      self.lblLabel = QtWidgets.QLabel(self)
-      self.lblLabel.setText(label)
-      self.ui.layout.setWidget(pos, QtWidgets.QFormLayout.LabelRole, self.lblLabel)
+            self.lblLabel = QtWidgets.QLabel(self)
+            self.lblLabel.setText(label)
+            self.ui.layout.setWidget(pos, QtWidgets.QFormLayout.LabelRole, self.lblLabel)
 
-      self.txtData = QtWidgets.QLineEdit(self)
-      self.txtData.setReadOnly(True)
-      self.txtData.setText(data)
-      self.ui.layout.setWidget(pos, QtWidgets.QFormLayout.FieldRole, self.txtData)
+            self.txtData = QtWidgets.QLineEdit(self)
+            self.txtData.setReadOnly(True)
+            self.txtData.setText(data)
+            self.ui.layout.setWidget(pos, QtWidgets.QFormLayout.FieldRole, self.txtData)
 
-      pos += 1
+            pos += 1
 
     # add message if there is no additional information
-    if len(info) == 0:
+    if not info or len(info) == 0:
       self.lblLabel = QtWidgets.QLabel(self)
       self.lblLabel.setText("No additional information.")
       self.ui.layout.setWidget(pos, QtWidgets.QFormLayout.LabelRole, self.lblLabel)
@@ -56,6 +57,6 @@ class MultCompCorrectionInfoDlg(QtWidgets.QDialog):
     size =  self.geometry()
     # Use integer division
     self.move((screen.width()-size.width())//2, (screen.height()-size.height())//2)
-    
-if __name__ == "__main__": 
+
+if __name__ == "__main__":
   pass

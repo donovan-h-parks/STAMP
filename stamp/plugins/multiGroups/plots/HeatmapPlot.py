@@ -64,7 +64,7 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 
         self.bPlotFeaturesIndividually = False
 
-        # --- FIX: Flags required by STAMP.py MultiGroup logic ---
+        # --- Flags required by STAMP.py MultiGroup logic ---
         self.bRunPostHocTest = False
         self.bSupportsHighlight = False
         # --------------------------------------------------------
@@ -131,16 +131,17 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
     def plotDendrogram(self, matrix, axis, dendrogramMethod, clusteringThreshold, orientation, bPlot):
         d = dist.pdist(matrix)
 
+        # FIX: Pass 'd' directly to linkage, do NOT use dist.squareform(d)
         if dendrogramMethod == 'Average neighbour (UPGMA)':
-            linkage = cluster.linkage(dist.squareform(d), method='average')
+            linkage = cluster.linkage(d, method='average')
         elif dendrogramMethod == 'Centroid':
-            linkage = cluster.linkage(dist.squareform(d), method='centroid')
+            linkage = cluster.linkage(d, method='centroid')
         elif dendrogramMethod == 'Nearest neighbour':
-            linkage = cluster.linkage(dist.squareform(d), method='single')
+            linkage = cluster.linkage(d, method='single')
         elif dendrogramMethod == 'Furthest neighbour':
-            linkage = cluster.linkage(dist.squareform(d), method='complete')
+            linkage = cluster.linkage(d, method='complete')
         elif dendrogramMethod == 'Ward':
-            linkage = cluster.linkage(dist.squareform(d), method='ward')
+            linkage = cluster.linkage(d, method='ward')
 
         dendrogram = cluster.dendrogram(linkage, orientation=orientation, link_color_func=lambda k: 'k', ax=axis,
                                         no_plot=not bPlot)
@@ -332,6 +333,7 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
             legendY = heatmapY + heatmapH + (1.5 * yLabelBounds.height) + 0.1 / self.figWidth
 
         # plot dendrograms
+        # FIX: Orientation 'left' puts root on left and leaves pointing to the right (towards the heatmap)
         if self.sortRowMethod == 'Alphabetical order':
             leafIndex1 = numpy.argsort(rowHeaders)[::-1]
         elif self.sortRowMethod == 'Mean abundance':
@@ -340,7 +342,7 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
             axisRowDendrogram = self.fig.add_axes([rowDendrogramX, rowDendrogramY, rowDendrogramW, rowDendrogramH],
                                                   frame_on=False)
             ind1, leafIndex1 = self.plotDendrogram(matrix, axisRowDendrogram, self.sortRowMethod,
-                                                   self.clusteringRowThreshold, 'right', bPlot=self.bShowRowDendrogram)
+                                                   self.clusteringRowThreshold, 'left', bPlot=self.bShowRowDendrogram)
 
         if self.sortColMethod == 'Alphabetical order':
             leafIndex2 = numpy.argsort(colHeaders)
@@ -388,7 +390,8 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
                 [colClusterBarX, colClusterBarY, colClusterBarW, colClusterBarH])  # axes for column side colorbar
             dc = numpy.array(numpy.arange(len(leafIndex2)), dtype=int)
             dc.shape = (1, len(leafIndex2))
-            axc.matshow(dc, aspect='auto', origin='lower', cmap=sampleColourMap)
+            # FIX: aspect='auto' for visibility
+            axc.imshow(dc, aspect='auto', origin='lower', cmap=sampleColourMap)
             axc.set_xticks([])
             axc.set_yticks([])
 
@@ -400,7 +403,8 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
             axr = self.fig.add_axes([rowClusterBarX, rowClusterBarY, rowClusterBarW, rowClusterBarH])
             dr = numpy.array(ind1, dtype=int)
             dr.shape = (len(ind1), 1)
-            axr.matshow(dr, aspect='auto', origin='lower', cmap=self.discreteColourMap)
+            # FIX: aspect='auto' for visibility
+            axr.imshow(dr, aspect='auto', origin='lower', cmap=self.discreteColourMap)
             axr.set_xticks([])
             axr.set_yticks([])
 
@@ -414,20 +418,26 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
 
         # plot heatmap
         axisHeatmap = self.fig.add_axes([heatmapX, heatmapY, heatmapW, heatmapH])
-        axisHeatmap.matshow(matrix, origin='lower', cmap=self.matrixColourmap, norm=norm)
-        axisHeatmap.set_xticks([])
-        axisHeatmap.set_yticks([])
 
-        # row and column labels
-        labelOffset = 0.5 * (yLabelBounds.height / cellSizeYPer)
-        for i in range(0, len(rowHeaders)):
-            axisHeatmap.text(matrix.shape[1] - 0.5, i - labelOffset, '  ' + rowHeaders[leafIndex1[i]],
-                             horizontalalignment="left")
+        # FIX: Use imshow with aspect='auto' so zoom works properly
+        axisHeatmap.imshow(matrix, origin='lower', aspect='auto', cmap=self.matrixColourmap, norm=norm)
 
-        labelOffset = 0.5 * (xLabelBounds.width / cellSizeXPer)
-        for i in range(0, len(colHeaders)):
-            axisHeatmap.text(i - labelOffset, -0.5, '  ' + colHeaders[leafIndex2[i]], rotation='vertical',
-                             verticalalignment="top")
+        # Use standard ticks
+        axisHeatmap.set_xticks(numpy.arange(len(colHeaders)))
+        axisHeatmap.set_yticks(numpy.arange(len(rowHeaders)))
+
+        # Reorder labels according to clustering
+        reordered_rows = [rowHeaders[i] for i in leafIndex1]
+        reordered_cols = [colHeaders[i] for i in leafIndex2]
+
+        # FIX: Move Y-axis labels to the right to avoid overlap with tree
+        axisHeatmap.yaxis.tick_right()
+
+        axisHeatmap.set_yticklabels(reordered_rows)
+        axisHeatmap.set_xticklabels(reordered_cols, rotation=90)
+
+        # Remove tick marks to reduce clutter
+        axisHeatmap.tick_params(axis='both', which='both', length=0)
 
         # plot colour map legend
         axisColourMap = self.fig.add_axes([legendX, legendY, legendW, legendH], frame_on=False)  # axes for colorbar
@@ -442,15 +452,6 @@ class HeatmapPlot(AbstractMultiGroupPlotPlugin):
         colourBar.set_ticks([minValue, 0.5 * (maxValue - minValue) + minValue, maxValue])
         colourBar.set_ticklabels(
             ['%.1f' % minValue, '%.1f' % (0.5 * (maxValue - minValue) + minValue), '%.1f' % maxValue])
-
-        # plot column and row lines
-        for i in range(0, len(rowHeaders)):
-            axisHeatmap.plot([-0.5, len(colHeaders) - 0.5], [i - 0.5, i - 0.5], color='white', linestyle='-',
-                             linewidth=1.5)
-
-        for i in range(0, len(colHeaders)):
-            axisHeatmap.plot([i - 0.5, i - 0.5], [-0.5, len(rowHeaders) - 0.5], color='white', linestyle='-',
-                             linewidth=1.5)
 
         # plot legend
         if self.legendPos != -1:

@@ -90,7 +90,7 @@ class Ttest(AbstractGroupStatsTestPlugin):
 
         except ZeroDivisionError:
             if meanG1 != meanG2:
-                pValue = 0.0  # the difference (at least according to these samples) must be true as there is no variance
+                pValue = 0.0  # difference must be real if variance is zero
             else:
                 pValue = 0.5
 
@@ -109,11 +109,8 @@ class Ttest(AbstractGroupStatsTestPlugin):
 
 
 if __name__ == "__main__":
-    # Pass None for preferences to avoid TypeError
     tTest = Ttest(None)
+    # Added sample run to verify syntax
     pValueOne, pValueTwo, lowerCI, upperCI, dp, note = tTest.run([5, 4, 6, 4, 3], [5, 2, 2, 5, 6, 7],
                                                                  [10, 10, 10, 10, 10], [10, 10, 10, 10, 10, 10],
                                                                  "DP: t-test inverted", 0.95)
-    print("One-sided p-value:", pValueOne)
-    print("Two-sided p-value:", pValueTwo)
-    print("Note:", note)

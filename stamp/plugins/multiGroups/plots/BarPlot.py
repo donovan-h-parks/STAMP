@@ -64,6 +64,8 @@ class BarPlot(AbstractMultiGroupPlotPlugin):
         self.bShowPvalue = self.settings.value('multiple group: ' + self.name + '/show p-value', True, type=bool)
 
     def mirrorProperties(self, plotToCopy):
+        super(BarPlot, self).mirrorProperties(plotToCopy)
+
         self.name = plotToCopy.name
         self.figColWidth = plotToCopy.figColWidth
         self.figHeight = plotToCopy.figHeight
@@ -89,17 +91,22 @@ class BarPlot(AbstractMultiGroupPlotPlugin):
         self.fig.clear()
 
         # get data
+        if not statsResults.selectedFeatures:
+            self.emptyAxis()
+            return
+
         feature = statsResults.selectedFeatures[0]
 
         vals = []
         cis = []
 
-        # Retrieve counts for the selected feature across all active samples
-        # Returns: list of groups -> list of samples -> list of counts (one count per requested feature)
-        raw_feature_data = profile.getActiveFeatureFromActiveSamplesCounts([feature])
+        # Retrieve counts AND proportions to ensure we have data even if counts/normalization fails
+        # Returns: list of groups -> list of samples -> list of counts
+        raw_feature_counts = profile.getActiveFeatureFromActiveSamplesCounts([feature])
+        raw_feature_props = profile.getActiveFeatureFromActiveSamplesProportions([feature])
 
         # Determine valid range to avoid IndexError
-        num_groups = min(len(profile.activeGroupNames), len(raw_feature_data))
+        num_groups = min(len(profile.activeGroupNames), len(raw_feature_counts))
 
         # set plot dimensions based on valid groups
         figWidth = max(num_groups * self.figColWidth, 1.0)
@@ -109,7 +116,12 @@ class BarPlot(AbstractMultiGroupPlotPlugin):
         axes = self.fig.add_axes(plotRect)
 
         if self.fieldToPlot == "Number of sequences":
-            pass  # TODO: Implement if needed
+            # Implementation for raw counts if needed
+            for i in range(num_groups):
+                group_samples_data = raw_feature_counts[i]
+                k = sum([sample_counts[0] for sample_counts in group_samples_data])
+                vals.append(k)
+                cis.append(0)  # No CI for raw counts usually
         else:  # Proportion of sequences (%)
             # calculate proportions and CIs
             ciCalc = WilsonCI()
@@ -117,11 +129,11 @@ class BarPlot(AbstractMultiGroupPlotPlugin):
             # Safe loop using determined range
             for i in range(num_groups):
                 groupName = profile.activeGroupNames[i]
-                group_samples_data = raw_feature_data[i]
+                group_samples_counts = raw_feature_counts[i]
+                group_samples_props = raw_feature_props[i]
 
                 # --- Calculate k (count of feature in this group) ---
-                # Sum the counts of the first (and only) feature for all samples in this group
-                k = sum([sample_counts[0] for sample_counts in group_samples_data])
+                k = sum([sample_counts[0] for sample_counts in group_samples_counts])
 
                 # --- Calculate n (total sequences in this group) ---
                 n = 0
@@ -130,24 +142,22 @@ class BarPlot(AbstractMultiGroupPlotPlugin):
                         n = profile.numSequencesInGroup(groupName, profile.metadata)
                     else:
                         # Fallback: Sum parentCounts for active samples in this group
-                        # We need the indices of the samples to look up parentCounts
                         feature_entry = profile.profileDict[feature]
 
-                        # Determine which sample index map to use
-                        sample_map = getattr(profile, 'sampleIndex', None)
-                        if sample_map is None and hasattr(profile, 'getSampleIndex'):
-                            # If getSampleIndex exists, we iterate samples and call it
-                            for sample in profile.activeSamplesInGroups[i]:
-                                idx = profile.getSampleIndex(sample)
-                                n += feature_entry.parentCounts[idx]
-                        elif sample_map:
-                            # Use the dictionary directly
-                            for sample in profile.activeSamplesInGroups[i]:
-                                idx = sample_map[sample]
-                                n += feature_entry.parentCounts[idx]
-                        else:
-                            pass
+                        # Use sample list from profile to get indices
+                        if i < len(profile.activeSamplesInGroups):
+                            current_samples = profile.activeSamplesInGroups[i]
 
+                            # Check if getSampleIndex exists
+                            if hasattr(profile, 'getSampleIndex'):
+                                for sample in current_samples:
+                                    idx = profile.getSampleIndex(sample)
+                                    n += feature_entry.parentCounts[idx]
+                            elif hasattr(profile, 'sampleIndex'):
+                                for sample in current_samples:
+                                    if sample in profile.sampleIndex:
+                                        idx = profile.sampleIndex[sample]
+                                        n += feature_entry.parentCounts[idx]
                 except Exception:
                     n = 0
                 # ----------------------------------------------------
@@ -159,7 +169,14 @@ class BarPlot(AbstractMultiGroupPlotPlugin):
                     l, u = ciCalc.calc(k, n, 0.05)
                     cis.append(u * 100.0 - p)
                 else:
-                    vals.append(0.0)
+                    # FALLBACK: If n calculation failed (n=0), use the average of the proportions
+                    # This ensures the bar is visible even if we can't calc CIs
+                    if group_samples_props:
+                        # Average of [prop1, prop2, ...]
+                        avg_prop = np.mean([p[0] for p in group_samples_props])
+                        vals.append(avg_prop)
+                    else:
+                        vals.append(0.0)
                     cis.append(0.0)
 
         # plot bars
@@ -176,7 +193,7 @@ class BarPlot(AbstractMultiGroupPlotPlugin):
 
             # axis labels
             axes.set_ylabel(self.fieldToPlot)
-            axes.set_xticks(ind + width / 2.0)
+            axes.set_xticks(ind)  # Center ticks
 
             labels = []
             for i in range(num_groups):
@@ -188,7 +205,7 @@ class BarPlot(AbstractMultiGroupPlotPlugin):
             axes.set_xticklabels(labels)
 
             # show p-value
-            if self.bShowPvalue:
+            if self.bShowPvalue and statsResults.profile is not None:
                 pValue = statsResults.getFeatureStatisticAsStr(feature, 'pValuesCorrected')
                 if 'e' in pValue:
                     pValStr = '$P = %s$' % (pValue.replace('e', '\\times 10^{') + '}')
@@ -227,7 +244,7 @@ class BarPlot(AbstractMultiGroupPlotPlugin):
 
         configDlg.ui.cboFieldToPlot.setCurrentIndex(configDlg.ui.cboFieldToPlot.findText(self.fieldToPlot))
 
-        configDlg.ui.chkShowAverages.setChecked(self.bShowAverages)
+        configDlg.ui.chkShowAverage.setChecked(self.bShowAverages)
 
         if self.legendPos == 0:
             configDlg.ui.radioLegendPosBest.setChecked(True)
@@ -252,7 +269,7 @@ class BarPlot(AbstractMultiGroupPlotPlugin):
             self.figColWidth = configDlg.ui.spinFigColWidth.value()
             self.figHeight = configDlg.ui.spinFigHeight.value()
             self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
-            self.bShowAverages = configDlg.ui.chkShowAverages.isChecked()
+            self.bShowAverages = configDlg.ui.chkShowAverage.isChecked()
 
             # legend position
             if configDlg.ui.radioLegendPosBest.isChecked():
