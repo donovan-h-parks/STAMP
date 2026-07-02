@@ -28,72 +28,51 @@ from stamp.metagenomics.Metadata import Metadata
 class MetadataIO(object):
 	def __init__(self, preferences):
 		self.preferences = preferences
-
-	import os
-
+		
 	def read(self, filename, profileTree):
-		print("Reading metadata from:", filename)
 		warningMessage = None
-
-		# 1. Python 3: Remove 'U' (deprecated), use 'r' with encoding
-		# Using a context manager (with) ensures the file closes even if an error occurs
-		try:
-			with open(filename, 'r', encoding='utf-8', errors='ignore') as fin:
-				# 2. In Python 3, map() is an iterator. Convert to list
-				# or use list comprehension for indexing like data[0]
-				data = [line.strip() for line in fin.readlines()]
-		except IOError:
-			return None, "Could not open metadata file."
-
-		if not data:
-			return None, "Metadata file is empty."
-
+		
+		fin = open(filename)
+		data = [__s.strip() for __s in fin.readlines()]
+		fin.close()
+		
 		metadata = Metadata()
-
-		# Get features from header row
+		
 		features = data[0].split('\t')
 
-		# Create a set for fast lookup
 		profileSamples = set(profileTree.sampleNames)
-		missingInProfile = []
-
+		
 		try:
+			missingInProfile = []
 			for r in range(1, len(data)):
-				line = data[r].strip()
-				if line == '':
+				if data[r].strip() == '':
 					continue
 
-				values = line.split('\t')
+				values = data[r].split('\t')
 				sampleName = values[0].strip()
-
 				if sampleName in profileSamples:
-					# Discard from set so we can track missing samples later
-					profileSamples.discard(sampleName)
-
+					profileSamples.remove(sampleName)
+					
 					featureDict = {}
-					# 3. Ensure we don't go out of bounds if a row is shorter than header
-					for v in range(1, min(len(values), len(features))):
+					for v in range(1, len(values)):
 						featureDict[features[v]] = values[v].strip()
-
+						
 					metadata.metadataDict[sampleName] = featureDict
 					metadata.activeSamples.append(sampleName)
 				else:
 					missingInProfile.append(sampleName)
+		except:
+			warningMessage = 'Failed to parse line: ' + str(r+1)
 
-		except Exception as e:
-			# In Python 3, 'r' is still in scope here
-			warningMessage = f'Failed to parse line {r + 1}: {str(e)}'
-
-		# 4. Consolidate warning messages
-		warnings = []
-		if missingInProfile:
-			warnings.append('Unknown sample(s) in metadata: ' + ', '.join(missingInProfile))
-
-		if profileSamples:
-			warnings.append('Missing metadata for samples: ' + ', '.join(list(profileSamples)))
-
-		if warnings:
-			warningMessage = '\n\n'.join(warnings)
+		if len(missingInProfile) != 0:
+			warningMessage = 'Unknown sample(s) specified in metadata file: ' + ', '.join(missingInProfile) + '\n\n'
+				
+		if len(profileSamples) != 0:
+			missingSamples = []
+			for sample in profileSamples:
+				missingSamples.append(sample)
+				
+			warningMessage = 'Missing metadata for the following samples: ' + ', '.join(missingSamples)
 
 		return metadata, warningMessage
  

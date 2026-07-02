@@ -21,7 +21,7 @@
 # along with STAMP. If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt5 import QtGui, QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from stamp.GUI.statsTableDlgUI import Ui_StatsTableDlg
 
 from stamp.metagenomics.GenericTable import GenericTable
@@ -36,8 +36,8 @@ class StatsTableDlg(QtWidgets.QDockWidget):
 		
 		self.preferences = preferences
 		self.table = ''
-
-		# Modern PyQt5 Syntax
+		
+		# signals
 		self.ui.btnSave.clicked.connect(self.saveTable)
 		self.ui.chkShowActiveFeatures.clicked.connect(self.__updateTable)
 		
@@ -50,7 +50,7 @@ class StatsTableDlg(QtWidgets.QDockWidget):
 			tableData, tableHeadings = self.statsTest.results.tableData(self.ui.chkShowActiveFeatures.isChecked())
 			
 			self.table = GenericTable(tableData, tableHeadings, self)
-			self.table.sort(0,QtCore.Qt.AscendingOrder) # start with features in alphabetical order
+			self.table.sort(0,QtCore.Qt.SortOrder.AscendingOrder) # start with features in alphabetical order
 
 			self.ui.tableStatisticalSummary.setModel(self.table)
 			self.ui.tableStatisticalSummary.verticalHeader().setVisible(False)
@@ -59,19 +59,10 @@ class StatsTableDlg(QtWidgets.QDockWidget):
 			#self.ui.tableStatisticalSummary.resizeColumnsToContents()
 			for colIndex in range(0, self.table.columnCount(None)):
 				fm = self.ui.tableStatisticalSummary.fontMetrics()
-				maxWidth = fm.width(tableHeadings[colIndex]) + 10
+				maxWidth = fm.horizontalAdvance(tableHeadings[colIndex]) + 10
 				
 				for i in range(0, 100): # sample first 100 rows to estimate column width, this is strictly for efficiency	
-					# 1. Get the raw data (usually a string or float)
-					cell_data = self.ui.tableStatisticalSummary.model().data(
-						self.ui.tableStatisticalSummary.model().index(i, colIndex),
-						QtCore.Qt.DisplayRole
-					)
-
-					# 2. Convert to string and calculate width using horizontalAdvance
-					# We use str() to ensure it's a string, and handle None cases
-					text_value = str(cell_data) if cell_data is not None else ""
-					width = fm.horizontalAdvance(text_value) + 10
+					width = fm.horizontalAdvance(str(self.ui.tableStatisticalSummary.model().data(self.ui.tableStatisticalSummary.model().index(i,colIndex), QtCore.Qt.ItemDataRole.DisplayRole))) + 10
 					if  width > maxWidth:
 						maxWidth = width
 				
@@ -81,14 +72,14 @@ class StatsTableDlg(QtWidgets.QDockWidget):
 		filename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save table...', self.preferences['Last directory'],
 									'Tab-separated values (*.tsv);;' +
 									'Text file (*.txt);;' +
-									'All files (*.*)')
+									'All files (*.*)')[0]
 		if filename != '':
-			self.preferences['Last directory'] = filename[0:filename.lastIndexOf('/')]
+			self.preferences['Last directory'] = filename[0:filename.rfind('/')]
 			try:
 				if self.table != '':
 					self.table.save(filename)
 			except IOError:
-				QtWidgets.QMessageBox.information(self, 'Failed to save table', 'Write permission for file denied.', QtWidgets.QMessageBox.Ok)
+				QtWidgets.QMessageBox.information(self, 'Failed to save table', 'Write permission for file denied.', QtWidgets.QMessageBox.StandardButton.Ok)
 		
 if __name__ == "__main__": 
 	pass

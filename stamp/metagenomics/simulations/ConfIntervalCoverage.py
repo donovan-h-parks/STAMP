@@ -57,7 +57,7 @@ for a in range(aMin, aMax+1):
   print(a)
   
   for b in range(bMin, bMax+1):
-    print(f'  ' + str(b))
+    print('  ' + str(b))
     p1 = float(a) / N1
     p2 = float(b) / N2
     

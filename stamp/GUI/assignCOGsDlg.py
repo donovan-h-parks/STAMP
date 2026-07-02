@@ -21,7 +21,7 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt5 import QtGui, QtCore , QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from stamp.metagenomics.fileIO.COG_IO import COG_IO
 from stamp.GUI.assignCOGUI import Ui_AssignCOGsDlg
 
@@ -37,26 +37,26 @@ class AssignCOGsDlg(QtWidgets.QDialog):
 		
 		self.preferences = preferences
 		
-		QtCore.QObject.connect(self.ui.btnLoadProfiles, QtCore.SIGNAL("clicked()"), self.loadProfiles)
-		QtCore.QObject.connect(self.ui.btnCreateProfile, QtCore.SIGNAL("clicked()"), self.createProfile)
-		QtCore.QObject.connect(self.ui.btnCancel, QtCore.SIGNAL("clicked()"), self.accept)
+		self.ui.btnLoadProfiles.clicked.connect(self.loadProfiles)
+		self.ui.btnCreateProfile.clicked.connect(self.createProfile)
+		self.ui.btnCancel.clicked.connect(self.accept)
 		
 		self.inputProfile = []
 		
 	def loadProfiles(self):
-		self.inputProfile = QtWidgets.QFileDialog.getOpenFileName(self, 'Load profile', self.preferences['Last directory'], 'IMG/M profiles (*.xls *.tsv);;All files (*.*)')
+		self.inputProfile = QtWidgets.QFileDialog.getOpenFileName(self, 'Load profile', self.preferences['Last directory'], 'IMG/M profiles (*.xls *.tsv);;All files (*.*)')[0]
 		if self.inputProfile != '':
-			self.preferences['Last directory'] = self.inputProfile[0:self.inputProfile.lastIndexOf('/')]
+			self.preferences['Last directory'] = self.inputProfile[0:self.inputProfile.rfind('/')]
 			self.ui.txtInputProfile.setText(self.inputProfile)
 			self.ui.btnCreateProfile.setEnabled(True)
 			
 	def createProfile(self):
 		# get filename to save STAMP profile to
-		stampFilename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')
+		stampFilename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')[0]
 		if stampFilename == '':
 			return
 			
-		self.preferences['Last directory'] = stampFilename[0:stampFilename.lastIndexOf('/')]
+		self.preferences['Last directory'] = stampFilename[0:stampFilename.rfind('/')]
 		
 		cogIO = COG_IO()			
 		cogIO.appendCategories(str(self.inputProfile), str(self.ui.cboMultiCogTreatment.currentText()), str(stampFilename), self.preferences)
@@ -64,6 +64,6 @@ class AssignCOGsDlg(QtWidgets.QDialog):
 		self.accept()
 
 	def centerWindow(self):
-		screen = QtWidgets.QDesktopWidget().screenGeometry()
+		screen = QtWidgets.QApplication.primaryScreen().geometry()
 		size =	self.geometry()
 		self.move((screen.width()-size.width())//2, (screen.height()-size.height())//2)

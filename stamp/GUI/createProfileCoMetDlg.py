@@ -21,7 +21,7 @@
 
 import string
 
-from PyQt5 import QtGui, QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from stamp.GUI.createProfileCoMetUI import Ui_CreateProfileCoMetDlg
 
 class ProfileRow():
@@ -41,17 +41,17 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 
 		self.centerWindow()
 		
-		QtCore.QObject.connect(self.ui.btnLoadProfiles, QtCore.SIGNAL("clicked()"), self.loadProfiles)
-		QtCore.QObject.connect(self.ui.btnCreateProfile, QtCore.SIGNAL("clicked()"), self.createProfile)
-		QtCore.QObject.connect(self.ui.btnCancel, QtCore.SIGNAL("clicked()"), self.accept)
+		self.ui.btnLoadProfiles.clicked.connect(self.loadProfiles)
+		self.ui.btnCreateProfile.clicked.connect(self.createProfile)
+		self.ui.btnCancel.clicked.connect(self.accept)
 		
 		self.selectedFiles = []
 			
 	def loadProfiles(self):
-		selectedFiles = QtWidgets.QFileDialog.getOpenFileNames(self, 'Load profiles', self.preferences['Last directory'], 'CoMet profiles (*.txt);;All files (*.*)')
+		selectedFiles = QtWidgets.QFileDialog.getOpenFileNames(self, 'Load profiles', self.preferences['Last directory'], 'CoMet profiles (*.txt);;All files (*.*)')[0]
 
 		if len(selectedFiles) > 0:
-			self.preferences['Last directory'] = selectedFiles[0][0:selectedFiles[0].lastIndexOf('/')]
+			self.preferences['Last directory'] = selectedFiles[0][0:selectedFiles[0].rfind('/')]
 			for file in selectedFiles:
 				self.selectedFiles.append(str(file))
 				self.ui.lstSelectedProfiles.addItem(file)
@@ -59,7 +59,7 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 	
 	def createProfile(self):
 		# get filename to save STAMP profile to
-		stampFilename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')
+		stampFilename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')[0]
 		if stampFilename == '':
 			return
 		
@@ -68,8 +68,8 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 		profileIndex = 0
 		sampleNames = []
 		for file in self.selectedFiles:
-			fin = open(file, 'U')
-			data = map(string.strip, fin.readlines())
+			fin = open(file)
+			data = [__s.strip() for __s in fin.readlines()]
 			fin.close()
 			
 			sampleName = file[file.rfind('/')+1:file.find('.')]
@@ -112,7 +112,7 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 		try:
 			fout = open(stampFilename, 'w')
 		except IOError:
-			QtWidgets.QMessageBox.information(self, 'Failed to save STAMP profile', 'Write permission for file denied.', QtWidgets.QMessageBox.Ok)
+			QtWidgets.QMessageBox.information(self, 'Failed to save STAMP profile', 'Write permission for file denied.', QtWidgets.QMessageBox.StandardButton.Ok)
 			return
 
 		fout.write('Category')
@@ -136,6 +136,6 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 		self.accept()
 
 	def centerWindow(self):
-		screen = QtWidgets.QDesktopWidget().screenGeometry()
+		screen = QtWidgets.QApplication.primaryScreen().geometry()
 		size =	self.geometry()
 		self.move((screen.width()-size.width())//2, (screen.height()-size.height())//2)

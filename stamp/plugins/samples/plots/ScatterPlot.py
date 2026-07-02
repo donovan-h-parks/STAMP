@@ -23,7 +23,7 @@
 
 import sys
 
-from PyQt5 import QtGui, QtCore
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.samples.plots.configGUI.scatterPlotUI import Ui_ScatterPlotDialog
@@ -52,15 +52,14 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 		self.type = 'Exploratory'
 
 		self.settings = preferences['Settings']
-		self.figWidth = float(self.settings.value(self.name + '/width', 7.0))
-		self.figHeight = float(self.settings.value(self.name + '/height', 7.0))
-		self.bShowCIs = bool(self.settings.value(self.name + '/show CIs', True))
-		self.numBins = int(self.settings.value(self.name + '/bins', 30))
-		self.histogramSize = float(self.settings.value(self.name + '/bin size', 0.5))
-		self.bShowHistograms = bool(self.settings.value(self.name + '/show histograms', True))
-		self.markerSize = int(self.settings.value(self.name + '/marker size', 20))
-		self.bShowR2 = bool(self.settings.value(self.name + '/show R2', True))
-
+		self.figWidth = self.settings.value(self.name + '/width', 7.0, type=float)
+		self.figHeight = self.settings.value(self.name + '/height', 7.0, type=float)
+		self.bShowCIs = self.settings.value(self.name + '/show CIs', True, type=bool)
+		self.numBins = self.settings.value(self.name + '/bins', 30, type=int)
+		self.histogramSize = self.settings.value(self.name + '/bin size', 0.5, type=float)
+		self.bShowHistograms = self.settings.value(self.name + '/show histograms', True, type=bool)
+		self.markerSize = self.settings.value(self.name + '/marker size', 20, type=int)
+		self.bShowR2 = self.settings.value(self.name + '/show R2', True, type=bool)
 		
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -78,12 +77,12 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 			return
 
 		if len(profile.profileDict) > 10000:
-			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
 			reply = QtWidgets.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(profile.profileDict)) + ' features. ' +
 																		'It may take several seconds to generate this plot. Exploring the data at a higher hierarchy level is recommended. ' + 
-																		'Do you wish to continue?', QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
+																		'Do you wish to continue?', QtWidgets.QMessageBox.StandardButton.Yes, QtWidgets.QMessageBox.StandardButton.No)
 			QtWidgets.QApplication.instance().restoreOverrideCursor()
-			if reply == QtWidgets.QMessageBox.No:
+			if reply == QtWidgets.QMessageBox.StandardButton.No:
 				self.emptyAxis()	
 				return
 						
@@ -339,7 +338,7 @@ class ScatterPlot(AbstractSamplePlotPlugin):
 		
 		configDlg.ui.chkShowR2.setChecked(self.bShowR2)
 				
-		if configDlg.exec_() == QtWidgets.QDialog.Accepted:	 
+		if configDlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:	 
 			self.figWidth = configDlg.ui.spinFigWidth.value()
 			self.figHeight = configDlg.ui.spinFigHeight.value()
 			
@@ -368,4 +367,4 @@ if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(ScatterPlot)
 	testWindow.show()
-	sys.exit(app.exec_())
+	sys.exit(app.exec())

@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt5 import QtGui, QtCore,QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from stamp.GUI.plotDlgUI import Ui_PlotDlg
 
 class PlotDlg(QtWidgets.QDockWidget):
@@ -31,8 +31,8 @@ class PlotDlg(QtWidgets.QDockWidget):
 		self.ui = Ui_PlotDlg()
 		self.ui.setupUi(self)
 		
-		QtCore.QObject.connect(self, QtCore.SIGNAL("topLevelChanged (bool)"), self.topLevelChanged )
-		QtCore.QObject.connect(self, QtCore.SIGNAL("dockLocationChanged(Qt::DockWidgetArea)"), self.dockLocationChanged)
+		self.topLevelChanged.connect(self.topLevelChanged)
+		self.dockLocationChanged.connect(self.dockLocationChanged)
 		
 		self.plot = None
 

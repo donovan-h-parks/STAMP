@@ -22,11 +22,11 @@
 #=======================================================================
 
 import math
-from PyQt5 import QtGui
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 class PlotEventHandler:
 	def __init__(self, xData, yData, toolTips, xtol=None, ytol=None):
-		self.data = zip(xData, yData, toolTips)
+		self.data = list(zip(xData, yData, toolTips))
 		
 		if xtol == None:
 			self.xtol = (max(xData) - min(xData)) / 50
@@ -57,18 +57,18 @@ class PlotEventHandler:
 			msgBox = QtWidgets.QMessageBox()
 			
 			icon = QtGui.QIcon()
-			icon.addPixmap(QtGui.QPixmap(":/icons/icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+			icon.addPixmap(QtGui.QPixmap("icons:programIcon.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off)
 			msgBox.setWindowIcon(icon)
 			
 			msgBox.setWindowTitle('Tooltip')
 			msgBox.setText(tip)
-			msgBox.exec_()
+			msgBox.exec()
 			
 class MultiPlotEventHandler:
 	def __init__(self, xData, yData, axes, toolTips):
 		self.data = []
 		for i in range(0, len(xData)):
-			self.data.append(zip(xData[i], yData[i], toolTips))
+			self.data.append(list(zip(xData[i], yData[i], toolTips)))
 		
 		self.xtol = []
 		self.ytol = []
@@ -99,9 +99,9 @@ class MultiPlotEventHandler:
 			msgBox = QtWidgets.QMessageBox()
 			
 			icon = QtGui.QIcon()
-			icon.addPixmap(QtGui.QPixmap(":/icons/icons/programIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+			icon.addPixmap(QtGui.QPixmap("icons:programIcon.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off)
 			msgBox.setWindowIcon(icon)
 			
 			msgBox.setWindowTitle('Tooltip')
 			msgBox.setText(tip)
-			msgBox.exec_()
+			msgBox.exec()

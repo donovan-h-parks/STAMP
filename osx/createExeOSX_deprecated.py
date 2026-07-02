@@ -2,7 +2,7 @@ from setuptools import setup
 import os
 import matplotlib as mpl
 
-print 'Setup on OS X is current deprecated.'
+print('Setup on OS X is current deprecated.')
 sys.exit()
 
 os.system('rm -rf build dist')
@@ -74,6 +74,6 @@ os.system('macdeployqt ./dist/STAMP.app')
 os.system('cp license.txt ./dist/license.txt')
 os.system('cp -r ./examples ./dist/')
 os.system('cp ./UsersGuide/STAMP_Users_Guide_v2.0.0.pdf ./dist/')
-print 'Creating ZIP file...'
+print('Creating ZIP file...')
 os.system('zip -rqy9 ./dist/STAMP_2_rc3_SnowLeopard.zip .')
-print 'Done.'
+print('Done.')

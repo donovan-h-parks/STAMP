@@ -1,34 +1,34 @@
-# #!/srv/sw/python/2.7.4/bin/python
+#!/srv/sw/python/2.7.4/bin/python
+
+#=======================================================================
+# Author: Donovan Parks
 #
-# #=======================================================================
-# # Author: Donovan Parks
-# #
-# # Copyright 2011 Donovan Parks
-# #
-# # This file is part of STAMP.
-# #
-# # STAMP is free software: you can redistribute it and/or modify
-# # it under the terms of the GNU General Public License as published by
-# # the Free Software Foundation, either version 3 of the License, or
-# # (at your option) any later version.
-# #
-# # STAMP is distributed in the hope that it will be useful,
-# # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# # GNU General Public License for more details.
-# #
-# # You should have received a copy of the GNU General Public License
-# # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
-# #=======================================================================
+# Copyright 2011 Donovan Parks
 #
-# import os
-# import sys
+# This file is part of STAMP.
 #
-# try:
-#     from stamp import STAMP
-# except:
-#     # STAMP library must be added to python path
-#     sys.path.append(os.path.join(os.path.split(os.path.realpath(__file__))[0], ".."))
-#     from stamp import STAMP
+# STAMP is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
-# STAMP.main()
+# STAMP is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
+#=======================================================================
+
+import os
+import sys
+
+try:
+    from stamp import STAMP
+except:
+    # STAMP library must be added to python path
+    sys.path.append(os.path.join(os.path.split(os.path.realpath(__file__))[0], ".."))
+    from stamp import STAMP
+
+STAMP.main()

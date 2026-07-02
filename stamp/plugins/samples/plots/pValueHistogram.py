@@ -23,7 +23,7 @@
 
 import sys
 
-from PyQt5 import QtGui, QtCore
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
@@ -41,19 +41,18 @@ class pValueHistogram(AbstractSamplePlotPlugin):
 		self.name = 'p-value histogram'
 		self.type = 'Statistical'
 		
-		self.settings = preferences['Settings']
-		self.figWidth = float(self.settings.value(self.name  + '/width', 7.0))
-		self.figHeight = float(self.settings.value(self.name + '/height', 7.0))
-		self.fieldToPlot = str(self.settings.value(self.name + '/field to plot', 'p-values (corrected)'))
-		self.yAxisLogScale = bool(self.settings.value(self.name + '/histogram log scale', False))
-		self.binWidth = float(self.settings.value(self.name + '/histogram bin width', 0.01))
-		self.bShowInset = bool(self.settings.value(self.name + '/show inset', True))
-		self.insetWidth = float(self.settings.value(self.name + '/inset width %', 60.0))
-		self.insetHeight = float(self.settings.value(self.name + '/inset height', 60.0))
-		self.insetLogScale = bool(self.settings.value(self.name + '/inset log scale', False))
-		self.insetBinWidth = float(self.settings.value(self.name + '/inset bin width', 0.002))
-		self.xLimit = float(self.settings.value(self.name + '/inset x-axis limit', 0.05))
-
+		self.settings = preferences['Settings']		
+		self.figWidth = self.settings.value(self.name + '/width', 7.0, type=float)
+		self.figHeight = self.settings.value(self.name + '/height', 7.0, type=float)
+		self.fieldToPlot = self.settings.value(self.name + '/field to plot', 'p-values (corrected)', type=str)
+		self.yAxisLogScale = self.settings.value(self.name + '/histogram log scale', False, type=bool)
+		self.binWidth = self.settings.value(self.name + '/histogram bin width', 0.01, type=float)
+		self.bShowInset = self.settings.value(self.name + '/show inset', True, type=bool)
+		self.insetWidth = self.settings.value(self.name + '/inset width %', 60.0, type=float)
+		self.insetHeight = self.settings.value(self.name + '/inset height %', 60.0, type=float)
+		self.insetLogScale = self.settings.value(self.name + '/inset log scale', False, type=bool)
+		self.insetBinWidth = self.settings.value(self.name + '/inset bin width', 0.002, type=float)
+		self.xLimit = self.settings.value(self.name + '/inset x-axis limit', 0.05, type=float)
 
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -175,7 +174,7 @@ class pValueHistogram(AbstractSamplePlotPlugin):
 		
 		self.configDlg = ConfigureDialog(Ui_pValueHistogramDialog)
 		
-		self.connect(self.configDlg.ui.btnXmax, QtCore.SIGNAL('clicked()'), self.setXaxisMax)
+		self.configDlg.ui.btnXmax.clicked.connect(self.setXaxisMax)
 		
 		self.configDlg.ui.cboFieldToPlot.setCurrentIndex(self.configDlg.ui.cboFieldToPlot.findText(self.fieldToPlot))
 		
@@ -192,7 +191,7 @@ class pValueHistogram(AbstractSamplePlotPlugin):
 		self.configDlg.ui.spinXlimit.setValue(self.xLimit)
 		self.configDlg.ui.chkInsetLogScale.setChecked(self.insetLogScale)
 		
-		if self.configDlg.exec_() == QtWidgets.QDialog.Accepted:		 
+		if self.configDlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:		 
 			self.figWidth = self.configDlg.ui.spinFigWidth.value()
 			self.figHeight = self.configDlg.ui.spinFigHeight.value()
 
@@ -235,7 +234,7 @@ if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(pValueHistogram)
 	testWindow.show()
-	sys.exit(app.exec_())
+	sys.exit(app.exec())
 
 
 				

@@ -28,7 +28,7 @@ class COG_IO():
     pass
   
   def appendCategories(self, inputFile, multiCogTreatment, outputFile, preferences):
-    fin = open(getMainDir() + '/stamp/data/fun.txt', 'U')
+    fin = open(getMainDir() + '/stamp/data/fun.txt')
     funcData = fin.readlines()
     fin.close()
     
@@ -48,7 +48,7 @@ class COG_IO():
         curClass = line
 
     # get COG category for each COG
-    fin = open(getMainDir() + '/stamp/data/whog.txt', 'U')
+    fin = open(getMainDir() + '/stamp/data/whog.txt')
     cogData = fin.readlines()
     fin.close()
     
@@ -62,7 +62,7 @@ class COG_IO():
         cogDict[cogId] = code
 
     # modify input file
-    fin = open(inputFile, 'U')
+    fin = open(inputFile)
     inputData = fin.readlines()
     fin.close()
     

@@ -19,15 +19,15 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-import os.path
 import sys
+import os.path
 
 def runningExecutable():
-    """
-    Returns True if the script is running as a frozen executable
-    (e.g., created by PyInstaller or cx_Freeze).
-    """
-    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+	# Detect a bundled/frozen build (py2exe, py2app, PyInstaller, cx_Freeze).
+	# The old `imp.is_frozen("__main__")` branch (stdlib `freeze` tool) is dropped:
+	# the `imp` module was removed in Python 3.12 and STAMP never used that tool.
+	return (hasattr(sys, "frozen") or # new py2exe / py2app / PyInstaller
+					 hasattr(sys, "importers")) # old py2exe
 	
 def getMainDir():
 	if runningExecutable():	
@@ -39,4 +39,6 @@ def getMainDir():
 		# on a Windows box
 		return os.path.dirname(sys.executable)
 
-	return sys.path[0]
+	# Non-frozen: return the directory that contains the `stamp` package,
+	# independent of how the app was launched (e.g. `python -m stamp`).
+	return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

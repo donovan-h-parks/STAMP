@@ -309,7 +309,7 @@ class SampleStatsTests(object):
 		index = 0
 		for feature in profile.getFeatures():
 			if progress == 'Verbose':
-				print ('    ' + feature)
+				print('    ' + feature)
 			elif progress != None:
 				if progress.wasCanceled():
 					self.results.data = []

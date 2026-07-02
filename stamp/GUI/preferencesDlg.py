@@ -21,7 +21,7 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt5 import QtGui, QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from stamp.GUI.preferencesUI import Ui_preferencesDlg
 
 import math
@@ -39,15 +39,15 @@ class PreferencesDlg(QtWidgets.QDialog):
 		self.tuncFeatureNameChanged()
 		
 		# connect signals to slots
-		self.connect(self.ui.chkTruncateFeatureNames, QtCore.SIGNAL('toggled(bool)'), self.tuncFeatureNameChanged)
-		self.connect(self.ui.btnOK, QtCore.SIGNAL("clicked()"), self.accept)
-		self.connect(self.ui.btnAxesColour, QtCore.SIGNAL("clicked()"), self.setAxesColour)
-		self.connect(self.ui.btnAllOtherSamplesColour, QtCore.SIGNAL("clicked()"), self.setAllOtherSamplesColour)
+		self.ui.chkTruncateFeatureNames.toggled.connect(self.tuncFeatureNameChanged)
+		self.ui.btnOK.clicked.connect(self.accept)
+		self.ui.btnAxesColour.clicked.connect(self.setAxesColour)
+		self.ui.btnAllOtherSamplesColour.clicked.connect(self.setAllOtherSamplesColour)
 		
 	def centerWindow(self):
-		screen = QtWidgets.QDesktopWidget().screenGeometry()
+		screen = QtWidgets.QApplication.primaryScreen().geometry()
 		size =	self.geometry()
-		self.move((screen.width()-size.width())/2, (screen.height()-size.height())/2)
+		self.move((screen.width()-size.width())//2, (screen.height()-size.height())//2)
 				
 	def tuncFeatureNameChanged(self):
 		self.ui.spinFeatureNameLength.setEnabled(self.ui.chkTruncateFeatureNames.isChecked())
@@ -61,7 +61,7 @@ class PreferencesDlg(QtWidgets.QDialog):
 		self.ui.btnAxesColour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
 
 	def setAxesColour(self):
-		colour = QtGui.QColorDialog.getColor(self.axesColour, self, 'Axis colour')
+		colour = QtWidgets.QColorDialog.getColor(self.axesColour, self, 'Axis colour')
 
 		if colour.isValid():
 			self.axesColour = colour
@@ -77,7 +77,7 @@ class PreferencesDlg(QtWidgets.QDialog):
 		self.ui.btnAllOtherSamplesColour.setStyleSheet('* { background-color: rgb(' + colourStr + ') }')
 
 	def setAllOtherSamplesColour(self):
-		colour = QtGui.QColorDialog.getColor(self.allOtherSamplesColour, self, 'All other samples colour')
+		colour = QtWidgets.QColorDialog.getColor(self.allOtherSamplesColour, self, 'All other samples colour')
 
 		if colour.isValid():
 			self.allOtherSamplesColour = colour

@@ -18,10 +18,10 @@
 # You should have received a copy of the GNU General Public License
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
-import os
+
 import string
 
-from PyQt5 import QtGui, QtCore,QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from stamp.GUI.createProfileMothurUI import Ui_CreateProfileMothurDlg
 
 class ProfileRow():
@@ -40,11 +40,10 @@ class CreateProfileMothurDlg(QtWidgets.QDialog):
 		self.preferences = preferences
 
 		self.centerWindow()
-
+		
 		self.ui.btnTaxonomyFile.clicked.connect(self.loadTaxonomyFile)
 		self.ui.btnGroupsFile.clicked.connect(self.loadGroupsFile)
-		self.ui.btnNamesFile.clicked.connect(
-			self.loadGroupsFile)  # Note: Double check if this should be self.loadNamesFile
+		self.ui.btnNamesFile.clicked.connect(self.loadNamesFile)
 		self.ui.btnCreateProfile.clicked.connect(self.createProfile)
 		self.ui.btnCancel.clicked.connect(self.accept)
 		
@@ -52,54 +51,42 @@ class CreateProfileMothurDlg(QtWidgets.QDialog):
 		self.groupsFile = None
 		self.namesFile = None
 
-	import os  # Ensure this is at the top of your file
-
 	def loadTaxonomyFile(self):
-		# 1. Unpack the PyQt5 tuple (path, filter)
-		# Using .get() prevents a crash if 'Last directory' isn't initialized
-		fileName, _ = QtWidgets.QFileDialog.getOpenFileName(
-			self,
-			'Load taxonomy file',
-			self.preferences.get('Last directory', ''),
-			'Taxonomy file (*.taxonomy);;All files (*.*)'
-		)
-
-		# 2. In Python 3/PyQt5, check if fileName is a non-empty string
-		if fileName:
-			# 3. Use os.path.dirname instead of the non-existent lastIndexOf
-			self.preferences['Last directory'] = os.path.dirname(fileName)
-			self.ui.txtTaxonomyFile.setText(fileName)
-			self.taxonomyFile = fileName
+		selectedFile = QtWidgets.QFileDialog.getOpenFileName(self, 'Load taxonomy file', self.preferences['Last directory'], 'Taxonomy file (*.taxonomy);;All files (*.*)')[0]
+		if selectedFile != '':
+			self.preferences['Last directory'] = selectedFile[0:selectedFile.rfind('/')]
+			self.ui.txtTaxonomyFile.setText(selectedFile)
+			self.taxonomyFile = selectedFile
 		
 	def loadGroupsFile(self):
-		selectedFile = QtWidgets.QFileDialog.getOpenFileName(self, 'Load groups file', self.preferences['Last directory'], 'Groups file (*.groups);;All files (*.*)')
+		selectedFile = QtWidgets.QFileDialog.getOpenFileName(self, 'Load groups file', self.preferences['Last directory'], 'Groups file (*.groups);;All files (*.*)')[0]
 		if selectedFile != '':
-			self.preferences['Last directory'] = selectedFile[0:selectedFile.lastIndexOf('/')]
+			self.preferences['Last directory'] = selectedFile[0:selectedFile.rfind('/')]
 			self.ui.txtGroupsFile.setText(selectedFile)
 			self.groupsFile = selectedFile
 		
 	def loadNamesFile(self):
-		selectedFile = QtWidgets.QFileDialog.getOpenFileName(self, 'Load names file', self.preferences['Last directory'], 'Names file (*.names);;All files (*.*)')
+		selectedFile = QtWidgets.QFileDialog.getOpenFileName(self, 'Load names file', self.preferences['Last directory'], 'Names file (*.names);;All files (*.*)')[0]
 		if selectedFile != '':
-			self.preferences['Last directory'] = selectedFile[0:selectedFile.lastIndexOf('/')]
+			self.preferences['Last directory'] = selectedFile[0:selectedFile.rfind('/')]
 			self.ui.txtNamesFile.setText(selectedFile)
 			self.namesFile = selectedFile
 	
 	def createProfile(self):
 		# determine group for each sequence ID
 		if self.groupsFile != None:
-			fin = open(self.groupsFile, 'U')
-			data = map(string.strip, fin.readlines())
+			fin = open(self.groupsFile)
+			data = [__s.strip() for __s in fin.readlines()]
 			fin.close()
 		else:
-			QtWidgets.QMessageBox.information(self, 'Missing data', 'A Group file must be specified.', QtWidgets.QMessageBox.Ok)
+			QtWidgets.QMessageBox.information(self, 'Missing data', 'A Group file must be specified.', QtWidgets.QMessageBox.StandardButton.Ok)
 			return
 			
-		outputFile = QtWidgets.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')
+		outputFile = QtWidgets.QFileDialog.getSaveFileName(self, 'Save STAMP profile...', self.preferences['Last directory'],'STAMP profile file(*.spf);;All files(*.*)')[0]
 		if outputFile == '':
 			return
 			
-		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+		QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.CursorShape.WaitCursor))
 			
 		seqIdToSampleId = {}
 		sampleIds = set([])
@@ -115,8 +102,8 @@ class CreateProfileMothurDlg(QtWidgets.QDialog):
 			
 		# determine representative sequence for OTUs
 		if self.namesFile != None:
-			fin = open(self.namesFile, 'U')
-			data = map(string.strip, fin.readlines())
+			fin = open(self.namesFile)
+			data = [__s.strip() for __s in fin.readlines()]
 			fin.close()
 
 			seqIdToSeqIds = {}
@@ -125,14 +112,14 @@ class CreateProfileMothurDlg(QtWidgets.QDialog):
 				seqId = lineSplit[0].strip()
 				
 				seqIds = lineSplit[1].split(',')
-				map(string.strip, seqIds)
+				[__s.strip() for __s in seqIds]
 				seqIdToSeqIds[seqId] = seqIds
 				
 		# read taxonomy file and create profile for each sample
 		deepestRank = 0
 
-		fin = open(self.taxonomyFile, 'U')
-		data = map(string.strip, fin.readlines())
+		fin = open(self.taxonomyFile)
+		data = [__s.strip() for __s in fin.readlines()]
 		fin.close()
 
 		sampleProfiles = {}
@@ -206,6 +193,6 @@ class CreateProfileMothurDlg(QtWidgets.QDialog):
 		self.accept()
 
 	def centerWindow(self):
-		screen = QtWidgets.QDesktopWidget().screenGeometry()
+		screen = QtWidgets.QApplication.primaryScreen().geometry()
 		size =	self.geometry()
 		self.move((screen.width()-size.width())//2, (screen.height()-size.height())//2)

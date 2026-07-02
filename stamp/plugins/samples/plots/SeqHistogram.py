@@ -24,7 +24,7 @@
 import sys
 import math
 
-from PyQt5 import QtCore, QtGui
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.samples.plots.configGUI.seqHistogramUI import Ui_SeqHistogramDialog
@@ -41,15 +41,15 @@ class SeqHistogram(AbstractSamplePlotPlugin):
 		self.type = 'Exploratory'
 		
 		self.settings = preferences['Settings']
-		self.figWidth = float(self.settings.value(self.name + '/width', 7.0))
-		self.figHeight = float(self.settings.value(self.name + '/height', 7.0))
-		self.bCustomBinWidth = bool(self.settings.value(self.name + '/custom bin width', False))
-		self.binWidth = float(self.settings.value(self.name + '/bin width', 100.0))
-		self.yAxisLogScale = bool(self.settings.value(self.name + '/log scale', False))
-		self.bCustomXaxis = bool(self.settings.value(self.name + '/custom x-axis extents', False))
-		self.xLimitLeft = float(self.settings.value(self.name + '/min value', 0.0))
-		self.xLimitRight = float(self.settings.value(self.name + '/max value', 1.0))
-		self.legendPos = int(self.settings.value(self.name + '/legend position', 0))
+		self.figWidth = self.settings.value(self.name + '/width', 7.0, type=float)
+		self.figHeight = self.settings.value(self.name + '/height', 7.0, type=float)
+		self.bCustomBinWidth = self.settings.value(self.name + '/custom bin width', False, type=bool)
+		self.binWidth = self.settings.value(self.name + '/bin width', 100.0, type=float)
+		self.yAxisLogScale = self.settings.value(self.name + '/log scale', False, type=bool)
+		self.bCustomXaxis = self.settings.value(self.name + '/custom x-axis extents', False, type=bool)
+		self.xLimitLeft = self.settings.value(self.name + '/min value', 0.0, type=float)
+		self.xLimitRight = self.settings.value(self.name + '/max value', 1.0, type=float)
+		self.legendPos = self.settings.value(self.name + '/legend position', 0, type=int)
 		
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -156,10 +156,10 @@ class SeqHistogram(AbstractSamplePlotPlugin):
 		
 		self.configDlg = ConfigureDialog(Ui_SeqHistogramDialog)
 		
-		self.connect(self.configDlg.ui.chkCustomBinWidth, QtCore.SIGNAL('toggled(bool)'), self.changeCustomBinWidth)
-		self.connect(self.configDlg.ui.chkCustomXaxis, QtCore.SIGNAL('toggled(bool)'), self.changeCustomXaxis)
-		self.connect(self.configDlg.ui.btnXmin, QtCore.SIGNAL('clicked()'), self.setXaxisMin)
-		self.connect(self.configDlg.ui.btnXmax, QtCore.SIGNAL('clicked()'), self.setXaxisMax)
+		self.configDlg.ui.chkCustomBinWidth.toggled.connect(self.changeCustomBinWidth)
+		self.configDlg.ui.chkCustomXaxis.toggled.connect(self.changeCustomXaxis)
+		self.configDlg.ui.btnXmin.clicked.connect(self.setXaxisMin)
+		self.configDlg.ui.btnXmax.clicked.connect(self.setXaxisMax)
 
 		self.configDlg.ui.spinFigWidth.setValue(self.figWidth)
 		self.configDlg.ui.spinFigHeight.setValue(self.figHeight)
@@ -193,7 +193,7 @@ class SeqHistogram(AbstractSamplePlotPlugin):
 		else:
 			self.configDlg.ui.radioLegendPosNone.setChecked(True)
 		
-		if self.configDlg.exec_() == QtWidgets.QDialog.Accepted:
+		if self.configDlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
 			self.figWidth = self.configDlg.ui.spinFigWidth.value()
 			self.figHeight = self.configDlg.ui.spinFigHeight.value()
 
@@ -256,7 +256,7 @@ if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(SeqHistogram)
 	testWindow.show()
-	sys.exit(app.exec_())
+	sys.exit(app.exec())
 
 
 				

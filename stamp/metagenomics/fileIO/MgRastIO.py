@@ -32,7 +32,7 @@ class MgRastIO():
       profileCol: column containing features to create profile for
       parentCol: column containing parental features/group in hierarchy
     ''' 
-    fin = open(filename, 'U')
+    fin = open(filename)
     data = fin.readlines()
     fin.close()
        

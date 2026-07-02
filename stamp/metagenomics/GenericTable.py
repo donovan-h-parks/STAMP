@@ -19,7 +19,7 @@
 # along with STAMP.	If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt5 import QtCore
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from stamp.metagenomics.TableHelper import SortTableStrCol
 from stamp.metagenomics.TableHelper import SortTableNumericStrCol
@@ -41,37 +41,34 @@ class GenericTable(QtCore.QAbstractTableModel):
 			return -1
 	
 	def data(self, index, role): 
-		if index.isValid() and role == QtCore.Qt.DisplayRole: 
-			return QtCore.QVariant(self.arraydata[index.row()][index.column()]) 
+		if index.isValid() and role == QtCore.Qt.ItemDataRole.DisplayRole: 
+			return self.arraydata[index.row()][index.column()]
 
-		return QtCore.QVariant() 
+		return None
 	
 	def headerData(self, col, orientation, role):
-		if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
-			return QtCore.QVariant(self.headerdata[col])
-		return QtCore.QVariant()
-
+		if orientation == QtCore.Qt.Orientation.Horizontal and role == QtCore.Qt.ItemDataRole.DisplayRole:
+			return self.headerdata[col]
+		return None
+	
 	def sort(self, Ncol, order):
 		'''
-        Sort table by given column number.
-        '''
+		Sort table by given column number.
+		'''
 		if len(self.arraydata) == 0:
 			return
-
-		# PyQt5 New Style: Call the signal object's emit method directly
+		
 		self.layoutAboutToBeChanged.emit()
-
+			
 		dataIsNumeric = isNumber(self.arraydata[0][Ncol])
-
+		
 		if dataIsNumeric:
 			self.arraydata = SortTableNumericStrCol(self.arraydata, Ncol)
 		else:
 			self.arraydata = SortTableStrCol(self.arraydata, Ncol)
-
-		if order == QtCore.Qt.DescendingOrder:
+				
+		if order == QtCore.Qt.SortOrder.DescendingOrder:
 			self.arraydata.reverse()
-
-		# PyQt5 New Style
 		self.layoutChanged.emit()
 		
 	def save(self, filename):

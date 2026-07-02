@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt5 import QtGui, QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from stamp.GUI.customizeHeadingsUI import Ui_CreateProfileDlg
 
 class CustomizeHeadingsDlg(QtWidgets.QDialog):
@@ -33,11 +33,11 @@ class CustomizeHeadingsDlg(QtWidgets.QDialog):
     self.ui.setupUi(self)
 
     self.centerWindow()
-
+    
     self.ui.btnOK.clicked.connect(self.accept)
     self.ui.btnCancel.clicked.connect(self.reject)
 
   def centerWindow(self):
-    screen = QtWidgets.QDesktopWidget().screenGeometry()
+    screen = QtWidgets.QApplication.primaryScreen().geometry()
     size =  self.geometry()
     self.move((screen.width()-size.width())//2, (screen.height()-size.height())//2)

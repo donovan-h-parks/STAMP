@@ -90,7 +90,7 @@ class MultiGroupProfile:
 			groupIndex += 1
 
 	def getFeatures(self):
-		return self.profileDict.keys()
+		return list(self.profileDict.keys())
 		
 	def getNumFeatures(self):
 		return len(self.profileDict)
@@ -240,7 +240,7 @@ class MultiGroupProfile:
 		return allData
 
 	def getFeatureMatrix(self):
-		numSamples = len(self.profileDict[self.profileDict.keys()[0]].featureCounts)
+		numSamples = len(self.profileDict[list(self.profileDict.keys())[0]].featureCounts)
 		
 		featureMatrix = []
 		for i in range(0, numSamples):

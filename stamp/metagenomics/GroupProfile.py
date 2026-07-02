@@ -46,7 +46,7 @@ class GroupProfile:
 		self.numParentCategories = 0
 				
 	def getFeatures(self):
-		return self.profileDict.keys()
+		return list(self.profileDict.keys())
 		
 	def getNumFeatures(self):
 		return len(self.profileDict)

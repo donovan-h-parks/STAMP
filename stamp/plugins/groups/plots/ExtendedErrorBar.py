@@ -21,7 +21,7 @@
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
 #=======================================================================
 
-from PyQt5 import QtGui, QtCore
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 import sys
 import math
@@ -48,19 +48,19 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 		self.bPlotFeaturesIndividually = False
 		
 		self.settings = preferences['Settings']
-		self.figWidth = float(self.settings.value('group: ' + self.name + '/width', 7.0))
-		self.figHeightPerRow = float(self.settings.value('group: ' + self.name + '/row height', 0.2))
-		self.sortingField = str(self.settings.value('group: ' + self.name + '/field', 'p-values'))
-		self.bShowBarPlot = bool(self.settings.value('group: ' + self.name + '/sequences subplot', True))
-		self.bShowPValueLabels = bool(self.settings.value('group: ' + self.name + '/p-value labels', True))
-		self.bShowCorrectedPvalues = bool(self.settings.value('group: ' + self.name + '/show corrected p-values', True))
-		self.bCustomLimits = bool(self.settings.value('group: ' + self.name + '/use custom limits', False))
-		self.minX = float(self.settings.value('group: ' + self.name + '/minimum', 0.0))
-		self.maxX = float(self.settings.value('group: ' + self.name + '/maximum', 1.0))
-		self.markerSize = int(self.settings.value('group: ' + self.name + '/marker size', 30))
-		self.bShowStdDev = bool(self.settings.value('group: ' + self.name + '/show std. dev.', False))
-		self.endCapSize = int(self.settings.value('group: ' + self.name + '/end cap size', 0.0))
-		self.legendPos = int(self.settings.value('group: ' + self.name + '/legend position', -1))
+		self.figWidth = self.settings.value('group: ' + self.name + '/width', 7.0, type=float)
+		self.figHeightPerRow = self.settings.value('group: ' + self.name + '/row height', 0.2, type=float)
+		self.sortingField = self.settings.value('group: ' + self.name + '/field', 'p-values', type=str)
+		self.bShowBarPlot = self.settings.value('group: ' + self.name + '/sequences subplot', True, type=bool)
+		self.bShowPValueLabels = self.settings.value('group: ' + self.name + '/p-value labels', True, type=bool)
+		self.bShowCorrectedPvalues = self.settings.value('group: ' + self.name + '/show corrected p-values', True, type=bool)
+		self.bCustomLimits = self.settings.value('group: ' + self.name + '/use custom limits', False, type=bool)
+		self.minX = self.settings.value('group: ' + self.name + '/minimum', 0.0, type=float)
+		self.maxX = self.settings.value('group: ' + self.name + '/maximum', 1.0, type=float)
+		self.markerSize = self.settings.value('group: ' + self.name + '/marker size', 30, type=int)
+		self.bShowStdDev = self.settings.value('group: ' + self.name + '/show std. dev.', False, type=bool)
+		self.endCapSize = self.settings.value('group: ' + self.name + '/end cap size', 0.0, type=int)
+		self.legendPos = self.settings.value('group: ' + self.name + '/legend position', -1, type=int)
 
 	def mirrorProperties(self, plotToCopy):
 		self.name = plotToCopy.name
@@ -93,12 +93,12 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 		
 		features = statsResults.getColumn('Features')
 		if len(features) > 200:
-			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
 			reply = QtWidgets.QMessageBox.question(self, 'Continue?', 'Profile contains ' + str(len(features)) + ' features. ' +
 																		'It may take several seconds to generate this plot. We recommend filtering your profile first. ' + 
-																		'Do you wish to continue?', QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
+																		'Do you wish to continue?', QtWidgets.QMessageBox.StandardButton.Yes, QtWidgets.QMessageBox.StandardButton.No)
 			QtWidgets.QApplication.instance().restoreOverrideCursor()
-			if reply == QtWidgets.QMessageBox.No:
+			if reply == QtWidgets.QMessageBox.StandardButton.No:
 				self.emptyAxis()	
 				return
 
@@ -199,7 +199,7 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 		self.imageWidth = self.figWidth
 		self.imageHeight = plotHeight + heightBottomLabels + heightTopLabels
 		if self.imageWidth > 256 or self.imageHeight > 256:
-				QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+				QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
 				self.emptyAxis()	
 				reply = QtWidgets.QMessageBox.question(self, 'Excessively large plot', 'The resulting plot is too large to display.')
 				QtWidgets.QApplication.instance().restoreOverrideCursor()
@@ -425,8 +425,8 @@ class ExtendedErrorBar(AbstractGroupPlotPlugin):
 		else:
 			self.configDlg.ui.radioLegendPosNone.setChecked(True)
 				
-		if self.configDlg.exec_() == QtWidgets.QDialog.Accepted:
-			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+		if self.configDlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+			QtWidgets.QApplication.instance().setOverrideCursor(QtGui.QCursor(QtCore.Qt.CursorShape.WaitCursor))
 			
 			self.sortingField = str(self.configDlg.ui.cboSortingField.currentText())
 			
@@ -480,4 +480,4 @@ if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(ExtendedErrorBar)
 	testWindow.show()
-	sys.exit(app.exec_())
+	sys.exit(app.exec())

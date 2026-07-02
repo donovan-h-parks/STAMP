@@ -1,4 +1,4 @@
-# =======================================================================
+#=======================================================================
 # Author: Donovan Parks
 #
 # Loading plot plugins. Render plots on the GUI. Save plots to file.
@@ -19,9 +19,9 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
-# =======================================================================
+#=======================================================================
 
-from PyQt5 import QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 import os
 import sys
@@ -29,125 +29,119 @@ import platform
 from stamp.metagenomics.DirectoryHelper import runningExecutable, getMainDir
 from stamp.GUI.plotDlg import PlotDlg
 
-
 class PlotsManager:
-    def __init__(self, cboPlots, plotScrollArea, defaultPlot):
-        self.currentPlot = None
-        self.currentPlotClass = None
-        self.plotClassDict = {}
-        self.plotDict = {}
+	def __init__(self, cboPlots, plotScrollArea, defaultPlot):
+		self.currentPlot = None
+		self.currentPlotClass = None
+		self.plotClassDict = {}
+		self.plotDict = {}
+		
+		self.defaultPlot = defaultPlot
+		
+		self.cboPlots = cboPlots
+		self.plotScrollArea = plotScrollArea
+		
+	def loadPlots(self, preferences, pluginFolder):
+		os.chdir(getMainDir())
+		
+		pluginModulePath = pluginFolder.replace('/', '.')
 
-        self.defaultPlot = defaultPlot
+		if runningExecutable():
+			if platform.system() == 'Windows':
+				# windows plugin folder
+				pluginFolder = 'library/' + pluginFolder
+			else:
+				# os x plugin folder
+				pluginFolder = './lib/python2.6/site-packages/' + pluginFolder
+		else:		
+			pluginFolder = os.path.join(os.path.split(os.path.realpath(__file__))[0], '..', '..', pluginFolder)
+		
+		for filename in os.listdir(pluginFolder):
+			if os.path.isdir(os.path.join (pluginFolder, filename)):
+				continue
 
-        self.cboPlots = cboPlots
-        self.plotScrollArea = plotScrollArea
-
-    def loadPlots(self, preferences, pluginFolder):
-        os.chdir(getMainDir())
-
-        pluginModulePath = pluginFolder.replace('/', '.')
-
-        if runningExecutable():
-            if platform.system() == 'Windows':
-                # windows plugin folder
-                pluginFolder = 'library/' + pluginFolder
-            else:
-                # os x plugin folder
-                pluginFolder = './lib/python2.6/site-packages/' + pluginFolder
-        else:
-            pluginFolder = os.path.join(os.path.split(os.path.realpath(__file__))[0], '..', '..', pluginFolder)
-
-        for filename in os.listdir(pluginFolder):
-            if os.path.isdir(os.path.join(pluginFolder, filename)):
-                continue
-
-            extension = filename.split('.')[-1]
-            if extension == 'py' and filename != '__init__.py':
-                pluginModule = filename.replace('.py', '')
-                theModule = __import__(pluginModulePath + pluginModule, fromlist='*')
-                theClass = getattr(theModule, pluginModule)
-                plot = theClass(preferences)
-
-                self.plotClassDict[plot.name] = theClass
-                self.plotDict[plot.name] = plot
-
-        exploratoryPlots = []
-        statisticalPlots = []
-        for key in self.plotDict:
-            if self.plotDict[key].type == 'Exploratory':
-                exploratoryPlots.append(key)
-            else:
-                statisticalPlots.append(key)
-
-        exploratoryPlots.sort(key=lambda x: x.upper())
-        statisticalPlots.sort(key=lambda x: x.upper())
-
-        for plotName in exploratoryPlots:
-            self.cboPlots.addItem(plotName)
-
-        self.cboPlots.insertSeparator(self.cboPlots.count())
-
-        for plotName in statisticalPlots:
-            self.cboPlots.addItem(plotName)
-
-        self.display(self.defaultPlot, None, None)
-        self.cboPlots.setCurrentIndex(self.cboPlots.findText(self.defaultPlot))
-
-    def display(self, plotName, profile, statsResults):
-        # remove current plot widget
-        if self.currentPlot is not None:
-            widget = self.plotScrollArea.takeWidget()
-            if widget:
-                widget.setParent(None)
-                del widget
-
-        # add new plot widget
-        self.currentPlotClass = self.plotClassDict[plotName]
-        self.currentPlot = self.plotDict[plotName]
-        if profile is not None:
-            self.currentPlot.plot(profile, statsResults)
-        else:
-            self.currentPlot.emptyAxis()
-        self.plotScrollArea.setWidget(self.currentPlot)
-
-    def checkFlags(self):
-        return self.plotDict[str(self.cboPlots.currentText())]
-
-    def update(self, profile, statsResults):
-        self.display(str(self.cboPlots.currentText()), profile, statsResults)
-
-    def reset(self, preferences):
-        for plotName in self.plotClassDict:
-            theClass = self.plotClassDict[plotName]
-            self.plotDict[plotName] = theClass(preferences)
-
-    def configure(self, profile, statsResults):
-        self.currentPlot.configure(profile, statsResults)
-
-    def save(self, file, dpi=300):
-        self.currentPlot.savePlot(str(file), dpi)
-
-    def sendToNewWindow(self, mainWindow, profile, statsResults):
-        plotDlg = PlotDlg(mainWindow)
-        plotDlg.setWindowTitle(self.cboPlots.currentText())
-        plotDlg.setObjectName("groupLegendDlg")
-        plotDlg.setVisible(True)
-        mainWindow.addDockWidget(QtCore.Qt.RightDockWidgetArea, plotDlg)
-        plotDlg.setFloating(True)
-
-        newPlotWindow = self.currentPlotClass(self.currentPlot.preferences)
-        newPlotWindow.mirrorProperties(self.currentPlot)
-        newPlotWindow.plot(profile, statsResults)
-
-        w = newPlotWindow.figWidth * newPlotWindow.fig.dpi
-        h = newPlotWindow.figHeight * newPlotWindow.fig.dpi
-
-        # Ensure integer size
-        w, h = int(w), int(h)
-
-        plotDlg.setMaximumSize(w, h)
-        if h > 800:
-            h = 800
-        plotDlg.resize(w, h)
-
-        plotDlg.addPlot(newPlotWindow)
+			extension = filename[filename.rfind('.')+1:len(filename)]	
+			if extension == 'py' and filename != '__init__.py':
+				pluginModule = filename[0:filename.rfind('.')]
+				theModule = __import__(pluginModulePath + pluginModule, fromlist='*')
+				theClass = getattr(theModule, pluginModule)
+				plot = theClass(preferences)
+				
+				self.plotClassDict[plot.name] = theClass
+				self.plotDict[plot.name] = plot
+			
+		exploratoryPlots = []
+		statisticalPlots = []
+		for key in self.plotDict:
+			if self.plotDict[key].type == 'Exploratory':
+				exploratoryPlots.append(key)
+			else:
+				statisticalPlots.append(key)
+				
+		exploratoryPlots.sort(key=lambda a: a.upper())
+		statisticalPlots.sort(key=lambda a: a.upper())
+			
+		for plotName in exploratoryPlots:
+			self.cboPlots.addItem(plotName)
+			
+		self.cboPlots.insertSeparator(self.cboPlots.count())
+			
+		for plotName in statisticalPlots:
+			self.cboPlots.addItem(plotName)
+				
+		self.display(self.defaultPlot, None, None)
+		self.cboPlots.setCurrentIndex(self.cboPlots.findText(self.defaultPlot)) 
+		
+	def display(self, plotName, profile, statsResults):
+		# remove current plot widget
+		if self.currentPlot != None:
+			widget = self.plotScrollArea.takeWidget()
+			if widget != None:  # may be None if a previous plot failed before setWidget()
+				widget.setParent(None)
+				del widget
+		
+		# add new plot widget
+		self.currentPlotClass = self.plotClassDict[plotName]
+		self.currentPlot = self.plotDict[plotName]
+		if profile != None:
+			self.currentPlot.plot(profile, statsResults)
+		else:
+			self.currentPlot.emptyAxis()
+		self.plotScrollArea.setWidget(self.currentPlot)
+		
+	def checkFlags(self):
+		return self.plotDict[str(self.cboPlots.currentText())]
+		
+	def update(self, profile, statsResults):
+		self.display(str(self.cboPlots.currentText()), profile, statsResults)
+		
+	def reset(self, preferences):
+		for plotName in self.plotClassDict:
+			theClass = self.plotClassDict[plotName]
+			self.plotDict[plotName] = theClass(preferences)
+		
+	def configure(self, profile, statsResults):
+		self.currentPlot.configure(profile, statsResults)
+		
+	def save(self, file, dpi = 300):
+		self.currentPlot.savePlot(str(file), dpi)
+		
+	def sendToNewWindow(self, mainWindow, profile, statsResults):
+		plotDlg = PlotDlg(mainWindow)
+		plotDlg.setWindowTitle(self.cboPlots.currentText())
+		plotDlg.setObjectName("groupLegendDlg");
+		plotDlg.setVisible(True)
+		mainWindow.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, plotDlg)
+		plotDlg.setFloating(True)
+		
+		newPlotWindow = self.currentPlotClass(self.currentPlot.preferences)
+		newPlotWindow.mirrorProperties(self.currentPlot)
+		newPlotWindow.plot(profile, statsResults)
+		
+		w, h = newPlotWindow.get_width_height()
+		plotDlg.setMaximumSize(w, h)
+		if h > 800:
+			h = 800
+		plotDlg.resize(w, h)
+		
+		plotDlg.addPlot(newPlotWindow)

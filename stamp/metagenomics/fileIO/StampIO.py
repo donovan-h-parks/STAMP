@@ -30,87 +30,76 @@ from stamp.metagenomics.StringHelper import isNumber
 class StampIO(object):
 	def __init__(self, preferences):
 		self.preferences = preferences
-
-	import os
-
+		
 	def read(self, filename):
 		errMsg = None
-
-		# 1. Python 3: Remove 'U', use 'r' with utf-8 encoding
-		try:
-			with open(filename, 'r', encoding='utf-8', errors='ignore') as fin:
-				# map in Python 3 returns an iterator; we need a list for indexing
-				data = [line.strip() for line in fin.readlines()]
-		except IOError:
-			return None, "Unable to open file."
+		
+		fin = open(filename)
+		data = [__s.strip() for __s in fin.readlines()]
+		fin.close()
 
 		profileTree = ProfileTree()
-
-		# 2. determine number of hierarchical levels and samples
+		
+		# determine number of hierarchical levels and samples
 		self.determineColumns(data, profileTree)
 
 		if profileTree.numSamples() < 2:
 			errMsg = 'Profile file must contain at least two samples.'
 			return None, errMsg
-
+		
 		if profileTree.numHierarchicalLevels() == 0:
 			errMsg = 'Profile file must contain a column indicating feature names.'
 			return None, errMsg
-
+		
 		# verify data forms a strict hierarchy
 		errMsg = self.checkHierarchy(data, profileTree.numHierarchicalLevels())
-		if errMsg is not None:
+		if errMsg != None:
 			return None, errMsg
-
+		
 		# construct profile tree
 		try:
-			# Initialize with 0.0 to ensure float arithmetic from the start
-			profileTree.numSeqInSample = [0.0] * profileTree.numSamples()
+			profileTree.numSeqInSample = [0] * profileTree.numSamples()
 			for i in range(1, len(data)):
 				# ignore blank lines
-				if not data[i].strip():
+				if data[i].strip() == "":
 					continue
 
-				# 3. Use list comprehension instead of map(string.strip, ...)
-				# This converts the map iterator into a usable list of strings
-				lineSplit = [item.strip() for item in data[i].split('\t')]
-
-				numH = profileTree.numHierarchicalLevels()
-				categories = lineSplit[0:numH]
-				countData = [float(count) for count in lineSplit[numH:]]
-
+				lineSplit = data[i].split('\t')
+				lineSplit = [__s.strip() for __s in lineSplit]
+				
+				categories = lineSplit[0:profileTree.numHierarchicalLevels()]
+				countData = [float(count) for count in lineSplit[profileTree.numHierarchicalLevels():]]
+				
 				# check for unclassified categories
 				taxa = ''
 				for j in range(0, len(categories)):
 					if self.isUnclassified(categories[j]):
-						categories[j] = ('Unclassified ' + taxa).rstrip()
+						categories[j] = 'Unclassified ' + taxa
+						categories[j] = categories[j].rstrip()
 					else:
 						taxa = categories[j]
-
-				# 4. Build the tree structure
+				
+				# add all hierarchical levels
 				curNode = profileTree.root
 				for category in categories:
 					node = curNode.childWithName(category)
-					if node is None:
+					if node == None:
 						node = Node(category, curNode)
 						curNode.children.append(node)
-
+						
 					curNode = node
-
+					
 				# add count data to leaf node
 				for j in range(0, len(profileTree.sampleNames)):
 					sampleName = profileTree.sampleNames[j]
-					# Ensure the sampleName key exists in the node's countData dictionary
-					curNode.countData[sampleName] = curNode.countData.get(sampleName, 0.0) + countData[j]
-
+					curNode.countData[sampleName] = curNode.countData.get(sampleName, 0) + countData[j]
+						
 				# add count data to total sequence count
 				for j in range(0, len(countData)):
 					profileTree.numSeqInSample[j] += countData[j]
-
-		except Exception as e:
-			# Providing the actual error 'e' helps debug specific Python 3 issues
-			errMsg = f'Failed to correctly parse line {i + 1}: {str(e)}'
-
+		except:
+			errMsg = 'Failed to correctly parse line: ' + str(i+1)
+			
 		return profileTree, errMsg
 	
 	def isUnclassified(self, value):
@@ -133,7 +122,7 @@ class StampIO(object):
 			
 		# get hierarchical and sample names
 		headings = data[0].split('\t')
-		headings = [line.strip() for line in headings]
+		headings = [__s.strip() for __s in headings]
 		profileTree.hierarchyHeadings = headings[0:firstSampleIndex]
 		profileTree.sampleNames = headings[firstSampleIndex:]
 		
@@ -142,7 +131,7 @@ class StampIO(object):
 		parent = defaultdict(dict)
 		for line in data:
 			lineSplit = line.split('\t')
-			lineSplit = [item.strip() for item in lineSplit]
+			lineSplit = [__s.strip() for __s in lineSplit]
 				
 			categories = lineSplit[0:numHierarchicalLevels]
 			for r, value in enumerate(categories):

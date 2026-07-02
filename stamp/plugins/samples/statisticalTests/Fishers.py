@@ -113,13 +113,13 @@ if __name__ == "__main__":
 	fout = open('FisherTiming.csv', 'w')
 	
 	for a in range(100, 10001, 100):
-		print a
+		print(a)
 		start = time.time()
 		for i in range(0, 10):
 			pValueOne, pValueTwo = fishers.hypothesisTest(a/2, a/2, 1000000, 1000000)
 		elapsed = (time.time() - start) / 10
 		fout.write(str(a) + ',' + str(elapsed) + '\n')
-		print elapsed
+		print(elapsed)
 		
 	fout.close()
 	'''

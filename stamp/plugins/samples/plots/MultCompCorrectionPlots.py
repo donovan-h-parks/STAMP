@@ -24,7 +24,7 @@
 
 import sys
 
-from PyQt5 import QtCore, QtGui
+from PyQt6 import QtCore, QtGui, QtWidgets
 import numpy as np
 
 from stamp.plugins.samples.AbstractSamplePlotPlugin import AbstractSamplePlotPlugin, TestWindow, ConfigureDialog
@@ -41,15 +41,14 @@ class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 		self.name = 'Multiple comparison plots'
 		self.type = 'Statistical'
 		
-		self.settings = preferences['Settings']
-		self.figWidth = float(self.settings.value(self.name + '/width', 7.0))
-		self.figHeight = float(self.settings.value(self.name + '/height', 7.0))
-
-		self.yAxisLogScale = bool(self.settings.value(self.name + '/histogram log scale', False))
-		self.binWidth = float(self.settings.value(self.name + '/bin width', 0.01))
-		self.xLimitFig1 = float(self.settings.value(self.name + '/histogram x-axis limit', 0.1))
-		self.xLimitFig2 = float(self.settings.value(self.name + '/correction plot x-axis limit', 1.0))
-		self.xLimitFig3 = float(self.settings.value(self.name + '/significant features x-axis limit', 0.1))
+		self.settings = preferences['Settings']		
+		self.figWidth = self.settings.value(self.name + '/width', 7.0, type=float)
+		self.figHeight = self.settings.value(self.name + '/height', 3.5, type=float)
+		self.yAxisLogScale = self.settings.value(self.name + '/histogram log scale', False, type=bool)
+		self.binWidth = self.settings.value(self.name + '/bin width', 0.01, type=float)
+		self.xLimitFig1 = self.settings.value(self.name + '/histogram x-axis limit', 0.1, type=float)
+		self.xLimitFig2 = self.settings.value(self.name + '/correction plot x-axis limit', 1.0, type=float)
+		self.xLimitFig3 = self.settings.value(self.name + '/significant features x-axis limit', 0.1, type=float)
 		
 		self.xMax = 0
 
@@ -97,7 +96,7 @@ class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 		self.fig.subplots_adjust(right = 0.97)
 				
 		# Sort p-values
-		pValues = zip(correctedValues, rawValues)
+		pValues = list(zip(correctedValues, rawValues))
 		pValues.sort()
 		correctedValues = [pValue[0] for pValue in pValues]
 		rawValues = [pValue[1] for pValue in pValues]
@@ -218,9 +217,9 @@ class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 	def configure(self, profile, statsResults):			 
 		self.configDlg = ConfigureDialog(Ui_MultCompCorrectionDialog)
 		
-		self.connect(self.configDlg.ui.btnXmaxFig1, QtCore.SIGNAL('clicked()'), self.setXaxisMax1)
-		self.connect(self.configDlg.ui.btnXmaxFig2, QtCore.SIGNAL('clicked()'), self.setXaxisMax2)
-		self.connect(self.configDlg.ui.btnXmaxFig3, QtCore.SIGNAL('clicked()'), self.setXaxisMax3)
+		self.configDlg.ui.btnXmaxFig1.clicked.connect(self.setXaxisMax1)
+		self.configDlg.ui.btnXmaxFig2.clicked.connect(self.setXaxisMax2)
+		self.configDlg.ui.btnXmaxFig3.clicked.connect(self.setXaxisMax3)
 		
 		self.configDlg.ui.spinFigWidth.setValue(self.figWidth)
 		self.configDlg.ui.spinFigHeight.setValue(self.figHeight)
@@ -232,7 +231,7 @@ class MultCompCorrectionPlots(AbstractSamplePlotPlugin):
 		self.configDlg.ui.spinXlimitFig2.setValue(self.xLimitFig2)		
 		self.configDlg.ui.spinXlimitFig3.setValue(self.xLimitFig3)
 				
-		if self.configDlg.exec_() == QtWidgets.QDialog.Accepted:					
+		if self.configDlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:					
 			self.figWidth = self.configDlg.ui.spinFigWidth.value()
 			self.figHeight = self.configDlg.ui.spinFigHeight.value()
 
@@ -266,7 +265,7 @@ if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
 	testWindow = TestWindow(MultCompCorrectionPlots)
 	testWindow.show()
-	sys.exit(app.exec_())
+	sys.exit(app.exec())
 
 
 				

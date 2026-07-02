@@ -22,9 +22,7 @@
 import operator
 import math
 
-from PyQt5 import QtCore, QtGui
-from PyQt5.uic.Compiler.qtproxies import QtWidgets
-
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 def SortTable(table, cols, bAscending = True, bAbsoluteValue = False, bLog = False):
 	''' 
@@ -41,17 +39,18 @@ def SortTable(table, cols, bAscending = True, bAbsoluteValue = False, bLog = Fal
 	'''
 	
 	for col in reversed(cols):
+		# py2 used sorted(table, cmp, key=itemgetter(col)); the cmp compared the
+		# key-extracted column values, so each is equivalent to ordering by that
+		# monotonic transform of the column value.
 		if bLog and bAbsoluteValue:
-			f = (lambda a, b: cmp(abs(math.log10(a)), abs(math.log10(b))))
-			table = sorted(table, f, key = operator.itemgetter(col), reverse = (not bAscending))
+			keyFunc = lambda row, c=col: abs(math.log10(row[c]))
 		elif bLog and not bAbsoluteValue:
-			f = (lambda a, b: cmp(math.log10(a), math.log10(b)))
-			table = sorted(table, f, key = operator.itemgetter(col), reverse = (not bAscending))
+			keyFunc = lambda row, c=col: math.log10(row[c])
 		elif not bLog and bAbsoluteValue:
-			f = (lambda a, b: cmp(abs(a), abs(b)))
-			table = sorted(table, f, key = operator.itemgetter(col), reverse = (not bAscending))
+			keyFunc = lambda row, c=col: abs(row[c])
 		else:
-			table = sorted(table, key = operator.itemgetter(col), reverse = (not bAscending))
+			keyFunc = operator.itemgetter(col)
+		table = sorted(table, key = keyFunc, reverse = (not bAscending))
 			
 	return table
 
@@ -85,8 +84,7 @@ def SortTableNumericStrCol(table, col, bAscending = True):
 			bAscending: flag indicating if column should be sorted in ascending or
 									descending order
 	'''
-	f = (lambda a, b: cmp(GetStrNumber(a), GetStrNumber(b)))
-	table = sorted(table, f, key = operator.itemgetter(col), reverse = (not bAscending))
+	table = sorted(table, key = lambda row: GetStrNumber(row[col]), reverse = (not bAscending))
 			
 	return table
 
@@ -96,7 +94,7 @@ class QTableWidgetNumericItem(QtWidgets.QTableWidgetItem):
 	'''
 	
 	def __init__(self, text):
-		QtGui.QTableWidgetItem.__init__(self, text, QtGui.QTableWidgetItem.UserType)
+		QtWidgets.QTableWidgetItem.__init__(self, text, QtWidgets.QTableWidgetItem.ItemType.UserType)
 
 	def __lt__(self, other):
 		return float(self.text()) < float(other.text())

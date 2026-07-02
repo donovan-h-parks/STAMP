@@ -1,4 +1,4 @@
-# =======================================================================
+#=======================================================================
 # Author: Donovan Parks
 #
 # Box plot for two groups.
@@ -19,205 +19,179 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with STAMP.  If not, see <http://www.gnu.org/licenses/>.
-# =======================================================================
+#=======================================================================
 
 import sys
 
-from PyQt5 import QtGui, QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from stamp.plugins.groups.AbstractGroupPlotPlugin import AbstractGroupPlotPlugin, TestWindow, ConfigureDialog
 from stamp.plugins.groups.plots.configGUI.BoxPlotUI import Ui_BoxPlotDialog
 
 from matplotlib.patches import Polygon
+
 from matplotlib.artist import setp
 
 import numpy as np
 
-
 class BoxPlot(AbstractGroupPlotPlugin):
-    '''
-    Box plot for two groups.
-    '''
+	'''
+	Box plot for two groups.
+	'''
+	def __init__(self, preferences, parent=None):
+		AbstractGroupPlotPlugin.__init__(self, preferences, parent)
+		self.preferences = preferences
+	 
+		self.name = 'Box plot'
+		self.type = 'Exploratory'
+		
+		self.settings = preferences['Settings']
+		self.figWidth = self.settings.value('group: ' + self.name + '/width', 7.0, type=float)
+		self.figHeight = self.settings.value('group: ' + self.name + '/height', 7.0, type=float)
+		self.fieldToPlot = self.settings.value('group: ' + self.name + '/field to plot', 'Proportion of sequences (%)', type=str)
+		self.bShowAverages = self.settings.value('group: ' + self.name + '/show averages', True, type=bool)
+		self.bShowPvalue = self.settings.value('group: ' + self.name + '/show p-value', True, type=bool)
 
-    def __init__(self, preferences, parent=None):
-        super(BoxPlot, self).__init__(preferences, parent)
-        self.preferences = preferences
+	def mirrorProperties(self, plotToCopy):
+		super(BoxPlot, self).mirrorProperties(plotToCopy)
+		
+		self.figWidth = plotToCopy.figWidth
+		self.figHeight = plotToCopy.figHeight
+		
+		self.fieldToPlot = plotToCopy.fieldToPlot
+		self.bShowAverage = plotToCopy.bShowAverages
+		
+		self.bShowPvalue = plotToCopy.bShowPvalue
+		
+	def plot(self, profile, statsResults):
+		if len(profile.profileDict) <= 0 or self.preferences['Selected group feature'] == '' or len(profile.samplesInGroup1) == 0 or len(profile.samplesInGroup2) == 0:
+			self.emptyAxis()
+			return
+			
+		# *** Colour of plot elements
+		axesColour = str(self.preferences['Axes colour'].name())
+		group1Colour = str(self.preferences['Group colours'][profile.groupName1].name())
+		group2Colour = str(self.preferences['Group colours'][profile.groupName2].name())
+		
+		# *** Get data for each group
+		feature = self.preferences['Selected group feature']
+		if self.fieldToPlot == "Number of sequences":
+			data1, data2 = profile.getFeatureCounts(feature)
+		else: # Proportion of sequences (%)
+			data1, data2 = profile.getFeatureProportions(feature)
+		
+		# *** Set figure size
+		self.fig.clear()
+		self.fig.set_size_inches(self.figWidth, self.figHeight)	
+		
+		padding = 0.25					 # inches
+		xOffsetFigSpace = (0.4 + padding)/self.figWidth
+		yOffsetFigSpace = (0.3 + padding)/self.figHeight
+		axesBoxPlot = self.fig.add_axes([xOffsetFigSpace, yOffsetFigSpace,
+																		1.0 - xOffsetFigSpace - (2*padding)/self.figWidth, 1.0 - yOffsetFigSpace - (2*padding)/self.figHeight])
+			
+		# box plot
+		data = [data1, data2]
+		bp = axesBoxPlot.boxplot(data, notch=0, sym='k+', vert=1, whis=1.5)
+		setp(bp['boxes'], color='black')
+		setp(bp['whiskers'], color='black',linestyle='-')
+		setp(bp['medians'], color='black')
+		
+		# fill boxes with desired colors
+		colours = [group1Colour, group2Colour]
 
-        self.name = 'Box plot'
-        self.type = 'Exploratory'
+		for i in range(0, len(data)):
+			# get box coordinates
+			box = bp['boxes'][i]
+			boxCoords = list(zip(box.get_xdata()[0:5],box.get_ydata()[0:5]))
+			
+			# colour in box
+			boxPolygon = Polygon(boxCoords, facecolor=colours[i])
+			axesBoxPlot.add_patch(boxPolygon)
+			
+			# draw the median lines back over what we just filled in
+			med = bp['medians'][i]
+			axesBoxPlot.plot(med.get_xdata()[0:2], med.get_ydata()[0:2], 'k')
+		
+		# mark average
+		if self.bShowAverages:
+			for i in range(0,2):
+				med = bp['medians'][i]
+				axesBoxPlot.plot([np.average(med.get_xdata())], [np.average(data[i])], color='w', marker='*', markeredgecolor='k')
+				
+		# *** P-value label
+		if self.bShowPvalue and statsResults.profile != None:
+			pValueStr = statsResults.getFeatureStatisticAsStr(feature, 'pValuesCorrected')
+			axesBoxPlot.text(1.0, 1.0, r'$p$ = ' + pValueStr, horizontalalignment='right', verticalalignment='bottom', transform=axesBoxPlot.transAxes)
+		
+		# *** Prettify scatter plot
+		if self.preferences['Truncate feature names']:
+			length = self.preferences['Length of truncated feature names']
+			if len(feature) > length+3:
+					feature = feature[0:length] + '...'
+					
+		axesBoxPlot.set_title(feature)
+		axesBoxPlot.set_ylabel(self.fieldToPlot)
+		axesBoxPlot.set_xticklabels([profile.groupName1, profile.groupName2])
+			
+		for a in axesBoxPlot.yaxis.majorTicks:
+			a.tick1On=True
+			a.tick2On=False
+				
+		for a in axesBoxPlot.xaxis.majorTicks:
+			a.tick1On=True
+			a.tick2On=False
+			
+		for line in axesBoxPlot.yaxis.get_ticklines(): 
+			line.set_color(axesColour)
+				
+		for line in axesBoxPlot.xaxis.get_ticklines(): 
+			line.set_color(axesColour)
+			
+		for loc, spine in axesBoxPlot.spines.items():
+			if loc in ['right','top']:
+				spine.set_color('none') 
+			else:
+				spine.set_color(axesColour)
+					
+		#axesBoxPlot.yaxis.grid(True, linestyle='-', which='major', color='lightgrey', alpha=0.5)
+		#axesBoxPlot.set_axisbelow(True)
+		
+		self.updateGeometry()
+		self.draw()
 
-        # --- FIX: Flags required by STAMP.py logic ---
-        self.bPlotFeaturesIndividually = True  # Required for groupPlotUpdate line 652
-        self.bSupportsHighlight = False
-        self.bRunPostHocTest = False
-        # ---------------------------------------------
+	def configure(self, profile, statsResults):
+		configDlg = ConfigureDialog(Ui_BoxPlotDialog)
+		
+		configDlg.ui.cboFieldToPlot.setCurrentIndex(configDlg.ui.cboFieldToPlot.findText(self.fieldToPlot))
 
-        self.settings = preferences['Settings']
-        self.figWidth = float(self.settings.value('group: ' + self.name + '/width', 7.0))
-        self.figHeight = float(self.settings.value('group: ' + self.name + '/height', 7.0))
-        self.fieldToPlot = str(
-            self.settings.value('group: ' + self.name + '/fieldToPlot', 'Proportion of sequences (%)'))
-        self.bShowAverages = self.settings.value('group: ' + self.name + '/show averages', True, type=bool)
-        self.bShowPvalue = self.settings.value('group: ' + self.name + '/show p-value', True, type=bool)
-
-    def mirrorProperties(self, plotToCopy):
-        super(BoxPlot, self).mirrorProperties(plotToCopy)
-
-        self.figWidth = plotToCopy.figWidth
-        self.figHeight = plotToCopy.figHeight
-
-        self.fieldToPlot = plotToCopy.fieldToPlot
-        self.bShowAverages = plotToCopy.bShowAverages
-
-        self.bShowPvalue = plotToCopy.bShowPvalue
-
-        # Mirror flags if present
-        if hasattr(plotToCopy, 'bPlotFeaturesIndividually'):
-            self.bPlotFeaturesIndividually = plotToCopy.bPlotFeaturesIndividually
-        if hasattr(plotToCopy, 'bSupportsHighlight'):
-            self.bSupportsHighlight = plotToCopy.bSupportsHighlight
-        if hasattr(plotToCopy, 'bRunPostHocTest'):
-            self.bRunPostHocTest = plotToCopy.bRunPostHocTest
-
-    def plot(self, profile, statsResults):
-        if len(profile.profileDict) <= 0 or self.preferences['Selected group feature'] == '' or len(
-                profile.samplesInGroup1) == 0 or len(profile.samplesInGroup2) == 0:
-            self.emptyAxis()
-            return
-
-        # *** Colour of plot elements
-        axesColour = str(self.preferences['Axes colour'].name())
-        group1Colour = str(self.preferences['Group colours'][profile.groupName1].name())
-        group2Colour = str(self.preferences['Group colours'][profile.groupName2].name())
-
-        # *** Get data for each group
-        feature = self.preferences['Selected group feature']
-        if self.fieldToPlot == "Number of sequences":
-            data1, data2 = profile.getFeatureCounts(feature)
-        else:  # Proportion of sequences (%)
-            data1, data2 = profile.getFeatureProportions(feature)
-
-        # *** Set figure size
-        self.fig.clear()
-        self.fig.set_size_inches(self.figWidth, self.figHeight)
-
-        padding = 0.25  # inches
-        xOffsetFigSpace = (0.4 + padding) / self.figWidth
-        yOffsetFigSpace = (0.3 + padding) / self.figHeight
-        axesBoxPlot = self.fig.add_axes([xOffsetFigSpace, yOffsetFigSpace,
-                                         1.0 - xOffsetFigSpace - (2 * padding) / self.figWidth,
-                                         1.0 - yOffsetFigSpace - (2 * padding) / self.figHeight])
-
-        # box plot
-        data = [data1, data2]
-        bp = axesBoxPlot.boxplot(data, notch=0, sym='k+', vert=1, whis=1.5)
-        setp(bp['boxes'], color='black')
-        setp(bp['whiskers'], color='black', linestyle='-')
-        setp(bp['medians'], color='black')
-
-        # fill boxes with desired colors
-        colours = [group1Colour, group2Colour]
-
-        for i in range(0, len(data)):
-            # get box coordinates
-            box = bp['boxes'][i]
-            # Python 3 Fix: zip returns iterator, Polygon needs list
-            boxCoords = list(zip(box.get_xdata()[0:5], box.get_ydata()[0:5]))
-
-            # colour in box
-            boxPolygon = Polygon(boxCoords, facecolor=colours[i])
-            axesBoxPlot.add_patch(boxPolygon)
-
-            # draw the median lines back over what we just filled in
-            med = bp['medians'][i]
-            axesBoxPlot.plot(med.get_xdata()[0:2], med.get_ydata()[0:2], 'k')
-
-        # mark average
-        if self.bShowAverages:
-            for i in range(0, 2):
-                med = bp['medians'][i]
-                axesBoxPlot.plot([np.average(med.get_xdata())], [np.average(data[i])], color='w', marker='*',
-                                 markeredgecolor='k')
-
-        # *** P-value label
-        if self.bShowPvalue and statsResults.profile is not None:
-            pValueStr = statsResults.getFeatureStatisticAsStr(feature, 'pValuesCorrected')
-            if 'e' in pValueStr:
-                # Simple latex formatting for sci notation
-                pValueStr = pValueStr.replace('e', r'\times 10^{') + '}'
-            axesBoxPlot.text(1.0, 1.0, r'$p$ = ' + pValueStr, horizontalalignment='right', verticalalignment='bottom',
-                             transform=axesBoxPlot.transAxes)
-
-        # *** Prettify scatter plot
-        display_feature = feature
-        if self.preferences['Truncate feature names']:
-            length = self.preferences['Length of truncated feature names']
-            if len(feature) > length + 3:
-                display_feature = feature[0:length] + '...'
-
-        axesBoxPlot.set_title(display_feature)
-        axesBoxPlot.set_ylabel(self.fieldToPlot)
-        axesBoxPlot.set_xticklabels([profile.groupName1, profile.groupName2])
-
-        for a in axesBoxPlot.yaxis.majorTicks:
-            a.tick1On = True
-            a.tick2On = False
-
-        for a in axesBoxPlot.xaxis.majorTicks:
-            a.tick1On = True
-            a.tick2On = False
-
-        for line in axesBoxPlot.yaxis.get_ticklines():
-            line.set_color(axesColour)
-
-        for line in axesBoxPlot.xaxis.get_ticklines():
-            line.set_color(axesColour)
-
-        for loc, spine in axesBoxPlot.spines.items():
-            if loc in ['right', 'top']:
-                spine.set_color('none')
-            else:
-                spine.set_color(axesColour)
-
-        # axesBoxPlot.yaxis.grid(True, linestyle='-', which='major', color='lightgrey', alpha=0.5)
-        # axesBoxPlot.set_axisbelow(True)
-
-        self.updateGeometry()
-        self.draw()
-
-    def configure(self, profile, statsResults):
-        configDlg = ConfigureDialog(Ui_BoxPlotDialog)
-
-        configDlg.ui.cboFieldToPlot.setCurrentIndex(configDlg.ui.cboFieldToPlot.findText(self.fieldToPlot))
-
-        configDlg.ui.spinFigWidth.setValue(self.figWidth)
-        configDlg.ui.spinFigHeight.setValue(self.figHeight)
-
-        configDlg.ui.chkShowAverage.setChecked(self.bShowAverages)
-
-        configDlg.ui.chkShowPvalue.setChecked(self.bShowPvalue)
-
-        if configDlg.exec_() == QtWidgets.QDialog.Accepted:
-            self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
-
-            self.figWidth = configDlg.ui.spinFigWidth.value()
-            self.figHeight = configDlg.ui.spinFigHeight.value()
-
-            self.bShowAverages = configDlg.ui.chkShowAverage.isChecked()
-
-            self.bShowPvalue = configDlg.ui.chkShowPvalue.isChecked()
-
-            self.settings.setValue('group: ' + self.name + '/column width', self.figWidth)
-            self.settings.setValue('group: ' + self.name + '/height', self.figHeight)
-            self.settings.setValue('group: ' + self.name + '/field to plot', self.fieldToPlot)
-            self.settings.setValue('group: ' + self.name + '/show averages', self.bShowAverages)
-            self.settings.setValue('group: ' + self.name + '/show p-value', self.bShowPvalue)
-
-            self.plot(profile, statsResults)
-
-
-if __name__ == "__main__":
-    app = QtWidgets.QApplication(sys.argv)
-    testWindow = TestWindow(BoxPlot)
-    testWindow.show()
-    sys.exit(app.exec_())
+		configDlg.ui.spinFigWidth.setValue(self.figWidth)
+		configDlg.ui.spinFigHeight.setValue(self.figHeight)
+		
+		configDlg.ui.chkShowAverage.setChecked(self.bShowAverages)
+		
+		configDlg.ui.chkShowPvalue.setChecked(self.bShowPvalue)
+				
+		if configDlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+			self.fieldToPlot = str(configDlg.ui.cboFieldToPlot.currentText())
+			
+			self.figWidth = configDlg.ui.spinFigWidth.value()
+			self.figHeight = configDlg.ui.spinFigHeight.value()
+			
+			self.bShowAverages = configDlg.ui.chkShowAverage.isChecked()
+			
+			self.bShowPvalue = configDlg.ui.chkShowPvalue.isChecked()
+			
+			self.settings.setValue('group: ' + self.name + '/column width', self.figWidth)
+			self.settings.setValue('group: ' + self.name + '/height', self.figHeight)
+			self.settings.setValue('group: ' + self.name + '/field to plot', self.fieldToPlot)
+			self.settings.setValue('group: ' + self.name + '/show averages', self.bShowAverages)
+			self.settings.setValue('group: ' + self.name + '/show p-value', self.bShowPvalue)
+			
+			self.plot(profile, statsResults)
+					
+if __name__ == "__main__": 
+	app = QtWidgets.QApplication(sys.argv)
+	testWindow = TestWindow(ProfileScatterPlot)
+	testWindow.show()
+	sys.exit(app.exec())
