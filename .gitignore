@@ -47,3 +47,13 @@ pip-log.txt
 /STAMP_rc.pyc
 /commandLine.pyc
 /mainUI.pyc
+
+# Python bytecode cache (py3)
+__pycache__/
+
+# Virtualenvs
+.venv/
+.venv313/
+
+# IDE
+.idea/

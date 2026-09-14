@@ -93,6 +93,8 @@ class CreateProfileCoMetDlg(QtWidgets.QDialog):
 					return
 				
 				category = line[openParanethsisIndex+1:closeParanethsisIndex].strip()
+				if category == "":
+						continue	# skip entries with an empty category name (e.g. CoMet terms with an empty description)
 				count = float(line[lastSemiColonIndex+1:])
 
 				hierarchy = [category]

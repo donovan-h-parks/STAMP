@@ -31,8 +31,8 @@ class PlotDlg(QtWidgets.QDockWidget):
 		self.ui = Ui_PlotDlg()
 		self.ui.setupUi(self)
 		
-		self.topLevelChanged.connect(self.topLevelChanged)
-		self.dockLocationChanged.connect(self.dockLocationChanged)
+		self.topLevelChanged.connect(self.onTopLevelChanged)
+		self.dockLocationChanged.connect(self.onDockLocationChanged)
 		
 		self.plot = None
 
@@ -40,7 +40,7 @@ class PlotDlg(QtWidgets.QDockWidget):
 		self.ui.scrollArea.setWidget(plot)
 		self.plot = plot
 		
-	def topLevelChanged (self, bFloating):
+	def onTopLevelChanged(self, bFloating):
 		if self.plot == None:
 			return
 			
@@ -51,7 +51,7 @@ class PlotDlg(QtWidgets.QDockWidget):
 				h = 800
 			self.resize(w, h)
 		
-	def dockLocationChanged(self):
+	def onDockLocationChanged(self):
 		self.setMaximumSize(10000, 10000)
 
 if __name__ == "__main__": 
