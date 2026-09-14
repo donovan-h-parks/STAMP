@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "STAMP"
+version = "2.1.3"
+description = "A graphical software package for analyzing taxonomic and functional profiles."
+readme = "README.md"
+license = { file = "LICENSE.txt" }
+requires-python = ">=3.9"
+authors = [
+    { name = "Donovan Parks" },
+    { name = "Rob Beiko" },
+]
+maintainers = [
+    { name = "Donovan Parks", email = "donovan.parks@gmail.com" },
+]
+keywords = ["metagenomics", "statistics", "bioinformatics", "taxonomic profiles"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+# Migrated dependency set:
+#   * numpy 2.x / scipy / matplotlib: modern releases
+#   * PyQt6 replaces PyQt4
+#   * biom-format retained (actively maintained, Python 3 native)
+#   * REMOVED: six (Py2/3 shim, unused after migration)
+#   * REMOVED: pyqi (archived, Python-2-only; was only referenced by the old
+#              build/packaging scripts, never by the STAMP runtime)
+dependencies = [
+    "numpy>=1.22",
+    "scipy>=1.9",
+    "matplotlib>=3.6",
+    "PyQt6>=6.5",
+    "biom-format>=2.1.15",
+]
+
+[project.urls]
+Homepage = "https://beikolab.cs.dal.ca/software/STAMP"
+Repository = "https://github.com/donovan-h-parks/STAMP"
+
+[project.gui-scripts]
+STAMP = "stamp.STAMP:main"
+
+[tool.setuptools.packages.find]
+include = ["stamp*"]
+
+[tool.setuptools.package-data]
+stamp = [
+    "data/*.txt",
+    "icons/*.png",
+    "icons/*.ico",
+    "GUI/*.ui",
+    "*.ui",
+]
