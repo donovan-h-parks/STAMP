@@ -17,6 +17,17 @@ const jpost = (p, body) => fetch(p, {
 
 const MODES = [['sample', 'Two samples'], ['two', 'Two groups'], ['multi', 'Multi-group'], ['pca', 'PCA'], ['heatmap', 'Heatmap']]
 
+// data-import formats: single- or multi-file, each posting to its endpoint under `field`
+const IMPORTERS = [
+  { id: 'spf', label: 'STAMP profile (.spf)', url: '/api/upload', field: 'profile', accept: '.spf', multiple: false, help: 'A ready-made STAMP profile.' },
+  { id: 'biom', label: 'BIOM table', url: '/api/import/biom', field: 'biom', accept: '.biom,.gz', multiple: false, help: 'Taxonomy hierarchy when present, else flat.' },
+  { id: 'mgrast', label: 'MG-RAST profile', url: '/api/import/mgrast', field: 'files', accept: '.tsv,.txt', multiple: false, help: 'One MG-RAST .tsv (function or phylogeny).' },
+  { id: 'mothur', label: 'Mothur', url: '/api/import/mothur', field: 'files', accept: '.taxonomy,.groups,.names', multiple: true, help: 'Select the .taxonomy and .groups files (.names optional).' },
+  { id: 'comet', label: 'CoMet profiles', url: '/api/import/comet', field: 'files', accept: '.txt', multiple: true, help: 'One CoMet file per sample — select them all.' },
+  { id: 'rita', label: 'RITA profiles', url: '/api/import/rita', field: 'files', accept: '.txt', multiple: true, help: 'One RITA classifier file per sample — select them all.' },
+  { id: 'cog', label: 'Append COG categories', url: '/api/import/cog', field: 'files', accept: '.tsv,.txt', multiple: false, help: 'An IMG/M COG profile — categories are appended.' },
+]
+
 function Field({ label, children, hint }) {
   return <><label>{label}</label>{children}{hint && <div className="hint">{hint}</div>}</>
 }
@@ -56,7 +67,9 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const upProfile = useRef(null), upMeta = useRef(null), upBiom = useRef(null)
+  const fileRef = useRef(null), upMeta = useRef(null)
+  const [importerKind, setImporterKind] = useState('spf')
+  const [cogTreatment, setCogTreatment] = useState('Treat multi-code COGs as features')
 
   useEffect(() => {
     jget('/api/datasets').then(d => {
@@ -91,21 +104,22 @@ export default function App() {
   async function refreshDatasets(selectId) {
     const d = await jget('/api/datasets'); setDatasets(d); if (selectId) setDataset(selectId)
   }
-  async function postImport(url, fileKey, fileRef) {
-    const pf = fileRef.current?.files?.[0]
-    if (!pf) { setError(`Choose a file first.`); return }
+  const importer = IMPORTERS.find(i => i.id === importerKind)
+  async function doImport() {
+    const fs = fileRef.current?.files
+    if (!fs || !fs.length) { setError('Choose file(s) to import.'); return }
     setBusy(true); setError(null)
     try {
-      const fd = new FormData(); fd.append(fileKey, pf)
+      const fd = new FormData()
+      for (const f of fs) fd.append(importer.field, f)   // single or multiple, same field
       if (upMeta.current?.files?.[0]) fd.append('metadata', upMeta.current.files[0])
-      const r = await fetch(url, { method: 'POST', body: fd })
+      if (importer.id === 'cog') fd.append('treatment', cogTreatment)
+      const r = await fetch(importer.url, { method: 'POST', body: fd })
       const j = await r.json(); if (!r.ok) throw j
       await refreshDatasets(j.id)
     } catch (e) { setError(e.detail || String(e)) }
     setBusy(false)
   }
-  const doUpload = () => postImport('/api/upload', 'profile', upProfile)
-  const doImportBiom = () => postImport('/api/import/biom', 'biom', upBiom)
 
   async function run() {
     setBusy(true); setError(null)
@@ -286,15 +300,20 @@ export default function App() {
         <div className="panel">
           <Field label="Dataset"><Sel value={dataset} onChange={setDataset} options={datasets.map(d => d.id)} /></Field>
           <div className="filebox">
-            <label style={{ margin: 0 }}>Upload your own</label>
+            <label style={{ margin: 0 }}>Import your own data</label>
+            <select value={importerKind} onChange={e => setImporterKind(e.target.value)}>
+              {IMPORTERS.map(i => <option key={i.id} value={i.id}>{i.label}</option>)}
+            </select>
+            <input key={importerKind} ref={fileRef} type="file"
+                   accept={importer.accept} multiple={importer.multiple} />
+            {importer.id === 'cog' &&
+              <select value={cogTreatment} onChange={e => setCogTreatment(e.target.value)}>
+                <option>Treat multi-code COGs as features</option>
+                <option>Assign sequence to each COG code</option>
+              </select>}
             <input ref={upMeta} type="file" accept=".tsv,.txt" title="metadata (.tsv, optional)" />
-            <div className="hint" style={{ marginTop: 0 }}>metadata .tsv (optional · shared by both imports below)</div>
-            <div className="row2" style={{ marginTop: 8 }}>
-              <div><input ref={upProfile} type="file" accept=".spf" title="profile (.spf)" />
-                <button onClick={doUpload} disabled={busy}>Load .spf</button></div>
-              <div><input ref={upBiom} type="file" accept=".biom,.gz" title="BIOM table" />
-                <button onClick={doImportBiom} disabled={busy}>Import BIOM</button></div>
-            </div>
+            <button onClick={doImport} disabled={busy}>{busy ? 'Importing…' : 'Import'}</button>
+            <div className="hint">{importer.help} Metadata .tsv optional (needed for grouping).</div>
           </div>
 
           {schema && <>

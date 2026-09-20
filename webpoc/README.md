@@ -77,9 +77,10 @@ Five modes, all rendered as interactive Plotly:
 - **Heatmap**: the most-variable features × samples, hierarchically clustered on both axes
   (SciPy), with a per-sample group colour strip.
 
-Plus **bring your own data**: upload a `.spf` **or import a BIOM table** (`.biom`, auto-using
-taxonomy metadata as the hierarchy when present, else a flat observation-id profile), each with
-an optional metadata `.tsv`, validated on the server and then usable in every mode.
+Plus **bring your own data** — an importer dropdown covers all of STAMP's input formats:
+`.spf`, **BIOM**, **MG-RAST**, **Mothur**, **CoMet**, **RITA**, and **Append-COG**. Each is
+converted to a profile on the server (Qt-free ports of STAMP's converters), validated, and then
+usable in every mode; an optional metadata `.tsv` enables grouping.
 
 ## API
 
@@ -92,15 +93,16 @@ an optional metadata `.tsv`, validated on the server and then usable in every mo
 - `POST /api/pca` — sample PC1/PC2 coordinates + group labels + variance explained
 - `POST /api/heatmap` — clustered feature × sample matrix + per-sample group labels
 - `POST /api/upload` — multipart profile (+ metadata) → registers a new dataset id
-- `POST /api/import/biom` — multipart BIOM table (+ metadata) → converts to a profile and registers it
+- `POST /api/import/biom` — BIOM table → profile
+- `POST /api/import/{kind}` — `kind` ∈ mgrast|mothur|comet|rita|cog; multipart file(s) (+ metadata) → profile
+  (`backend/importers.py` holds the Qt-free converters)
 
 ## What it still skips (the real project's remaining work)
 
 - Only 5 of STAMP's ~22 plot types (bar, grouped bar, PCA, heatmap, post-hoc). Each remaining
   one (box, scatter, profile bar, sequence/p-value histograms, multiple-comparison…) becomes an
   interactive chart.
-- **1 of 6 data importers** done (**BIOM**). The other 5 (MG-RAST / Mothur / RITA / CoMet /
-  Append-COG) are not wired yet.
+- **All 6 data importers** are done (BIOM, MG-RAST, Mothur, CoMet, RITA, Append-COG).
 - No **effect-size filter plugins** beyond the simple significance/min-effect filter here, no
   save-image / table export, and none of the fine-grained UI (active-group toggling, feature
   highlighting, parent level).

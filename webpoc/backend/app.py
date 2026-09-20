@@ -23,7 +23,9 @@ from functools import lru_cache
 import numpy as np
 import scipy.cluster.hierarchy as _cluster
 import scipy.spatial.distance as _dist
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from typing import List
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -567,6 +569,65 @@ async def api_import_biom(biom: UploadFile = File(...), metadata: UploadFile = F
     ds_id = "upload/" + os.path.basename(d)
     REGISTRY[ds_id] = {"id": ds_id, "name": "⬆ " + (biom.filename or "table.biom") + " (BIOM)",
                        "profile": spf_path, "metadata": meta_path, "uploaded": True}
+    return {"id": ds_id, "name": REGISTRY[ds_id]["name"], "hasMetadata": meta_path is not None,
+            "levels": list(tree.hierarchyHeadings)}
+
+
+IMPORTER_LABELS = {"mgrast": "MG-RAST", "mothur": "Mothur", "comet": "CoMet", "rita": "RITA", "cog": "COG"}
+
+
+@app.post("/api/import/{kind}")
+async def api_import(kind: str, files: List[UploadFile] = File(...),
+                     metadata: UploadFile = File(None),
+                     treatment: str = Form("Treat multi-code COGs as features")):
+    """Convert a raw STAMP-supported format (MG-RAST / Mothur / CoMet / RITA / Append-COG) to a
+    profile and register it. Mothur takes several files (identified by extension); CoMet and
+    RITA take one file per sample; MG-RAST and COG take a single file."""
+    import importers as IMP
+    if kind not in IMPORTER_LABELS:
+        raise HTTPException(404, f"Unknown importer: {kind}")
+    os.makedirs(_UPLOAD_ROOT, exist_ok=True)
+    d = tempfile.mkdtemp(prefix=f"{kind}_", dir=_UPLOAD_ROOT)
+    saved = []
+    for uf in files:
+        p = os.path.join(d, os.path.basename(uf.filename) or "file")
+        with open(p, "wb") as f:
+            shutil.copyfileobj(uf.file, f)
+        saved.append(p)
+
+    spf = os.path.join(d, "converted.spf")
+    try:
+        if kind == "mgrast":
+            IMP.mgrast_to_spf(saved[0], spf)
+        elif kind == "cog":
+            IMP.append_cog(saved[0], spf, treatment, PREFERENCES)
+        elif kind == "comet":
+            IMP.comet_to_spf(saved, spf)
+        elif kind == "rita":
+            IMP.rita_to_spf(saved, spf)
+        elif kind == "mothur":
+            by_ext = lambda e: next((p for p in saved if p.endswith(e)), None)
+            tax, grp, nms = by_ext(".taxonomy"), by_ext(".groups"), by_ext(".names")
+            if not tax or not grp:
+                raise ValueError("Mothur import needs a .taxonomy and a .groups file (.names optional).")
+            IMP.mothur_to_spf(tax, grp, spf, nms)
+        tree, err = StampIO(PREFERENCES).read(spf)
+    except Exception as e:
+        shutil.rmtree(d, ignore_errors=True)
+        raise HTTPException(400, f"Import failed: {e}")
+    if err:
+        shutil.rmtree(d, ignore_errors=True)
+        raise HTTPException(400, f"Converted profile did not validate: {err}")
+
+    meta_path = None
+    if metadata is not None and metadata.filename:
+        meta_path = os.path.join(d, os.path.basename(metadata.filename))
+        with open(meta_path, "wb") as f:
+            shutil.copyfileobj(metadata.file, f)
+
+    ds_id = "upload/" + os.path.basename(d)
+    REGISTRY[ds_id] = {"id": ds_id, "name": f"⬆ {files[0].filename} ({IMPORTER_LABELS[kind]})",
+                       "profile": spf, "metadata": meta_path, "uploaded": True}
     return {"id": ds_id, "name": REGISTRY[ds_id]["name"], "hasMetadata": meta_path is not None,
             "levels": list(tree.hierarchyHeadings)}
 
