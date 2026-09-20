@@ -1,0 +1,6 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+
+# optional: enables `python stamp_web.py --window` (native app window)
+pywebview>=5.0
