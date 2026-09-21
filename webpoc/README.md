@@ -81,6 +81,9 @@ Five modes, all rendered as interactive Plotly:
 - **Heatmap**: the most-variable features × samples, hierarchically clustered on both axes
   (SciPy), with a per-sample group colour strip.
 
+**Export**: every plot has manuscript-quality export — **hi-res PNG** (4× pixel density) and
+**vector SVG** — and every results table exports to **CSV** (all features, all columns).
+
 Plus **bring your own data** — an importer dropdown covers all of STAMP's input formats:
 `.spf`, **BIOM**, **MG-RAST**, **Mothur**, **CoMet**, **RITA**, and **Append-COG**. Each is
 converted to a profile on the server (Qt-free ports of STAMP's converters), validated, and then

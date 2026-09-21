@@ -1,5 +1,46 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import Plot from 'react-plotly.js'
+import createPlotlyComponent from 'react-plotly.js/factory'
+import Plotly from 'plotly.js-dist-min'
+const RPlot = createPlotlyComponent(Plotly)   // one Plotly instance for render + export
+
+// Wrap every plot with manuscript-quality export buttons (hi-res PNG + vector SVG).
+// Defined as `Plot` so all existing <Plot .../> usages get export for free.
+function Plot({ name = 'stamp-plot', ...props }) {
+  const gd = useRef(null)
+  const download = format => {
+    if (!gd.current) return
+    const fl = gd.current._fullLayout || {}
+    Plotly.downloadImage(gd.current, {
+      format, filename: name,
+      scale: format === 'png' ? 4 : 1,        // 4× pixel density for print-quality PNG
+      width: fl.width || 900, height: fl.height || 500,
+    })
+  }
+  return (
+    <div>
+      <RPlot {...props} onInitialized={(_f, g) => { gd.current = g }} onUpdate={(_f, g) => { gd.current = g }} />
+      <div className="exportbar">
+        <span>export:</span>
+        <button onClick={() => download('png')} title="high-resolution PNG (4× density)">PNG</button>
+        <button onClick={() => download('svg')} title="vector SVG — scales losslessly for figures">SVG</button>
+      </div>
+    </div>
+  )
+}
+
+// Trigger a CSV download in the browser.
+function downloadCSV(filename, header, rows) {
+  const esc = v => {
+    const s = v == null ? '' : String(v)
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  }
+  const csv = [header.map(esc).join(','), ...rows.map(r => r.map(esc).join(','))].join('\n')
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  a.download = filename
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}
 
 const G1 = '#2b6cb0'   // higher in group/sample 1
 const G2 = '#dd6b20'   // higher in group/sample 2
@@ -547,6 +588,11 @@ export default function App() {
             </>}
             {pairPlotKind === 'seqhist' && seqHist &&
               <Plot data={seqHist.data} layout={seqHist.layout} config={seqHist.config} style={{ width: '100%' }} useResizeHandler />}
+            <button className="csvbtn" onClick={() => downloadCSV(
+              `stamp_${result.group1}_vs_${result.group2}.csv`.replace(/[^\w.-]+/g, '_'),
+              ['Feature', `${result.group1} (%)`, `${result.group2} (%)`, 'Difference (%)', 'Lower CI', 'Upper CI', 'p-value', 'q-value', 'Note'],
+              result.rows.map(r => [r.feature, r.mean1, r.mean2, r.effect, r.lowerCI, r.upperCI, r.pvalue, r.corrected, r.note]))}>
+              ⬇ Export table — CSV ({result.count} features)</button>
             <div className="tablewrap">
               <table><thead><tr>
                 <th>Feature</th><th>{isSample ? '' : 'mean '}{result.group1} (%)</th><th>{isSample ? '' : 'mean '}{result.group2} (%)</th>
@@ -588,6 +634,11 @@ export default function App() {
                 <Plot data={boxPlot.data} layout={boxPlot.layout} config={boxPlot.config} style={{ width: '100%' }} useResizeHandler />
               </>}
             </>}
+            <button className="csvbtn" onClick={() => downloadCSV(
+              `stamp_multigroup_${result.field}.csv`.replace(/[^\w.-]+/g, '_'),
+              ['Feature', 'p-value', 'q-value', 'Eta-squared', ...result.groups.map(g => `${g} mean (%)`)],
+              result.rows.map(r => [r.feature, r.pvalue, r.corrected, r.effect, ...r.groupMeans]))}>
+              ⬇ Export table — CSV ({result.count} features)</button>
             <div className="tablewrap">
               <table><thead><tr><th>Feature</th><th>p-value</th><th>q-value</th><th>η² (effect)</th></tr></thead>
                 <tbody>{result.rows.slice(0, 30).map((r, i) => <tr key={i}>
