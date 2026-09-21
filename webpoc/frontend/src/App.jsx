@@ -10,6 +10,19 @@ const nf = (x, d = 3) => (x == null || Number.isNaN(x) ? '—' : x.toFixed(d))
 const ne = x => (x == null || Number.isNaN(x) ? '—' : x.toExponential(2))
 const half = (a, b) => (a == null || b == null ? 0 : (a - b) / 2)
 
+function pvalueHistogram(rows, key = 'pvalue') {
+  const vals = rows.map(r => r[key]).filter(v => v != null && !Number.isNaN(v))
+  return {
+    data: [{ type: 'histogram', x: vals, xbins: { start: 0, end: 1, size: 0.05 }, marker: { color: '#2b6cb0' } }],
+    layout: {
+      margin: { l: 54, r: 20, t: 10, b: 44 }, height: 340, bargap: 0.03,
+      xaxis: { title: `${key === 'corrected' ? 'corrected q' : 'p'}-value`, range: [0, 1] },
+      yaxis: { title: 'features' }, font: { family: 'inherit' },
+    },
+    config: { displaylogo: false, responsive: true },
+  }
+}
+
 const jget = p => fetch(p).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
 const jpost = (p, body) => fetch(p, {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -63,6 +76,11 @@ export default function App() {
   const [phResult, setPhResult] = useState(null); const [phBusy, setPhBusy] = useState(false)
   // heatmap
   const [hmTopN, setHmTopN] = useState(40)
+  // plot-type switchers + box-plot distribution
+  const [pairPlotKind, setPairPlotKind] = useState('effect')   // effect | scatter | pvalue
+  const [mgPlotKind, setMgPlotKind] = useState('bar')          // bar | box | pvalue
+  const [boxFeature, setBoxFeature] = useState('')
+  const [boxResult, setBoxResult] = useState(null); const [boxBusy, setBoxBusy] = useState(false)
 
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -135,10 +153,12 @@ export default function App() {
     setBusy(false)
   }
 
-  // post-hoc: reset when a new analysis runs; default the feature to the top multi-group hit
+  // reset post-hoc & box when a new analysis runs; default the feature to the top multi-group hit
   useEffect(() => {
-    setPhResult(null)
-    if (result?.mode === 'multi-group' && result.rows.length) setPhFeature(result.rows[0].feature)
+    setPhResult(null); setBoxResult(null); setPairPlotKind('effect'); setMgPlotKind('bar')
+    if (result?.mode === 'multi-group' && result.rows.length) {
+      setPhFeature(result.rows[0].feature); setBoxFeature(result.rows[0].feature)
+    }
   }, [result])
 
   async function runPostHoc() {
@@ -207,6 +227,119 @@ export default function App() {
       config: { displaylogo: false, responsive: true, modeBarButtonsToRemove: ['lasso2d', 'select2d'] },
     }
   }, [result, isPair, isSample, pairFiltered, topN])
+
+  // scatter: group/sample 1 vs 2 mean proportion, coloured by significance
+  const pairScatter = useMemo(() => {
+    if (!isPair) return null
+    const rows = result.rows
+    const mk = (rs, color, name) => ({
+      type: 'scatter', mode: 'markers', name,
+      x: rs.map(r => r.mean1), y: rs.map(r => r.mean2),
+      text: rs.map(r => `${r.feature}<br>${result.group1}: ${nf(r.mean1)}%<br>${result.group2}: ${nf(r.mean2)}%<br>p = ${ne(r.pvalue)}`),
+      hoverinfo: 'text', marker: { color, size: 6, opacity: 0.75 },
+    })
+    const sig = rows.filter(r => r.pvalue < 0.05), ns = rows.filter(r => !(r.pvalue < 0.05))
+    const mx = Math.max(1, ...rows.map(r => Math.max(r.mean1 || 0, r.mean2 || 0)))
+    return {
+      data: [mk(ns, '#b0b7c0', 'n.s.'), mk(sig, '#2b6cb0', 'p < 0.05')],
+      layout: {
+        margin: { l: 58, r: 20, t: 10, b: 50 }, height: 460,
+        xaxis: { title: `${result.group1} — ${isSample ? 'proportion' : 'mean proportion'} (%)` },
+        yaxis: { title: `${result.group2} — ${isSample ? 'proportion' : 'mean proportion'} (%)`, scaleanchor: 'x' },
+        shapes: [{ type: 'line', x0: 0, y0: 0, x1: mx, y1: mx, line: { color: '#cbd2d9', dash: 'dot' } }],
+        legend: { orientation: 'h', y: 1.05 }, font: { family: 'inherit' },
+      },
+      config: { displaylogo: false, responsive: true },
+    }
+  }, [result, isPair, isSample])
+
+  // profile bar: top features as a paired bar of the two groups'/samples' proportions
+  const profileBar = useMemo(() => {
+    if (!isPair) return null
+    const top = result.rows.slice()
+      .sort((a, b) => Math.max(b.mean1 || 0, b.mean2 || 0) - Math.max(a.mean1 || 0, a.mean2 || 0))
+      .slice(0, 20).reverse()
+    const bar = (name, key, color) => ({
+      type: 'bar', orientation: 'h', name, marker: { color },
+      y: top.map(r => r.feature), x: top.map(r => r[key]),
+      hovertemplate: `${name}: %{x:.3f}%<extra>%{y}</extra>`,
+    })
+    return {
+      data: [bar(result.group1, 'mean1', G1), bar(result.group2, 'mean2', G2)],
+      layout: {
+        barmode: 'group', margin: { l: 175, r: 20, t: 10, b: 44 }, height: Math.max(320, top.length * 30 + 80),
+        xaxis: { title: `${isSample ? 'Proportion' : 'Mean proportion'} (%)` },
+        yaxis: { automargin: true, tickfont: { size: 11 } }, legend: { orientation: 'h', y: 1.05 }, font: { family: 'inherit' },
+      },
+      config: { displaylogo: false, responsive: true },
+    }
+  }, [result, isPair, isSample])
+
+  // multiple-comparison plots: raw-vs-corrected scatter + cumulative significant count
+  const multComp = useMemo(() => {
+    if (!isPair) return null
+    const rows = result.rows.filter(r => r.pvalue != null)
+    const raw = rows.map(r => r.pvalue), corr = rows.map(r => r.corrected)
+    const sorted = raw.slice().sort((a, b) => a - b)
+    const cum = sorted.map((_v, i) => i + 1)
+    return {
+      scatter: {
+        data: [{ type: 'scatter', mode: 'markers', x: raw, y: corr, marker: { color: '#7f7f7f', size: 5, opacity: 0.7 },
+          hovertemplate: 'raw p %{x:.2e}<br>corrected q %{y:.2e}<extra></extra>' }],
+        layout: { margin: { l: 60, r: 16, t: 10, b: 44 }, height: 300,
+          xaxis: { title: 'raw p-value' }, yaxis: { title: 'corrected q-value' },
+          shapes: [{ type: 'line', x0: 0, y0: 0, x1: 1, y1: 1, line: { color: '#cbd2d9', dash: 'dot' } }], font: { family: 'inherit' } },
+        config: { displaylogo: false, responsive: true },
+      },
+      cumulative: {
+        data: [{ type: 'scatter', mode: 'lines', x: sorted, y: cum, line: { color: '#2b6cb0' } }],
+        layout: { margin: { l: 60, r: 16, t: 10, b: 44 }, height: 300,
+          xaxis: { title: 'p-value threshold', range: [0, Math.min(1, (sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.5))] || 0.1) * 2 + 0.05)] },
+          yaxis: { title: '# features below threshold' }, font: { family: 'inherit' } },
+        config: { displaylogo: false, responsive: true },
+      },
+    }
+  }, [result, isPair])
+
+  // sequence histogram (two-sample): distribution of per-feature sequence counts
+  const seqHist = useMemo(() => {
+    if (result?.mode !== 'two-sample') return null
+    return {
+      data: [
+        { type: 'histogram', name: result.group1, x: result.rows.map(r => r.seq1), opacity: 0.6, marker: { color: G1 } },
+        { type: 'histogram', name: result.group2, x: result.rows.map(r => r.seq2), opacity: 0.6, marker: { color: G2 } },
+      ],
+      layout: { barmode: 'overlay', margin: { l: 58, r: 20, t: 10, b: 44 }, height: 360,
+        xaxis: { title: 'Sequences per feature' }, yaxis: { title: 'Number of features' },
+        legend: { orientation: 'h', y: 1.05 }, font: { family: 'inherit' } },
+      config: { displaylogo: false, responsive: true },
+    }
+  }, [result])
+
+  // box plot: per-group distribution of one feature (from /api/distribution)
+  const boxPlot = useMemo(() => {
+    if (!boxResult) return null
+    return {
+      data: boxResult.data.map((d, i) => ({
+        type: 'box', name: d.group, y: d.values, boxpoints: 'all', jitter: 0.4, pointpos: 0,
+        marker: { color: PALETTE[i % PALETTE.length], size: 5 }, line: { color: PALETTE[i % PALETTE.length] },
+        text: d.samples, hoverinfo: 'y+text',
+      })),
+      layout: {
+        margin: { l: 58, r: 20, t: 10, b: 70 }, height: 420,
+        yaxis: { title: 'Relative frequency (%)' }, xaxis: { tickangle: -30 },
+        showlegend: false, font: { family: 'inherit' },
+      },
+      config: { displaylogo: false, responsive: true },
+    }
+  }, [boxResult])
+
+  async function fetchBox(feature) {
+    setBoxBusy(true); setError(null)
+    try { setBoxResult(await jpost('/api/distribution', { dataset, field, level, feature })) }
+    catch (e) { setError(e.detail || String(e)) }
+    setBoxBusy(false)
+  }
 
   // ---- multi-group grouped-bar ----------------------------------------------
   const multiPlot = useMemo(() => {
@@ -394,8 +527,26 @@ export default function App() {
             <label className="chk"><input type="checkbox" checked={sigOnly} onChange={e => setSigOnly(e.target.checked)} /> significant only</label>
             <label className="chk"><input type="checkbox" checked={useCorrected} onChange={e => setUseCorrected(e.target.checked)} /> use corrected q-value for the threshold</label>
             <div className="hint">{pairFiltered.length} of {result.count} features pass the current filter.</div>
-            {pairPlot?.empty ? <p className="err">No features pass the filter.</p>
-              : pairPlot && <Plot data={pairPlot.data} layout={pairPlot.layout} config={pairPlot.config} style={{ width: '100%' }} useResizeHandler />}
+            <div className="tabs" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+              {[['effect', 'Effect size'], ['scatter', 'Scatter'], ['profilebar', 'Profile bar'],
+                ['pvalue', 'p-value histogram'], ['multcomp', 'Mult. comparison'],
+                ...(isSample ? [['seqhist', 'Seq. histogram']] : [])].map(([k, l]) =>
+                <div key={k} className={'tab' + (pairPlotKind === k ? ' active' : '')} onClick={() => setPairPlotKind(k)}>{l}</div>)}
+            </div>
+            {pairPlotKind === 'effect' && (pairPlot?.empty ? <p className="err">No features pass the filter.</p>
+              : pairPlot && <Plot data={pairPlot.data} layout={pairPlot.layout} config={pairPlot.config} style={{ width: '100%' }} useResizeHandler />)}
+            {pairPlotKind === 'scatter' && pairScatter &&
+              <Plot data={pairScatter.data} layout={pairScatter.layout} config={pairScatter.config} style={{ width: '100%' }} useResizeHandler />}
+            {pairPlotKind === 'profilebar' && profileBar &&
+              <Plot data={profileBar.data} layout={profileBar.layout} config={profileBar.config} style={{ width: '100%' }} useResizeHandler />}
+            {pairPlotKind === 'pvalue' && (() => { const h = pvalueHistogram(result.rows); return <Plot data={h.data} layout={h.layout} config={h.config} style={{ width: '100%' }} useResizeHandler /> })()}
+            {pairPlotKind === 'multcomp' && multComp && <>
+              <p className="hint">Effect of the correction: raw p vs corrected q, and how many features pass each threshold.</p>
+              <Plot data={multComp.scatter.data} layout={multComp.scatter.layout} config={multComp.scatter.config} style={{ width: '100%' }} useResizeHandler />
+              <Plot data={multComp.cumulative.data} layout={multComp.cumulative.layout} config={multComp.cumulative.config} style={{ width: '100%' }} useResizeHandler />
+            </>}
+            {pairPlotKind === 'seqhist' && seqHist &&
+              <Plot data={seqHist.data} layout={seqHist.layout} config={seqHist.config} style={{ width: '100%' }} useResizeHandler />}
             <div className="tablewrap">
               <table><thead><tr>
                 <th>Feature</th><th>{isSample ? '' : 'mean '}{result.group1} (%)</th><th>{isSample ? '' : 'mean '}{result.group2} (%)</th>
@@ -418,8 +569,25 @@ export default function App() {
             </div>
             <div className="legend">{result.groups.map((g, gi) =>
               <span key={g}><span className="sw" style={{ background: PALETTE[gi % PALETTE.length] }} />{g} (n={result.groupSizes[gi]})</span>)}</div>
-            <p className="hint">Top 12 features by p-value — mean proportion in each group.</p>
-            {multiPlot && <Plot data={multiPlot.data} layout={multiPlot.layout} config={multiPlot.config} style={{ width: '100%' }} useResizeHandler />}
+            <div className="tabs" style={{ marginTop: 4 }}>
+              {[['bar', 'Group means'], ['box', 'Box plot'], ['pvalue', 'p-value histogram']].map(([k, l]) =>
+                <div key={k} className={'tab' + (mgPlotKind === k ? ' active' : '')} onClick={() => setMgPlotKind(k)}>{l}</div>)}
+            </div>
+            {mgPlotKind === 'bar' && <>
+              <p className="hint">Top 12 features by p-value — mean proportion in each group.</p>
+              {multiPlot && <Plot data={multiPlot.data} layout={multiPlot.layout} config={multiPlot.config} style={{ width: '100%' }} useResizeHandler />}
+            </>}
+            {mgPlotKind === 'pvalue' && (() => { const h = pvalueHistogram(result.rows); return <Plot data={h.data} layout={h.layout} config={h.config} style={{ width: '100%' }} useResizeHandler /> })()}
+            {mgPlotKind === 'box' && <>
+              <div className="row2" style={{ alignItems: 'end', marginTop: 6 }}>
+                <div><label>Feature</label><Sel value={boxFeature} onChange={setBoxFeature} options={result.rows.slice(0, 50).map(r => r.feature)} /></div>
+                <div><button className="run" style={{ marginTop: 0 }} onClick={() => fetchBox(boxFeature)} disabled={boxBusy}>{boxBusy ? 'Loading…' : 'Show distribution'}</button></div>
+              </div>
+              {boxResult && boxPlot && <>
+                <p className="hint" style={{ marginTop: 8 }}>Per-sample relative frequency of <b>{boxResult.feature}</b> in each group.</p>
+                <Plot data={boxPlot.data} layout={boxPlot.layout} config={boxPlot.config} style={{ width: '100%' }} useResizeHandler />
+              </>}
+            </>}
             <div className="tablewrap">
               <table><thead><tr><th>Feature</th><th>p-value</th><th>q-value</th><th>η² (effect)</th></tr></thead>
                 <tbody>{result.rows.slice(0, 30).map((r, i) => <tr key={i}>

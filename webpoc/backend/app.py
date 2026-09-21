@@ -296,8 +296,8 @@ def api_sample(req: SampleRequest):
 
     R = stats.results
     names = ["Features", "RelFreq1", "RelFreq2", "EffectSize",
-             "pValues", "pValuesCorrected", "LowerCI", "UpperCI", "Note"]
-    keys = ["feature", "mean1", "mean2", "effect", "pvalue", "corrected", "lowerCI", "upperCI", "note"]
+             "pValues", "pValuesCorrected", "LowerCI", "UpperCI", "Seq1", "Seq2", "Note"]
+    keys = ["feature", "mean1", "mean2", "effect", "pvalue", "corrected", "lowerCI", "upperCI", "seq1", "seq2", "note"]
     cols = {k: R.getColumn(n, False) for k, n in zip(keys, names)}
     rows = [{k: (cols[k][i] if k in ("feature", "note") else float(cols[k][i])) for k in keys}
             for i in range(len(cols["feature"]))]
@@ -405,6 +405,39 @@ def api_multigroup(req: MultiGroupRequest):
             "test": req.test, "correction": req.correction,
             "groups": groups, "groupSizes": [len(g) for g in profile.activeSamplesInGroups],
             "count": len(rows), "rows": rows}
+
+
+class DistributionRequest(BaseModel):
+    dataset: str
+    field: str
+    level: str
+    feature: str
+
+
+@app.post("/api/distribution")
+def api_distribution(req: DistributionRequest):
+    """Per-group, per-sample relative frequency (%) of one feature — for a box plot."""
+    tree, metadata = load_dataset(req.dataset)
+    require_metadata(metadata)
+    metadata.setActiveField(req.field, tree)
+    if req.level not in tree.hierarchyHeadings:
+        raise HTTPException(400, "Unknown hierarchy level.")
+
+    profile = tree.createMultiGroupProfile(
+        list(tree.groupDict.keys()), "Entire sample", req.level, metadata, "Retain unclassified reads")
+    profile.setActiveGroups(tree.groupActive)
+    if req.feature not in profile.getFeatures():
+        raise HTTPException(400, "Feature not found at this level.")
+
+    fc = profile.getActiveFeatureCounts(req.feature)
+    pc = profile.getActiveParentCounts(req.feature)
+    groups = list(profile.activeGroupNames)
+    data = []
+    for gi in range(len(groups)):
+        vals = [fc[gi][j] * 100.0 / pc[gi][j] if pc[gi][j] > 0 else 0.0 for j in range(len(fc[gi]))]
+        data.append({"group": groups[gi], "samples": list(profile.activeSamplesInGroups[gi]), "values": vals})
+    return {"mode": "distribution", "feature": req.feature, "field": req.field, "level": req.level,
+            "groups": groups, "data": data}
 
 
 class PostHocRequest(BaseModel):

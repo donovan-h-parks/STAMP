@@ -65,13 +65,17 @@ the API passes `progress=None`, which the single-feature test path already suppo
 Five modes, all rendered as interactive Plotly:
 
 - **Two samples**: one sample vs one sample — Fisher's exact, G-test (± Yates'), G-test+Fisher's,
-  difference-between-proportions, chi-square; extended-error-bar plot + significance filtering.
-- **Two groups**: Welch's / Student's / White's non-parametric test, four multiple-comparison
-  corrections, extended-error-bar plot, and **significance filtering** (α on raw p or corrected
-  q, min |effect|, significant-only).
+  difference-between-proportions, chi-square, Hypergeometric, Bootstrap, Permutation (10 tests);
+  significance filtering and six switchable plots (extended error bar, scatter, profile bar,
+  p-value histogram, multiple-comparison, sequence histogram).
+- **Two groups**: Welch's / Student's / White's non-parametric test, six multiple-comparison
+  corrections, **significance filtering** (α on raw p or corrected q, min |effect|,
+  significant-only), and five switchable plots — extended error bar, scatter, profile bar,
+  p-value histogram, multiple-comparison.
 - **Multi-group**: ANOVA / Kruskal-Wallis across all groups in a field, η² effect size,
-  grouped-bar plot of per-group means + results table, **plus post-hoc** pairwise comparisons
-  for any feature (Tukey-Kramer, Games-Howell, Scheffé, Welch's uncorrected).
+  switchable plots (per-group means bar / per-feature **box plot** / p-value histogram),
+  **plus post-hoc** pairwise comparisons for any feature (Tukey-Kramer, Games-Howell, Scheffé,
+  Welch's uncorrected).
 - **PCA** ordination: samples on PC1/PC2 (NumPy SVD of the sample × feature relative-abundance
   matrix), coloured by metadata group.
 - **Heatmap**: the most-variable features × samples, hierarchically clustered on both axes
@@ -90,6 +94,7 @@ usable in every mode; an optional metadata `.tsv` enables grouping.
 - `POST /api/analyze` — two-group → per-feature means, effect size, CI, p/q
 - `POST /api/multigroup` — ANOVA/Kruskal-Wallis → per-feature p/q/η² + per-group means
 - `POST /api/posthoc` — pairwise group comparisons for one feature (effect + CI + p)
+- `POST /api/distribution` — per-group, per-sample values of one feature (for the box plot)
 - `POST /api/pca` — sample PC1/PC2 coordinates + group labels + variance explained
 - `POST /api/heatmap` — clustered feature × sample matrix + per-sample group labels
 - `POST /api/upload` — multipart profile (+ metadata) → registers a new dataset id
@@ -99,18 +104,17 @@ usable in every mode; an optional metadata `.tsv` enables grouping.
 
 ## What it still skips (the real project's remaining work)
 
-- Only 5 of STAMP's ~22 plot types (bar, grouped bar, PCA, heatmap, post-hoc). Each remaining
-  one (box, scatter, profile bar, sequence/p-value histograms, multiple-comparison…) becomes an
-  interactive chart.
-- **All 6 data importers** are done (BIOM, MG-RAST, Mothur, CoMet, RITA, Append-COG).
-- No **effect-size filter plugins** beyond the simple significance/min-effect filter here, no
-  save-image / table export, and none of the fine-grained UI (active-group toggling, feature
-  highlighting, parent level).
+- All ~11 of STAMP's distinct plot types are covered (extended error bar, grouped & profile
+  bar, scatter, box, PCA, heatmap, post-hoc, p-value & sequence histograms, multiple-
+  comparison). What remains is finish, not coverage: table export isn't wired (Plotly's toolbar
+  already exports PNG), there are no effect-size filter plugins beyond the simple
+  significance/min-effect filter, and none of the fine-grained desktop UI (active-group
+  toggling, feature highlighting, parent level).
 - No auth / persistence / multi-user, and no limits/queueing for the CPU-heavy permutation
   tests (White's/Bootstrap/Permutation take a few seconds). Fine for a **local single-user**
   app; a hosted service would need all of it.
 
 The takeaway: the **scientific core ported straight over** — five analysis modes, ~19 tests
-(10 two-sample, 3 two-group, 2 multi-group, 4 post-hoc), 6 corrections, and PCA all run through
-STAMP's unchanged Python. The effort in a full web port is UI breadth and turning each remaining
-plot interactive, not the statistics.
+(10 two-sample, 3 two-group, 2 multi-group, 4 post-hoc), 6 corrections, all 6 importers, and the
+full plot family run through STAMP's unchanged Python. The remaining work in a full web port is
+productionization and polish, not the science.
