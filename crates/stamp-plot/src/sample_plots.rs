@@ -459,6 +459,8 @@ pub struct MultCompOptions {
     pub width: f64,
     pub height: f64,
     pub bin_width: f64,
+    /// Count the features of the histogram on a logarithmic axis.
+    pub log_scale: bool,
     /// Largest corrected p-value in the histogram.
     pub histogram_limit: f64,
     /// Largest corrected p-value in the corrected-against-uncorrected plot.
@@ -473,6 +475,7 @@ impl Default for MultCompOptions {
             width: 7.0,
             height: 3.5,
             bin_width: 0.01,
+            log_scale: false,
             histogram_limit: 0.1,
             correction_limit: 1.0,
             significant_limit: 0.1,
@@ -526,11 +529,9 @@ pub fn multiple_comparison(results: &SampleResults, options: &MultCompOptions) -
     for (corrected, _) in pairs.iter().filter(|(c, _)| *c <= limit) {
         counts[((corrected / options.bin_width) as usize).min(bins - 1)] += 1;
     }
-    let y_ticks = Ticks::covering(0.0, counts.iter().copied().max().unwrap_or(0).max(1) as f64);
-    let (x, y) = (
-        frame.x_scale(0.0, limit),
-        frame.y_scale(y_ticks.min, y_ticks.max),
-    );
+    let most = counts.iter().copied().max().unwrap_or(0);
+    let x = frame.x_scale(0.0, limit);
+    let (y, y_tick_labels) = crate::histogram::count_axis(&frame, most, options.log_scale);
     for (i, &n) in counts.iter().enumerate() {
         if n > 0 {
             let (a, b) = (
@@ -539,9 +540,9 @@ pub fn multiple_comparison(results: &SampleResults, options: &MultCompOptions) -
             );
             figure.rect(
                 a,
-                y.map(n as f64),
+                y(n as f64),
                 b - a,
-                frame.bottom - y.map(n as f64),
+                frame.bottom - y(n as f64),
                 Some(grey),
                 Some(Stroke::solid(Color::BLACK, 0.5)),
             );
@@ -573,7 +574,7 @@ pub fn multiple_comparison(results: &SampleResults, options: &MultCompOptions) -
     y_axis(
         &mut figure,
         &frame,
-        &scaled_ticks(&y_ticks, &y),
+        &y_tick_labels,
         Some("Number of features"),
         AXES_COLOR,
     );

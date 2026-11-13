@@ -197,10 +197,10 @@ impl Rows<'_> {
         );
     }
 
-    fn error_bar(&mut self, options: &mut extended_error_bar::Options, groups: bool, sort: bool) {
+    fn error_bar(&mut self, options: &mut extended_error_bar::Options, groups: bool, legend: bool) {
         self.inches("Figure width:", &mut options.width, 2.0..=40.0);
         self.inches("Row height:", &mut options.row_height, 0.05..=2.0);
-        if sort {
+        {
             self.choice(
                 "Sort features by:",
                 &mut options.sort_by,
@@ -227,6 +227,10 @@ impl Rows<'_> {
             &mut options.effect_limits,
             (-10.0, 10.0),
         );
+        if !legend {
+            self.truncate(&mut options.truncate_labels);
+            return;
+        }
         self.choice(
             "Legend position:",
             &mut options.legend,
@@ -255,9 +259,22 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
             let mut rows = Rows { ui, changed: false };
             match kind {
                 PlotKind::ExtendedErrorBar => {
+                    if mode == Mode::TwoSamples {
+                        rows.choice(
+                            "Bars show:",
+                            &mut settings.error_bar_sequence_counts,
+                            &[(false, "Proportion (%)"), (true, "Sequences")],
+                        );
+                    }
                     rows.error_bar(&mut settings.error_bar, mode != Mode::TwoSamples, true)
                 }
-                PlotKind::PostHoc => rows.error_bar(&mut settings.post_hoc, false, false),
+                PlotKind::PostHoc => {
+                    rows.check(
+                        "Filter rows above the nominal level",
+                        &mut settings.post_hoc_only_significant,
+                    );
+                    rows.error_bar(&mut settings.post_hoc, true, false)
+                }
                 PlotKind::Bar if mode == Mode::TwoSamples => {
                     let o = &mut settings.stat_bar;
                     rows.inches("Figure width:", &mut o.width, 2.0..=40.0);
@@ -307,6 +324,10 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                             (false, "Proportion of sequences (%)"),
                             (true, "Number of sequences"),
                         ],
+                    );
+                    rows.check(
+                        "Only active features",
+                        &mut settings.profile_bar_only_active,
                     );
                     rows.count("Features to show:", &mut o.features_to_show, 1..=1000);
                     rows.number(
@@ -364,6 +385,11 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 PlotKind::PValueHistogram => {
                     let o = &mut settings.p_value_histogram;
                     rows.size(&mut o.width, &mut o.height);
+                    rows.choice(
+                        "Field to plot:",
+                        &mut settings.p_value_histogram_corrected,
+                        &[(false, "p-values"), (true, "p-values (corrected)")],
+                    );
                     rows.number("Bin width:", &mut o.bin_width, 0.001, 0.001..=0.5);
                     rows.check("Logarithmic y axis", &mut o.log_scale);
                     let mut inset = o.inset.is_some();
@@ -414,6 +440,7 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                     let o = &mut settings.multiple_comparison;
                     rows.size(&mut o.width, &mut o.height);
                     rows.number("Bin width:", &mut o.bin_width, 0.001, 0.001..=0.5);
+                    rows.check("Histogram: logarithmic y axis", &mut o.log_scale);
                     rows.number(
                         "Histogram: largest p-value:",
                         &mut o.histogram_limit,
@@ -437,13 +464,28 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                     let o = &mut settings.pca;
                     rows.size(&mut o.width, &mut o.height);
                     rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
-                    rows.check("Show third component", &mut o.show_pc3);
+                    rows.check("Show PC3 vs. PC2", &mut o.show_pc3_vs_pc2);
+                    rows.check("Show PC1 vs. PC3", &mut o.show_pc1_vs_pc3);
+                    rows.check("Rotate PC3 labels", &mut o.rotate_pc3_labels);
+                    rows.check("Fixed length per unit distance", &mut o.fixed_scale);
                     rows.check("Unique marker shape for each group", &mut o.unique_shapes);
                     rows.legend(&mut o.legend);
                 }
                 PlotKind::Heatmap => {
                     let o = &mut settings.heatmap;
                     rows.size(&mut o.width, &mut o.height);
+                    rows.choice(
+                        "Field to plot:",
+                        &mut settings.heatmap_sequence_counts,
+                        &[
+                            (false, "Proportion of sequences (%)"),
+                            (true, "Number of sequences"),
+                        ],
+                    );
+                    rows.check(
+                        "Plot only active features",
+                        &mut settings.heatmap_only_active,
+                    );
                     rows.order("Order features by:", &mut o.row_order);
                     rows.check("Show feature dendrogram", &mut o.show_row_dendrogram);
                     rows.inches(
@@ -461,7 +503,15 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                     let maps: Vec<(ColorMap, &str)> =
                         ColorMap::ALL.iter().map(|&m| (m, m.name())).collect();
                     rows.choice("Colour map:", &mut o.color_map, &maps);
-                    rows.check("Show legend", &mut o.show_legend);
+                    rows.check("Show colour scale", &mut o.show_color_scale);
+                    rows.check("Colour clusters of features", &mut o.show_row_clusters);
+                    rows.number(
+                        "Feature cluster threshold:",
+                        &mut o.row_cluster_threshold,
+                        0.01,
+                        0.0..=1.0,
+                    );
+                    rows.legend(&mut o.legend);
                     rows.truncate(&mut o.truncate_labels);
                 }
             }

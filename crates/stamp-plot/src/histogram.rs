@@ -46,7 +46,7 @@ fn count(values: &[f64], edges: &[f64]) -> Vec<usize> {
 
 /// The vertical scale of a histogram and its ticks.
 #[allow(clippy::type_complexity)]
-fn count_axis(
+pub(crate) fn count_axis(
     frame: &Frame,
     most: usize,
     log: bool,

@@ -131,11 +131,15 @@ pub fn convert_files(source: Source, files: &[OpenedFile]) -> Result<String, Str
     result.map_err(|e| e.to_string())
 }
 
-/// Encode a figure in the format implied by a file name.
-pub fn encode_plot(figure: &Figure, file_name: &str) -> Result<Vec<u8>, String> {
+/// Resolution of saved PNG images unless another is chosen.
+pub const DEFAULT_DPI: f64 = 300.0;
+
+/// Encode a figure in the format implied by a file name. `dpi` sets the
+/// resolution of a PNG image.
+pub fn encode_plot(figure: &Figure, file_name: &str, dpi: f64) -> Result<Vec<u8>, String> {
     let format = Format::from_file_name(file_name)
         .ok_or("Use a file name ending in .png, .svg or .pdf to choose the image format.")?;
-    export(figure, format, 300.0).map_err(|e| e.to_string())
+    export(figure, format, dpi).map_err(|e| e.to_string())
 }
 
 /// The application's connection to the file system or the browser.
@@ -375,12 +379,16 @@ mod tests {
     #[test]
     fn plot_format_follows_the_file_name() {
         let figure = Figure::message("test");
-        assert!(encode_plot(&figure, "a.svg").unwrap().starts_with(b"<svg"));
-        assert!(encode_plot(&figure, "a.png")
+        assert!(encode_plot(&figure, "a.svg", DEFAULT_DPI)
+            .unwrap()
+            .starts_with(b"<svg"));
+        assert!(encode_plot(&figure, "a.png", DEFAULT_DPI)
             .unwrap()
             .starts_with(b"\x89PNG"));
-        assert!(encode_plot(&figure, "a.pdf").unwrap().starts_with(b"%PDF"));
-        assert!(encode_plot(&figure, "a.eps")
+        assert!(encode_plot(&figure, "a.pdf", DEFAULT_DPI)
+            .unwrap()
+            .starts_with(b"%PDF"));
+        assert!(encode_plot(&figure, "a.eps", DEFAULT_DPI)
             .unwrap_err()
             .contains(".png, .svg or .pdf"));
     }

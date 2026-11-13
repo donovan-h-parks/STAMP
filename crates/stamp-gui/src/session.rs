@@ -521,33 +521,59 @@ impl Session {
         }
     }
 
-    /// Keep the selected feature if it still exists; otherwise select the
-    /// most significant one.
+    /// Keep the selected feature for as long as the analysis has it, whether
+    /// or not it passes the filters: re-running a test, switching samples
+    /// off or changing a filter must not change which feature is shown. If
+    /// the feature is gone (after a change of profile level, say), select
+    /// the most significant one that passes the filters.
     fn keep_selection_valid(&mut self, mode: Mode) {
-        let features: Vec<&str> = match mode {
+        let exists = |feature: &str| match mode {
             Mode::TwoSamples => self
-                .sample_rows()
-                .iter()
-                .map(|r| r.feature.as_str())
-                .collect(),
+                .samples
+                .output
+                .as_ref()
+                .is_some_and(|(_, r)| r.rows.iter().any(|row| row.feature == feature)),
             Mode::TwoGroups => self
-                .group_rows()
-                .iter()
-                .map(|r| r.feature.as_str())
-                .collect(),
+                .groups
+                .output
+                .as_ref()
+                .is_some_and(|(_, r)| r.rows.iter().any(|row| row.feature == feature)),
             Mode::MultipleGroups => self
-                .multi_rows()
-                .iter()
-                .map(|r| r.feature.as_str())
-                .collect(),
+                .multi
+                .output
+                .as_ref()
+                .is_some_and(|(_, r)| r.rows.iter().any(|row| row.feature == feature)),
         };
-        let still_there = self
-            .selected_feature
-            .as_deref()
-            .is_some_and(|f| features.contains(&f));
-        if !still_there {
-            self.selected_feature = features.first().map(|f| f.to_string());
+        if self.selected_feature.as_deref().is_some_and(exists) {
+            return;
         }
+        let first = |passing: Option<&str>, any: Option<&str>| passing.or(any).map(str::to_string);
+        self.selected_feature = match mode {
+            Mode::TwoSamples => first(
+                self.sample_rows().first().map(|r| r.feature.as_str()),
+                self.samples
+                    .output
+                    .as_ref()
+                    .and_then(|(_, r)| r.rows.first())
+                    .map(|r| r.feature.as_str()),
+            ),
+            Mode::TwoGroups => first(
+                self.group_rows().first().map(|r| r.feature.as_str()),
+                self.groups
+                    .output
+                    .as_ref()
+                    .and_then(|(_, r)| r.rows.first())
+                    .map(|r| r.feature.as_str()),
+            ),
+            Mode::MultipleGroups => first(
+                self.multi_rows().first().map(|r| r.feature.as_str()),
+                self.multi
+                    .output
+                    .as_ref()
+                    .and_then(|(_, r)| r.rows.first())
+                    .map(|r| r.feature.as_str()),
+            ),
+        };
     }
 
     /// Rows of the two-sample results that pass the filters.

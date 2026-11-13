@@ -115,6 +115,7 @@ pub fn plot_with_colors(
         color1: group_color(0),
         color2: group_color(1),
         bar_label: "Mean proportion (%)".to_string(),
+        bar_is_count: false,
         effect_label: "Difference in mean proportions (%)".to_string(),
         is_ratio: false,
         coverage,

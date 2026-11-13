@@ -102,8 +102,17 @@ pub struct Options {
     pub height: f64,
     /// Area of the markers, in square points.
     pub marker_size: f64,
-    /// Also show the third component, against the first and the second.
-    pub show_pc3: bool,
+    /// Show the third component against the second, beside the main panel.
+    pub show_pc3_vs_pc2: bool,
+    /// Show the first component against the third, beneath the main panel.
+    pub show_pc1_vs_pc3: bool,
+    /// Draw the tick labels of the PC3 axis beside the main panel at an
+    /// angle.
+    pub rotate_pc3_labels: bool,
+    /// Give every axis the same length per unit of distance, so that
+    /// distances between samples compare across panels. The height of the
+    /// figure then follows from its width.
+    pub fixed_scale: bool,
     /// Give each group its own marker shape as well as its own colour.
     pub unique_shapes: bool,
     pub legend: LegendPosition,
@@ -115,7 +124,10 @@ impl Default for Options {
             width: 7.0,
             height: 6.0,
             marker_size: 30.0,
-            show_pc3: true,
+            show_pc3_vs_pc2: true,
+            show_pc1_vs_pc3: true,
+            rotate_pc3_labels: true,
+            fixed_scale: true,
             unique_shapes: true,
             legend: LegendPosition::None,
         }
@@ -133,7 +145,8 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     if components < 2 {
         return Figure::message("Degenerate PCA plot: the samples vary along a single direction.");
     }
-    let show_pc3 = options.show_pc3 && components >= 3;
+    let beside = options.show_pc3_vs_pc2 && components >= 3;
+    let beneath = options.show_pc1_vs_pc3 && components >= 3;
     let coordinate = |sample: usize, component: usize| result.positions[sample][component];
     let label = |component: usize| {
         format!(
@@ -148,27 +161,59 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         let pad = (high - low) * 0.05;
         Ticks::inside(low - pad, high + pad)
     };
-    let ticks: Vec<Ticks> = (0..if show_pc3 { 3 } else { 2 }).map(ticks_for).collect();
+    let ticks: Vec<Ticks> = (0..if beside || beneath { 3 } else { 2 })
+        .map(ticks_for)
+        .collect();
+    let span = |component: usize| ticks[component].max - ticks[component].min;
 
-    let mut figure = Figure::with_size_inches(options.width, options.height);
+    let width = options.width * INCH;
     let padding = 0.25 * INCH;
     let left = padding + y_axis_width(&ticks[1], true);
     let bottom_labels = 0.4 * INCH;
     let gap = 0.35 * INCH;
-    let inner_width = figure.width - left - padding;
-    let inner_height = figure.height - 2.0 * padding - bottom_labels;
-    // With three components the main panel takes two thirds of each direction.
-    let (main_w, main_h) = if show_pc3 {
-        (
-            (inner_width - gap) * 0.66,
-            (inner_height - gap - bottom_labels) * 0.58,
-        )
+    let inner_width = width - left - padding;
+    // Width and height of the main panel, and the sizes of the others.
+    let (main_w, main_h, beside_w, beneath_h, height);
+    if options.fixed_scale {
+        // One length per unit of distance, set by what must fit across.
+        let across = span(0) + if beside { span(2) } else { 0.0 };
+        let room = inner_width - if beside { gap } else { 0.0 };
+        if !(across > 0.0 && span(1) > 0.0 && room > 0.0) {
+            return Figure::message("Degenerate PCA plot");
+        }
+        let unit = room / across;
+        main_w = span(0) * unit;
+        main_h = span(1) * unit;
+        beside_w = if beside { span(2) * unit } else { 0.0 };
+        beneath_h = if beneath { span(2) * unit } else { 0.0 };
+        height =
+            2.0 * padding + main_h + if beneath { gap + beneath_h } else { 0.0 } + bottom_labels;
+        if height > 6.0 * width {
+            return Figure::message(
+                "The PCA plot would be too tall; switch off \"fixed length per unit distance\"",
+            );
+        }
     } else {
-        (inner_width, inner_height)
-    };
-    if main_w < INCH || main_h < INCH {
+        height = options.height * INCH;
+        let inner_height = height - 2.0 * padding - bottom_labels;
+        // With further panels the main one takes about two thirds.
+        main_w = if beside {
+            (inner_width - gap) * 0.66
+        } else {
+            inner_width
+        };
+        main_h = if beneath {
+            (inner_height - gap) * 0.6
+        } else {
+            inner_height
+        };
+        beside_w = inner_width - gap - main_w;
+        beneath_h = inner_height - gap - main_h;
+    }
+    if main_w < 0.75 * INCH || main_h < 0.75 * INCH {
         return Figure::message("The figure is too small for a PCA plot");
     }
+    let mut figure = Figure::with_size_inches(options.width, height / INCH);
     let main = Frame {
         left,
         top: padding,
@@ -277,26 +322,34 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         }
     };
 
-    if show_pc3 {
-        // PC1 against PC2, with PC3 against PC2 to its right and PC1 against
-        // PC3 below, so that neighbouring panels share an axis.
-        panel(&mut figure, main, 0, 1, false, true, false);
-        let right = Frame {
+    // Neighbouring panels share an axis: PC2 with the panel beside the main
+    // one, PC1 with the panel beneath it.
+    panel(&mut figure, main, 0, 1, !beneath, true, false);
+    if beside {
+        let frame = Frame {
             left: main.right + gap,
             top: main.top,
-            right: figure.width - padding,
+            right: main.right + gap + beside_w,
             bottom: main.bottom,
         };
-        panel(&mut figure, right, 2, 1, true, false, true);
-        let below = Frame {
+        panel(
+            &mut figure,
+            frame,
+            2,
+            1,
+            true,
+            false,
+            options.rotate_pc3_labels,
+        );
+    }
+    if beneath {
+        let frame = Frame {
             left: main.left,
             top: main.bottom + gap,
             right: main.right,
-            bottom: figure.height - padding - bottom_labels,
+            bottom: main.bottom + gap + beneath_h,
         };
-        panel(&mut figure, below, 0, 2, true, true, false);
-    } else {
-        panel(&mut figure, main, 0, 1, true, true, false);
+        panel(&mut figure, frame, 0, 2, true, true, false);
     }
 
     let entries: Vec<(String, Color)> = data
@@ -371,7 +424,8 @@ mod tests {
         let two = plot(
             &data(6),
             &Options {
-                show_pc3: false,
+                show_pc3_vs_pc2: false,
+                show_pc1_vs_pc3: false,
                 legend: LegendPosition::UpperRight,
                 ..Options::default()
             },
@@ -381,11 +435,85 @@ mod tests {
     }
 
     #[test]
+    fn panels_are_chosen_one_by_one() {
+        let regions = |beside: bool, beneath: bool| {
+            plot(
+                &data(6),
+                &Options {
+                    show_pc3_vs_pc2: beside,
+                    show_pc1_vs_pc3: beneath,
+                    ..Options::default()
+                },
+            )
+            .regions
+            .len()
+        };
+        assert_eq!(regions(true, false), 10);
+        assert_eq!(regions(false, true), 10);
+        assert_eq!(regions(false, false), 5);
+
+        // The PC3 tick labels beside the main panel are drawn at an angle
+        // unless asked otherwise.
+        let angled = |rotate: bool| {
+            plot(
+                &data(6),
+                &Options {
+                    rotate_pc3_labels: rotate,
+                    ..Options::default()
+                },
+            )
+            .shapes
+            .iter()
+            .filter(|s| matches!(s, Shape::Text { style, .. } if style.rotation != 0.0 && style.rotation != 90.0))
+            .count()
+        };
+        assert!(angled(true) > 0);
+        assert_eq!(angled(false), 0);
+    }
+
+    #[test]
+    fn a_fixed_scale_gives_every_axis_the_same_length_per_unit() {
+        // The frame of each panel is its bottom and left axis lines.
+        let fixed = plot(&data(6), &Options::default());
+        let free = plot(
+            &data(6),
+            &Options {
+                fixed_scale: false,
+                ..Options::default()
+            },
+        );
+        // Without it the figure has the height asked for; with it the
+        // height follows from the data.
+        assert_eq!(free.height, 6.0 * INCH);
+        assert_eq!(fixed.width, 7.0 * INCH);
+        assert!(fixed.height != free.height);
+        assert_eq!(fixed.regions.len(), 15);
+
+        // Two samples one unit apart along PC1 and along PC2 are as far
+        // apart on the page in both directions.
+        let matrix: Vec<Vec<f64>> = data(6)
+            .samples
+            .iter()
+            .map(|s| s.proportions.clone())
+            .collect();
+        let result = pca(&matrix).unwrap();
+        let (a, b) = (&result.positions[0], &result.positions[3]);
+        let (ra, rb) = (&fixed.regions[0], &fixed.regions[3]);
+        let per_unit_x = (rb.x - ra.x) / (b[0] - a[0]);
+        let per_unit_y = (ra.y - rb.y) / (b[1] - a[1]);
+        assert!(
+            (per_unit_x - per_unit_y).abs() < 1e-6 * per_unit_x.abs(),
+            "{per_unit_x} against {per_unit_y}"
+        );
+    }
+
+    #[test]
     fn groups_get_their_own_shapes() {
         let shaped = plot(
             &data(6),
             &Options {
-                show_pc3: false,
+                show_pc3_vs_pc2: false,
+                show_pc1_vs_pc3: false,
                 ..Options::default()
             },
         );
@@ -398,7 +526,8 @@ mod tests {
         let round = plot(
             &data(6),
             &Options {
-                show_pc3: false,
+                show_pc3_vs_pc2: false,
+                show_pc1_vs_pc3: false,
                 unique_shapes: false,
                 ..Options::default()
             },

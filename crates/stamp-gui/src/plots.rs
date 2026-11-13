@@ -96,15 +96,25 @@ impl PlotKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlotSettings {
     pub error_bar: extended_error_bar::Options,
+    /// Show sequence counts instead of proportions in the bars of the
+    /// two-sample extended error bar plot.
+    pub error_bar_sequence_counts: bool,
     pub post_hoc: extended_error_bar::Options,
+    /// Leave pairs of groups that do not differ significantly out of the
+    /// post-hoc plot.
+    pub post_hoc_only_significant: bool,
     /// The two-sample bar plot.
     pub stat_bar: sample_plots::StatBarOptions,
     pub profile_bar: sample_plots::ProfileBarOptions,
+    /// Draw only the features that pass the filters in the profile bar plot.
+    pub profile_bar_only_active: bool,
     pub scatter: scatter::Options,
     /// What the error bars of the two-group scatter plot span.
     pub group_spread: scatter::Spread,
     pub sequence_histogram: histogram::SequenceOptions,
     pub p_value_histogram: histogram::PValueOptions,
+    /// Plot corrected rather than uncorrected p-values in the histogram.
+    pub p_value_histogram_corrected: bool,
     pub multiple_comparison: sample_plots::MultCompOptions,
     /// The bar plot of one feature across groups.
     pub bar: feature_plots::BarOptions,
@@ -113,6 +123,10 @@ pub struct PlotSettings {
     pub feature_field: feature_plots::Field,
     pub pca: pca_plot::Options,
     pub heatmap: heatmap::Options,
+    /// Draw only the features that pass the filters in the heatmap.
+    pub heatmap_only_active: bool,
+    /// Show sequence counts instead of proportions in the heatmap.
+    pub heatmap_sequence_counts: bool,
     /// Features drawn in red by the plots that support highlighting.
     pub highlighted: Vec<String>,
 }
@@ -125,12 +139,15 @@ impl Default for PlotSettings {
                 legend: extended_error_bar::Legend::LowerCenter,
                 ..Default::default()
             },
+            error_bar_sequence_counts: false,
             post_hoc: extended_error_bar::Options::default(),
+            post_hoc_only_significant: true,
             stat_bar: sample_plots::StatBarOptions {
                 legend,
                 ..Default::default()
             },
             profile_bar: sample_plots::ProfileBarOptions::default(),
+            profile_bar_only_active: true,
             scatter: scatter::Options {
                 height: 6.0,
                 ..Default::default()
@@ -144,6 +161,7 @@ impl Default for PlotSettings {
                 height: 6.0,
                 ..Default::default()
             },
+            p_value_histogram_corrected: true,
             multiple_comparison: sample_plots::MultCompOptions::default(),
             bar: feature_plots::BarOptions {
                 legend,
@@ -162,6 +180,8 @@ impl Default for PlotSettings {
                 height: 6.0,
                 ..Default::default()
             },
+            heatmap_only_active: false,
+            heatmap_sequence_counts: false,
             highlighted: Vec::new(),
         }
     }
@@ -172,8 +192,14 @@ impl PlotSettings {
     pub fn reset(&mut self, mode: Mode, kind: PlotKind) {
         let defaults = PlotSettings::default();
         match kind {
-            PlotKind::ExtendedErrorBar => self.error_bar = defaults.error_bar,
-            PlotKind::PostHoc => self.post_hoc = defaults.post_hoc,
+            PlotKind::ExtendedErrorBar => {
+                self.error_bar = defaults.error_bar;
+                self.error_bar_sequence_counts = defaults.error_bar_sequence_counts;
+            }
+            PlotKind::PostHoc => {
+                self.post_hoc = defaults.post_hoc;
+                self.post_hoc_only_significant = defaults.post_hoc_only_significant;
+            }
             PlotKind::Bar if mode == Mode::TwoSamples => self.stat_bar = defaults.stat_bar,
             PlotKind::Bar => {
                 self.bar = defaults.bar;
@@ -183,16 +209,26 @@ impl PlotSettings {
                 self.box_plot = defaults.box_plot;
                 self.feature_field = defaults.feature_field;
             }
-            PlotKind::ProfileBar => self.profile_bar = defaults.profile_bar,
+            PlotKind::ProfileBar => {
+                self.profile_bar = defaults.profile_bar;
+                self.profile_bar_only_active = defaults.profile_bar_only_active;
+            }
             PlotKind::Scatter => {
                 self.scatter = defaults.scatter;
                 self.group_spread = defaults.group_spread;
             }
             PlotKind::SequenceHistogram => self.sequence_histogram = defaults.sequence_histogram,
-            PlotKind::PValueHistogram => self.p_value_histogram = defaults.p_value_histogram,
+            PlotKind::PValueHistogram => {
+                self.p_value_histogram = defaults.p_value_histogram;
+                self.p_value_histogram_corrected = defaults.p_value_histogram_corrected;
+            }
             PlotKind::MultipleComparison => self.multiple_comparison = defaults.multiple_comparison,
             PlotKind::Pca => self.pca = defaults.pca,
-            PlotKind::Heatmap => self.heatmap = defaults.heatmap,
+            PlotKind::Heatmap => {
+                self.heatmap = defaults.heatmap;
+                self.heatmap_only_active = defaults.heatmap_only_active;
+                self.heatmap_sequence_counts = defaults.heatmap_sequence_counts;
+            }
         }
     }
 }
@@ -226,8 +262,14 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
             let rows = session.sample_rows();
             match kind {
                 PlotKind::ExtendedErrorBar => {
-                    let data =
-                        extended_error_bar::Data::from_sample_results(profile, results, rows);
+                    let mut data = extended_error_bar::Data::from_sample_results(
+                        profile,
+                        results,
+                        rows.iter().copied(),
+                    );
+                    if settings.error_bar_sequence_counts {
+                        data = data.with_sequence_counts(rows);
+                    }
                     extended_error_bar::plot(&data, &error_bar)
                 }
                 PlotKind::Bar => sample_plots::stat_bar(
@@ -241,7 +283,11 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                 ),
                 PlotKind::ProfileBar => sample_plots::profile_bar(
                     profile,
-                    rows,
+                    if settings.profile_bar_only_active {
+                        rows
+                    } else {
+                        results.rows.iter().collect()
+                    },
                     &sample_plots::ProfileBarOptions {
                         highlighted: highlighted(),
                         ..settings.profile_bar.clone()
@@ -255,8 +301,30 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     histogram::sequence_histogram(profile, &settings.sequence_histogram)
                 }
                 PlotKind::PValueHistogram => {
-                    let p: Vec<f64> = results.rows.iter().map(|r| r.p_value_corrected).collect();
-                    histogram::p_value_histogram(&p, &settings.p_value_histogram)
+                    let corrected = settings.p_value_histogram_corrected;
+                    let p: Vec<f64> = results
+                        .rows
+                        .iter()
+                        .map(|r| {
+                            if corrected {
+                                r.p_value_corrected
+                            } else {
+                                r.p_value
+                            }
+                        })
+                        .collect();
+                    let label = if corrected {
+                        "p-value (corrected)"
+                    } else {
+                        "p-value"
+                    };
+                    histogram::p_value_histogram(
+                        &p,
+                        &histogram::PValueOptions {
+                            label: label.to_string(),
+                            ..settings.p_value_histogram.clone()
+                        },
+                    )
                 }
                 PlotKind::MultipleComparison => {
                     sample_plots::multiple_comparison(results, &settings.multiple_comparison)
@@ -322,7 +390,11 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     heatmap::plot(
                         &heatmap::Data {
                             group_colors: vec![color1, color2],
-                            ..heatmap::Data::from_group_profile(profile, Some(&names))
+                            ..heatmap::Data::from_group_profile_field(
+                                profile,
+                                settings.heatmap_only_active.then_some(names.as_slice()),
+                                settings.heatmap_sequence_counts,
+                            )
                         },
                         &settings.heatmap,
                     )
@@ -375,7 +447,11 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     heatmap::plot(
                         &heatmap::Data {
                             group_colors: colors.clone(),
-                            ..heatmap::Data::from_multi_group_profile(profile, Some(&names))
+                            ..heatmap::Data::from_multi_group_profile_field(
+                                profile,
+                                settings.heatmap_only_active.then_some(names.as_slice()),
+                                settings.heatmap_sequence_counts,
+                            )
                         },
                         &settings.heatmap,
                     )
@@ -394,7 +470,7 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                         name,
                         &result,
                         session.multi.post_hoc_coverage,
-                        false,
+                        settings.post_hoc_only_significant,
                         &colors,
                         &settings.post_hoc,
                     ),

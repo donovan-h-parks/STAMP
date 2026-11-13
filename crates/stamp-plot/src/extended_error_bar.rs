@@ -49,6 +49,8 @@ pub struct Data {
     pub color2: Color,
     /// Label under the bars, for example `Proportion (%)`.
     pub bar_label: String,
+    /// The bars show counts, labelled as whole numbers, not percentages.
+    pub bar_is_count: bool,
     /// Label under the effect sizes.
     pub effect_label: String,
     /// True if the effect size is a ratio (no effect at 1, not 0).
@@ -183,6 +185,7 @@ impl Data {
             color1: SAMPLE1_COLOR,
             color2: SAMPLE2_COLOR,
             bar_label: "Proportion (%)".to_string(),
+            bar_is_count: false,
             effect_label: ci.plot_label().to_string(),
             is_ratio: ci.is_ratio(),
             coverage: results.analysis.coverage,
@@ -190,6 +193,20 @@ impl Data {
             corrected: results.correction.method != stamp_core::stats::correction::Correction::None,
             heading: None,
         }
+    }
+
+    /// Show the number of sequences in each sample in the bars, instead of
+    /// proportions. `rows` must be the rows the data was built from.
+    pub fn with_sequence_counts<'a>(
+        mut self,
+        rows: impl IntoIterator<Item = &'a SampleRow>,
+    ) -> Data {
+        for (row, source) in self.rows.iter_mut().zip(rows) {
+            (row.value1, row.value2) = (source.seq1, source.seq2);
+        }
+        self.bar_label = "Sequences".to_string();
+        self.bar_is_count = true;
+        self
     }
 
     /// Plot data for two-group results.
@@ -221,6 +238,7 @@ impl Data {
             color1: SAMPLE1_COLOR,
             color2: SAMPLE2_COLOR,
             bar_label: "Mean proportion (%)".to_string(),
+            bar_is_count: false,
             effect_label: "Difference in mean proportions (%)".to_string(),
             is_ratio: false,
             coverage: results.analysis.coverage,
@@ -446,7 +464,14 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         }
         let ticks = [
             (left, "0.0".to_string()),
-            (x_scale.map(largest), format!("{largest:.1}")),
+            (
+                x_scale.map(largest),
+                if data.bar_is_count {
+                    format!("{largest:.0}")
+                } else {
+                    format!("{largest:.1}")
+                },
+            ),
         ];
         x_axis(&mut figure, left, right, &ticks, &data.bar_label);
     }
@@ -689,6 +714,7 @@ mod tests {
             color1: SAMPLE1_COLOR,
             color2: SAMPLE2_COLOR,
             bar_label: "Proportion (%)".to_string(),
+            bar_is_count: false,
             effect_label: "Difference between proportions (%)".to_string(),
             is_ratio: false,
             coverage: 0.95,

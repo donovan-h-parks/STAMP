@@ -75,6 +75,12 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 37 | done | "Select specific features" in the Filtering section opens the "Select features" window, as in v2: features are listed at any hierarchical level and moved between the selected and filtered lists. A name is matched at the listed level only (v2 matched it at any level). The choice is kept for each analysis type and is cleared when the profile level, parent level or treatment of unclassified sequences changes, because the features are then different ones. |
 | 38 | done | The feature, results and metadata tables are sorted by clicking a column heading; a second click reverses the order. Numbers sort by value and text without regard to case. A downloaded results table keeps its original order. |
 | 39 | done | The graphical application no longer has "Create profile from" in its File menu. Profiles in other formats are to be opened directly through File > Load profile; for now it reads STAMP profiles (SPF) only. The converters remain available as `stamp-cli convert`. |
+| 40 | done | Added to the graphical application from v2: the "Correction info" button with the summary of the multiple test correction; the profile summary in the status bar (parent categories, features, sequences in each sample or group, to which the number of active features is added); a choice of resolution when a plot is saved as PNG; and "Show only active features" in the results table, which like v2 lists every feature until it is ticked. The p-value filter starts switched on at 0.05, as in v2. |
+| 41 | done | Plot options added from v2: sequence counts in the bars of the two-sample extended error bar plot; uncorrected p-values in the p-value histogram; a logarithmic axis for the histogram of the multiple comparison plots; "only active features" in the profile bar plot (on to begin with) and the heatmaps (off to begin with, so heatmaps now show every feature unless it is ticked); and sorting, standard deviations and "filter rows above the nominal level" in the post-hoc plot. That filter is on to begin with, as in v2, so the post-hoc plot shows only the pairs of groups that differ. |
+| 42 | done | PCA plot: "PC3 vs. PC2" and "PC1 vs. PC3" are switched on and off separately, the PC3 labels can be drawn level, and "fixed length per unit distance" (on to begin with, as in v2) gives every axis the same scale, with the height of the figure following from its width. |
+| 43 | done | Heatmap: sequence counts; all fourteen colour maps of v2; a strip beside the feature dendrogram colouring the clusters formed below a chosen fraction of the greatest distance (0.75 to begin with); and a legend of the groups that can be placed in any corner or side of the figure, or by "Best". v2 also stored a threshold for clustering samples but never drew it; it is not offered. The colour maps were written from their published definitions without matplotlib at hand to compare against; "Spectral" in particular should be checked by eye against v2. |
+| 44 | done | Pausing recalculation (v2's "Recalculate statistics and plots" toggle) is not offered and is not planned. |
+| 45 | done | The feature shown by the bar, box and post-hoc plots stays selected when a test is re-run, a sample is switched off or a filter changes, whether or not it passes the filters. It changes only when the feature no longer exists, for example after a change of profile level. |
 
 ## Kept as is
 
@@ -116,22 +122,12 @@ numerical methods rather than from different formulas:
     CoMet) from File > Load profile, with the choices the v2 converters
     offered: BIOM metadata field, MG-RAST level headings, RITA groups to
     retain, and the treatment of multi-category COGs;
-  * pausing recalculation ("Recalculate statistics and plots" in the status
-    bar), to change several settings before the tests are run again;
-  * the multiple-test-correction information window (number of significant
-    features, corrected error rate, Storey's estimate of pi0), which the
-    command line prints;
-  * the profile summary in the status bar: parent categories and sequences
-    in each sample or group;
   * keyboard shortcuts (Ctrl+O, Ctrl+S, Ctrl+Q and those that show panels);
   * remembering the window layout, preferences and plot settings between
     runs;
-  * choosing the resolution of a saved PNG (300 dpi is used; the command
-    line has `--plot-dpi`);
   * preferences for the smallest p-value reported (fixed at 1e-15) and for
     the colour of "All other samples" (fixed at grey);
   * customising sample and axis colours (group colours can be changed);
-  * showing all features, not only the active ones, in the results table;
   * leaving an unticked group out of the Group 1 and Group 2 lists
     (unticking affects the multiple-group analysis only), and a tooltip
     listing the samples of each group;
@@ -143,26 +139,9 @@ numerical methods rather than from different formulas:
 * The stand-alone `checkHierarchy.py` script, which lists every row of a
   profile with an unclassified parent or several parents. The loader stops
   at the first such row.
-* Plot options that are not carried over yet: sequence counts instead of
-  proportions in the bars of the two-sample extended error bar plot;
-  uncorrected p-values in the p-value histogram; a logarithmic axis in the
-  multiple comparison plots; showing all features rather than only the
-  active ones in the profile bar plot and the heatmaps; choosing "PC3 vs.
-  PC2" and "PC1 vs. PC3" separately and rotating PC3 labels in the PCA
-  plot; sorting, standard deviations and "filter rows above the nominal
-  level" in the post-hoc plot; and placing the heatmap's legend.
-* Further plot options not carried over: the heatmap's colouring of
-  clusters below a distance threshold and eight of its fourteen colour maps
-  (Blues, Reds, Grayscale, Orange to red, Yellow to orange to red and Blue to
-  white to red are available); the PCA plot's "fixed pixels per unit
-  distance"; and choosing sequence counts instead of proportions in the
-  heatmap plots (the group bar and box plots offer it).
 
 ## Open questions
 
-* **p-value filter at start-up.** STAMP v2 starts with the p-value filter
-  switched on (at 0.05) in all three analysis types; this port starts with
-  it off. Which default to keep has not been decided.
 * **BIOM 2.x (HDF5).** Not supported in this port so far (see behaviour
   change 9). Supporting it needs an HDF5 reader that also works in the browser.
 * **Example profiles the reader rejects.** `examples/EBPR/MartinEBPR.spf`,

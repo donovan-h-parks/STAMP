@@ -41,6 +41,9 @@ impl Harness {
             "Enterotypes.metadata.tsv",
             &example("EnterotypesArumugam/Enterotypes.metadata.tsv"),
         );
+        // Most tests look at every feature; the filter that is on when the
+        // application starts has a test of its own.
+        harness.app.set_p_value_filter(None);
         harness
     }
 
@@ -609,6 +612,7 @@ fn specific_features_can_be_selected() {
     harness
         .app
         .set_selected_features(Some(&["Firmicutes", "Bacteroidetes"]));
+    harness.app.set_results_only_active(true);
     harness.settle();
     assert_eq!(harness.app.results_table().rows.len(), 2);
     assert_eq!(harness.app.session.feature_counts(Mode::TwoGroups), (17, 2));
@@ -673,4 +677,179 @@ fn tables_are_sorted_by_their_headings() {
     harness.app.sort_results_table(0);
     let order = harness.app.results_table_order();
     assert_eq!(table.rows[order[0]][0], "Verrucomicrobia");
+}
+
+#[test]
+fn switching_a_sample_off_keeps_the_selected_feature() {
+    for mode in [Mode::TwoGroups, Mode::MultipleGroups] {
+        let mut harness = Harness::enterotypes();
+        harness.app.session.set_group_field("Nationality");
+        harness.app.set_mode(mode);
+        harness.app.set_plot_kind(PlotKind::Bar);
+        harness.settle();
+        harness.app.select_feature("Actinobacteria");
+        harness.settle();
+
+        harness
+            .app
+            .session
+            .set_samples_active(&["AM-AD-1".to_string()], false);
+        harness.settle();
+        assert_eq!(
+            harness.app.session.selected_feature.as_deref(),
+            Some("Actinobacteria"),
+            "{mode:?}"
+        );
+
+        // Nor does a filter that the feature fails change what is shown.
+        harness.app.set_p_value_filter(Some(1e-9));
+        harness.settle();
+        harness
+            .app
+            .session
+            .set_samples_active(&["AM-AD-2".to_string()], false);
+        harness.settle();
+        assert_eq!(
+            harness.app.session.selected_feature.as_deref(),
+            Some("Actinobacteria"),
+            "{mode:?} with a filter"
+        );
+    }
+}
+
+#[test]
+fn starts_with_the_p_value_filter_on() {
+    let mut harness = Harness::new();
+    harness.app.load_example();
+    harness.settle();
+    // One feature of the example differs at the 0.05 level.
+    assert_eq!(harness.app.session.feature_counts(Mode::TwoGroups), (17, 1));
+    assert_eq!(harness.app.session.groups.filter.significance, Some(0.05));
+    // The results table lists every feature until asked for the active ones.
+    assert_eq!(harness.app.results_table().rows.len(), 17);
+    harness.app.set_results_only_active(true);
+    harness.settle();
+    assert_eq!(harness.app.results_table().rows.len(), 1);
+    harness.app.show_results_table(true);
+    harness.settle();
+    harness.screenshot("results_only_active");
+}
+
+#[test]
+fn status_bar_and_correction_information() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let status = harness.app.status_summary();
+    assert!(
+        status.starts_with("Parent categories: 1, Features: 17, Sequences in group 1: "),
+        "{status}"
+    );
+    assert!(status.ends_with("Active features: 17"), "{status}");
+    harness.app.set_mode(Mode::TwoSamples);
+    harness.settle();
+    assert!(harness
+        .app
+        .status_summary()
+        .contains("Sequences in sample 2: "));
+
+    // No correction: only the number of significant features.
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.settle();
+    assert_eq!(
+        harness.app.correction_info(),
+        ["Method: No correction", "Number of significant features: 1"]
+    );
+    harness.app.session.set_correction(
+        Mode::TwoGroups,
+        stamp_core::stats::correction::Correction::Bonferroni,
+    );
+    harness.app.show_correction_info(true);
+    harness.settle();
+    let info = harness.app.correction_info();
+    assert_eq!(info[0], "Method: Bonferroni");
+    assert!(
+        info.iter()
+            .any(|line| line.starts_with("Corrected error rate: 0.00")),
+        "{info:?}"
+    );
+    harness.screenshot("correction_info");
+}
+
+#[test]
+fn new_plot_options_change_the_plots() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let texts = |figure: &stamp_plot::Figure| -> Vec<String> {
+        figure
+            .shapes
+            .iter()
+            .filter_map(|s| match s {
+                stamp_plot::Shape::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+
+    // Heatmap: all features unless asked for the active ones; counts.
+    harness.app.set_p_value_filter(Some(0.4));
+    harness.app.set_plot_kind(PlotKind::Heatmap);
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), 17);
+    harness.screenshot("heatmap_options");
+    let mut settings = harness.app.plot_settings().clone();
+    settings.heatmap_only_active = true;
+    settings.heatmap_sequence_counts = true;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    let active = harness.app.session.feature_counts(Mode::TwoGroups).1;
+    assert!(active > 1 && active < 17);
+    assert_eq!(harness.app.figure().regions.len(), active);
+    assert!(texts(harness.app.figure()).contains(&"Number of sequences".to_string()));
+
+    // PCA: the panels are chosen separately.
+    harness.app.set_plot_kind(PlotKind::Pca);
+    harness.settle();
+    let samples = harness.app.figure().regions.len() / 3;
+    harness.screenshot("pca_fixed_scale");
+    let mut settings = harness.app.plot_settings().clone();
+    settings.pca.show_pc1_vs_pc3 = false;
+    settings.pca.fixed_scale = false;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), 2 * samples);
+    assert_eq!(harness.app.figure().height, 6.0 * 72.0);
+
+    // Two samples: counts in the bars, uncorrected p-values, all features.
+    harness.app.set_mode(Mode::TwoSamples);
+    harness.app.set_plot_kind(PlotKind::ExtendedErrorBar);
+    harness.settle();
+    assert!(texts(harness.app.figure()).contains(&"Proportion (%)".to_string()));
+    let mut settings = harness.app.plot_settings().clone();
+    settings.error_bar_sequence_counts = true;
+    settings.p_value_histogram_corrected = false;
+    settings.profile_bar_only_active = false;
+    settings.multiple_comparison.log_scale = true;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert!(texts(harness.app.figure()).contains(&"Sequences".to_string()));
+    harness.app.set_plot_kind(PlotKind::PValueHistogram);
+    harness.settle();
+    assert!(texts(harness.app.figure()).contains(&"p-value".to_string()));
+    harness.app.set_plot_kind(PlotKind::MultipleComparison);
+    harness.settle();
+    assert!(texts(harness.app.figure()).contains(&"10".to_string()));
+    harness.screenshot("multiple_comparison_log");
+
+    // Post-hoc: pairs that do not differ are left out unless asked for.
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::PostHoc);
+    harness.app.select_feature("Euryarchaeota");
+    harness.settle();
+    let significant = harness.app.figure().regions.len();
+    let mut settings = harness.app.plot_settings().clone();
+    settings.post_hoc_only_significant = false;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    let all = harness.app.figure().regions.len();
+    assert!(significant < all, "{significant} of {all}");
 }

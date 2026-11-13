@@ -320,7 +320,7 @@ struct FilterUi {
 impl Default for FilterUi {
     fn default() -> Self {
         FilterUi {
-            p_enabled: false,
+            p_enabled: true,
             p_value: 0.05,
             sequences: CountFilterUi::default(),
             parent_sequences: CountFilterUi::default(),
@@ -569,6 +569,12 @@ pub struct StampApp {
     metadata_sort: SortState,
     show_metadata_table: bool,
     show_plot_config: bool,
+    show_correction_info: bool,
+    /// Show only the features that pass the filters in the results table.
+    results_only_active: bool,
+    /// The resolution being chosen for a PNG image, while that window is
+    /// open.
+    png_dpi: Option<f64>,
     metadata_filter: MetadataFilterUi,
     /// The hierarchical level and the name at that level whose features are
     /// drawn in red.
@@ -669,6 +675,9 @@ impl StampApp {
             metadata_sort: SortState::default(),
             show_metadata_table: false,
             show_plot_config: false,
+            show_correction_info: false,
+            results_only_active: false,
+            png_dpi: None,
             metadata_filter: MetadataFilterUi::default(),
             highlight_level: None,
             highlight_value: String::new(),
@@ -738,6 +747,106 @@ impl StampApp {
         if let Some(profile) = self.current_profile() {
             self.select_dialog = Some((self.mode, FeatureSelection::new(profile, chosen)));
         }
+    }
+
+    /// Switch the p-value filter of every analysis on, at a level, or off.
+    pub fn set_p_value_filter(&mut self, level: Option<f64>) {
+        for filter in &mut self.filters {
+            filter.p_enabled = level.is_some();
+            if let Some(level) = level {
+                filter.p_value = level;
+            }
+        }
+        self.apply_filters();
+    }
+
+    /// Show every feature in the results table, or only those that pass the
+    /// filters.
+    pub fn set_results_only_active(&mut self, only_active: bool) {
+        self.results_only_active = only_active;
+        self.view_dirty = true;
+    }
+
+    /// Open or close the window of information on the multiple test
+    /// correction.
+    pub fn show_correction_info(&mut self, show: bool) {
+        self.show_correction_info = show;
+    }
+
+    /// The lines of the correction information window: the method, its
+    /// summary values and any caution.
+    pub fn correction_info(&self) -> Vec<String> {
+        let s = &self.session;
+        let summary = match self.mode {
+            Mode::TwoSamples => s.samples.output.as_ref().map(|(_, r)| &r.correction),
+            Mode::TwoGroups => s.groups.output.as_ref().map(|(_, r)| &r.correction),
+            Mode::MultipleGroups => s.multi.output.as_ref().map(|(_, r)| &r.correction),
+        };
+        let Some(summary) = summary else {
+            return vec!["Run a hypothesis test first.".to_string()];
+        };
+        let mut lines = vec![format!("Method: {}", summary.method.name())];
+        for (label, value) in &summary.info {
+            let value = if value.fract() == 0.0 {
+                format!("{value:.0}")
+            } else {
+                format!("{value:.6}")
+            };
+            lines.push(format!("{label}: {value}"));
+        }
+        if let Some(warning) = summary.warning {
+            lines.push(warning.to_string());
+        }
+        lines
+    }
+
+    /// The summary of the profile shown in the status bar, as in STAMP v2:
+    /// parent categories, features and the sequences being compared.
+    pub fn status_summary(&self) -> String {
+        let Some(tree) = &self.session.tree else {
+            return "No profile loaded".to_string();
+        };
+        // Profiles of proportions have fractional totals; whole numbers read
+        // better here.
+        let total = |samples: &[String]| -> String {
+            let sum: f64 = samples.iter().filter_map(|s| tree.sample_total(s)).sum();
+            format!("{sum:.0}")
+        };
+        let s = &self.session;
+        let (profile, sequences) = match self.mode {
+            Mode::TwoSamples => (
+                s.samples.output.as_ref().map(|(p, _)| &p.profile),
+                s.samples.output.as_ref().map(|(p, _)| {
+                    let names = &p.profile.sample_names;
+                    format!(
+                        ", Sequences in sample 1: {}, Sequences in sample 2: {}",
+                        total(&names[..1]),
+                        total(&names[1..2])
+                    )
+                }),
+            ),
+            Mode::TwoGroups => (
+                s.groups.output.as_ref().map(|(p, _)| &p.profile),
+                s.groups.output.as_ref().map(|(p, _)| {
+                    format!(
+                        ", Sequences in group 1: {}, Sequences in group 2: {}",
+                        total(p.samples_in_group1()),
+                        total(p.samples_in_group2())
+                    )
+                }),
+            ),
+            Mode::MultipleGroups => (s.multi.output.as_ref().map(|(p, _)| &p.profile), None),
+        };
+        let Some(profile) = profile else {
+            return String::new();
+        };
+        let (_, active) = s.feature_counts(self.mode);
+        format!(
+            "Parent categories: {}, Features: {}{}, Active features: {active}",
+            profile.num_parent_categories(),
+            profile.num_features(),
+            sequences.unwrap_or_default()
+        )
     }
 
     /// The settings of every plot.
@@ -936,6 +1045,21 @@ impl StampApp {
         );
     }
 
+    /// Save the plot as a PNG image of the given resolution, through the
+    /// platform's save dialog or as a browser download.
+    pub fn save_png(&mut self, ctx: &egui::Context, dpi: f64) {
+        match platform::encode_plot(&self.figure, "plot.png", dpi) {
+            Ok(bytes) => self.platform.request(
+                Request::Save {
+                    name: "plot.png".to_string(),
+                    bytes,
+                },
+                ctx,
+            ),
+            Err(message) => self.notice = Some(message),
+        }
+    }
+
     /// Act on files that have been opened or converted since the last frame.
     fn handle_file_events(&mut self) {
         for event in self.platform.poll() {
@@ -1010,6 +1134,8 @@ impl StampApp {
                 active: false,
             };
 
+        // The features that pass the filters.
+        let mut active: Vec<String> = Vec::new();
         let mut feature_rows = Vec::new();
         let mut effect_heading = "Effect size";
         let (table, features): (Table, Vec<String>) = match self.mode {
@@ -1029,8 +1155,14 @@ impl StampApp {
                         })
                         .collect();
                     let rows = s.sample_rows();
-                    let features = rows.iter().map(|r| r.feature.clone()).collect();
-                    (sample_table(profile, results, rows), features)
+                    active = rows.iter().map(|r| r.feature.clone()).collect();
+                    let shown = if self.results_only_active {
+                        rows
+                    } else {
+                        results.rows.iter().collect()
+                    };
+                    let features = shown.iter().map(|r| r.feature.clone()).collect();
+                    (sample_table(profile, results, shown), features)
                 }
                 None => empty_table(),
             },
@@ -1051,8 +1183,14 @@ impl StampApp {
                         })
                         .collect();
                     let rows = s.group_rows();
-                    let features = rows.iter().map(|r| r.feature.clone()).collect();
-                    (group_table(profile, results, rows), features)
+                    active = rows.iter().map(|r| r.feature.clone()).collect();
+                    let shown = if self.results_only_active {
+                        rows
+                    } else {
+                        results.rows.iter().collect()
+                    };
+                    let features = shown.iter().map(|r| r.feature.clone()).collect();
+                    (group_table(profile, results, shown), features)
                 }
                 None => empty_table(),
             },
@@ -1073,14 +1211,20 @@ impl StampApp {
                         })
                         .collect();
                     let rows = s.multi_rows();
-                    let features = rows.iter().map(|r| r.feature.clone()).collect();
-                    (multi_group_table(profile, results, rows), features)
+                    active = rows.iter().map(|r| r.feature.clone()).collect();
+                    let shown = if self.results_only_active {
+                        rows
+                    } else {
+                        results.rows.iter().collect()
+                    };
+                    let features = shown.iter().map(|r| r.feature.clone()).collect();
+                    (multi_group_table(profile, results, shown), features)
                 }
                 None => empty_table(),
             },
         };
         for row in feature_rows.iter_mut() {
-            row.active = features.contains(&row.feature);
+            row.active = active.contains(&row.feature);
         }
         // The feature table starts in alphabetical order, as in STAMP v2.
         feature_rows.sort_by(|a, b| a.feature.cmp(&b.feature));
@@ -1159,8 +1303,18 @@ impl StampApp {
                             ("SVG image", "plot.svg"),
                             ("PDF document", "plot.pdf"),
                         ] {
-                            if ui.button(label).clicked() {
-                                match platform::encode_plot(&self.figure, name) {
+                            if !ui.button(label).clicked() {
+                                continue;
+                            }
+                            if name.ends_with(".png") {
+                                // The resolution is asked for first.
+                                self.png_dpi = Some(platform::DEFAULT_DPI);
+                            } else {
+                                match platform::encode_plot(
+                                    &self.figure,
+                                    name,
+                                    platform::DEFAULT_DPI,
+                                ) {
                                     Ok(bytes) => self.platform.request(
                                         Request::Save {
                                             name: name.to_string(),
@@ -1221,8 +1375,7 @@ impl StampApp {
                 ui.label("No profile loaded");
                 return;
             }
-            let (total, active) = self.session.feature_counts(self.mode);
-            ui.label(format!("Features: {total}, active: {active}"));
+            ui.label(self.status_summary());
             if let Some(progress) = self.session.progress(self.mode) {
                 ui.separator();
                 ui.add(
@@ -1404,6 +1557,7 @@ impl StampApp {
         let mode = self.mode;
         let mut rerun = false;
         let mut correction = None;
+        let mut show_info = false;
 
         match mode {
             Mode::TwoSamples => {
@@ -1463,6 +1617,12 @@ impl StampApp {
                         }) {
                             correction = Some(chosen);
                         }
+                        ui.label("");
+                        show_info |= ui
+                            .button("Correction info")
+                            .on_hover_text("Summary of the multiple test correction")
+                            .clicked();
+                        ui.end_row();
                     });
             }
             Mode::TwoGroups => {
@@ -1509,6 +1669,12 @@ impl StampApp {
                         }) {
                             correction = Some(chosen);
                         }
+                        ui.label("");
+                        show_info |= ui
+                            .button("Correction info")
+                            .on_hover_text("Summary of the multiple test correction")
+                            .clicked();
+                        ui.end_row();
                     });
             }
             Mode::MultipleGroups => {
@@ -1547,6 +1713,12 @@ impl StampApp {
                         }) {
                             correction = Some(chosen);
                         }
+                        ui.label("");
+                        show_info |= ui
+                            .button("Correction info")
+                            .on_hover_text("Summary of the multiple test correction")
+                            .clicked();
+                        ui.end_row();
                     });
                 self.view_dirty |= post_hoc_changed;
             }
@@ -1554,6 +1726,7 @@ impl StampApp {
         if rerun {
             self.session.invalidate(mode);
         }
+        self.show_correction_info |= show_info;
         if let Some(correction) = correction {
             self.session.set_correction(mode, correction);
         }
@@ -1929,21 +2102,25 @@ impl StampApp {
         let mut download = false;
         let mut sort = self.table_sort;
         let order = self.results_table_order();
+        let mut only_active_changed = false;
         egui::Window::new("Results table")
             .open(&mut self.show_table)
             .default_size([760.0, 320.0])
             .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    download = ui
+                        .add_enabled(!self.table.rows.is_empty(), egui::Button::new("Download"))
+                        .on_hover_text("Save this table as a tab-separated file")
+                        .clicked();
+                    only_active_changed = ui
+                        .checkbox(&mut self.results_only_active, "Show only active features")
+                        .changed();
+                    ui.label(format!("{} features", self.table.rows.len()));
+                });
                 if self.table.rows.is_empty() {
                     ui.label("No features pass the filters.");
                     return;
                 }
-                ui.horizontal(|ui| {
-                    download = ui
-                        .button("Download")
-                        .on_hover_text("Save this table as a tab-separated file")
-                        .clicked();
-                    ui.label(format!("{} features", self.table.rows.len()));
-                });
                 ui.separator();
                 use egui_extras::{Column, TableBuilder};
                 let selected = self.session.selected_feature.as_deref();
@@ -1986,6 +2163,7 @@ impl StampApp {
             self.select_feature(&feature);
         }
         self.table_sort = sort;
+        self.view_dirty |= only_active_changed;
         if download {
             self.download_table(ctx);
         }
@@ -2011,6 +2189,47 @@ impl StampApp {
                 self.apply_filters();
             }
             self.select_dialog = None;
+        }
+
+        let lines = self.correction_info();
+        egui::Window::new("Multiple test correction")
+            .open(&mut self.show_correction_info)
+            .resizable(false)
+            .default_pos([420.0, 160.0])
+            .show(ctx, |ui| {
+                for line in &lines {
+                    ui.label(line);
+                }
+            });
+
+        if let Some(dpi) = &mut self.png_dpi {
+            let (mut save, mut cancel) = (false, false);
+            egui::Window::new("Save plot as PNG")
+                .collapsible(false)
+                .resizable(false)
+                .default_pos([420.0, 200.0])
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Resolution of the image:");
+                        ui.add(
+                            egui::DragValue::new(dpi)
+                                .speed(5.0)
+                                .range(50.0..=1200.0)
+                                .suffix(" dpi"),
+                        );
+                    });
+                    ui.horizontal(|ui| {
+                        save = ui.button("Save").clicked();
+                        cancel = ui.button("Cancel").clicked();
+                    });
+                });
+            let dpi = *dpi;
+            if save {
+                self.save_png(ctx, dpi);
+            }
+            if save || cancel {
+                self.png_dpi = None;
+            }
         }
 
         let (mode, kind) = (self.mode, self.plot_kind());
