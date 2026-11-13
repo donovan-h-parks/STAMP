@@ -307,11 +307,6 @@ impl Dialog<'_> {
         }
     }
 
-    /// Options that stand on their own.
-    fn plain(&mut self, id: &str, add: impl FnOnce(&mut Rows)) {
-        self.grid(id, false, add);
-    }
-
     /// Related options in a frame with a title.
     fn group(&mut self, title: &str, add: impl FnOnce(&mut Rows)) {
         self.grid(title, true, add);
@@ -319,10 +314,6 @@ impl Dialog<'_> {
 
     fn legend(&mut self, value: &mut LegendPosition) {
         self.group("Legend position", |rows| rows.legend(value));
-    }
-
-    fn truncate(&mut self, value: &mut Option<usize>) {
-        self.plain("labels", |rows| rows.truncate(value));
     }
 
     /// The extended error bar plot and, with `post_hoc`, the post-hoc plot,
@@ -414,12 +405,18 @@ impl Dialog<'_> {
                 );
             });
         }
-        self.truncate(&mut options.truncate_labels);
+        self.group(OTHER_OPTIONS, |rows| {
+            rows.truncate(&mut options.truncate_labels);
+        });
     }
 }
 
+/// Title of the frame, placed last, for the options that belong to no
+/// other group.
+const OTHER_OPTIONS: &str = "Other options";
+
 /// Width of the frames around groups of options, so that they line up.
-const GROUP_WIDTH: f32 = 330.0;
+const GROUP_WIDTH: f32 = 350.0;
 
 /// The controls for the settings of one plot. Returns true if a setting
 /// changed.
@@ -440,7 +437,12 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
         ),
         PlotKind::Bar if mode == Mode::TwoSamples => {
             let o = &mut settings.stat_bar;
-            dialog.plain("general", |rows| {
+            dialog.group("Figure size", |rows| {
+                rows.inches("Width:", &mut o.width, 2.0..=40.0);
+                rows.inches("Row height:", &mut o.row_height, 0.05..=2.0);
+            });
+            dialog.legend(&mut o.legend);
+            dialog.group(OTHER_OPTIONS, |rows| {
                 rows.choice(
                     "Field to plot:",
                     &mut o.field,
@@ -454,62 +456,41 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                     ],
                 );
                 rows.check("Sort values", &mut o.sort);
+                rows.truncate(&mut o.truncate_labels);
             });
-            dialog.group("Figure size", |rows| {
-                rows.inches("Width:", &mut o.width, 2.0..=40.0);
-                rows.inches("Row height:", &mut o.row_height, 0.05..=2.0);
-            });
-            dialog.legend(&mut o.legend);
-            dialog.truncate(&mut o.truncate_labels);
         }
         PlotKind::Bar => {
             let o = &mut settings.bar;
             let field = &mut settings.feature_field;
-            dialog.plain("general", |rows| {
-                rows.field(field);
-                rows.check("Show average of each group", &mut o.show_averages);
-                rows.check("Show p-value", &mut o.show_p_value);
-            });
             dialog.group("Figure size", |rows| {
                 rows.inches("Height:", &mut o.height, 2.0..=40.0);
                 rows.inches("Column width:", &mut o.column_width, 0.05..=2.0);
             });
             dialog.legend(&mut o.legend);
-            dialog.truncate(&mut o.truncate_labels);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.field(field);
+                rows.check("Show average of each group", &mut o.show_averages);
+                rows.check("Show p-value", &mut o.show_p_value);
+                rows.truncate(&mut o.truncate_labels);
+            });
         }
         PlotKind::Box => {
             let o = &mut settings.box_plot;
             let field = &mut settings.feature_field;
-            dialog.plain("general", |rows| {
-                rows.field(field);
-                rows.check("Show average of each group", &mut o.show_averages);
-                rows.check("Show p-value", &mut o.show_p_value);
-            });
             dialog.group("Figure size", |rows| {
                 rows.inches("Height:", &mut o.height, 2.0..=40.0);
                 rows.inches("Width:", &mut o.width, 2.0..=40.0);
             });
-            dialog.truncate(&mut o.truncate_labels);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.field(field);
+                rows.check("Show average of each group", &mut o.show_averages);
+                rows.check("Show p-value", &mut o.show_p_value);
+                rows.truncate(&mut o.truncate_labels);
+            });
         }
         PlotKind::ProfileBar => {
             let o = &mut settings.profile_bar;
             let only_active = &mut settings.profile_bar_only_active;
-            dialog.plain("general", |rows| {
-                rows.choice(
-                    "Field to plot:",
-                    &mut o.sequence_counts,
-                    &[
-                        (false, "Proportion of sequences (%)"),
-                        (true, "Number of sequences"),
-                    ],
-                );
-                rows.count(
-                    "Maximum # features to show:",
-                    &mut o.features_to_show,
-                    1..=1000,
-                );
-                rows.check("Only show active features", only_active);
-            });
             dialog.group("Figure size", |rows| {
                 rows.inches("Height:", &mut o.height, 2.0..=40.0);
                 rows.inches("Column width:", &mut o.column_width, 0.05..=2.0);
@@ -541,12 +522,39 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 );
             });
             dialog.legend(&mut o.legend);
-            dialog.truncate(&mut o.truncate_labels);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.choice(
+                    "Field to plot:",
+                    &mut o.sequence_counts,
+                    &[
+                        (false, "Proportion of sequences (%)"),
+                        (true, "Number of sequences"),
+                    ],
+                );
+                rows.count(
+                    "Maximum # features to show:",
+                    &mut o.features_to_show,
+                    1..=1000,
+                );
+                rows.check("Only show active features", only_active);
+                rows.truncate(&mut o.truncate_labels);
+            });
         }
         PlotKind::Scatter => {
             let o = &mut settings.scatter;
             let spread = &mut settings.group_spread;
-            dialog.plain("general", |rows| {
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Histogram", |rows| {
+                rows.check("Show histograms", &mut o.show_histograms);
+                rows.count_if(o.show_histograms, "Bins:", &mut o.bins, 2..=500);
+                rows.inches_if(
+                    o.show_histograms,
+                    "Height:",
+                    &mut o.histogram_size,
+                    0.1..=5.0,
+                );
+            });
+            dialog.group(OTHER_OPTIONS, |rows| {
                 if mode == Mode::TwoSamples {
                     rows.check("Show CIs", &mut o.show_spread);
                 } else {
@@ -568,17 +576,6 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
                 rows.check("Show R\u{b2} value", &mut o.show_r2);
             });
-            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
-            dialog.group("Histogram", |rows| {
-                rows.check("Show histograms", &mut o.show_histograms);
-                rows.count_if(o.show_histograms, "Bins:", &mut o.bins, 2..=500);
-                rows.inches_if(
-                    o.show_histograms,
-                    "Height:",
-                    &mut o.histogram_size,
-                    0.1..=5.0,
-                );
-            });
         }
         PlotKind::SequenceHistogram => {
             let o = &mut settings.sequence_histogram;
@@ -595,13 +592,6 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
         PlotKind::PValueHistogram => {
             let o = &mut settings.p_value_histogram;
             let corrected = &mut settings.p_value_histogram_corrected;
-            dialog.plain("general", |rows| {
-                rows.choice(
-                    "Field to plot:",
-                    corrected,
-                    &[(false, "p-values"), (true, "p-values (corrected)")],
-                );
-            });
             dialog.group("Main figure size", |rows| {
                 rows.size(&mut o.width, &mut o.height)
             });
@@ -659,6 +649,13 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.check_if(shown, "Show y-axis as log scale", &mut inset.log_scale);
             });
             o.inset = shown.then_some(inset);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.choice(
+                    "Field to plot:",
+                    corrected,
+                    &[(false, "p-values"), (true, "p-values (corrected)")],
+                );
+            });
         }
         PlotKind::MultipleComparison => {
             let o = &mut settings.multiple_comparison;
@@ -679,15 +676,6 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
         }
         PlotKind::Pca => {
             let o = &mut settings.pca;
-            dialog.plain("general", |rows| {
-                rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
-                rows.check("Assign unique shapes", &mut o.unique_shapes);
-                rows.check_if(
-                    o.show_pc3_vs_pc2,
-                    "Rotate PC3 labels",
-                    &mut o.rotate_pc3_labels,
-                );
-            });
             dialog.group("Figure size", |rows| {
                 rows.check(
                     "Fixed pixels per unit distance (recommended)",
@@ -704,26 +692,20 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.check("PC1 vs. PC3", &mut o.show_pc1_vs_pc3);
             });
             dialog.legend(&mut o.legend);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
+                rows.check("Assign unique shapes", &mut o.unique_shapes);
+                rows.check_if(
+                    o.show_pc3_vs_pc2,
+                    "Rotate PC3 labels",
+                    &mut o.rotate_pc3_labels,
+                );
+            });
         }
         PlotKind::Heatmap => {
             let o = &mut settings.heatmap;
             let counts = &mut settings.heatmap_sequence_counts;
             let only_active = &mut settings.heatmap_only_active;
-            dialog.plain("general", |rows| {
-                rows.choice(
-                    "Field to plot:",
-                    counts,
-                    &[
-                        (false, "Proportion of sequences (%)"),
-                        (true, "Number of sequences"),
-                    ],
-                );
-                rows.check("Plot only active features", only_active);
-                let maps: Vec<(ColorMap, &str)> =
-                    ColorMap::ALL.iter().map(|&m| (m, m.name())).collect();
-                rows.choice("Colour map:", &mut o.color_map, &maps);
-                rows.check("Show colour scale", &mut o.show_color_scale);
-            });
             dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
             dialog.group("Sort rows", |rows| {
                 rows.order("Method:", &mut o.row_order);
@@ -757,7 +739,22 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 );
             });
             dialog.legend(&mut o.legend);
-            dialog.truncate(&mut o.truncate_labels);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.choice(
+                    "Field to plot:",
+                    counts,
+                    &[
+                        (false, "Proportion of sequences (%)"),
+                        (true, "Number of sequences"),
+                    ],
+                );
+                rows.check("Plot only active features", only_active);
+                let maps: Vec<(ColorMap, &str)> =
+                    ColorMap::ALL.iter().map(|&m| (m, m.name())).collect();
+                rows.choice("Colour map:", &mut o.color_map, &maps);
+                rows.check("Show colour scale", &mut o.show_color_scale);
+                rows.truncate(&mut o.truncate_labels);
+            });
         }
     }
     dialog.changed
