@@ -142,7 +142,9 @@ pub struct PlotSettings {
 
 impl Default for PlotSettings {
     fn default() -> Self {
-        let legend = LegendPosition::UpperRight;
+        // Every plot that has a legend starts with one, placed where it
+        // covers least.
+        let legend = LegendPosition::Best;
         PlotSettings {
             error_bar: extended_error_bar::Options {
                 legend: extended_error_bar::Legend::LowerCenter,
@@ -155,7 +157,10 @@ impl Default for PlotSettings {
                 legend,
                 ..Default::default()
             },
-            profile_bar: sample_plots::ProfileBarOptions::default(),
+            profile_bar: sample_plots::ProfileBarOptions {
+                legend,
+                ..Default::default()
+            },
             profile_bar_only_active: true,
             scatter: scatter::Options {
                 height: 6.0,
@@ -163,6 +168,7 @@ impl Default for PlotSettings {
             },
             group_spread: scatter::Spread::Percentiles2And98,
             sequence_histogram: histogram::SequenceOptions {
+                legend,
                 height: 6.0,
                 ..Default::default()
             },
@@ -186,6 +192,7 @@ impl Default for PlotSettings {
                 ..Default::default()
             },
             heatmap: heatmap::Options {
+                legend,
                 height: 6.0,
                 ..Default::default()
             },
@@ -287,6 +294,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
         highlighted: highlighted(),
         ..settings.scatter.clone()
     };
+    let p_text = |p: f64| format_p_value(p, settings.min_p_exponent);
     let field = settings.feature_field;
     let feature = session.selected_feature.as_deref();
 
@@ -329,10 +337,14 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         ..settings.profile_bar.clone()
                     },
                 ),
-                PlotKind::Scatter => scatter::plot(
-                    &scatter::Data::from_sample_profile(profile),
-                    &scatter_options,
-                ),
+                PlotKind::Scatter => {
+                    let mut data = scatter::Data::from_sample_profile(profile);
+                    data.add_p_values(|feature| {
+                        let row = results.rows.iter().find(|r| r.feature == feature)?;
+                        Some((p_text(row.p_value), p_text(row.p_value_corrected)))
+                    });
+                    scatter::plot(&data, &scatter_options)
+                }
                 PlotKind::SequenceHistogram => {
                     histogram::sequence_histogram(profile, &settings.sequence_histogram)
                 }
@@ -406,14 +418,18 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     Some(data) => feature_plots::box_plot(&data, &settings.box_plot),
                     None => Figure::message(NO_FEATURE),
                 },
-                PlotKind::Scatter => scatter::plot(
-                    &scatter::Data {
+                PlotKind::Scatter => {
+                    let mut data = scatter::Data {
                         x_color: color1,
                         y_color: color2,
                         ..scatter::Data::from_group_profile(profile, settings.group_spread)
-                    },
-                    &scatter_options,
-                ),
+                    };
+                    data.add_p_values(|feature| {
+                        let row = results.rows.iter().find(|r| r.feature == feature)?;
+                        Some((p_text(row.p_value), p_text(row.p_value_corrected)))
+                    });
+                    scatter::plot(&data, &scatter_options)
+                }
                 PlotKind::Pca => pca_plot::plot(
                     &pca_plot::Data {
                         group_colors: vec![color1, color2],

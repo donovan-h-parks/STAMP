@@ -1111,3 +1111,99 @@ fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
         .any(|(x, y)| before.pixel(x, y) != after.pixel(x, y));
     assert!(differs, "the filter label did not change");
 }
+
+#[test]
+fn starts_with_the_tests_and_legends_of_stamp_v2() {
+    use stamp_core::stats::ci::SampleCi;
+    use stamp_core::stats::two_sample::SampleTest;
+    use stamp_plot::axes::LegendPosition;
+
+    let mut harness = Harness::new();
+    harness.app.load_example();
+    harness.settle();
+    let samples = &harness.app.session.samples;
+    assert_eq!(samples.analysis.test, SampleTest::GTestFisher);
+    assert_eq!(
+        samples.analysis.ci_method,
+        SampleCi::DiffBetweenPropAsymptoticCc
+    );
+    // The first two samples in alphabetical order.
+    let mut names = harness
+        .app
+        .session
+        .tree
+        .as_ref()
+        .unwrap()
+        .sample_names()
+        .to_vec();
+    names.sort();
+    assert_eq!([&samples.sample1, &samples.sample2], [&names[0], &names[1]]);
+
+    // Every plot with a legend starts with one, placed where it fits best.
+    let settings = harness.app.plot_settings();
+    for legend in [
+        settings.stat_bar.legend,
+        settings.profile_bar.legend,
+        settings.sequence_histogram.legend,
+        settings.bar.legend,
+        settings.pca.legend,
+        settings.heatmap.legend,
+    ] {
+        assert_eq!(legend, LegendPosition::Best);
+    }
+    assert_ne!(
+        settings.error_bar.legend,
+        stamp_plot::extended_error_bar::Legend::None
+    );
+}
+
+#[test]
+fn scatter_plot_tooltips_say_what_stamp_v2_did() {
+    let mut harness = Harness::enterotypes();
+    harness.app.set_plot_kind(PlotKind::Scatter);
+    harness.settle();
+    let tooltip = |app: &StampApp| {
+        app.figure()
+            .regions
+            .iter()
+            .find(|r| r.item == "Firmicutes")
+            .expect("a point for Firmicutes")
+            .tooltip
+            .clone()
+    };
+    let groups = tooltip(&harness.app);
+    for expected in [
+        "Firmicutes\n\nEnterotype 1 mean proportion: ",
+        "Enterotype 2 mean proportion: ",
+        "Difference between mean proportions (%): 6.511",
+        "Ratio of mean proportions: ",
+        "p-value: 0.165\nCorrected p-value: 0.165",
+    ] {
+        assert!(
+            groups.contains(expected),
+            "missing {expected:?} in {groups:?}"
+        );
+    }
+
+    harness.app.set_mode(Mode::TwoSamples);
+    harness.app.set_plot_kind(PlotKind::Scatter);
+    harness.settle();
+    let samples = tooltip(&harness.app);
+    let (s1, s2) = (
+        harness.app.session.samples.sample1.clone(),
+        harness.app.session.samples.sample2.clone(),
+    );
+    for expected in [
+        format!("Sequences in {s1}: "),
+        format!("Sequences in {s2}: "),
+        format!("{s1} percentage: "),
+        "Difference between proportions (%): ".to_string(),
+        "Ratio of proportions: ".to_string(),
+        "Corrected p-value: ".to_string(),
+    ] {
+        assert!(
+            samples.contains(&expected),
+            "missing {expected:?} in {samples:?}"
+        );
+    }
+}

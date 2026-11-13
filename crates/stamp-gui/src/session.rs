@@ -206,9 +206,9 @@ impl Default for Session {
                 sample1: String::new(),
                 sample2: String::new(),
                 analysis: SampleAnalysis {
-                    test: SampleTest::Fisher,
+                    test: SampleTest::GTestFisher,
                     test_type: TestType::TwoSided,
-                    ci_method: SampleCi::NewcombeWilson,
+                    ci_method: SampleCi::DiffBetweenPropAsymptoticCc,
                     coverage: 0.95,
                     correction: Correction::None,
                 },
@@ -261,7 +261,9 @@ impl Session {
         };
         self.profile_name = name.to_string();
         self.profile_level = tree.hierarchy_headings()[0].clone();
-        let samples = tree.sample_names();
+        // The first two samples in alphabetical order, as the lists show them.
+        let mut samples = tree.sample_names().to_vec();
+        samples.sort();
         self.samples.sample1 = samples[0].clone();
         self.samples.sample2 = samples[1].clone();
         self.tree = Some(Arc::new(tree));

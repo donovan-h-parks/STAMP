@@ -20,6 +20,22 @@ pub struct Point {
     /// Range drawn around the point in each direction, if any.
     pub x_spread: Option<(f64, f64)>,
     pub y_spread: Option<(f64, f64)>,
+    /// What is shown when the point is pointed at; a short summary is used
+    /// if this is empty.
+    pub tooltip: String,
+}
+
+/// The last lines of a tooltip: the difference and ratio of two values.
+fn comparison(x: f64, y: f64, what: &str) -> String {
+    let ratio = if y != 0.0 {
+        format!("{:.3}", x / y)
+    } else {
+        "undefined".to_string()
+    };
+    format!(
+        "Difference between {what} (%): {:.3}\nRatio of {what}: {ratio}",
+        x - y
+    )
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -95,12 +111,26 @@ impl Data {
             .map(|feature| {
                 let c = profile.counts(feature);
                 let (x, y) = c.percentages();
+                let [s1, s2] = [
+                    &profile.profile.sample_names[0],
+                    &profile.profile.sample_names[1],
+                ];
+                // As in STAMP v2: counts, percentages, then how they compare.
+                let tooltip = format!(
+                    "{}\n\nSequences in {s1}: {}\nSequences in {s2}: {}\n\n\
+                     {s1} percentage: {x:.3}\n{s2} percentage: {y:.3}\n\n{}",
+                    feature.name,
+                    c.seq1,
+                    c.seq2,
+                    comparison(x, y, "proportions")
+                );
                 Point {
                     feature: feature.name.clone(),
                     x,
                     y,
                     x_spread: interval(c.seq1, c.parent_seq1),
                     y_spread: interval(c.seq2, c.parent_seq2),
+                    tooltip,
                 }
             })
             .collect();
@@ -129,12 +159,21 @@ impl Data {
             .iter()
             .map(|feature| {
                 let (g1, g2) = profile.percentages(feature);
+                let (x, y) = (mean(&g1), mean(&g2));
+                let tooltip = format!(
+                    "{}\n\n{} mean proportion: {x:.3}\n{} mean proportion: {y:.3}\n\n{}",
+                    feature.name,
+                    profile.group_name1,
+                    profile.group_name2,
+                    comparison(x, y, "mean proportions")
+                );
                 Point {
                     feature: feature.name.clone(),
-                    x: mean(&g1),
-                    y: mean(&g2),
+                    x,
+                    y,
                     x_spread: spread_of(&g1, spread),
                     y_spread: spread_of(&g2, spread),
+                    tooltip,
                 }
             })
             .collect();
@@ -144,6 +183,21 @@ impl Data {
             y_label: format!("{} (%)", profile.group_name2),
             x_color: group_color(0),
             y_color: group_color(1),
+        }
+    }
+}
+
+impl Data {
+    /// Add each feature's p-value and corrected p-value to its tooltip.
+    /// `p_values` gives the two, already formatted, for a feature that was
+    /// tested.
+    pub fn add_p_values(&mut self, p_values: impl Fn(&str) -> Option<(String, String)>) {
+        for point in &mut self.points {
+            if let Some((p, corrected)) = p_values(&point.feature) {
+                point
+                    .tooltip
+                    .push_str(&format!("\n\np-value: {p}\nCorrected p-value: {corrected}"));
+            }
         }
     }
 }
@@ -300,15 +354,19 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             2.0 * radius + 2.0,
             2.0 * radius + 2.0,
             &p.feature,
-            format!(
-                "{}\n{}: {:.3}\n{}: {:.3}\nDifference: {:.3}",
-                p.feature,
-                data.x_label,
-                p.x,
-                data.y_label,
-                p.y,
-                p.x - p.y
-            ),
+            if p.tooltip.is_empty() {
+                format!(
+                    "{}\n{}: {:.3}\n{}: {:.3}\nDifference: {:.3}",
+                    p.feature,
+                    data.x_label,
+                    p.x,
+                    data.y_label,
+                    p.y,
+                    p.x - p.y
+                )
+            } else {
+                p.tooltip.clone()
+            },
         );
     }
 
@@ -434,6 +492,7 @@ mod tests {
             y,
             x_spread: Some((x * 0.9, x * 1.1)),
             y_spread: Some((y * 0.9, y * 1.1)),
+            tooltip: String::new(),
         }
     }
 

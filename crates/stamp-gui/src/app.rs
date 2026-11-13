@@ -226,11 +226,18 @@ struct CountFilterUi {
 
 impl Default for CountFilterUi {
     fn default() -> Self {
+        CountFilterUi::starting_at(1.0)
+    }
+}
+
+impl CountFilterUi {
+    /// A filter that is off, with both thresholds at `threshold`.
+    fn starting_at(threshold: f64) -> CountFilterUi {
         CountFilterUi {
             enabled: false,
             kind: 0,
-            first: 1.0,
-            second: 1.0,
+            first: threshold,
+            second: threshold,
         }
     }
 }
@@ -296,10 +303,23 @@ impl CountFilterUi {
         self.enabled.then_some(match self.kind {
             0 => GroupCountFilter::Maximum(self.first),
             1 => GroupCountFilter::Minimum(self.first),
-            2 => GroupCountFilter::IndependentMinimum(self.first, self.second),
-            _ => GroupCountFilter::IndependentMaximum(self.first, self.second),
+            2 => GroupCountFilter::IndependentMaximum(self.first, self.second),
+            _ => GroupCountFilter::IndependentMinimum(self.first, self.second),
         })
     }
+}
+
+/// The filters each analysis starts with, in the order of `Mode::ALL`. They
+/// are those of STAMP v2: the multiple-group effect size, eta-squared, lies
+/// between zero and one, so its filter starts at 0.8.
+fn starting_filters() -> [FilterUi; 3] {
+    let mut filters = [
+        FilterUi::default(),
+        FilterUi::default(),
+        FilterUi::default(),
+    ];
+    filters[mode_slot(Mode::MultipleGroups)].effect1_minimum = 0.8;
+    filters
 }
 
 /// The user's filter settings, kept even while a filter is switched off.
@@ -323,8 +343,9 @@ impl Default for FilterUi {
         FilterUi {
             p_enabled: true,
             p_value: 0.05,
-            sequences: CountFilterUi::default(),
-            parent_sequences: CountFilterUi::default(),
+            // The thresholds STAMP v2 starts with.
+            sequences: CountFilterUi::starting_at(5.0),
+            parent_sequences: CountFilterUi::starting_at(1.0),
             effect1_enabled: false,
             effect1_measure: 0,
             effect1_minimum: 1.0,
@@ -486,8 +507,8 @@ const SAMPLE_COUNT_KINDS: [&str; 3] = ["maximum", "minimum", "independent"];
 const GROUP_COUNT_KINDS: [&str; 4] = [
     "maximum",
     "minimum",
-    "independent, minimum",
     "independent, maximum",
+    "independent, minimum",
 ];
 
 /// Keyboard shortcuts, as in STAMP v2. In a browser some of them belong to
@@ -746,11 +767,7 @@ impl StampApp {
             ],
             plot_settings: PlotSettings::default(),
             zoom: DEFAULT_ZOOM,
-            filters: [
-                FilterUi::default(),
-                FilterUi::default(),
-                FilterUi::default(),
-            ],
+            filters: starting_filters(),
             selections: Default::default(),
             select_dialog: None,
             figure: Figure::message("Load a profile to begin"),
@@ -1275,7 +1292,7 @@ impl StampApp {
     pub fn load_profile(&mut self, name: &str, text: &str) {
         match self.session.load_profile(name, text) {
             Ok(()) => {
-                self.filters = Default::default();
+                self.filters = starting_filters();
                 self.selections = Default::default();
                 self.select_dialog = None;
                 self.highlight_level = None;
@@ -1936,12 +1953,15 @@ impl StampApp {
             Mode::TwoSamples => {
                 // Samples switched off in the metadata table are not offered.
                 let metadata = self.session.metadata.as_ref();
-                let names: Vec<String> = self
+                let mut names: Vec<String> = self
                     .session
                     .tree
                     .as_ref()
                     .map(|t| t.sample_names().to_vec())
-                    .unwrap_or_default()
+                    .unwrap_or_default();
+                // In alphabetical order, as in STAMP v2.
+                names.sort();
+                let names: Vec<String> = names
                     .into_iter()
                     .filter(|name| {
                         metadata.is_none_or(|m| !m.samples().contains(name) || m.is_active(name))
@@ -3017,15 +3037,39 @@ mod tests {
             filter.sample(),
             Some(SampleCountFilter::Independent(5.0, 7.0))
         );
-        assert_eq!(
-            filter.group(),
-            Some(GroupCountFilter::IndependentMinimum(5.0, 7.0))
-        );
-        filter.kind = 3;
+        // The kinds are listed in STAMP v2's order.
+        assert_eq!(GROUP_COUNT_KINDS[2], "independent, maximum");
         assert_eq!(
             filter.group(),
             Some(GroupCountFilter::IndependentMaximum(5.0, 7.0))
         );
+        filter.kind = 3;
+        assert_eq!(
+            filter.group(),
+            Some(GroupCountFilter::IndependentMinimum(5.0, 7.0))
+        );
+    }
+
+    #[test]
+    fn filters_start_as_in_stamp_v2() {
+        let filters = starting_filters();
+        for filter in &filters {
+            assert!(filter.p_enabled && filter.p_value == 0.05);
+            assert!(!filter.sequences.enabled && !filter.effect1_enabled);
+            assert_eq!(
+                (filter.sequences.first, filter.sequences.second),
+                (5.0, 5.0)
+            );
+            assert_eq!(filter.parent_sequences.first, 1.0);
+            assert_eq!(filter.effect2_minimum, 2.0);
+            assert_eq!(filter.operator, FilterOperator::Or);
+        }
+        assert_eq!(
+            filters[mode_slot(Mode::MultipleGroups)].effect1_minimum,
+            0.8
+        );
+        assert_eq!(filters[mode_slot(Mode::TwoGroups)].effect1_minimum, 1.0);
+        assert_eq!(filters[mode_slot(Mode::TwoSamples)].effect1_minimum, 1.0);
     }
 
     #[test]
@@ -3065,7 +3109,7 @@ mod tests {
         );
         assert_eq!(
             filter.sequences,
-            Some(GroupCountFilter::IndependentMaximum(10.0, 20.0))
+            Some(GroupCountFilter::IndependentMinimum(10.0, 20.0))
         );
         assert_eq!(
             app.session.samples.filter.parent_sequences,

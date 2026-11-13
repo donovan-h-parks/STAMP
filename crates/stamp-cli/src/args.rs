@@ -374,7 +374,7 @@ pub enum ConvertFormat {
         #[command(flatten)]
         output: OutputArg,
     },
-    /// BIOM table (JSON format, optionally gzip-compressed)
+    /// BIOM table (JSON or HDF5 format, optionally gzip-compressed)
     Biom {
         /// BIOM file
         input: PathBuf,
