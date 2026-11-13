@@ -64,6 +64,14 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 26 | done | Plots are saved through File > Save plot as > PNG, SVG or PDF, rather than by choosing the format in the save dialog. A built-in example dataset can be opened from the File menu. |
 | 27 | done | In the graphical application: the plot is centred in its area; Settings has a light/dark mode switch; a Reset button returns the zoom to its default; each group's colour can be changed with a colour picker in the group list; and the results table window has a Download button. |
 | 28 | done | A group keeps one colour in every plot, taken from its position among all groups of the metadata field (or chosen by the user). The second group of a two-group comparison is no longer always orange. |
+| 29 | done | Layout of the graphical application: the analysis type (Multiple groups, Two groups, Two samples) is chosen at the top of the right-hand panel and sets what the Statistics and Filtering sections show; Profile, Groups, Statistics and Filtering are collapsible sections; the plot type, size, sort order, legend and zoom controls sit in a bar beneath the plot; and the View menu shows or hides the side panels, the feature table and the results table. |
+| 30 | done | The feature table beside the single-feature plots lists each feature with its effect size, p-value, corrected p-value and note, and can be limited to the active features. Clicking a row shows that feature. |
+| 31 | done | In light mode the text of active controls is black. |
+| 32 | done | The plot type, a "Configure plot" button, the zoom and the highlight choices sit beneath the plot. "Configure plot" opens a window with the settings of the plot being shown; changes apply as they are made rather than on OK, and "Restore defaults" undoes them. One set of settings is kept for each kind of plot, shared between the analysis types where the plot is the same (the extended error bar, scatter, PCA and heatmap plots). |
+| 33 | done | The feature table is shown beside every plot, not only those of a single feature, and can be hidden from the View menu. |
+| 34 | done | The metadata table (View > Metadata table) runs along the bottom of the window. As in v2, samples are switched off by unticking them, with "Select all" and "Remove all", or by a rule that adds or removes all samples whose value of a field is less than, equal to or greater than a chosen value. The table cannot be sorted by a column, and switching a sample off does not remove it from the sample lists of the two-sample analysis. |
+| 35 | done | Highlighting: a hierarchical level and a name at that level are chosen beneath the plot, and the features under that name are drawn in red in the extended error bar, scatter, two-sample bar and profile bar plots. One choice is shared by the three analysis types. |
+| 36 | done | Legend position: the bar, profile bar, sequence histogram and PCA plots offer Best, Upper right, Centre right, Lower right, Upper left, Centre left, Lower left and None. "Best" takes the first of those places (in matplotlib's order of preference) that covers the fewest drawn shapes; it is a simpler rule than matplotlib's, so it can choose a different corner than v2 did. The extended error bar plot keeps its own choices (around the whole figure), and the heatmap's legend can only be shown or hidden. |
 
 ## Kept as is
 
@@ -100,13 +108,8 @@ numerical methods rather than from different formulas:
 * In the browser build, running analyses in a web worker so that long
   resampling tests do not hold the page while they run.
 * In the graphical application:
-  * per-plot configuration dialogs (the plots share a few settings: size,
-    sort order, legend and zoom);
-  * customising sample and axis colours, and the preference for truncating
-    feature names (group colours can be changed);
-  * switching individual samples off in a metadata table;
-  * the "select features" dialog, the parent sequence-count filter, and
-    highlighting of features in plots;
+  * customising sample and axis colours (group colours can be changed);
+  * the "select features" dialog;
   * choices in the file converters (BIOM metadata field, MG-RAST level
     headings, treatment of multi-category COGs), which the command line has;
   * sending a plot to its own window.
@@ -115,7 +118,7 @@ numerical methods rather than from different formulas:
   (Blues, Reds, Grayscale, Orange to red, Yellow to orange to red and Blue to
   white to red are available); the PCA plot's "fixed pixels per unit
   distance"; and choosing sequence counts instead of proportions in the
-  group bar, box and heatmap plots.
+  heatmap plots (the group bar and box plots offer it).
 
 ## Open questions
 

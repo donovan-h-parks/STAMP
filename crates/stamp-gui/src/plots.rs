@@ -2,7 +2,7 @@
 
 use stamp_core::stats::results::format_p_value;
 use stamp_plot::axes::LegendPosition;
-use stamp_plot::extended_error_bar::{self, SortBy};
+use stamp_plot::extended_error_bar;
 use stamp_plot::{
     feature_plots, heatmap, histogram, pca_plot, post_hoc, sample_plots, scatter, Color, Figure,
 };
@@ -72,6 +72,15 @@ impl PlotKind {
         }
     }
 
+    /// True if the plot can draw chosen features in red.
+    pub fn supports_highlight(self, mode: Mode) -> bool {
+        match self {
+            PlotKind::ExtendedErrorBar | PlotKind::Scatter | PlotKind::ProfileBar => true,
+            PlotKind::Bar => mode == Mode::TwoSamples,
+            _ => false,
+        }
+    }
+
     /// True if the plot shows the selected feature only.
     pub fn uses_selected_feature(self, mode: Mode) -> bool {
         match self {
@@ -82,54 +91,131 @@ impl PlotKind {
     }
 }
 
-/// Settings shared by the plots. Lengths are in inches.
+/// The settings of every plot, as set in the "Configure plot" window.
+/// Lengths are in inches.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlotSettings {
-    pub width: f64,
-    pub height: f64,
-    pub row_height: f64,
-    pub sort_by: SortBy,
-    pub show_legend: bool,
+    pub error_bar: extended_error_bar::Options,
+    pub post_hoc: extended_error_bar::Options,
+    /// The two-sample bar plot.
+    pub stat_bar: sample_plots::StatBarOptions,
+    pub profile_bar: sample_plots::ProfileBarOptions,
+    pub scatter: scatter::Options,
+    /// What the error bars of the two-group scatter plot span.
+    pub group_spread: scatter::Spread,
+    pub sequence_histogram: histogram::SequenceOptions,
+    pub p_value_histogram: histogram::PValueOptions,
+    pub multiple_comparison: sample_plots::MultCompOptions,
+    /// The bar plot of one feature across groups.
+    pub bar: feature_plots::BarOptions,
+    pub box_plot: feature_plots::BoxOptions,
+    /// What the group bar and box plots show for each sample.
+    pub feature_field: feature_plots::Field,
+    pub pca: pca_plot::Options,
+    pub heatmap: heatmap::Options,
+    /// Features drawn in red by the plots that support highlighting.
+    pub highlighted: Vec<String>,
 }
 
 impl Default for PlotSettings {
     fn default() -> Self {
+        let legend = LegendPosition::UpperRight;
         PlotSettings {
-            width: 7.0,
-            height: 6.0,
-            row_height: 0.2,
-            sort_by: SortBy::PValues,
-            show_legend: true,
+            error_bar: extended_error_bar::Options {
+                legend: extended_error_bar::Legend::LowerCenter,
+                ..Default::default()
+            },
+            post_hoc: extended_error_bar::Options::default(),
+            stat_bar: sample_plots::StatBarOptions {
+                legend,
+                ..Default::default()
+            },
+            profile_bar: sample_plots::ProfileBarOptions::default(),
+            scatter: scatter::Options {
+                height: 6.0,
+                ..Default::default()
+            },
+            group_spread: scatter::Spread::Percentiles2And98,
+            sequence_histogram: histogram::SequenceOptions {
+                height: 6.0,
+                ..Default::default()
+            },
+            p_value_histogram: histogram::PValueOptions {
+                height: 6.0,
+                ..Default::default()
+            },
+            multiple_comparison: sample_plots::MultCompOptions::default(),
+            bar: feature_plots::BarOptions {
+                legend,
+                ..Default::default()
+            },
+            box_plot: feature_plots::BoxOptions {
+                height: 6.0,
+                ..Default::default()
+            },
+            feature_field: feature_plots::Field::Proportion,
+            pca: pca_plot::Options {
+                legend,
+                ..Default::default()
+            },
+            heatmap: heatmap::Options {
+                height: 6.0,
+                ..Default::default()
+            },
+            highlighted: Vec::new(),
+        }
+    }
+}
+
+impl PlotSettings {
+    /// Return the settings of one plot to their defaults.
+    pub fn reset(&mut self, mode: Mode, kind: PlotKind) {
+        let defaults = PlotSettings::default();
+        match kind {
+            PlotKind::ExtendedErrorBar => self.error_bar = defaults.error_bar,
+            PlotKind::PostHoc => self.post_hoc = defaults.post_hoc,
+            PlotKind::Bar if mode == Mode::TwoSamples => self.stat_bar = defaults.stat_bar,
+            PlotKind::Bar => {
+                self.bar = defaults.bar;
+                self.feature_field = defaults.feature_field;
+            }
+            PlotKind::Box => {
+                self.box_plot = defaults.box_plot;
+                self.feature_field = defaults.feature_field;
+            }
+            PlotKind::ProfileBar => self.profile_bar = defaults.profile_bar,
+            PlotKind::Scatter => {
+                self.scatter = defaults.scatter;
+                self.group_spread = defaults.group_spread;
+            }
+            PlotKind::SequenceHistogram => self.sequence_histogram = defaults.sequence_histogram,
+            PlotKind::PValueHistogram => self.p_value_histogram = defaults.p_value_histogram,
+            PlotKind::MultipleComparison => self.multiple_comparison = defaults.multiple_comparison,
+            PlotKind::Pca => self.pca = defaults.pca,
+            PlotKind::Heatmap => self.heatmap = defaults.heatmap,
         }
     }
 }
 
 const NO_RESULTS: &str = "Load a profile to begin";
 const NO_METADATA: &str = "Load a metadata file to compare groups of samples";
-const NO_FEATURE: &str = "Select a feature in the results table";
+const NO_FEATURE: &str = "Select a feature in the feature table";
 
 /// Build the figure for the current results of `mode`.
 pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSettings) -> Figure {
     if session.tree.is_none() {
         return Figure::message(NO_RESULTS);
     }
-    let legend = if settings.show_legend {
-        LegendPosition::UpperRight
-    } else {
-        LegendPosition::None
-    };
+    let highlighted = || settings.highlighted.clone();
     let error_bar = extended_error_bar::Options {
-        width: settings.width,
-        row_height: settings.row_height,
-        sort_by: settings.sort_by,
-        legend: if settings.show_legend {
-            extended_error_bar::Legend::LowerCenter
-        } else {
-            extended_error_bar::Legend::None
-        },
-        ..Default::default()
+        highlighted: highlighted(),
+        ..settings.error_bar.clone()
     };
-    let (width, height) = (settings.width, settings.height);
+    let scatter_options = scatter::Options {
+        highlighted: highlighted(),
+        ..settings.scatter.clone()
+    };
+    let field = settings.feature_field;
     let feature = session.selected_feature.as_deref();
 
     match mode {
@@ -149,57 +235,32 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     results,
                     rows,
                     &sample_plots::StatBarOptions {
-                        width,
-                        row_height: settings.row_height,
-                        legend,
-                        ..Default::default()
+                        highlighted: highlighted(),
+                        ..settings.stat_bar.clone()
                     },
                 ),
                 PlotKind::ProfileBar => sample_plots::profile_bar(
                     profile,
                     rows,
                     &sample_plots::ProfileBarOptions {
-                        height,
-                        legend,
-                        ..Default::default()
+                        highlighted: highlighted(),
+                        ..settings.profile_bar.clone()
                     },
                 ),
                 PlotKind::Scatter => scatter::plot(
                     &scatter::Data::from_sample_profile(profile),
-                    &scatter::Options {
-                        width,
-                        height,
-                        ..Default::default()
-                    },
+                    &scatter_options,
                 ),
-                PlotKind::SequenceHistogram => histogram::sequence_histogram(
-                    profile,
-                    &histogram::SequenceOptions {
-                        width,
-                        height,
-                        legend,
-                        ..Default::default()
-                    },
-                ),
+                PlotKind::SequenceHistogram => {
+                    histogram::sequence_histogram(profile, &settings.sequence_histogram)
+                }
                 PlotKind::PValueHistogram => {
                     let p: Vec<f64> = results.rows.iter().map(|r| r.p_value_corrected).collect();
-                    histogram::p_value_histogram(
-                        &p,
-                        &histogram::PValueOptions {
-                            width,
-                            height,
-                            ..Default::default()
-                        },
-                    )
+                    histogram::p_value_histogram(&p, &settings.p_value_histogram)
                 }
-                PlotKind::MultipleComparison => sample_plots::multiple_comparison(
-                    results,
-                    &sample_plots::MultCompOptions {
-                        width,
-                        height: height.min(3.5),
-                        ..Default::default()
-                    },
-                ),
+                PlotKind::MultipleComparison => {
+                    sample_plots::multiple_comparison(results, &settings.multiple_comparison)
+                }
                 _ => Figure::message("This plot is not available for two samples"),
             }
         }
@@ -215,11 +276,8 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
             let color2 = session.group_color(&profile.group_name2);
             let feature_data = || {
                 let name = feature?;
-                let mut data = feature_plots::FeatureData::from_group_profile(
-                    profile,
-                    name,
-                    feature_plots::Field::Proportion,
-                )?;
+                let mut data =
+                    feature_plots::FeatureData::from_group_profile(profile, name, field)?;
                 data.groups[0].color = color1;
                 data.groups[1].color = color2;
                 data.p_value = results
@@ -237,53 +295,27 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     extended_error_bar::plot(&data, &error_bar)
                 }
                 PlotKind::Bar => match feature_data() {
-                    Some(data) => feature_plots::bar_plot(
-                        &data,
-                        &feature_plots::BarOptions {
-                            height,
-                            legend,
-                            ..Default::default()
-                        },
-                    ),
+                    Some(data) => feature_plots::bar_plot(&data, &settings.bar),
                     None => Figure::message(NO_FEATURE),
                 },
                 PlotKind::Box => match feature_data() {
-                    Some(data) => feature_plots::box_plot(
-                        &data,
-                        &feature_plots::BoxOptions {
-                            width,
-                            height,
-                            ..Default::default()
-                        },
-                    ),
+                    Some(data) => feature_plots::box_plot(&data, &settings.box_plot),
                     None => Figure::message(NO_FEATURE),
                 },
                 PlotKind::Scatter => scatter::plot(
                     &scatter::Data {
                         x_color: color1,
                         y_color: color2,
-                        ..scatter::Data::from_group_profile(
-                            profile,
-                            scatter::Spread::Percentiles2And98,
-                        )
+                        ..scatter::Data::from_group_profile(profile, settings.group_spread)
                     },
-                    &scatter::Options {
-                        width,
-                        height,
-                        ..Default::default()
-                    },
+                    &scatter_options,
                 ),
                 PlotKind::Pca => pca_plot::plot(
                     &pca_plot::Data {
                         group_colors: vec![color1, color2],
                         ..pca_plot::Data::from_group_profile(profile)
                     },
-                    &pca_plot::Options {
-                        width,
-                        height,
-                        legend,
-                        ..Default::default()
-                    },
+                    &settings.pca,
                 ),
                 PlotKind::Heatmap => {
                     let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
@@ -292,12 +324,7 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                             group_colors: vec![color1, color2],
                             ..heatmap::Data::from_group_profile(profile, Some(&names))
                         },
-                        &heatmap::Options {
-                            width,
-                            height,
-                            show_legend: settings.show_legend,
-                            ..Default::default()
-                        },
+                        &settings.heatmap,
                     )
                 }
                 _ => Figure::message("This plot is not available for two groups"),
@@ -323,11 +350,8 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                 .collect();
             let feature_data = || {
                 let name = feature?;
-                let mut data = feature_plots::FeatureData::from_multi_group_profile(
-                    profile,
-                    name,
-                    feature_plots::Field::Proportion,
-                )?;
+                let mut data =
+                    feature_plots::FeatureData::from_multi_group_profile(profile, name, field)?;
                 for (group, color) in data.groups.iter_mut().zip(&colors) {
                     group.color = *color;
                 }
@@ -344,12 +368,7 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                         group_colors: colors.clone(),
                         ..pca_plot::Data::from_multi_group_profile(profile)
                     },
-                    &pca_plot::Options {
-                        width,
-                        height,
-                        legend,
-                        ..Default::default()
-                    },
+                    &settings.pca,
                 ),
                 PlotKind::Heatmap => {
                     let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
@@ -358,34 +377,15 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                             group_colors: colors.clone(),
                             ..heatmap::Data::from_multi_group_profile(profile, Some(&names))
                         },
-                        &heatmap::Options {
-                            width,
-                            height,
-                            show_legend: settings.show_legend,
-                            ..Default::default()
-                        },
+                        &settings.heatmap,
                     )
                 }
                 PlotKind::Bar => match feature_data() {
-                    Some(data) => feature_plots::bar_plot(
-                        &data,
-                        &feature_plots::BarOptions {
-                            height,
-                            legend,
-                            ..Default::default()
-                        },
-                    ),
+                    Some(data) => feature_plots::bar_plot(&data, &settings.bar),
                     None => Figure::message(NO_FEATURE),
                 },
                 PlotKind::Box => match feature_data() {
-                    Some(data) => feature_plots::box_plot(
-                        &data,
-                        &feature_plots::BoxOptions {
-                            width,
-                            height,
-                            ..Default::default()
-                        },
-                    ),
+                    Some(data) => feature_plots::box_plot(&data, &settings.box_plot),
                     None => Figure::message(NO_FEATURE),
                 },
                 PlotKind::PostHoc => match (feature, session.post_hoc()) {
@@ -396,10 +396,7 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                         session.multi.post_hoc_coverage,
                         false,
                         &colors,
-                        &extended_error_bar::Options {
-                            legend: extended_error_bar::Legend::None,
-                            ..error_bar
-                        },
+                        &settings.post_hoc,
                     ),
                     (_, Some(Err(message))) => Figure::message(&message),
                     _ => Figure::message(NO_FEATURE),

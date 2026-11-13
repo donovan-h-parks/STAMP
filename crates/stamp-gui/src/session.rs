@@ -43,6 +43,34 @@ impl Mode {
     }
 }
 
+/// How a sample's metadata value compares with a chosen value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Relation {
+    Less,
+    Equal,
+    Greater,
+}
+
+impl Relation {
+    pub const ALL: [Relation; 3] = [Relation::Less, Relation::Equal, Relation::Greater];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Relation::Less => "<",
+            Relation::Equal => "=",
+            Relation::Greater => ">",
+        }
+    }
+
+    fn ordering(self) -> std::cmp::Ordering {
+        match self {
+            Relation::Less => std::cmp::Ordering::Less,
+            Relation::Equal => std::cmp::Ordering::Equal,
+            Relation::Greater => std::cmp::Ordering::Greater,
+        }
+    }
+}
+
 /// A two-sample analysis: settings, then results once computed.
 pub struct SampleState {
     pub sample1: String,
@@ -273,6 +301,52 @@ impl Session {
             .as_ref()?
             .groups(self.group_field.as_deref()?)
             .ok()
+    }
+
+    /// Include or exclude samples from the group analyses, as the metadata
+    /// table does.
+    pub fn set_samples_active(&mut self, samples: &[String], active: bool) {
+        let Some(metadata) = &mut self.metadata else {
+            return;
+        };
+        let mut changed = false;
+        for sample in samples {
+            if metadata.is_active(sample) != active {
+                metadata.set_active(sample, active);
+                changed = true;
+            }
+        }
+        if changed {
+            self.invalidate(Mode::TwoGroups);
+            self.invalidate(Mode::MultipleGroups);
+            self.generation += 1;
+        }
+    }
+
+    /// Samples whose value of a metadata field stands in `relation` to
+    /// `value`. Numbers are compared as numbers when the whole field is
+    /// numeric, and as text otherwise.
+    pub fn samples_matching(&self, field: &str, relation: Relation, value: &str) -> Vec<String> {
+        let Some(metadata) = &self.metadata else {
+            return Vec::new();
+        };
+        let number = |text: &str| text.trim().parse::<f64>().ok();
+        let numeric = metadata.is_numeric(field);
+        metadata
+            .samples()
+            .iter()
+            .filter(|sample| {
+                let Some(own) = metadata.value(sample, field) else {
+                    return false;
+                };
+                let ordering = match (numeric, number(own), number(value)) {
+                    (true, Some(a), Some(b)) => a.partial_cmp(&b),
+                    _ => Some(own.cmp(value)),
+                };
+                ordering == Some(relation.ordering())
+            })
+            .cloned()
+            .collect()
     }
 
     /// Mark one analysis as needing to be run again.
@@ -580,6 +654,34 @@ mod tests {
         session.load_profile("test.spf", SPF).unwrap();
         session.load_metadata("test.tsv", META).unwrap();
         session
+    }
+
+    #[test]
+    fn samples_are_switched_off_by_their_metadata() {
+        let mut session = loaded();
+        let skin = session.samples_matching("Site", Relation::Equal, "skin");
+        assert_eq!(skin, ["A3", "B2", "B3", "C3"]);
+        assert_eq!(
+            session.samples_matching("Site", Relation::Less, "h").len(),
+            5
+        );
+        assert!(session
+            .samples_matching("Site", Relation::Greater, "skin")
+            .is_empty());
+
+        session.set_samples_active(&skin, false);
+        let groups = session.grouping().unwrap();
+        assert_eq!(groups.samples("A").unwrap(), ["A1", "A2"]);
+        assert_eq!(groups.samples("B").unwrap(), ["B1"]);
+        session.run_to_completion(Mode::TwoGroups);
+        let (profile, _) = session.groups.output.as_ref().unwrap();
+        assert_eq!(profile.samples_in_group1().len(), 2);
+        assert_eq!(profile.samples_in_group2().len(), 1);
+
+        session.set_samples_active(&skin, true);
+        session.run_to_completion(Mode::TwoGroups);
+        let (profile, _) = session.groups.output.as_ref().unwrap();
+        assert_eq!(profile.samples_in_group1().len(), 3);
     }
 
     #[test]

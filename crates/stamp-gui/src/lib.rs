@@ -8,6 +8,7 @@ pub mod figure_painter;
 pub mod headless;
 pub mod jobs;
 pub mod platform;
+pub mod plot_config;
 pub mod plots;
 pub mod session;
 

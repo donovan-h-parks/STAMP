@@ -239,10 +239,151 @@ pub fn corner_note(figure: &mut Figure, frame: &Frame, text: &str) {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LegendPosition {
     None,
-    UpperLeft,
+    /// Wherever the legend covers the least of what is drawn.
+    Best,
     UpperRight,
-    LowerLeft,
+    CentreRight,
     LowerRight,
+    UpperLeft,
+    CentreLeft,
+    LowerLeft,
+}
+
+impl LegendPosition {
+    /// Every choice, in the order STAMP v2 lists them.
+    pub const ALL: [LegendPosition; 8] = [
+        LegendPosition::Best,
+        LegendPosition::UpperRight,
+        LegendPosition::CentreRight,
+        LegendPosition::LowerRight,
+        LegendPosition::UpperLeft,
+        LegendPosition::CentreLeft,
+        LegendPosition::LowerLeft,
+        LegendPosition::None,
+    ];
+
+    /// The fixed places, in the order "best" prefers them when they are
+    /// equally clear.
+    const PLACES: [LegendPosition; 6] = [
+        LegendPosition::UpperRight,
+        LegendPosition::UpperLeft,
+        LegendPosition::LowerLeft,
+        LegendPosition::LowerRight,
+        LegendPosition::CentreRight,
+        LegendPosition::CentreLeft,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            LegendPosition::None => "None",
+            LegendPosition::Best => "Best",
+            LegendPosition::UpperRight => "Upper right",
+            LegendPosition::CentreRight => "Centre right",
+            LegendPosition::LowerRight => "Lower right",
+            LegendPosition::UpperLeft => "Upper left",
+            LegendPosition::CentreLeft => "Centre left",
+            LegendPosition::LowerLeft => "Lower left",
+        }
+    }
+
+    /// Top-left corner of a legend of the given size at this place.
+    fn origin(self, frame: &Frame, width: f64, height: f64) -> (f64, f64) {
+        let margin = 8.0;
+        let x = match self {
+            LegendPosition::UpperLeft | LegendPosition::CentreLeft | LegendPosition::LowerLeft => {
+                frame.left + margin
+            }
+            _ => frame.right - margin - width,
+        };
+        let y = match self {
+            LegendPosition::UpperLeft | LegendPosition::UpperRight => frame.top + margin,
+            LegendPosition::CentreLeft | LegendPosition::CentreRight => {
+                (frame.top + frame.bottom - height) / 2.0
+            }
+            _ => frame.bottom - margin - height,
+        };
+        (x, y)
+    }
+}
+
+/// True if the segment from `a` to `b` touches the box.
+fn segment_meets_box(
+    a: (f64, f64),
+    b: (f64, f64),
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
+) -> bool {
+    // Liang-Barsky clipping: the part of the segment inside the box, if any.
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let (mut t0, mut t1) = (0.0_f64, 1.0_f64);
+    for (p, q) in [
+        (-dx, a.0 - left),
+        (dx, right - a.0),
+        (-dy, a.1 - top),
+        (dy, bottom - a.1),
+    ] {
+        if p == 0.0 {
+            if q < 0.0 {
+                return false;
+            }
+        } else if p < 0.0 {
+            t0 = t0.max(q / p);
+        } else {
+            t1 = t1.min(q / p);
+        }
+    }
+    t0 <= t1
+}
+
+/// How much of what is already drawn a box would cover: the number of
+/// shapes it touches. Text is ignored, as are shapes that fill the frame,
+/// such as its background.
+fn clutter(figure: &Figure, frame: &Frame, x: f64, y: f64, width: f64, height: f64) -> usize {
+    use crate::figure::Shape;
+    let (left, top, right, bottom) = (x, y, x + width, y + height);
+    let overlaps = |l: f64, t: f64, r: f64, b: f64| l < right && r > left && t < bottom && b > top;
+    let fills_frame = |l: f64, t: f64, r: f64, b: f64| {
+        (r - l) >= 0.9 * frame.width() && (b - t) >= 0.9 * frame.height()
+    };
+    figure
+        .shapes
+        .iter()
+        .filter(|shape| match shape {
+            Shape::Line { points, .. } => points
+                .windows(2)
+                .any(|pair| segment_meets_box(pair[0], pair[1], left, top, right, bottom)),
+            Shape::Rect {
+                x,
+                y,
+                width,
+                height,
+                ..
+            } => {
+                let (l, t, r, b) = (*x, *y, x + width, y + height);
+                overlaps(l, t, r, b) && !fills_frame(l, t, r, b)
+            }
+            Shape::Circle { cx, cy, radius, .. } => {
+                overlaps(cx - radius, cy - radius, cx + radius, cy + radius)
+            }
+            Shape::Polygon { points, .. } => {
+                let fold = |pick: fn(&(f64, f64)) -> f64, start: f64, f: fn(f64, f64) -> f64| {
+                    points.iter().map(pick).fold(start, f)
+                };
+                let (l, r) = (
+                    fold(|p| p.0, f64::INFINITY, f64::min),
+                    fold(|p| p.0, f64::NEG_INFINITY, f64::max),
+                );
+                let (t, b) = (
+                    fold(|p| p.1, f64::INFINITY, f64::min),
+                    fold(|p| p.1, f64::NEG_INFINITY, f64::max),
+                );
+                overlaps(l, t, r, b) && !fills_frame(l, t, r, b)
+            }
+            Shape::Text { .. } => false,
+        })
+        .count()
 }
 
 /// Shapes of scatter-plot markers.
@@ -324,15 +465,18 @@ pub fn legend(
         .map(|(name, _)| text::width(name, FONT_SIZE))
         .fold(0.0, f64::max);
     let (width, height) = (swatch_w + pad + widest, line * entries.len() as f64);
-    let margin = 8.0;
-    let x = match position {
-        LegendPosition::UpperLeft | LegendPosition::LowerLeft => frame.left + margin,
-        _ => frame.right - margin - width,
+    let place = match position {
+        // The clearest place, taking the first of those equally clear.
+        LegendPosition::Best => LegendPosition::PLACES
+            .into_iter()
+            .min_by_key(|place| {
+                let (x, y) = place.origin(frame, width, height);
+                clutter(figure, frame, x, y, width, height)
+            })
+            .unwrap_or(LegendPosition::UpperRight),
+        fixed => fixed,
     };
-    let y = match position {
-        LegendPosition::UpperLeft | LegendPosition::UpperRight => frame.top + margin,
-        _ => frame.bottom - margin - height,
-    };
+    let (x, y) = place.origin(frame, width, height);
     for (i, (name, color)) in entries.iter().enumerate() {
         let centre = y + line * (i as f64 + 0.5);
         figure.rect(
@@ -448,18 +592,74 @@ mod tests {
             ("Lean".to_string(), group_color(0)),
             ("Obese".to_string(), group_color(1)),
         ];
-        for position in [
-            LegendPosition::UpperLeft,
-            LegendPosition::UpperRight,
-            LegendPosition::LowerLeft,
-            LegendPosition::LowerRight,
-        ] {
+        for position in LegendPosition::ALL {
             let mut figure = Figure::new(200.0, 100.0);
             legend(&mut figure, &frame, &entries, position);
-            assert_eq!(figure.shapes.len(), 4);
+            if position == LegendPosition::None {
+                continue;
+            }
+            assert_eq!(figure.shapes.len(), 4, "{}", position.name());
+            for shape in &figure.shapes {
+                if let crate::figure::Shape::Rect {
+                    x,
+                    y,
+                    width,
+                    height,
+                    ..
+                } = shape
+                {
+                    assert!(*x >= 0.0 && x + width <= 200.0 && *y >= 0.0 && y + height <= 100.0);
+                }
+            }
         }
         let mut figure = Figure::new(200.0, 100.0);
         legend(&mut figure, &frame, &entries, LegendPosition::None);
         assert!(figure.shapes.is_empty());
+    }
+
+    /// Where the first swatch of a legend was drawn.
+    fn swatch(figure: &Figure, from: usize) -> (f64, f64) {
+        match &figure.shapes[from] {
+            crate::figure::Shape::Rect { x, y, .. } => (*x, *y),
+            other => panic!("not a swatch: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn best_legend_avoids_what_is_drawn() {
+        let frame = Frame {
+            left: 0.0,
+            top: 0.0,
+            right: 200.0,
+            bottom: 100.0,
+        };
+        let entries = vec![("Lean".to_string(), group_color(0))];
+        let fill = Some(Color::BLACK);
+
+        // An empty frame: the upper right, as in matplotlib.
+        let mut figure = Figure::new(200.0, 100.0);
+        figure.rect(0.0, 0.0, 200.0, 100.0, Some(Color::WHITE), None);
+        legend(&mut figure, &frame, &entries, LegendPosition::Best);
+        let (x, y) = swatch(&figure, 1);
+        assert!(x > 100.0 && y < 50.0, "({x}, {y})");
+
+        // Bars in the upper right and upper left: the lower left.
+        let mut figure = Figure::new(200.0, 100.0);
+        figure.rect(150.0, 0.0, 50.0, 40.0, fill, None);
+        figure.rect(0.0, 0.0, 50.0, 40.0, fill, None);
+        legend(&mut figure, &frame, &entries, LegendPosition::Best);
+        let (x, y) = swatch(&figure, 2);
+        assert!(x < 100.0 && y > 50.0, "({x}, {y})");
+
+        // A line through three corners and points in the fourth: a side.
+        let mut figure = Figure::new(200.0, 100.0);
+        figure.shapes.push(crate::figure::Shape::Line {
+            points: vec![(20.0, 95.0), (20.0, 12.0), (190.0, 12.0)],
+            stroke: Stroke::solid(Color::BLACK, 1.0),
+        });
+        figure.circle(180.0, 85.0, 3.0, fill, None);
+        legend(&mut figure, &frame, &entries, LegendPosition::Best);
+        let (x, y) = swatch(&figure, 2);
+        assert!(x > 100.0 && (30.0..70.0).contains(&y), "({x}, {y})");
     }
 }

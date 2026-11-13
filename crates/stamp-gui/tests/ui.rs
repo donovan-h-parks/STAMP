@@ -179,6 +179,8 @@ fn results_table_and_feature_selection() {
 #[test]
 fn hovering_a_feature_shows_its_tooltip() {
     let mut harness = Harness::enterotypes();
+    // The plot has the room beside the panels to itself.
+    harness.app.show_feature_table(false);
     harness.settle();
     let plain = harness.screenshot("before_hover");
     // Point at the first row of the plot, wherever the plot has been placed.
@@ -270,6 +272,8 @@ fn built_in_example_and_opened_files_are_loaded() {
 #[test]
 fn plot_is_centred_in_its_space() {
     let mut harness = Harness::enterotypes();
+    // The plot has the room beside the panels to itself.
+    harness.app.show_feature_table(false);
     harness.settle();
     let (plot, space) = harness.app.plot_placement.expect("the plot was drawn");
     // Smaller than its space: equal margins on both sides, in both directions.
@@ -380,4 +384,209 @@ fn results_table_holds_what_would_be_downloaded() {
     assert!(tsv.starts_with("Phyla\tEnterotype 1: mean rel. freq. (%)"));
     assert_eq!(tsv.lines().count(), 18);
     harness.screenshot("table_download");
+}
+
+#[test]
+fn feature_table_lists_and_selects_features() {
+    let mut harness = Harness::enterotypes();
+    harness.app.set_plot_kind(PlotKind::Box);
+    harness.settle();
+
+    // Every feature, in alphabetical order, with its key statistics.
+    let names: Vec<String> = harness
+        .app
+        .feature_table()
+        .iter()
+        .map(|r| r.feature.clone())
+        .collect();
+    assert_eq!(names.len(), 17);
+    let mut sorted = names.clone();
+    sorted.sort();
+    assert_eq!(names, sorted);
+    let table = harness.app.feature_table();
+    let row = table.iter().find(|r| r.feature == "Bacteroidetes").unwrap();
+    assert_eq!(
+        (row.p_value.as_str(), row.p_value_corrected.as_str()),
+        ("0.320", "0.320")
+    );
+    assert!(row.effect_size.parse::<f64>().unwrap() > 5.0);
+    assert!(row.active);
+    let image = harness.screenshot("feature_table");
+    assert!(ink(&image, 0, 0, 1280, 800) > 0.05);
+
+    // Selecting a feature in the table redraws the plot for it.
+    let before = harness.app.figure().clone();
+    harness.app.select_feature("Firmicutes");
+    harness.settle();
+    assert_ne!(*harness.app.figure(), before);
+    let title = harness
+        .app
+        .figure()
+        .shapes
+        .iter()
+        .any(|s| matches!(s, stamp_plot::Shape::Text { text, .. } if text == "Firmicutes"));
+    assert!(title, "the box plot does not show the selected feature");
+
+    // "Show only active features" follows the filters.
+    harness.app.session.groups.filter.significance = Some(0.05);
+    harness.app.set_plot_kind(PlotKind::Box);
+    harness.app.set_show_only_active_features(true);
+    harness.settle();
+    let active: Vec<String> = harness
+        .app
+        .feature_table()
+        .iter()
+        .map(|r| r.feature.clone())
+        .collect();
+    assert_eq!(active, ["Unclassified"]);
+    harness.app.set_show_only_active_features(false);
+    assert_eq!(harness.app.feature_table().len(), 17);
+}
+
+#[test]
+fn side_panels_can_be_hidden() {
+    let mut harness = Harness::enterotypes();
+    // The plot has the room beside the panels to itself.
+    harness.app.show_feature_table(false);
+    harness.settle();
+    let (_, with_panels) = harness.app.plot_placement.unwrap();
+
+    harness.app.show_side_panels(false, true);
+    harness.settle();
+    let (_, without_left) = harness.app.plot_placement.unwrap();
+    assert!(without_left.left() < with_panels.left() - 100.0);
+    assert!((without_left.right() - with_panels.right()).abs() < 2.0);
+
+    harness.app.show_side_panels(false, false);
+    harness.settle();
+    let (plot, whole) = harness.app.plot_placement.unwrap();
+    assert!(whole.width() > 1200.0, "{whole:?}");
+    assert!((plot.center().x - whole.center().x).abs() <= 1.0);
+    harness.screenshot("no_side_panels");
+}
+
+#[test]
+fn light_mode_text_is_black() {
+    let mut harness = Harness::enterotypes();
+    stamp_gui::app::set_dark_mode(&harness.renderer.ctx, false);
+    harness.settle();
+    let image = harness.screenshot("light_text");
+    // Labels and combo-box text in the properties panel are drawn in black.
+    let black = (900..1270)
+        .flat_map(|x| (30..420).map(move |y| (x, y)))
+        .filter(|&(x, y)| image.pixel(x, y) == egui::Color32::BLACK)
+        .count();
+    assert!(
+        black > 300,
+        "only {black} black pixels in the properties panel"
+    );
+}
+
+#[test]
+fn metadata_table_switches_samples_off() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let (_, tall) = harness.app.plot_placement.unwrap();
+    harness.app.show_metadata_table(true);
+    harness.settle();
+    // The table takes its room from the bottom of the window.
+    let (_, short) = harness.app.plot_placement.unwrap();
+    assert!(short.height() < tall.height() - 100.0);
+    let image = harness.screenshot("metadata_table");
+    assert!(ink(&image, 0, 560, 1280, 760) > 0.01);
+
+    // Leaving samples out changes the groups, and so the results.
+    let before = harness.app.results_table().clone();
+    let session = &mut harness.app.session;
+    let field = session.group_field.clone().unwrap();
+    let group = session.groups.group1.clone();
+    let members = session.samples_matching(&field, stamp_gui::session::Relation::Equal, &group);
+    assert_eq!(members.len(), 8);
+    session.set_samples_active(&members[..3], false);
+    harness.settle();
+    assert_eq!(
+        harness
+            .app
+            .session
+            .grouping()
+            .unwrap()
+            .samples(&group)
+            .unwrap()
+            .len(),
+        5
+    );
+    assert_ne!(*harness.app.results_table(), before);
+    harness.screenshot("metadata_table_samples_off");
+}
+
+#[test]
+fn configure_plot_changes_the_plot() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    harness.app.show_plot_config(true);
+    harness.settle();
+    let image = harness.screenshot("configure_plot");
+    assert!(ink(&image, 0, 0, 1280, 800) > 0.05);
+
+    let before = harness.app.figure().clone();
+    let mut settings = harness.app.plot_settings().clone();
+    settings.error_bar.width = 9.0;
+    settings.error_bar.show_p_values = false;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    let after = harness.app.figure();
+    assert!((after.width - before.width - 2.0 * 72.0).abs() < 1.0);
+    let p_values = |figure: &stamp_plot::Figure| {
+        figure
+            .shapes
+            .iter()
+            .any(|s| matches!(s, stamp_plot::Shape::Text { text, .. } if text == "0.037"))
+    };
+    assert!(p_values(&before) && !p_values(after));
+
+    // Every plot has its own window of settings.
+    for mode in Mode::ALL {
+        harness.app.set_mode(mode);
+        for &kind in PlotKind::available(mode) {
+            harness.app.set_plot_kind(kind);
+            harness.settle();
+            let name = kind.name().to_lowercase().replace([' ', '-'], "_");
+            let mode_name = mode.name().to_lowercase().replace(' ', "_");
+            harness.screenshot(&format!("configure_{mode_name}_{name}"));
+        }
+    }
+}
+
+#[test]
+fn features_are_highlighted_in_red() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let choices = harness.app.highlight_choices("Phyla");
+    assert_eq!(choices.len(), 17);
+    assert!(choices.contains(&"Firmicutes".to_string()));
+    let red = |figure: &stamp_plot::Figure| -> Vec<String> {
+        figure
+            .shapes
+            .iter()
+            .filter_map(|s| match s {
+                stamp_plot::Shape::Text { text, style, .. }
+                    if style.color == stamp_plot::Color::RED =>
+                {
+                    Some(text.clone())
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    assert!(red(harness.app.figure()).is_empty());
+
+    harness.app.set_highlight(Some("Phyla"), "Firmicutes");
+    harness.settle();
+    assert_eq!(harness.app.highlighted_features(), ["Firmicutes"]);
+    assert_eq!(red(harness.app.figure()), ["Firmicutes"]);
+    harness.screenshot("highlight");
+
+    harness.app.set_highlight(None, "");
+    harness.settle();
+    assert!(red(harness.app.figure()).is_empty());
 }

@@ -1,4 +1,9 @@
 //! The main window.
+//!
+//! The layout follows STAMP v2: profile and group settings in one side
+//! panel; the kind of analysis with its statistical properties and filters in
+//! the other; the plot in the middle, with the table of features beside it
+//! for plots of a single feature and the choice of plot beneath it.
 
 use eframe::egui::{self, Color32, RichText};
 use stamp_core::stats::ci::SampleCi;
@@ -6,19 +11,21 @@ use stamp_core::stats::correction::Correction;
 use stamp_core::stats::effect_size::{GroupEffectSize, SampleEffectSize};
 use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::post_hoc::PostHocTest;
-use stamp_core::stats::results::{FilterOperator, GroupCountFilter, SampleCountFilter};
+use stamp_core::stats::results::{
+    format_p_value, FilterOperator, GroupCountFilter, SampleCountFilter,
+};
 use stamp_core::stats::table::{group_table, multi_group_table, sample_table, Table};
 use stamp_core::stats::two_group::GroupTest;
 use stamp_core::stats::two_sample::SampleTest;
 use stamp_core::stats::TestType;
 use stamp_core::Unclassified;
-use stamp_plot::extended_error_bar::SortBy;
 use stamp_plot::Figure;
 
 use crate::figure_painter;
 use crate::platform::{self, Event, Platform, Request, Source};
+use crate::plot_config;
 use crate::plots::{self, PlotKind, PlotSettings};
-use crate::session::{Mode, Session};
+use crate::session::{Mode, Relation, Session};
 
 const COVERAGES: [f64; 5] = [0.90, 0.95, 0.98, 0.99, 0.999];
 
@@ -33,9 +40,12 @@ const EXAMPLE_PROFILE: &str =
 const EXAMPLE_METADATA: &str =
     include_str!("../../../examples/EnterotypesArumugam/Enterotypes.metadata.tsv");
 
+/// Width of the combo boxes in the side panels, in points.
+const COMBO_WIDTH: f32 = 132.0;
+
 /// A combo box over a fixed list of choices. Returns true if the choice
 /// changed.
-fn choose<T: PartialEq + Clone>(
+pub(crate) fn choose<T: PartialEq + Clone>(
     ui: &mut egui::Ui,
     id: &str,
     current: &mut T,
@@ -47,9 +57,12 @@ fn choose<T: PartialEq + Clone>(
         .find(|(value, _)| value == current)
         .map(|(_, name)| name.clone())
         .unwrap_or_default();
-    egui::ComboBox::from_id_salt(id)
-        .selected_text(selected)
-        .width(170.0)
+    // A fixed width keeps the side panels narrow; long choices are cut short
+    // in the box and shown in full when pointed at.
+    let combo = egui::ComboBox::from_id_salt(id)
+        .selected_text(selected.clone())
+        .width(COMBO_WIDTH)
+        .truncate()
         .show_ui(ui, |ui| {
             for (value, name) in options {
                 if ui
@@ -62,6 +75,7 @@ fn choose<T: PartialEq + Clone>(
                 }
             }
         });
+    combo.response.on_hover_text(selected);
     changed
 }
 
@@ -79,6 +93,13 @@ fn strings(items: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<(String, Str
         .collect()
 }
 
+/// Text in a table cell. Unlike an ordinary label its text cannot be
+/// selected, so the pointer keeps its arrow and a click anywhere in the cell
+/// reaches the row.
+fn plain_label(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) {
+    ui.add(egui::Label::new(text).selectable(false));
+}
+
 /// A labelled row of a settings grid.
 fn row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui) -> bool) -> bool {
     ui.label(label);
@@ -87,11 +108,109 @@ fn row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui) -> bool) 
     changed
 }
 
+/// A section of a side panel that can be folded away, open to begin with.
+fn section(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
+    egui::CollapsingHeader::new(RichText::new(title).heading())
+        .default_open(true)
+        .show(ui, add);
+    ui.add_space(4.0);
+}
+
+/// A sequence-count filter as the user set it: whether it is on, its kind
+/// (an index into the kinds offered) and its one or two thresholds.
+#[derive(Debug, Clone, PartialEq)]
+struct CountFilterUi {
+    enabled: bool,
+    kind: usize,
+    first: f64,
+    second: f64,
+}
+
+impl Default for CountFilterUi {
+    fn default() -> Self {
+        CountFilterUi {
+            enabled: false,
+            kind: 0,
+            first: 1.0,
+            second: 1.0,
+        }
+    }
+}
+
+impl CountFilterUi {
+    /// Rows of a filter grid: the kind with its on/off box, then the
+    /// thresholds. `second_label` names the second sample or group.
+    fn rows(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: &str,
+        label: &str,
+        kinds: &[&str],
+        second_label: &str,
+    ) {
+        let options: Vec<(usize, String)> = kinds
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (i, k.to_string()))
+            .collect();
+        ui.checkbox(&mut self.enabled, label);
+        ui.add_enabled_ui(self.enabled, |ui| choose(ui, id, &mut self.kind, &options));
+        ui.end_row();
+
+        let independent = kinds[self.kind].starts_with("independent");
+        let first_label = if independent {
+            second_label.replace('2', "1")
+        } else {
+            // "Maximum (<):" or "Minimum (<):"
+            let mut kind = kinds[self.kind].to_string();
+            kind[..1].make_ascii_uppercase();
+            format!("{kind} (<):")
+        };
+        ui.add_enabled(self.enabled, egui::Label::new(first_label));
+        ui.add_enabled(
+            self.enabled,
+            egui::DragValue::new(&mut self.first)
+                .speed(1.0)
+                .range(0.0..=f64::MAX),
+        );
+        ui.end_row();
+        if independent {
+            ui.add_enabled(self.enabled, egui::Label::new(second_label));
+            ui.add_enabled(
+                self.enabled,
+                egui::DragValue::new(&mut self.second)
+                    .speed(1.0)
+                    .range(0.0..=f64::MAX),
+            );
+            ui.end_row();
+        }
+    }
+
+    fn sample(&self) -> Option<SampleCountFilter> {
+        self.enabled.then_some(match self.kind {
+            0 => SampleCountFilter::Maximum(self.first),
+            1 => SampleCountFilter::Minimum(self.first),
+            _ => SampleCountFilter::Independent(self.first, self.second),
+        })
+    }
+
+    fn group(&self) -> Option<GroupCountFilter> {
+        self.enabled.then_some(match self.kind {
+            0 => GroupCountFilter::Maximum(self.first),
+            1 => GroupCountFilter::Minimum(self.first),
+            2 => GroupCountFilter::IndependentMinimum(self.first, self.second),
+            _ => GroupCountFilter::IndependentMaximum(self.first, self.second),
+        })
+    }
+}
+
 /// The user's filter settings, kept even while a filter is switched off.
 #[derive(Debug, Clone, PartialEq)]
 struct FilterUi {
     p_enabled: bool,
     p_value: f64,
+    sequences: CountFilterUi,
+    parent_sequences: CountFilterUi,
     effect1_enabled: bool,
     effect1_measure: usize,
     effect1_minimum: f64,
@@ -99,10 +218,6 @@ struct FilterUi {
     effect2_measure: usize,
     effect2_minimum: f64,
     operator: FilterOperator,
-    counts_enabled: bool,
-    counts_kind: usize,
-    counts_first: f64,
-    counts_second: f64,
 }
 
 impl Default for FilterUi {
@@ -110,6 +225,8 @@ impl Default for FilterUi {
         FilterUi {
             p_enabled: false,
             p_value: 0.05,
+            sequences: CountFilterUi::default(),
+            parent_sequences: CountFilterUi::default(),
             effect1_enabled: false,
             effect1_measure: 0,
             effect1_minimum: 1.0,
@@ -117,30 +234,33 @@ impl Default for FilterUi {
             effect2_measure: 1,
             effect2_minimum: 2.0,
             operator: FilterOperator::Or,
-            counts_enabled: false,
-            counts_kind: 0,
-            counts_first: 1.0,
-            counts_second: 1.0,
         }
     }
 }
 
 impl FilterUi {
-    /// Controls for the filters. `measures` names the effect-size measures
-    /// and `count_kinds` the sequence-count filters; empty lists hide those
-    /// parts.
+    /// Controls for the filters, in the order of STAMP v2: the p-value
+    /// filter, the sequence filters, the effect-size filters and the number
+    /// of features left, each set apart by a line.
+    ///
+    /// `measures` names the effect-size measures and `count_kinds` the
+    /// sequence-count filters; an empty `count_kinds` hides those filters.
+    /// `second_label` is "Sample 2 (<):" or "Group 2 (<):".
     fn show(
         &mut self,
         ui: &mut egui::Ui,
         id: &str,
         measures: &[&str],
         count_kinds: &[&str],
+        second_label: &str,
+        active_features: (usize, usize),
     ) -> bool {
         let before = self.clone();
-        egui::Grid::new(format!("{id}-filters"))
+
+        egui::Grid::new(format!("{id}-p-filter"))
             .num_columns(2)
             .show(ui, |ui| {
-                ui.checkbox(&mut self.p_enabled, "p-value filter (>)");
+                ui.checkbox(&mut self.p_enabled, "p-value filter (>):");
                 ui.add_enabled(
                     self.p_enabled,
                     egui::DragValue::new(&mut self.p_value)
@@ -148,92 +268,110 @@ impl FilterUi {
                         .range(0.0..=1.0),
                 );
                 ui.end_row();
+            });
 
-                if !measures.is_empty() {
-                    let options: Vec<(usize, String)> = measures
-                        .iter()
-                        .enumerate()
-                        .map(|(i, m)| (i, m.to_string()))
-                        .collect();
-                    for (index, enabled, measure, minimum) in [
-                        (
-                            1,
-                            &mut self.effect1_enabled,
+        if !count_kinds.is_empty() {
+            ui.separator();
+            egui::Grid::new(format!("{id}-count-filters"))
+                .num_columns(2)
+                .show(ui, |ui| {
+                    self.sequences.rows(
+                        ui,
+                        &format!("{id}-seq"),
+                        "Sequence filter:",
+                        count_kinds,
+                        second_label,
+                    );
+                    self.parent_sequences.rows(
+                        ui,
+                        &format!("{id}-parent-seq"),
+                        "Parent seq. filter:",
+                        count_kinds,
+                        second_label,
+                    );
+                });
+        }
+
+        ui.separator();
+        let options: Vec<(usize, String)> = measures
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (i, m.to_string()))
+            .collect();
+        let two = measures.len() > 1;
+        egui::Grid::new(format!("{id}-effect-filters"))
+            .num_columns(2)
+            .show(ui, |ui| {
+                let label = if two {
+                    "Effect size filter 1:"
+                } else {
+                    "Effect size filter (<):"
+                };
+                ui.checkbox(&mut self.effect1_enabled, label);
+                if two {
+                    ui.add_enabled_ui(self.effect1_enabled, |ui| {
+                        choose(
+                            ui,
+                            &format!("{id}-effect1"),
                             &mut self.effect1_measure,
-                            &mut self.effect1_minimum,
-                        ),
-                        (
-                            2,
-                            &mut self.effect2_enabled,
-                            &mut self.effect2_measure,
-                            &mut self.effect2_minimum,
-                        ),
-                    ] {
-                        ui.checkbox(enabled, format!("Effect size filter {index} (<)"));
-                        ui.add_enabled(
-                            *enabled,
-                            egui::DragValue::new(minimum)
-                                .speed(0.05)
-                                .range(0.0..=f64::MAX),
-                        );
-                        ui.end_row();
-                        if measures.len() > 1 {
-                            ui.label("");
-                            ui.add_enabled_ui(*enabled, |ui| {
-                                choose(ui, &format!("{id}-effect{index}"), measure, &options)
-                            });
-                            ui.end_row();
-                        }
-                    }
-                    if measures.len() > 1 {
-                        ui.label("Remove a feature failing");
-                        let both = self.effect1_enabled && self.effect2_enabled;
-                        ui.add_enabled_ui(both, |ui| {
-                            choose(
-                                ui,
-                                &format!("{id}-operator"),
-                                &mut self.operator,
-                                &[
-                                    (FilterOperator::Or, "either filter".to_string()),
-                                    (FilterOperator::And, "both filters".to_string()),
-                                ],
-                            )
-                        });
-                        ui.end_row();
-                    }
-                }
-
-                if !count_kinds.is_empty() {
-                    ui.checkbox(&mut self.counts_enabled, "Sequence filter");
-                    let options: Vec<(usize, String)> = count_kinds
-                        .iter()
-                        .enumerate()
-                        .map(|(i, k)| (i, k.to_string()))
-                        .collect();
-                    ui.add_enabled_ui(self.counts_enabled, |ui| {
-                        choose(ui, &format!("{id}-counts"), &mut self.counts_kind, &options)
+                            &options,
+                        )
                     });
                     ui.end_row();
-                    ui.label("");
-                    ui.add_enabled_ui(self.counts_enabled, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut self.counts_first)
-                                    .speed(1.0)
-                                    .range(0.0..=f64::MAX),
-                            );
-                            if count_kinds[self.counts_kind].starts_with("independent") {
-                                ui.add(
-                                    egui::DragValue::new(&mut self.counts_second)
-                                        .speed(1.0)
-                                        .range(0.0..=f64::MAX),
-                                );
-                            }
-                        });
+                    ui.add_enabled(self.effect1_enabled, egui::Label::new("Effect size (<):"));
+                }
+                ui.add_enabled(
+                    self.effect1_enabled,
+                    egui::DragValue::new(&mut self.effect1_minimum)
+                        .speed(0.05)
+                        .range(0.0..=f64::MAX),
+                );
+                ui.end_row();
+
+                if two {
+                    let both = self.effect1_enabled && self.effect2_enabled;
+                    ui.add_enabled(both, egui::Label::new("Remove a feature failing"));
+                    ui.add_enabled_ui(both, |ui| {
+                        choose(
+                            ui,
+                            &format!("{id}-operator"),
+                            &mut self.operator,
+                            &[
+                                (FilterOperator::Or, "either filter (OR)".to_string()),
+                                (FilterOperator::And, "both filters (AND)".to_string()),
+                            ],
+                        )
                     });
+                    ui.end_row();
+
+                    ui.checkbox(&mut self.effect2_enabled, "Effect size filter 2:");
+                    ui.add_enabled_ui(self.effect2_enabled, |ui| {
+                        choose(
+                            ui,
+                            &format!("{id}-effect2"),
+                            &mut self.effect2_measure,
+                            &options,
+                        )
+                    });
+                    ui.end_row();
+                    ui.add_enabled(self.effect2_enabled, egui::Label::new("Effect size (<):"));
+                    ui.add_enabled(
+                        self.effect2_enabled,
+                        egui::DragValue::new(&mut self.effect2_minimum)
+                            .speed(0.05)
+                            .range(0.0..=f64::MAX),
+                    );
                     ui.end_row();
                 }
             });
+
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.label("Number active features:");
+            let (total, active) = active_features;
+            ui.label(RichText::new(active.to_string()).strong())
+                .on_hover_text(format!("{active} of {total} features pass the filters"));
+        });
         *self != before
     }
 }
@@ -246,20 +384,69 @@ const GROUP_COUNT_KINDS: [&str; 4] = [
     "independent, maximum",
 ];
 
+/// The rule in the metadata table for switching samples on or off: add or
+/// remove all samples whose `field` stands in `relation` to `value`.
+#[derive(Debug, Clone, PartialEq)]
+struct MetadataFilterUi {
+    add: bool,
+    field: String,
+    relation: Relation,
+    value: String,
+}
+
+impl Default for MetadataFilterUi {
+    fn default() -> Self {
+        MetadataFilterUi {
+            add: true,
+            field: String::new(),
+            relation: Relation::Equal,
+            value: String::new(),
+        }
+    }
+}
+
+/// One row of the table of features shown beside the plot.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FeatureRow {
+    pub feature: String,
+    pub effect_size: String,
+    pub p_value: String,
+    pub p_value_corrected: String,
+    pub note: String,
+    /// Whether the feature passes the filters.
+    pub active: bool,
+}
+
 /// The STAMP application: one analysis session and its window.
 pub struct StampApp {
     pub session: Session,
     pub mode: Mode,
     plot_kinds: [PlotKind; 3],
-    pub plot_settings: PlotSettings,
+    plot_settings: PlotSettings,
     zoom: f32,
     filters: [FilterUi; 3],
-    /// The current plot and table, rebuilt when `view_dirty` is set.
+    /// The current plot and tables, rebuilt when `view_dirty` is set.
     figure: Figure,
     table: Table,
     table_features: Vec<String>,
+    /// Every feature of the current analysis, in alphabetical order.
+    feature_rows: Vec<FeatureRow>,
+    /// Heading of the effect-size column of the feature table.
+    effect_heading: &'static str,
     view_dirty: bool,
     seen_generation: u64,
+    /// Which parts of the window are shown (the View menu).
+    show_profile_panel: bool,
+    show_properties_panel: bool,
+    show_feature_table: bool,
+    show_only_active_features: bool,
+    show_metadata_table: bool,
+    show_plot_config: bool,
+    metadata_filter: MetadataFilterUi,
+    /// The hierarchical level and the name at that level whose features are
+    /// drawn in red.
+    highlight_level: Option<String>,
+    highlight_value: String,
     show_table: bool,
     show_about: bool,
     show_preferences: bool,
@@ -277,10 +464,48 @@ fn mode_slot(mode: Mode) -> usize {
     Mode::ALL.iter().position(|m| *m == mode).unwrap_or(0)
 }
 
+fn empty_table() -> (Table, Vec<String>) {
+    (
+        Table {
+            headings: Vec::new(),
+            rows: Vec::new(),
+        },
+        Vec::new(),
+    )
+}
+
+/// Switch the whole interface between its dark and light appearance.
+pub fn set_dark_mode(ctx: &egui::Context, dark: bool) {
+    ctx.set_theme(if dark {
+        egui::Theme::Dark
+    } else {
+        egui::Theme::Light
+    });
+}
+
+/// In the light theme, the text of controls that can be used is black;
+/// egui's own light theme draws it in grey. Controls that are switched off
+/// are still faded.
+fn use_black_text_in_light_mode(ctx: &egui::Context) {
+    ctx.style_mut_of(egui::Theme::Light, |style| {
+        let widgets = &mut style.visuals.widgets;
+        for state in [
+            &mut widgets.noninteractive,
+            &mut widgets.inactive,
+            &mut widgets.hovered,
+            &mut widgets.active,
+            &mut widgets.open,
+        ] {
+            state.fg_stroke.color = Color32::BLACK;
+        }
+    });
+}
+
 impl StampApp {
     /// Create the application. Registers the plot font with `ctx`.
     pub fn new(ctx: &egui::Context) -> StampApp {
         figure_painter::install_plot_font(ctx);
+        use_black_text_in_light_mode(ctx);
         StampApp {
             session: Session::default(),
             mode: Mode::TwoSamples,
@@ -302,8 +527,19 @@ impl StampApp {
                 rows: Vec::new(),
             },
             table_features: Vec::new(),
+            feature_rows: Vec::new(),
+            effect_heading: "Effect size",
             view_dirty: true,
             seen_generation: 0,
+            show_profile_panel: true,
+            show_properties_panel: true,
+            show_feature_table: true,
+            show_only_active_features: false,
+            show_metadata_table: false,
+            show_plot_config: false,
+            metadata_filter: MetadataFilterUi::default(),
+            highlight_level: None,
+            highlight_value: String::new(),
             show_table: false,
             show_about: false,
             show_preferences: false,
@@ -333,9 +569,139 @@ impl StampApp {
         self.show_table = show;
     }
 
+    /// Show or hide the side panels, as the View menu does: the profile and
+    /// groups panel, and the properties (statistics and filtering) panel.
+    pub fn show_side_panels(&mut self, profile: bool, properties: bool) {
+        self.show_profile_panel = profile;
+        self.show_properties_panel = properties;
+    }
+
+    /// Show or hide the table of features beside the plot.
+    pub fn show_feature_table(&mut self, show: bool) {
+        self.show_feature_table = show;
+    }
+
+    /// Show or hide the metadata table along the bottom of the window.
+    pub fn show_metadata_table(&mut self, show: bool) {
+        self.show_metadata_table = show;
+    }
+
+    /// Open or close the "Configure plot" window.
+    pub fn show_plot_config(&mut self, show: bool) {
+        self.show_plot_config = show;
+    }
+
+    /// The settings of every plot.
+    pub fn plot_settings(&self) -> &PlotSettings {
+        &self.plot_settings
+    }
+
+    /// Replace the settings of the plots, as the "Configure plot" window
+    /// does.
+    pub fn set_plot_settings(&mut self, settings: PlotSettings) {
+        self.plot_settings = settings;
+        self.view_dirty = true;
+    }
+
+    /// The profile of the analysis being shown.
+    fn current_profile(&self) -> Option<&stamp_core::profile::Profile> {
+        let s = &self.session;
+        match self.mode {
+            Mode::TwoSamples => s.samples.output.as_ref().map(|(p, _)| &p.profile),
+            Mode::TwoGroups => s.groups.output.as_ref().map(|(p, _)| &p.profile),
+            Mode::MultipleGroups => s.multi.output.as_ref().map(|(p, _)| &p.profile),
+        }
+    }
+
+    /// The names found at a hierarchical level of the current profile, in
+    /// alphabetical order: the choices for highlighting.
+    pub fn highlight_choices(&self, level: &str) -> Vec<String> {
+        let Some(profile) = self.current_profile() else {
+            return Vec::new();
+        };
+        let Some(index) = profile.hierarchy_headings.iter().position(|h| h == level) else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = profile
+            .features()
+            .iter()
+            .filter_map(|f| f.hierarchy.get(index).cloned())
+            .collect();
+        names.sort_by(|a, b| (a.to_lowercase(), a).cmp(&(b.to_lowercase(), b)));
+        names.dedup();
+        names
+    }
+
+    /// Draw in red the features that fall under `value` at a hierarchical
+    /// level, in the plots that support it. `None` highlights nothing.
+    pub fn set_highlight(&mut self, level: Option<&str>, value: &str) {
+        self.highlight_level = level.map(str::to_string);
+        self.highlight_value = value.to_string();
+        self.view_dirty = true;
+    }
+
+    /// The features currently highlighted.
+    pub fn highlighted_features(&self) -> Vec<String> {
+        let (Some(level), Some(profile)) = (&self.highlight_level, self.current_profile()) else {
+            return Vec::new();
+        };
+        let Some(index) = profile.hierarchy_headings.iter().position(|h| h == level) else {
+            return Vec::new();
+        };
+        profile
+            .features()
+            .iter()
+            .filter(|f| f.hierarchy.get(index) == Some(&self.highlight_value))
+            .map(|f| f.name.clone())
+            .collect()
+    }
+
     /// The figure currently shown.
     pub fn figure(&self) -> &Figure {
         &self.figure
+    }
+
+    /// The results table as shown: the rows that pass the filters.
+    pub fn results_table(&self) -> &Table {
+        &self.table
+    }
+
+    /// The features listed beside single-feature plots, honouring the "show
+    /// only active features" choice.
+    pub fn feature_table(&self) -> Vec<&FeatureRow> {
+        self.feature_rows
+            .iter()
+            .filter(|row| row.active || !self.show_only_active_features)
+            .collect()
+    }
+
+    pub fn set_show_only_active_features(&mut self, only_active: bool) {
+        self.show_only_active_features = only_active;
+    }
+
+    /// Select the feature shown by the single-feature plots.
+    pub fn select_feature(&mut self, feature: &str) {
+        self.session.selected_feature = Some(feature.to_string());
+        self.view_dirty = true;
+    }
+
+    /// The zoom of the plot; 1 shows one figure point per screen point.
+    pub fn zoom(&self) -> f32 {
+        self.zoom
+    }
+
+    pub fn set_zoom(&mut self, zoom: f32) {
+        self.zoom = zoom.clamp(0.5, 4.0);
+    }
+
+    /// Return the plot to the zoom it starts with.
+    pub fn reset_zoom(&mut self) {
+        self.zoom = DEFAULT_ZOOM;
+    }
+
+    /// The message currently shown to the user, if any.
+    pub fn notice(&self) -> Option<&str> {
+        self.notice.as_deref()
     }
 
     /// Load a profile from the text of a file.
@@ -343,6 +709,9 @@ impl StampApp {
         match self.session.load_profile(name, text) {
             Ok(()) => {
                 self.filters = Default::default();
+                self.highlight_level = None;
+                self.highlight_value.clear();
+                self.metadata_filter = MetadataFilterUi::default();
                 self.mode = Mode::TwoSamples;
                 self.apply_filters();
             }
@@ -365,6 +734,43 @@ impl StampApp {
         self.view_dirty = true;
     }
 
+    /// Load the example that ships inside the application.
+    pub fn load_example(&mut self) {
+        self.load_profile("Enterotypes.profile.spf", EXAMPLE_PROFILE);
+        self.load_metadata("Enterotypes.metadata.tsv", EXAMPLE_METADATA);
+    }
+
+    /// Hand the application the outcome of a file request, as the file
+    /// dialogs do.
+    pub fn deliver(&self, event: Event) {
+        self.platform.push(event);
+    }
+
+    /// Save the results table as it is shown, through the platform's save
+    /// dialog or as a browser download.
+    pub fn download_table(&self, ctx: &egui::Context) {
+        let bytes = self.table.to_tsv().into_bytes();
+        self.platform.request(
+            Request::Save {
+                name: "results.tsv".to_string(),
+                bytes,
+            },
+            ctx,
+        );
+    }
+
+    /// Act on files that have been opened or converted since the last frame.
+    fn handle_file_events(&mut self) {
+        for event in self.platform.poll() {
+            match event {
+                Event::Profile(file) => self.load_profile(&file.name, &file.text()),
+                Event::Metadata(file) => self.load_metadata(&file.name, &file.text()),
+                Event::Converted { name, spf } => self.load_profile(&name, &spf),
+                Event::Failed(message) => self.notice = Some(message),
+            }
+        }
+    }
+
     /// Copy the filter controls into the session's filters.
     fn apply_filters(&mut self) {
         let effect = |enabled: bool, minimum: f64| enabled.then_some(minimum);
@@ -377,11 +783,8 @@ impl StampApp {
         filter.effect_size2 = effect(f.effect2_enabled, f.effect2_minimum)
             .map(|m| (SampleEffectSize::ALL[f.effect2_measure], m));
         filter.operator = f.operator;
-        filter.sequences = f.counts_enabled.then_some(match f.counts_kind {
-            0 => SampleCountFilter::Maximum(f.counts_first),
-            1 => SampleCountFilter::Minimum(f.counts_first),
-            _ => SampleCountFilter::Independent(f.counts_first, f.counts_second),
-        });
+        filter.sequences = f.sequences.sample();
+        filter.parent_sequences = f.parent_sequences.sample();
 
         let f = &self.filters[mode_slot(Mode::TwoGroups)];
         let filter = &mut self.session.groups.filter;
@@ -392,12 +795,8 @@ impl StampApp {
         filter.effect_size2 =
             effect(f.effect2_enabled, f.effect2_minimum).map(|m| (measure(f.effect2_measure), m));
         filter.operator = f.operator;
-        filter.sequences = f.counts_enabled.then_some(match f.counts_kind {
-            0 => GroupCountFilter::Maximum(f.counts_first),
-            1 => GroupCountFilter::Minimum(f.counts_first),
-            2 => GroupCountFilter::IndependentMinimum(f.counts_first, f.counts_second),
-            _ => GroupCountFilter::IndependentMaximum(f.counts_first, f.counts_second),
-        });
+        filter.sequences = f.sequences.group();
+        filter.parent_sequences = f.parent_sequences.group();
 
         let f = &self.filters[mode_slot(Mode::MultipleGroups)];
         let filter = &mut self.session.multi.filter;
@@ -406,8 +805,9 @@ impl StampApp {
         self.view_dirty = true;
     }
 
-    /// Rebuild the plot and the results table from the session.
+    /// Rebuild the plot and the tables from the session.
     fn refresh_view(&mut self) {
+        self.plot_settings.highlighted = self.highlighted_features();
         self.figure = plots::build(
             &self.session,
             self.mode,
@@ -415,9 +815,34 @@ impl StampApp {
             &self.plot_settings,
         );
         let s = &self.session;
+        let feature_row =
+            |feature: &str, effect: f64, p: f64, corrected: f64, note: &str| FeatureRow {
+                feature: feature.to_string(),
+                effect_size: format!("{effect:.3}"),
+                p_value: format_p_value(p, -15),
+                p_value_corrected: format_p_value(corrected, -15),
+                note: note.to_string(),
+                active: false,
+            };
+
+        let mut feature_rows = Vec::new();
+        let mut effect_heading = "Effect size";
         let (table, features): (Table, Vec<String>) = match self.mode {
             Mode::TwoSamples => match &s.samples.output {
                 Some((profile, results)) => {
+                    feature_rows = results
+                        .rows
+                        .iter()
+                        .map(|r| {
+                            feature_row(
+                                &r.feature,
+                                r.effect_size,
+                                r.p_value,
+                                r.p_value_corrected,
+                                &r.note,
+                            )
+                        })
+                        .collect();
                     let rows = s.sample_rows();
                     let features = rows.iter().map(|r| r.feature.clone()).collect();
                     (sample_table(profile, results, rows), features)
@@ -426,6 +851,20 @@ impl StampApp {
             },
             Mode::TwoGroups => match &s.groups.output {
                 Some((profile, results)) => {
+                    effect_heading = "Diff. between means";
+                    feature_rows = results
+                        .rows
+                        .iter()
+                        .map(|r| {
+                            feature_row(
+                                &r.feature,
+                                r.effect_size,
+                                r.p_value,
+                                r.p_value_corrected,
+                                &r.note,
+                            )
+                        })
+                        .collect();
                     let rows = s.group_rows();
                     let features = rows.iter().map(|r| r.feature.clone()).collect();
                     (group_table(profile, results, rows), features)
@@ -434,6 +873,20 @@ impl StampApp {
             },
             Mode::MultipleGroups => match &s.multi.output {
                 Some((profile, results)) => {
+                    effect_heading = "Eta-squared";
+                    feature_rows = results
+                        .rows
+                        .iter()
+                        .map(|r| {
+                            feature_row(
+                                &r.feature,
+                                r.effect_size,
+                                r.p_value,
+                                r.p_value_corrected,
+                                &r.note,
+                            )
+                        })
+                        .collect();
                     let rows = s.multi_rows();
                     let features = rows.iter().map(|r| r.feature.clone()).collect();
                     (multi_group_table(profile, results, rows), features)
@@ -441,8 +894,16 @@ impl StampApp {
                 None => empty_table(),
             },
         };
+        for row in feature_rows.iter_mut() {
+            row.active = features.contains(&row.feature);
+        }
+        // The feature table starts in alphabetical order, as in STAMP v2.
+        feature_rows.sort_by(|a, b| a.feature.cmp(&b.feature));
+
         self.table = table;
         self.table_features = features;
+        self.feature_rows = feature_rows;
+        self.effect_heading = effect_heading;
         self.view_dirty = false;
     }
 
@@ -460,16 +921,26 @@ impl StampApp {
 
         egui::Panel::top("menu").show(ui, |ui| self.menu(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
-        egui::Panel::left("profile")
-            .default_size(215.0)
-            .show(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| self.profile_panel(ui));
-            });
-        egui::Panel::right("properties")
-            .default_size(285.0)
-            .show(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| self.properties_panel(ui));
-            });
+        if self.show_metadata_table {
+            egui::Panel::bottom("metadata")
+                .resizable(true)
+                .default_size(220.0)
+                .show(ui, |ui| self.metadata_panel(ui));
+        }
+        if self.show_profile_panel {
+            egui::Panel::left("profile")
+                .default_size(215.0)
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| self.profile_panel(ui));
+                });
+        }
+        if self.show_properties_panel {
+            egui::Panel::right("properties")
+                .default_size(285.0)
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| self.properties_panel(ui));
+                });
+        }
         egui::CentralPanel::default().show(ui, |ui| self.plot_panel(ui));
         self.windows(ui.ctx());
     }
@@ -521,11 +992,9 @@ impl StampApp {
                         }
                     });
                 });
+                let save_table = egui::Button::new("Save results table...");
                 if ui
-                    .add_enabled(
-                        !self.table.rows.is_empty(),
-                        egui::Button::new("Save results table..."),
-                    )
+                    .add_enabled(!self.table.rows.is_empty(), save_table)
                     .clicked()
                 {
                     self.download_table(&ctx);
@@ -539,6 +1008,11 @@ impl StampApp {
                 }
             });
             ui.menu_button("View", |ui| {
+                ui.checkbox(&mut self.show_profile_panel, "Profile and groups");
+                ui.checkbox(&mut self.show_properties_panel, "Properties");
+                ui.checkbox(&mut self.show_feature_table, "Feature table");
+                ui.checkbox(&mut self.show_metadata_table, "Metadata table");
+                ui.separator();
                 ui.checkbox(&mut self.show_table, "Results table");
             });
             ui.menu_button("Settings", |ui| {
@@ -559,67 +1033,6 @@ impl StampApp {
         });
     }
 
-    /// Save the results table as it is shown, through the platform's save
-    /// dialog or as a browser download.
-    pub fn download_table(&self, ctx: &egui::Context) {
-        let bytes = self.table.to_tsv().into_bytes();
-        self.platform.request(
-            Request::Save {
-                name: "results.tsv".to_string(),
-                bytes,
-            },
-            ctx,
-        );
-    }
-
-    /// The zoom of the plot; 1 shows one figure point per screen point.
-    pub fn zoom(&self) -> f32 {
-        self.zoom
-    }
-
-    /// Return the plot to the zoom it starts with.
-    pub fn reset_zoom(&mut self) {
-        self.zoom = DEFAULT_ZOOM;
-    }
-
-    /// The results table as shown: the rows that pass the filters.
-    pub fn results_table(&self) -> &Table {
-        &self.table
-    }
-
-    pub fn set_zoom(&mut self, zoom: f32) {
-        self.zoom = zoom.clamp(0.5, 4.0);
-    }
-
-    /// Load the example that ships inside the application.
-    pub fn load_example(&mut self) {
-        self.load_profile("Enterotypes.profile.spf", EXAMPLE_PROFILE);
-        self.load_metadata("Enterotypes.metadata.tsv", EXAMPLE_METADATA);
-    }
-
-    /// Hand the application the outcome of a file request, as the file
-    /// dialogs do.
-    pub fn deliver(&self, event: Event) {
-        self.platform.push(event);
-    }
-
-    /// The message currently shown to the user, if any.
-    pub fn notice(&self) -> Option<&str> {
-        self.notice.as_deref()
-    }
-
-    /// Act on files that have been opened or converted since the last frame.
-    fn handle_file_events(&mut self) {
-        for event in self.platform.poll() {
-            match event {
-                Event::Profile(file) => self.load_profile(&file.name, &file.text()),
-                Event::Metadata(file) => self.load_metadata(&file.name, &file.text()),
-                Event::Converted { name, spf } => self.load_profile(&name, &spf),
-                Event::Failed(message) => self.notice = Some(message),
-            }
-        }
-    }
-
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if self.session.tree.is_none() {
@@ -627,7 +1040,7 @@ impl StampApp {
                 return;
             }
             let (total, active) = self.session.feature_counts(self.mode);
-            ui.label(format!("{active} of {total} features shown"));
+            ui.label(format!("Features: {total}, active: {active}"));
             if let Some(progress) = self.session.progress(self.mode) {
                 ui.separator();
                 ui.add(
@@ -647,7 +1060,11 @@ impl StampApp {
     }
 
     fn profile_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Profile");
+        section(ui, "Profile", |ui| self.profile_section(ui));
+        section(ui, "Groups", |ui| self.groups_section(ui));
+    }
+
+    fn profile_section(&mut self, ui: &mut egui::Ui) {
         let Some(tree) = self.session.tree.clone() else {
             ui.label("Use File > Load profile to open a STAMP profile.");
             return;
@@ -665,14 +1082,6 @@ impl StampApp {
         egui::Grid::new("profile-grid")
             .num_columns(2)
             .show(ui, |ui| {
-                changed |= row(ui, "Profile level:", |ui| {
-                    choose(
-                        ui,
-                        "profile-level",
-                        &mut self.session.profile_level,
-                        &strings(headings),
-                    )
-                });
                 let depth = headings
                     .iter()
                     .position(|h| *h == self.session.profile_level)
@@ -694,6 +1103,14 @@ impl StampApp {
                 }
                 changed |= row(ui, "Parent level:", |ui| {
                     choose(ui, "parent-level", &mut self.session.parent_level, &parents)
+                });
+                changed |= row(ui, "Profile level:", |ui| {
+                    choose(
+                        ui,
+                        "profile-level",
+                        &mut self.session.profile_level,
+                        &strings(headings),
+                    )
                 });
                 changed |= row(ui, "Unclassified:", |ui| {
                     choose(
@@ -720,9 +1137,9 @@ impl StampApp {
         if changed {
             self.session.invalidate_all();
         }
+    }
 
-        ui.add_space(10.0);
-        ui.heading("Groups");
+    fn groups_section(&mut self, ui: &mut egui::Ui) {
         let Some(metadata) = &self.session.metadata else {
             ui.label("Use File > Load metadata to define groups of samples.");
             return;
@@ -736,51 +1153,62 @@ impl StampApp {
                 self.session.set_group_field(&field);
             }
         });
-        if let Some(groups) = self.session.grouping() {
-            let names: Vec<String> = groups.names().map(str::to_string).collect();
-            for name in &names {
-                let size = groups.samples(name).map_or(0, <[String]>::len);
-                let position = self
-                    .session
-                    .multi
-                    .active_groups
-                    .iter()
-                    .position(|g| g == name);
-                ui.horizontal(|ui| {
-                    // The swatch opens a colour picker for the group.
-                    let color = self.session.group_color(name);
-                    let mut rgb = [color.r, color.g, color.b];
-                    let picker = ui
-                        .color_edit_button_srgb(&mut rgb)
-                        .on_hover_text("Change the colour of this group");
-                    if picker.changed() {
-                        self.session
-                            .set_group_color(name, stamp_plot::Color::rgb(rgb[0], rgb[1], rgb[2]));
+        let Some(groups) = self.session.grouping() else {
+            return;
+        };
+        let names: Vec<String> = groups.names().map(str::to_string).collect();
+        for name in &names {
+            let size = groups.samples(name).map_or(0, <[String]>::len);
+            let position = self
+                .session
+                .multi
+                .active_groups
+                .iter()
+                .position(|g| g == name);
+            ui.horizontal(|ui| {
+                // The swatch opens a colour picker for the group.
+                let color = self.session.group_color(name);
+                let mut rgb = [color.r, color.g, color.b];
+                let picker = ui
+                    .color_edit_button_srgb(&mut rgb)
+                    .on_hover_text("Change the colour of this group");
+                if picker.changed() {
+                    self.session
+                        .set_group_color(name, stamp_plot::Color::rgb(rgb[0], rgb[1], rgb[2]));
+                }
+                let mut active = position.is_some();
+                let checkbox = egui::Checkbox::new(&mut active, format!("{name} ({size})"));
+                if ui.add_enabled(size > 0, checkbox).changed() {
+                    if active {
+                        self.session.multi.active_groups.push(name.clone());
+                        self.session.multi.active_groups.sort();
+                    } else {
+                        self.session.multi.active_groups.retain(|g| g != name);
                     }
-                    let mut active = position.is_some();
-                    if ui
-                        .add_enabled(
-                            size > 0,
-                            egui::Checkbox::new(&mut active, format!("{name} ({size})")),
-                        )
-                        .changed()
-                    {
-                        if active {
-                            self.session.multi.active_groups.push(name.clone());
-                            self.session.multi.active_groups.sort();
-                        } else {
-                            self.session.multi.active_groups.retain(|g| g != name);
-                        }
-                        self.session.invalidate(Mode::MultipleGroups);
-                    }
-                });
-            }
+                    self.session.invalidate(Mode::MultipleGroups);
+                }
+            });
         }
     }
 
     fn properties_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Statistics");
+        // The kind of analysis decides what the sections below contain.
+        ui.horizontal_wrapped(|ui| {
+            for mode in Mode::ALL {
+                let tab = ui.selectable_label(self.mode == mode, mode.name());
+                if tab.clicked() && self.mode != mode {
+                    self.set_mode(mode);
+                }
+            }
+        });
+        ui.separator();
+        section(ui, "Statistics", |ui| self.statistics_section(ui));
+        section(ui, "Filtering", |ui| self.filtering_section(ui));
+    }
+
+    fn statistics_section(&mut self, ui: &mut egui::Ui) {
         if self.session.tree.is_none() {
+            ui.label("Load a profile to choose a statistical test.");
             return;
         }
         let corrections = named(&Correction::ALL, Correction::name);
@@ -811,12 +1239,8 @@ impl StampApp {
                             choose(ui, "sample2", &mut state.sample2, &samples)
                         });
                         rerun |= row(ui, "Statistical test:", |ui| {
-                            choose(
-                                ui,
-                                "sample-test",
-                                &mut state.analysis.test,
-                                &named(&SampleTest::ALL, SampleTest::name),
-                            )
+                            let tests = named(&SampleTest::ALL, SampleTest::name);
+                            choose(ui, "sample-test", &mut state.analysis.test, &tests)
                         });
                         // Tests without a one-sided p-value are always two-sided.
                         if !state.analysis.test.has_one_sided()
@@ -836,12 +1260,8 @@ impl StampApp {
                         });
                         ui.end_row();
                         rerun |= row(ui, "CI method:", |ui| {
-                            choose(
-                                ui,
-                                "sample-ci",
-                                &mut state.analysis.ci_method,
-                                &named(&SampleCi::ALL, SampleCi::name),
-                            )
+                            let methods = named(&SampleCi::ALL, SampleCi::name);
+                            choose(ui, "sample-ci", &mut state.analysis.ci_method, &methods)
                         });
                         rerun |= row(ui, "Coverage:", |ui| {
                             choose(
@@ -879,12 +1299,8 @@ impl StampApp {
                             choose(ui, "group2", &mut state.group2, &seconds)
                         });
                         rerun |= row(ui, "Statistical test:", |ui| {
-                            choose(
-                                ui,
-                                "group-test",
-                                &mut state.analysis.test,
-                                &named(&GroupTest::ALL, GroupTest::name),
-                            )
+                            let tests = named(&GroupTest::ALL, GroupTest::name);
+                            choose(ui, "group-test", &mut state.analysis.test, &tests)
                         });
                         rerun |= row(ui, "Type:", |ui| {
                             choose(ui, "group-type", &mut state.analysis.test_type, &test_types)
@@ -920,11 +1336,19 @@ impl StampApp {
                     .num_columns(2)
                     .show(ui, |ui| {
                         rerun |= row(ui, "Statistical test:", |ui| {
+                            let tests = named(&MultiGroupTest::ALL, MultiGroupTest::name);
+                            choose(ui, "multi-test", &mut state.analysis.test, &tests)
+                        });
+                        post_hoc_changed |= row(ui, "Post-hoc test:", |ui| {
+                            let tests = named(&PostHocTest::ALL, PostHocTest::name);
+                            choose(ui, "post-hoc-test", &mut state.post_hoc_test, &tests)
+                        });
+                        post_hoc_changed |= row(ui, "Post-hoc coverage:", |ui| {
                             choose(
                                 ui,
-                                "multi-test",
-                                &mut state.analysis.test,
-                                &named(&MultiGroupTest::ALL, MultiGroupTest::name),
+                                "post-hoc-coverage",
+                                &mut state.post_hoc_coverage,
+                                &coverages,
                             )
                         });
                         row(ui, "Effect size:", |ui| {
@@ -937,22 +1361,6 @@ impl StampApp {
                         }) {
                             correction = Some(chosen);
                         }
-                        post_hoc_changed |= row(ui, "Post-hoc test:", |ui| {
-                            choose(
-                                ui,
-                                "post-hoc-test",
-                                &mut state.post_hoc_test,
-                                &named(&PostHocTest::ALL, PostHocTest::name),
-                            )
-                        });
-                        post_hoc_changed |= row(ui, "Post-hoc coverage:", |ui| {
-                            choose(
-                                ui,
-                                "post-hoc-coverage",
-                                &mut state.post_hoc_coverage,
-                                &coverages,
-                            )
-                        });
                     });
                 self.view_dirty |= post_hoc_changed;
             }
@@ -963,130 +1371,361 @@ impl StampApp {
         if let Some(correction) = correction {
             self.session.set_correction(mode, correction);
         }
+    }
 
-        ui.add_space(10.0);
-        ui.heading("Filtering");
-        let slot = mode_slot(mode);
+    fn filtering_section(&mut self, ui: &mut egui::Ui) {
+        let mode = self.mode;
+        let available = match mode {
+            Mode::TwoSamples => self.session.tree.is_some(),
+            _ => self.session.metadata.is_some(),
+        };
+        if !available {
+            ui.label("Filters apply once an analysis has been run.");
+            return;
+        }
+        let counts = self.session.feature_counts(mode);
+        let filter = &mut self.filters[mode_slot(mode)];
         let changed = match mode {
             Mode::TwoSamples => {
                 let measures: Vec<&str> = SampleEffectSize::ALL.iter().map(|m| m.name()).collect();
-                self.filters[slot].show(ui, "samples", &measures, &SAMPLE_COUNT_KINDS)
+                filter.show(
+                    ui,
+                    "samples",
+                    &measures,
+                    &SAMPLE_COUNT_KINDS,
+                    "Sample 2 (<):",
+                    counts,
+                )
             }
             Mode::TwoGroups => {
                 let measures: Vec<&str> = GroupEffectSize::ALL.iter().map(|m| m.name()).collect();
-                self.filters[slot].show(ui, "groups", &measures, &GROUP_COUNT_KINDS)
+                filter.show(
+                    ui,
+                    "groups",
+                    &measures,
+                    &GROUP_COUNT_KINDS,
+                    "Group 2 (<):",
+                    counts,
+                )
             }
-            Mode::MultipleGroups => self.filters[slot].show(ui, "multi", &["Eta-squared"], &[]),
+            Mode::MultipleGroups => filter.show(ui, "multi", &["Eta-squared"], &[], "", counts),
         };
         if changed {
             self.apply_filters();
         }
     }
 
+    /// The middle of the window: the plot, the choice of plot beneath it,
+    /// and the table of features beside it for plots of a single feature.
     fn plot_panel(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            for mode in Mode::ALL {
-                if ui
-                    .selectable_label(self.mode == mode, mode.name())
-                    .clicked()
-                    && self.mode != mode
-                {
-                    self.set_mode(mode);
-                }
-            }
-        });
-        ui.separator();
+        if self.view_dirty {
+            self.refresh_view();
+        }
+        egui::Panel::bottom("plot-bar").show(ui, |ui| self.plot_bar(ui));
+        if self.show_feature_table && self.session.tree.is_some() {
+            egui::Panel::right("features")
+                .default_size(270.0)
+                .show(ui, |ui| self.feature_panel(ui));
+        }
 
-        let mut changed = false;
+        egui::CentralPanel::default().show(ui, |ui| {
+            // The plot is centred in the room left for it.
+            let space = ui.available_size();
+            egui::ScrollArea::both()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    let response = figure_painter::show(ui, &self.figure, self.zoom, space);
+                    self.hovered = response.hovered;
+                    self.plot_placement = response.placement;
+                    if let Some(item) = response.clicked {
+                        // Clicking a feature selects it for the single-feature plots.
+                        if self.feature_rows.iter().any(|row| row.feature == item) {
+                            self.select_feature(&item);
+                        }
+                    }
+                });
+        });
+    }
+
+    /// The controls beneath the plot, in one row where there is room: the
+    /// choice of plot with its settings, the zoom, and the features to
+    /// highlight.
+    fn plot_bar(&mut self, ui: &mut egui::Ui) {
+        let headings: Vec<String> = self
+            .current_profile()
+            .map(|p| p.hierarchy_headings.clone())
+            .unwrap_or_default();
+        let supported = self.plot_kind().supports_highlight(self.mode) && !headings.is_empty();
+
+        ui.add_space(2.0);
         ui.horizontal_wrapped(|ui| {
-            ui.label("Plot:");
+            // A group of controls stays together: it starts a new row when
+            // the window is too narrow for it, and otherwise follows a
+            // dividing line.
+            let divide = |ui: &mut egui::Ui, room: f32| {
+                if ui.max_rect().right() - ui.cursor().left() < room {
+                    ui.end_row();
+                } else {
+                    ui.separator();
+                }
+            };
+
             let mut kind = self.plot_kind();
-            if choose(
-                ui,
-                "plot-kind",
-                &mut kind,
-                &named(PlotKind::available(self.mode), PlotKind::name),
-            ) {
+            let kinds = named(PlotKind::available(self.mode), PlotKind::name);
+            if choose(ui, "plot-kind", &mut kind, &kinds) {
                 self.set_plot_kind(kind);
             }
-            ui.separator();
-            ui.label("Width:");
-            changed |= ui
-                .add(
-                    egui::DragValue::new(&mut self.plot_settings.width)
-                        .speed(0.1)
-                        .range(2.0..=40.0)
-                        .suffix(" in"),
-                )
-                .changed();
-            ui.label("Height:");
-            changed |= ui
-                .add(
-                    egui::DragValue::new(&mut self.plot_settings.height)
-                        .speed(0.1)
-                        .range(2.0..=40.0)
-                        .suffix(" in"),
-                )
-                .changed();
-            ui.label("Sort by:");
-            changed |= choose(
-                ui,
-                "plot-sort",
-                &mut self.plot_settings.sort_by,
-                &[
-                    (SortBy::PValues, "p-values".to_string()),
-                    (SortBy::EffectSizes, "Effect sizes".to_string()),
-                    (SortBy::FeatureLabels, "Feature labels".to_string()),
-                ],
-            );
-            changed |= ui
-                .checkbox(&mut self.plot_settings.show_legend, "Legend")
-                .changed();
-            ui.separator();
+            let configure = ui
+                .button("Configure plot")
+                .on_hover_text("Change the size and appearance of this plot");
+            if configure.clicked() {
+                self.show_plot_config = true;
+            }
+
+            divide(ui, 240.0);
             ui.label("Zoom:");
             ui.add(egui::Slider::new(&mut self.zoom, 0.5..=4.0).show_value(false));
             let reset = ui.add_enabled(self.zoom != DEFAULT_ZOOM, egui::Button::new("Reset"));
             if reset.on_hover_text("Return to the default zoom").clicked() {
                 self.reset_zoom();
             }
-        });
-        if self.plot_kind().uses_selected_feature(self.mode) {
-            ui.horizontal(|ui| {
-                ui.label("Feature:");
-                let mut feature = self.session.selected_feature.clone().unwrap_or_default();
-                if choose(
-                    ui,
-                    "selected-feature",
-                    &mut feature,
-                    &strings(&self.table_features),
-                ) {
-                    self.session.selected_feature = Some(feature);
-                    changed = true;
+
+            divide(ui, 400.0);
+            // Everything from here on is switched off for plots that cannot
+            // highlight features.
+            if !supported {
+                ui.disable();
+            }
+            ui.label("Highlight:")
+                .on_hover_text("Draw the features of one category in red");
+            let mut levels: Vec<(Option<String>, String)> = vec![(None, "None".to_string())];
+            levels.extend(headings.iter().map(|h| (Some(h.clone()), h.clone())));
+            // A level above the profile level may have gone.
+            let mut level = self
+                .highlight_level
+                .clone()
+                .filter(|level| headings.contains(level));
+            let level_changed = choose(ui, "highlight-level", &mut level, &levels);
+            let Some(level) = level else {
+                if self.highlight_level.is_some() {
+                    self.set_highlight(None, "");
                 }
-            });
+                // The second box is shown, empty, until a level is chosen.
+                ui.add_enabled_ui(false, |ui| {
+                    choose(ui, "highlight-feature", &mut String::new(), &[])
+                });
+                return;
+            };
+            let choices = self.highlight_choices(&level);
+            let mut value = self.highlight_value.clone();
+            if level_changed || !choices.contains(&value) {
+                value = choices.first().cloned().unwrap_or_default();
+            }
+            choose(ui, "highlight-feature", &mut value, &strings(&choices));
+            if self.highlight_level.as_deref() != Some(level.as_str())
+                || self.highlight_value != value
+            {
+                self.set_highlight(Some(&level), &value);
+            }
+        });
+        ui.add_space(2.0);
+    }
+
+    /// The table of sample metadata. Unticking a sample leaves it out of the
+    /// group analyses; the filter ticks or unticks samples by their metadata.
+    fn metadata_panel(&mut self, ui: &mut egui::Ui) {
+        use egui_extras::{Column, TableBuilder};
+
+        let StampApp {
+            session,
+            metadata_filter: filter,
+            ..
+        } = self;
+        ui.add_space(2.0);
+        let Some(metadata) = &session.metadata else {
+            ui.label("Use File > Load metadata to see the metadata of the samples.");
+            return;
+        };
+        let fields = metadata.fields();
+        let samples = metadata.samples();
+        if !fields.contains(&filter.field) {
+            filter.field = fields.first().cloned().unwrap_or_default();
         }
-        self.view_dirty |= changed;
+        let mut values: Vec<String> = metadata
+            .unique_values(&filter.field)
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        if metadata.is_numeric(&filter.field) {
+            let number = |text: &String| text.trim().parse::<f64>().unwrap_or(f64::NAN);
+            values.sort_by(|a, b| number(a).total_cmp(&number(b)));
+        } else {
+            values.sort_by_key(|value| value.to_lowercase());
+        }
+        if !values.contains(&filter.value) {
+            filter.value = values.first().cloned().unwrap_or_default();
+        }
+
+        // Changes are collected here and made once the table is drawn.
+        let mut switch: Option<(Vec<String>, bool)> = None;
+        ui.horizontal_wrapped(|ui| {
+            ui.strong("Metadata");
+            ui.separator();
+            let all = ui
+                .button("Select all")
+                .on_hover_text("Set all samples as active");
+            if all.clicked() {
+                switch = Some((samples.to_vec(), true));
+            }
+            let none = ui
+                .button("Remove all")
+                .on_hover_text("Remove all samples from the active set");
+            if none.clicked() {
+                switch = Some((samples.to_vec(), false));
+            }
+            ui.separator();
+            ui.label("Filter:");
+            choose(
+                ui,
+                "metadata-add",
+                &mut filter.add,
+                &[(true, "Add".to_string()), (false, "Remove".to_string())],
+            );
+            ui.label("all samples where");
+            choose(ui, "metadata-field", &mut filter.field, &strings(fields));
+            let relations = named(&Relation::ALL, Relation::name);
+            choose(ui, "metadata-relation", &mut filter.relation, &relations);
+            choose(ui, "metadata-value", &mut filter.value, &strings(&values));
+            let apply = ui
+                .button("Apply")
+                .on_hover_text("Apply the filtering criteria");
+            if apply.clicked() {
+                let matching =
+                    session.samples_matching(&filter.field, filter.relation, &filter.value);
+                switch = Some((matching, filter.add));
+            }
+            ui.separator();
+            ui.label(format!(
+                "{} of {} samples active",
+                metadata.active_samples().len(),
+                samples.len()
+            ));
+        });
         ui.separator();
 
-        if self.view_dirty {
-            self.refresh_view();
-        }
-        // The plot is centred in the room left for it.
-        let space = ui.available_size();
-        egui::ScrollArea::both()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                let response = figure_painter::show(ui, &self.figure, self.zoom, space);
-                self.hovered = response.hovered;
-                self.plot_placement = response.placement;
-                if let Some(item) = response.clicked {
-                    // Clicking a feature selects it for the single-feature plots.
-                    if self.table_features.contains(&item) {
-                        self.session.selected_feature = Some(item);
-                        self.view_dirty = true;
+        egui::ScrollArea::horizontal().show(ui, |ui| {
+            TableBuilder::new(ui)
+                .id_salt("metadata-table")
+                .striped(true)
+                .column(Column::auto().at_least(150.0).resizable(true))
+                .columns(
+                    Column::auto().at_least(80.0).clip(true).resizable(true),
+                    fields.len(),
+                )
+                .header(20.0, |mut header| {
+                    header.col(|ui| {
+                        ui.strong("Sample");
+                    });
+                    for field in fields {
+                        header.col(|ui| {
+                            ui.strong(field);
+                        });
                     }
-                }
-            });
+                })
+                .body(|body| {
+                    body.rows(20.0, samples.len(), |mut table_row| {
+                        let sample = &samples[table_row.index()];
+                        table_row.col(|ui| {
+                            let mut active = metadata.is_active(sample);
+                            if ui.checkbox(&mut active, sample).changed() {
+                                switch = Some((vec![sample.clone()], active));
+                            }
+                        });
+                        for field in fields {
+                            table_row.col(|ui| {
+                                plain_label(ui, metadata.value(sample, field).unwrap_or_default());
+                            });
+                        }
+                    });
+                });
+        });
+        if let Some((samples, active)) = switch {
+            session.set_samples_active(&samples, active);
+        }
+    }
+
+    /// The table of features beside a single-feature plot. Clicking a row
+    /// shows that feature in the plot.
+    fn feature_panel(&mut self, ui: &mut egui::Ui) {
+        use egui_extras::{Column, TableBuilder};
+
+        ui.add_space(2.0);
+        ui.checkbox(
+            &mut self.show_only_active_features,
+            "Show only active features",
+        );
+        ui.separator();
+        let rows: Vec<&FeatureRow> = self
+            .feature_rows
+            .iter()
+            .filter(|row| row.active || !self.show_only_active_features)
+            .collect();
+        if rows.is_empty() {
+            ui.label("No features to show.");
+            return;
+        }
+        let selected = self.session.selected_feature.clone();
+        let headings = [
+            "Feature",
+            self.effect_heading,
+            "p-value",
+            "Corrected p-value",
+            "Note",
+        ];
+        let mut select = None;
+        egui::ScrollArea::horizontal().show(ui, |ui| {
+            TableBuilder::new(ui)
+                .id_salt("feature-table")
+                .striped(true)
+                .sense(egui::Sense::click())
+                .column(Column::auto().at_least(110.0).clip(true).resizable(true))
+                .columns(Column::auto().at_least(60.0).resizable(true), 3)
+                .column(Column::remainder().at_least(60.0).clip(true))
+                .header(20.0, |mut header| {
+                    for heading in headings {
+                        header.col(|ui| {
+                            ui.strong(heading);
+                        });
+                    }
+                })
+                .body(|body| {
+                    body.rows(18.0, rows.len(), |mut table_row| {
+                        let feature = rows[table_row.index()];
+                        table_row
+                            .set_selected(selected.as_deref() == Some(feature.feature.as_str()));
+                        for cell in [
+                            &feature.feature,
+                            &feature.effect_size,
+                            &feature.p_value,
+                            &feature.p_value_corrected,
+                            &feature.note,
+                        ] {
+                            table_row.col(|ui| {
+                                plain_label(ui, cell);
+                            });
+                        }
+                        let response = table_row
+                            .response()
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        if response.clicked() {
+                            select = Some(feature.feature.clone());
+                        }
+                    });
+                });
+        });
+        if let Some(feature) = select {
+            self.select_feature(&feature);
+        }
     }
 
     fn windows(&mut self, ctx: &egui::Context) {
@@ -1112,6 +1751,7 @@ impl StampApp {
                 let selected = self.session.selected_feature.as_deref();
                 egui::ScrollArea::horizontal().show(ui, |ui| {
                     TableBuilder::new(ui)
+                        .id_salt("results-table")
                         .striped(true)
                         .sense(egui::Sense::click())
                         .columns(
@@ -1133,10 +1773,13 @@ impl StampApp {
                                 );
                                 for cell in &self.table.rows[index] {
                                     row.col(|ui| {
-                                        ui.label(shorten_number(cell));
+                                        plain_label(ui, shorten_number(cell));
                                     });
                                 }
-                                if row.response().clicked() {
+                                let response = row
+                                    .response()
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                if response.clicked() {
                                     select = self.table_features.get(index).cloned();
                                 }
                             });
@@ -1144,12 +1787,34 @@ impl StampApp {
                 });
             });
         if let Some(feature) = select {
-            self.session.selected_feature = Some(feature);
-            self.view_dirty = true;
+            self.select_feature(&feature);
         }
         if download {
             self.download_table(ctx);
         }
+
+        let (mode, kind) = (self.mode, self.plot_kind());
+        let mut open = self.show_plot_config;
+        let (mut changed, mut reset, mut close) = (false, false, false);
+        egui::Window::new("Configure plot")
+            .open(&mut open)
+            .default_pos([300.0, 90.0])
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.strong(kind.name());
+                ui.separator();
+                changed = plot_config::show(ui, mode, kind, &mut self.plot_settings);
+                ui.separator();
+                ui.horizontal(|ui| {
+                    reset = ui.button("Restore defaults").clicked();
+                    close = ui.button("Close").clicked();
+                });
+            });
+        if reset {
+            self.plot_settings.reset(mode, kind);
+        }
+        self.view_dirty |= changed || reset;
+        self.show_plot_config = open && !close;
 
         let mut changed = false;
         egui::Window::new("Preferences")
@@ -1164,19 +1829,17 @@ impl StampApp {
                                 .changed()
                         });
                         changed |= row(ui, "Replicates:", |ui| {
-                            ui.add(
+                            let replicates =
                                 egui::DragValue::new(&mut self.session.stats.replicates)
-                                    .range(10..=1_000_000),
-                            )
-                            .changed()
+                                    .range(10..=1_000_000);
+                            ui.add(replicates).changed()
                         });
                         changed |= row(ui, "Pseudocount:", |ui| {
-                            ui.add(
+                            let pseudocount =
                                 egui::DragValue::new(&mut self.session.stats.pseudocount)
                                     .speed(0.05)
-                                    .range(0.0..=10.0),
-                            )
-                            .changed()
+                                    .range(0.0..=10.0);
+                            ui.add(pseudocount).changed()
                         });
                     });
                 ui.label("The seed makes bootstrap and permutation results repeatable.");
@@ -1213,15 +1876,6 @@ impl StampApp {
     }
 }
 
-/// Switch the whole interface between its dark and light appearance.
-pub fn set_dark_mode(ctx: &egui::Context, dark: bool) {
-    ctx.set_theme(if dark {
-        egui::Theme::Dark
-    } else {
-        egui::Theme::Light
-    });
-}
-
 /// Numbers in the table are shown with six significant digits; the saved
 /// table keeps full precision.
 fn shorten_number(cell: &str) -> String {
@@ -1237,16 +1891,6 @@ fn shorten_number(cell: &str) -> String {
         }
         _ => cell.to_string(),
     }
-}
-
-fn empty_table() -> (Table, Vec<String>) {
-    (
-        Table {
-            headings: Vec::new(),
-            rows: Vec::new(),
-        },
-        Vec::new(),
-    )
 }
 
 impl eframe::App for StampApp {
@@ -1267,5 +1911,76 @@ mod tests {
         assert_eq!(shorten_number("5"), "5");
         assert_eq!(shorten_number("Bacteroides"), "Bacteroides");
         assert_eq!(shorten_number("0.5"), "0.5");
+    }
+
+    #[test]
+    fn count_filters_translate_to_the_core_filters() {
+        let mut filter = CountFilterUi::default();
+        assert_eq!(filter.sample(), None);
+        assert_eq!(filter.group(), None);
+        filter.enabled = true;
+        filter.first = 5.0;
+        filter.second = 7.0;
+        assert_eq!(filter.sample(), Some(SampleCountFilter::Maximum(5.0)));
+        filter.kind = 2;
+        assert_eq!(
+            filter.sample(),
+            Some(SampleCountFilter::Independent(5.0, 7.0))
+        );
+        assert_eq!(
+            filter.group(),
+            Some(GroupCountFilter::IndependentMinimum(5.0, 7.0))
+        );
+        filter.kind = 3;
+        assert_eq!(
+            filter.group(),
+            Some(GroupCountFilter::IndependentMaximum(5.0, 7.0))
+        );
+    }
+
+    #[test]
+    fn filter_controls_reach_the_session() {
+        let mut app = StampApp::new(&egui::Context::default());
+        app.load_example();
+
+        let groups = &mut app.filters[mode_slot(Mode::TwoGroups)];
+        groups.p_enabled = true;
+        groups.p_value = 0.01;
+        groups.parent_sequences = CountFilterUi {
+            enabled: true,
+            kind: 1,
+            first: 500.0,
+            second: 0.0,
+        };
+        groups.sequences = CountFilterUi {
+            enabled: true,
+            kind: 3,
+            first: 10.0,
+            second: 20.0,
+        };
+        let samples = &mut app.filters[mode_slot(Mode::TwoSamples)];
+        samples.parent_sequences = CountFilterUi {
+            enabled: true,
+            kind: 2,
+            first: 3.0,
+            second: 4.0,
+        };
+        app.apply_filters();
+
+        let filter = &app.session.groups.filter;
+        assert_eq!(filter.significance, Some(0.01));
+        assert_eq!(
+            filter.parent_sequences,
+            Some(GroupCountFilter::Minimum(500.0))
+        );
+        assert_eq!(
+            filter.sequences,
+            Some(GroupCountFilter::IndependentMaximum(10.0, 20.0))
+        );
+        assert_eq!(
+            app.session.samples.filter.parent_sequences,
+            Some(SampleCountFilter::Independent(3.0, 4.0))
+        );
+        assert_eq!(app.session.samples.filter.sequences, None);
     }
 }
