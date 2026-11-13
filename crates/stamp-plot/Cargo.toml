@@ -18,5 +18,6 @@ pdf = ["dep:svg2pdf"]
 [dependencies]
 stamp-core = { workspace = true }
 ttf-parser = { workspace = true }
+serde = { workspace = true }
 resvg = { workspace = true, optional = true }
 svg2pdf = { workspace = true, optional = true }

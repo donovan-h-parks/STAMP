@@ -96,7 +96,8 @@ impl Data {
 }
 
 /// Appearance of the PCA plot. Lengths are in inches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct Options {
     pub width: f64,
     pub height: f64,

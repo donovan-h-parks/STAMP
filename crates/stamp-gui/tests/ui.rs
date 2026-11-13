@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use eframe::egui;
 use stamp_gui::headless::{Image, Renderer};
+use stamp_gui::platform::Event;
 use stamp_gui::plots::PlotKind;
 use stamp_gui::session::Mode;
 use stamp_gui::StampApp;
@@ -852,4 +853,261 @@ fn new_plot_options_change_the_plots() {
     harness.settle();
     let all = harness.app.figure().regions.len();
     assert!(significant < all, "{significant} of {all}");
+}
+
+fn opened(relative: &str) -> stamp_gui::platform::OpenedFile {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(relative);
+    stamp_gui::platform::OpenedFile {
+        name: path.file_name().unwrap().to_string_lossy().into_owned(),
+        bytes: std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display())),
+    }
+}
+
+fn text_file(name: &str, text: &str) -> stamp_gui::platform::OpenedFile {
+    stamp_gui::platform::OpenedFile {
+        name: name.to_string(),
+        bytes: text.as_bytes().to_vec(),
+    }
+}
+
+#[test]
+fn biom_tables_open_from_load_profile() {
+    for file in ["otu_table_v2.biom", "otu_table_v1.biom"] {
+        let mut harness = Harness::new();
+        // A table with metadata asks which field gives the hierarchy.
+        harness
+            .app
+            .open_profile_file(opened(&format!("../stamp-core/tests/data/{file}")));
+        assert_eq!(harness.app.pending_profile(), Some("BIOM"), "{file}");
+        assert!(harness.app.session.tree.is_none());
+        harness.settle();
+        harness.screenshot("biom_table");
+        harness.app.accept_pending_profile();
+        harness.settle();
+        assert_eq!(harness.app.pending_profile(), None);
+        assert_eq!(harness.app.notice(), None, "{file}");
+        let tree = harness
+            .app
+            .session
+            .tree
+            .as_ref()
+            .expect("the profile loaded");
+        // Three levels of taxonomy, then the observation ids.
+        assert_eq!(tree.hierarchy_headings().len(), 4, "{file}");
+        assert_eq!(tree.sample_names(), ["S1", "S2", "S3", "S4"]);
+
+        // The ids alone can be chosen instead.
+        harness
+            .app
+            .open_profile_file(opened(&format!("../stamp-core/tests/data/{file}")));
+        harness.app.choose_biom_field(None);
+        harness.app.accept_pending_profile();
+        let tree = harness.app.session.tree.as_ref().unwrap();
+        assert_eq!(tree.hierarchy_headings(), ["Observation Ids"]);
+    }
+
+    // A table without metadata loads at once; one that is damaged says so.
+    let mut harness = Harness::new();
+    harness
+        .app
+        .open_profile_file(opened("../stamp-core/tests/data/plain_v2.biom"));
+    assert_eq!(harness.app.pending_profile(), None);
+    assert!(harness.app.session.tree.is_some());
+    let mut broken = opened("../stamp-core/tests/data/plain_v2.biom");
+    broken.bytes.truncate(600);
+    harness.app.open_profile_file(broken);
+    assert!(harness.app.notice().unwrap().contains("Could not load"));
+}
+
+#[test]
+fn mothur_files_open_from_load_profile() {
+    let taxonomy = "seq1\tBacteria(100);Firmicutes(98);Bacilli(90);\n\
+        seq2\tBacteria(100);Firmicutes(95);\n\
+        seq3\tBacteria(100);Proteobacteria(98);Gammaproteobacteria(91);\n";
+    let groups = "seq1\tgut\nseq2\tsoil\nseq3\tsoil\n";
+    let mut harness = Harness::new();
+    harness
+        .app
+        .open_profile_file(text_file("final.taxonomy", taxonomy));
+    assert_eq!(harness.app.pending_profile(), Some("mothur"));
+    harness.settle();
+    harness.screenshot("mothur_files");
+
+    // Nothing happens until the groups file has been given.
+    harness.app.accept_pending_profile();
+    assert_eq!(harness.app.pending_profile(), Some("mothur"));
+    harness.app.deliver(Event::Auxiliary(
+        stamp_gui::platform::Auxiliary::MothurGroups,
+        text_file("final.groups", groups),
+    ));
+    harness.settle();
+    harness.app.accept_pending_profile();
+    harness.settle();
+    assert_eq!(harness.app.notice(), None);
+    let tree = harness
+        .app
+        .session
+        .tree
+        .as_ref()
+        .expect("the profile loaded");
+    assert_eq!(tree.sample_names(), ["gut", "soil"]);
+
+    // An ordinary profile still loads directly.
+    harness.app.open_profile_file(opened(
+        "../../examples/EnterotypesArumugam/Enterotypes.profile.spf",
+    ));
+    assert_eq!(harness.app.pending_profile(), None);
+    assert_eq!(harness.app.session.tree.as_ref().unwrap().num_samples(), 39);
+}
+
+#[test]
+fn shortcuts_plot_windows_and_remembered_settings() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+
+    // Ctrl+M shows the metadata table and Ctrl+W sends the plot to a window.
+    let app = &mut harness.app;
+    harness
+        .renderer
+        .press_shortcut(egui::Key::M, |ui| app.draw(ui));
+    harness.settle();
+    let with_table = harness.app.saved(&harness.renderer.ctx);
+    assert!(with_table.show_metadata_table);
+    let app = &mut harness.app;
+    harness
+        .renderer
+        .press_shortcut(egui::Key::W, |ui| app.draw(ui));
+    harness.app.send_plot_to_window();
+    harness.settle();
+    assert_eq!(harness.app.plot_window_count(), 2);
+    let image = harness.screenshot("plot_windows");
+    assert!(ink(&image, 0, 0, 1280, 800) > 0.05);
+
+    // What is remembered survives being written out and read back.
+    let mut settings = harness.app.plot_settings().clone();
+    settings.min_p_exponent = -5;
+    settings.pca.fixed_scale = false;
+    settings.heatmap.color_map = stamp_plot::heatmap::ColorMap::Jet;
+    settings.axes_color = stamp_plot::Color::rgb(10, 20, 30);
+    harness.app.set_plot_settings(settings.clone());
+    harness.app.set_zoom(2.0);
+    let saved = harness.app.saved(&harness.renderer.ctx);
+    let text = serde_json::to_string(&saved).unwrap();
+    let read: stamp_gui::app::Saved = serde_json::from_str(&text).unwrap();
+    assert_eq!(read, saved);
+    // A file from an older version, lacking newer settings, still reads.
+    let old: stamp_gui::app::Saved = serde_json::from_str(r#"{"zoom": 1.5}"#).unwrap();
+    assert_eq!(old.zoom, 1.5);
+    assert_eq!(old.plots, stamp_gui::plots::PlotSettings::default());
+
+    let mut fresh = Harness::enterotypes();
+    fresh.app.restore(&fresh.renderer.ctx, read);
+    fresh.settle();
+    assert_eq!(fresh.app.zoom(), 2.0);
+    assert_eq!(fresh.app.plot_settings(), &settings);
+    assert!(fresh.app.saved(&fresh.renderer.ctx).show_metadata_table);
+}
+
+#[test]
+fn preferences_reach_the_tables_and_plots() {
+    let mut harness = Harness::enterotypes();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.settle();
+    // Some p-value of the example is below 1e-5.
+    let bounded = |app: &StampApp| {
+        app.feature_table()
+            .iter()
+            .filter(|r| r.p_value.starts_with('<'))
+            .count()
+    };
+    assert_eq!(bounded(&harness.app), 1);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.min_p_exponent = -5;
+    let grey = stamp_plot::axes::AXES_COLOR;
+    let (red, green) = (
+        stamp_plot::Color::rgb(200, 0, 0),
+        stamp_plot::Color::rgb(0, 150, 0),
+    );
+    settings.axes_color = red;
+    settings.sample_colors[0] = green;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert!(bounded(&harness.app) > 1);
+    assert!(harness
+        .app
+        .feature_table()
+        .iter()
+        .any(|r| r.p_value == "< 1e-5"));
+
+    let uses = |figure: &stamp_plot::Figure, wanted: stamp_plot::Color| {
+        figure.shapes.iter().any(|shape| match shape {
+            stamp_plot::Shape::Line { stroke, .. } => stroke.color == wanted,
+            stamp_plot::Shape::Rect { fill, .. } => *fill == Some(wanted),
+            _ => false,
+        })
+    };
+    harness.app.set_mode(Mode::TwoSamples);
+    harness.settle();
+    let figure = harness.app.figure();
+    assert!(uses(figure, red) && uses(figure, green));
+    assert!(!uses(figure, grey));
+    assert!(!uses(figure, stamp_plot::extended_error_bar::SAMPLE1_COLOR));
+    harness.screenshot("preference_colours");
+}
+
+#[test]
+fn unticked_groups_and_inactive_samples_leave_the_lists() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    assert_eq!(harness.app.session.groups.group1, "Enterotype 1");
+    assert_eq!(
+        harness.app.session.groups.group2.as_deref(),
+        Some("Enterotype 2")
+    );
+
+    // Unticking the first group moves the comparison to the groups left.
+    harness
+        .app
+        .session
+        .multi
+        .active_groups
+        .retain(|g| g != "Enterotype 1");
+    harness.settle();
+    harness.settle();
+    let groups = &harness.app.session.groups;
+    assert_ne!(groups.group1, "Enterotype 1");
+    assert_ne!(groups.group2.as_deref(), Some("Enterotype 1"));
+    assert_ne!(Some(&groups.group1), groups.group2.as_ref());
+
+    // A sample switched off in the metadata table leaves the sample lists.
+    harness.app.set_mode(Mode::TwoSamples);
+    harness.settle();
+    let first = harness.app.session.samples.sample1.clone();
+    harness
+        .app
+        .session
+        .set_samples_active(std::slice::from_ref(&first), false);
+    harness.settle();
+    harness.settle();
+    let samples = &harness.app.session.samples;
+    assert_ne!(samples.sample1, first);
+    assert_ne!(samples.sample1, samples.sample2);
+}
+
+#[test]
+fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
+    // The label is drawn text; its width shows which one is in use.
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let before = harness.screenshot("p_value_filter_label");
+    harness.app.session.set_correction(
+        Mode::TwoGroups,
+        stamp_core::stats::correction::Correction::BenjaminiHochberg,
+    );
+    harness.settle();
+    let after = harness.screenshot("q_value_filter_label");
+    let differs = (985..1110)
+        .flat_map(|x| (335..360).map(move |y| (x, y)))
+        .any(|(x, y)| before.pixel(x, y) != after.pixel(x, y));
+    assert!(differs, "the filter label did not change");
 }

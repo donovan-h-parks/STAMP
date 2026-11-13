@@ -8,7 +8,7 @@ use super::correction::{Corrected, Correction};
 use super::effect_size::{GroupEffectSize, SampleEffectSize};
 use super::multi_group::{MultiGroupEffectSize, MultiGroupTest};
 use super::post_hoc::{PostHocResult, PostHocTest};
-use super::two_group::{FeatureCounts, GroupTest};
+use super::two_group::{FeatureCounts, GroupOutcome, GroupTest};
 use super::two_sample::SampleTest;
 use super::{mean, population_std, StampRng, StatsSettings, TestType};
 use crate::error::{Result, StampError};
@@ -17,6 +17,47 @@ use crate::profile::{GroupProfile, MultiGroupProfile, SampleProfile};
 /// Callback reporting progress as `(done, total)`. Returning `false` cancels
 /// the run.
 pub type Progress<'a> = &'a mut dyn FnMut(usize, usize) -> bool;
+
+/// What a run should do before its next piece of work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Control {
+    Continue,
+    /// Stop for now; the run can be advanced again later.
+    Pause,
+    /// Give up; the run is of no further use.
+    Cancel,
+}
+
+/// How far a run got when it was last advanced.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Step<T> {
+    Paused,
+    Cancelled,
+    Done(T),
+}
+
+/// Callback asked before each piece of work, with `(done, total)`.
+pub type Pace<'a> = &'a mut dyn FnMut(usize, usize) -> Control;
+
+/// A `Pace` that follows a progress callback: it never pauses, and cancels
+/// when the callback returns `false`.
+fn pace_of(progress: Progress<'_>) -> impl FnMut(usize, usize) -> Control + '_ {
+    move |done, total| {
+        if progress(done, total) {
+            Control::Continue
+        } else {
+            Control::Cancel
+        }
+    }
+}
+
+fn no_correction() -> CorrectionSummary {
+    CorrectionSummary {
+        method: Correction::None,
+        info: Vec::new(),
+        warning: None,
+    }
+}
 
 /// Summary of the multiple-test correction applied to a set of results.
 #[derive(Debug, Clone, PartialEq)]
@@ -164,6 +205,88 @@ impl Default for SampleFilter {
     }
 }
 
+/// A two-sample analysis that can be carried out a few features at a time,
+/// so that whatever runs it can attend to other things in between. The
+/// results do not depend on where it pauses.
+#[derive(Debug, Clone)]
+pub struct SampleRun {
+    analysis: SampleAnalysis,
+    settings: StatsSettings,
+    rows: Vec<SampleRow>,
+}
+
+impl SampleRun {
+    pub fn new(analysis: SampleAnalysis, settings: &StatsSettings) -> SampleRun {
+        SampleRun {
+            analysis,
+            settings: *settings,
+            rows: Vec::new(),
+        }
+    }
+
+    /// Test further features of `profile`, which with `rng` must be the same
+    /// on every call. `pace` is asked before each feature.
+    pub fn advance(
+        &mut self,
+        profile: &SampleProfile,
+        rng: &mut StampRng,
+        pace: Pace<'_>,
+    ) -> Step<SampleResults> {
+        let (analysis, settings) = (self.analysis, &self.settings);
+        let features = profile.profile.features();
+        while self.rows.len() < features.len() {
+            match pace(self.rows.len(), features.len()) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
+            }
+            let feature = &features[self.rows.len()];
+            let c = profile.counts(feature);
+            let test =
+                analysis
+                    .test
+                    .run(c.seq1, c.seq2, c.parent_seq1, c.parent_seq2, settings, rng);
+            let p_value = match analysis.test_type {
+                TestType::OneSided => test.one_sided,
+                TestType::TwoSided => test.two_sided,
+            };
+            let ci = analysis.ci_method.run(
+                c.seq1,
+                c.seq2,
+                c.parent_seq1,
+                c.parent_seq2,
+                analysis.coverage,
+                settings.pseudocount,
+            );
+            let (rel_freq1, rel_freq2) = c.percentages();
+            self.rows.push(SampleRow {
+                feature: feature.name.clone(),
+                seq1: c.seq1,
+                seq2: c.seq2,
+                parent_seq1: c.parent_seq1,
+                parent_seq2: c.parent_seq2,
+                rel_freq1,
+                rel_freq2,
+                p_value,
+                p_value_corrected: p_value,
+                effect_size: ci.effect_size,
+                lower_ci: ci.lower,
+                upper_ci: ci.upper,
+                note: join_notes(test.note, ci.note),
+            });
+        }
+        let mut rows = std::mem::take(&mut self.rows);
+        sort_rows(&mut rows, |r| r.p_value, |r| &r.feature);
+        let mut results = SampleResults {
+            analysis,
+            rows,
+            correction: no_correction(),
+        };
+        results.apply_correction(analysis.correction, rng);
+        Step::Done(results)
+    }
+}
+
 /// Run a two-sample test on every feature of a profile. Returns `None` if
 /// cancelled through `progress`.
 pub fn run_sample_analysis(
@@ -173,58 +296,10 @@ pub fn run_sample_analysis(
     rng: &mut StampRng,
     progress: Progress<'_>,
 ) -> Option<SampleResults> {
-    let features = profile.profile.features();
-    let mut rows = Vec::with_capacity(features.len());
-    for (i, feature) in features.iter().enumerate() {
-        if !progress(i, features.len()) {
-            return None;
-        }
-        let c = profile.counts(feature);
-        let test = analysis
-            .test
-            .run(c.seq1, c.seq2, c.parent_seq1, c.parent_seq2, settings, rng);
-        let p_value = match analysis.test_type {
-            TestType::OneSided => test.one_sided,
-            TestType::TwoSided => test.two_sided,
-        };
-        let ci = analysis.ci_method.run(
-            c.seq1,
-            c.seq2,
-            c.parent_seq1,
-            c.parent_seq2,
-            analysis.coverage,
-            settings.pseudocount,
-        );
-        let (rel_freq1, rel_freq2) = c.percentages();
-        rows.push(SampleRow {
-            feature: feature.name.clone(),
-            seq1: c.seq1,
-            seq2: c.seq2,
-            parent_seq1: c.parent_seq1,
-            parent_seq2: c.parent_seq2,
-            rel_freq1,
-            rel_freq2,
-            p_value,
-            p_value_corrected: p_value,
-            effect_size: ci.effect_size,
-            lower_ci: ci.lower,
-            upper_ci: ci.upper,
-            note: join_notes(test.note, ci.note),
-        });
+    match SampleRun::new(analysis, settings).advance(profile, rng, &mut pace_of(progress)) {
+        Step::Done(results) => Some(results),
+        Step::Paused | Step::Cancelled => None,
     }
-    sort_rows(&mut rows, |r| r.p_value, |r| &r.feature);
-
-    let mut results = SampleResults {
-        analysis,
-        rows,
-        correction: CorrectionSummary {
-            method: Correction::None,
-            info: Vec::new(),
-            warning: None,
-        },
-    };
-    results.apply_correction(analysis.correction, rng);
-    Some(results)
 }
 
 impl SampleResults {
@@ -376,6 +451,113 @@ impl Default for GroupFilter {
     }
 }
 
+/// A two-group analysis that can be carried out in pieces; see
+/// [`SampleRun`]. White's test works on all features at once and is done in
+/// a single piece, during which it can be cancelled but not paused.
+#[derive(Debug, Clone)]
+pub struct GroupRun {
+    analysis: GroupAnalysis,
+    settings: StatsSettings,
+    outcomes: Vec<GroupOutcome>,
+}
+
+impl GroupRun {
+    pub fn new(analysis: GroupAnalysis, settings: &StatsSettings) -> GroupRun {
+        GroupRun {
+            analysis,
+            settings: *settings,
+            outcomes: Vec::new(),
+        }
+    }
+
+    /// Test further features of `profile`, which with `rng` must be the same
+    /// on every call. `pace` is asked before each piece of work.
+    pub fn advance(
+        &mut self,
+        profile: &GroupProfile,
+        rng: &mut StampRng,
+        pace: Pace<'_>,
+    ) -> Step<GroupResults> {
+        let (analysis, settings) = (self.analysis, &self.settings);
+        let features = profile.profile.features();
+        let counts = |feature| {
+            let (seq1, seq2) = profile.counts(feature);
+            let (parent1, parent2) = profile.parent_counts(feature);
+            FeatureCounts {
+                seq1,
+                seq2,
+                parent1,
+                parent2,
+            }
+        };
+        if analysis.test == GroupTest::White {
+            if self.outcomes.len() < features.len() {
+                let all: Vec<FeatureCounts<'_>> = features.iter().map(counts).collect();
+                // Asked to pause, the test carries on: it cannot resume.
+                let mut progress = |done: usize, total: usize| pace(done, total) != Control::Cancel;
+                match analysis
+                    .test
+                    .run_all(&all, analysis.coverage, settings, rng, &mut progress)
+                {
+                    Some(outcomes) => self.outcomes = outcomes,
+                    None => return Step::Cancelled,
+                }
+            }
+        } else {
+            // The other tests treat each feature on its own.
+            while self.outcomes.len() < features.len() {
+                match pace(self.outcomes.len(), features.len()) {
+                    Control::Continue => {}
+                    Control::Pause => return Step::Paused,
+                    Control::Cancel => return Step::Cancelled,
+                }
+                let one = [counts(&features[self.outcomes.len()])];
+                let outcome = analysis
+                    .test
+                    .run_all(&one, analysis.coverage, settings, rng, &mut |_, _| true)
+                    .and_then(|mut outcomes| outcomes.pop());
+                match outcome {
+                    Some(outcome) => self.outcomes.push(outcome),
+                    None => return Step::Cancelled,
+                }
+            }
+        }
+
+        let mut rows: Vec<GroupRow> = features
+            .iter()
+            .zip(std::mem::take(&mut self.outcomes))
+            .map(|(feature, outcome)| {
+                let (percent1, percent2) = profile.percentages(feature);
+                let p_value = match analysis.test_type {
+                    TestType::OneSided => outcome.one_sided,
+                    TestType::TwoSided => outcome.two_sided,
+                };
+                GroupRow {
+                    feature: feature.name.clone(),
+                    mean1: mean(&percent1),
+                    std_dev1: population_std(&percent1),
+                    mean2: mean(&percent2),
+                    std_dev2: population_std(&percent2),
+                    p_value,
+                    p_value_corrected: p_value,
+                    effect_size: outcome.effect_size,
+                    lower_ci: outcome.lower_ci,
+                    upper_ci: outcome.upper_ci,
+                    note: outcome.note.to_string(),
+                }
+            })
+            .collect();
+        sort_rows(&mut rows, |r| r.p_value, |r| &r.feature);
+        let mut results = GroupResults {
+            analysis,
+            rows,
+            correction: no_correction(),
+        };
+        results.apply_correction(analysis.correction, rng);
+        Step::Done(results)
+    }
+}
+
 /// Run a two-group test on every feature of a profile. Returns `None` if
 /// cancelled through `progress`.
 pub fn run_group_analysis(
@@ -385,61 +567,10 @@ pub fn run_group_analysis(
     rng: &mut StampRng,
     progress: Progress<'_>,
 ) -> Option<GroupResults> {
-    let features = profile.profile.features();
-    let counts: Vec<FeatureCounts<'_>> = features
-        .iter()
-        .map(|feature| {
-            let (seq1, seq2) = profile.counts(feature);
-            let (parent1, parent2) = profile.parent_counts(feature);
-            FeatureCounts {
-                seq1,
-                seq2,
-                parent1,
-                parent2,
-            }
-        })
-        .collect();
-    let outcomes = analysis
-        .test
-        .run_all(&counts, analysis.coverage, settings, rng, progress)?;
-
-    let mut rows: Vec<GroupRow> = features
-        .iter()
-        .zip(outcomes)
-        .map(|(feature, outcome)| {
-            let (percent1, percent2) = profile.percentages(feature);
-            let p_value = match analysis.test_type {
-                TestType::OneSided => outcome.one_sided,
-                TestType::TwoSided => outcome.two_sided,
-            };
-            GroupRow {
-                feature: feature.name.clone(),
-                mean1: mean(&percent1),
-                std_dev1: population_std(&percent1),
-                mean2: mean(&percent2),
-                std_dev2: population_std(&percent2),
-                p_value,
-                p_value_corrected: p_value,
-                effect_size: outcome.effect_size,
-                lower_ci: outcome.lower_ci,
-                upper_ci: outcome.upper_ci,
-                note: outcome.note.to_string(),
-            }
-        })
-        .collect();
-    sort_rows(&mut rows, |r| r.p_value, |r| &r.feature);
-
-    let mut results = GroupResults {
-        analysis,
-        rows,
-        correction: CorrectionSummary {
-            method: Correction::None,
-            info: Vec::new(),
-            warning: None,
-        },
-    };
-    results.apply_correction(analysis.correction, rng);
-    Some(results)
+    match GroupRun::new(analysis, settings).advance(profile, rng, &mut pace_of(progress)) {
+        Step::Done(results) => Some(results),
+        Step::Paused | Step::Cancelled => None,
+    }
 }
 
 impl GroupResults {
@@ -555,6 +686,64 @@ pub struct MultiGroupFilter {
     pub min_effect_size: Option<f64>,
 }
 
+/// A multiple-group analysis that can be carried out a few features at a
+/// time; see [`SampleRun`].
+#[derive(Debug, Clone)]
+pub struct MultiGroupRun {
+    analysis: MultiGroupAnalysis,
+    rows: Vec<MultiGroupRow>,
+}
+
+impl MultiGroupRun {
+    pub fn new(analysis: MultiGroupAnalysis) -> MultiGroupRun {
+        MultiGroupRun {
+            analysis,
+            rows: Vec::new(),
+        }
+    }
+
+    /// Test further features of `profile`, which with `rng` must be the same
+    /// on every call. `pace` is asked before each feature.
+    pub fn advance(
+        &mut self,
+        profile: &MultiGroupProfile,
+        rng: &mut StampRng,
+        pace: Pace<'_>,
+    ) -> Step<MultiGroupResults> {
+        let analysis = self.analysis;
+        let features = profile.profile.features();
+        while self.rows.len() < features.len() {
+            match pace(self.rows.len(), features.len()) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
+            }
+            let feature = &features[self.rows.len()];
+            let percentages = profile.percentages(feature);
+            let groups: Vec<&[f64]> = percentages.iter().map(Vec::as_slice).collect();
+            let (p_value, note) = analysis.test.run(&groups);
+            self.rows.push(MultiGroupRow {
+                feature: feature.name.clone(),
+                p_value,
+                p_value_corrected: p_value,
+                effect_size: analysis.effect_size.run(&groups),
+                note: note.to_string(),
+                group_means: groups.iter().map(|g| mean(g)).collect(),
+                group_std_devs: groups.iter().map(|g| population_std(g)).collect(),
+            });
+        }
+        let mut rows = std::mem::take(&mut self.rows);
+        sort_rows(&mut rows, |r| r.p_value, |r| &r.feature);
+        let mut results = MultiGroupResults {
+            analysis,
+            rows,
+            correction: no_correction(),
+        };
+        results.apply_correction(analysis.correction, rng);
+        Step::Done(results)
+    }
+}
+
 /// Run a multiple-group test on every feature of a profile. Returns `None`
 /// if cancelled through `progress`.
 pub fn run_multi_group_analysis(
@@ -563,38 +752,10 @@ pub fn run_multi_group_analysis(
     rng: &mut StampRng,
     progress: Progress<'_>,
 ) -> Option<MultiGroupResults> {
-    let features = profile.profile.features();
-    let mut rows = Vec::with_capacity(features.len());
-    for (i, feature) in features.iter().enumerate() {
-        if !progress(i, features.len()) {
-            return None;
-        }
-        let percentages = profile.percentages(feature);
-        let groups: Vec<&[f64]> = percentages.iter().map(Vec::as_slice).collect();
-        let (p_value, note) = analysis.test.run(&groups);
-        rows.push(MultiGroupRow {
-            feature: feature.name.clone(),
-            p_value,
-            p_value_corrected: p_value,
-            effect_size: analysis.effect_size.run(&groups),
-            note: note.to_string(),
-            group_means: groups.iter().map(|g| mean(g)).collect(),
-            group_std_devs: groups.iter().map(|g| population_std(g)).collect(),
-        });
+    match MultiGroupRun::new(analysis).advance(profile, rng, &mut pace_of(progress)) {
+        Step::Done(results) => Some(results),
+        Step::Paused | Step::Cancelled => None,
     }
-    sort_rows(&mut rows, |r| r.p_value, |r| &r.feature);
-
-    let mut results = MultiGroupResults {
-        analysis,
-        rows,
-        correction: CorrectionSummary {
-            method: Correction::None,
-            info: Vec::new(),
-            warning: None,
-        },
-    };
-    results.apply_correction(analysis.correction, rng);
-    Some(results)
 }
 
 impl MultiGroupResults {
@@ -942,5 +1103,157 @@ mod tests {
         assert_eq!(format_p_value(1.5e-12, -15), "1.50e-12");
         assert_eq!(format_p_value(1e-20, -15), "< 1e-15");
         assert_eq!(format_p_value(0.0, -15), "< 1e-15");
+    }
+
+    /// Advancing a run a feature at a time gives exactly what running it in
+    /// one go does, random numbers included.
+    #[test]
+    fn runs_can_pause_between_features() {
+        use crate::stats::rng_from_seed;
+        use crate::stats::two_sample::SampleTest;
+        use crate::{ProfileTree, SecondGroup, Unclassified};
+
+        let mut spf = String::from("Feature\tA1\tA2\tA3\tB1\tB2\tB3\tC1\tC2\tC3\n");
+        for row in 0..12 {
+            spf.push_str(&format!("f{row}"));
+            for column in 0..9 {
+                spf.push_str(&format!(
+                    "\t{}",
+                    5 + (row * 7 + column * 13 + row * column) % 41
+                ));
+            }
+            spf.push('\n');
+        }
+        let tree = ProfileTree::read(&spf).unwrap();
+        let metadata = "Id\tGroup\nA1\tA\nA2\tA\nA3\tA\nB1\tB\nB2\tB\nB3\tB\nC1\tC\nC2\tC\nC3\tC\n";
+        let (metadata, _) = crate::Metadata::read(metadata, &tree).unwrap();
+        let groups = metadata.groups("Group").unwrap();
+        let settings = StatsSettings {
+            replicates: 50,
+            ..StatsSettings::default()
+        };
+        // Pause before every second piece of work, cancel never.
+        let stepped = |advance: &mut dyn FnMut(Pace<'_>) -> bool| {
+            let mut pauses = 0;
+            loop {
+                let mut calls = 0;
+                let done = advance(&mut |_, _| {
+                    calls += 1;
+                    if calls % 2 == 0 {
+                        Control::Pause
+                    } else {
+                        Control::Continue
+                    }
+                });
+                if done {
+                    return pauses;
+                }
+                pauses += 1;
+                assert!(pauses < 1000, "the run does not finish");
+            }
+        };
+
+        // Two samples, with a test that draws random numbers.
+        let profile = tree
+            .sample_profile("A1", "B2", None, "Feature", Unclassified::Retain)
+            .unwrap();
+        let analysis = SampleAnalysis {
+            test: SampleTest::Bootstrap,
+            test_type: TestType::TwoSided,
+            ci_method: crate::stats::ci::SampleCi::NewcombeWilson,
+            coverage: 0.95,
+            correction: Correction::BenjaminiHochberg,
+        };
+        let whole = run_sample_analysis(
+            &profile,
+            analysis,
+            &settings,
+            &mut rng_from_seed(3),
+            &mut |_, _| true,
+        )
+        .unwrap();
+        let (mut run, mut rng, mut result) =
+            (SampleRun::new(analysis, &settings), rng_from_seed(3), None);
+        let pauses = stepped(&mut |pace| match run.advance(&profile, &mut rng, pace) {
+            Step::Done(results) => {
+                result = Some(results);
+                true
+            }
+            Step::Paused => false,
+            Step::Cancelled => panic!("cancelled"),
+        });
+        assert!(pauses >= 5);
+        assert_eq!(result.unwrap(), whole);
+
+        // Two groups.
+        let profile = tree
+            .group_profile(
+                &groups,
+                "A",
+                SecondGroup::Named("B"),
+                None,
+                "Feature",
+                Unclassified::Retain,
+            )
+            .unwrap();
+        for test in [GroupTest::Welch, GroupTest::White] {
+            let analysis = GroupAnalysis {
+                test,
+                test_type: TestType::TwoSided,
+                coverage: 0.95,
+                correction: Correction::None,
+            };
+            let whole = run_group_analysis(
+                &profile,
+                analysis,
+                &settings,
+                &mut rng_from_seed(3),
+                &mut |_, _| true,
+            )
+            .unwrap();
+            let (mut run, mut rng, mut result) =
+                (GroupRun::new(analysis, &settings), rng_from_seed(3), None);
+            stepped(&mut |pace| match run.advance(&profile, &mut rng, pace) {
+                Step::Done(results) => {
+                    result = Some(results);
+                    true
+                }
+                Step::Paused => false,
+                Step::Cancelled => panic!("cancelled"),
+            });
+            assert_eq!(result.unwrap(), whole, "{test:?}");
+        }
+
+        // Multiple groups, and cancelling.
+        let profile = tree
+            .multi_group_profile(&groups, None, None, "Feature", Unclassified::Retain)
+            .unwrap();
+        let analysis = MultiGroupAnalysis {
+            test: crate::stats::multi_group::MultiGroupTest::Anova,
+            effect_size: crate::stats::multi_group::MultiGroupEffectSize::EtaSquared,
+            correction: Correction::None,
+        };
+        let whole =
+            run_multi_group_analysis(&profile, analysis, &mut rng_from_seed(3), &mut |_, _| true)
+                .unwrap();
+        let (mut run, mut rng, mut result) = (MultiGroupRun::new(analysis), rng_from_seed(3), None);
+        stepped(&mut |pace| match run.advance(&profile, &mut rng, pace) {
+            Step::Done(results) => {
+                result = Some(results);
+                true
+            }
+            Step::Paused => false,
+            Step::Cancelled => panic!("cancelled"),
+        });
+        assert_eq!(result.unwrap(), whole);
+        let mut run = MultiGroupRun::new(analysis);
+        assert_eq!(
+            run.advance(&profile, &mut rng, &mut |done, _| if done == 3 {
+                Control::Cancel
+            } else {
+                Control::Continue
+            }),
+            Step::Cancelled
+        );
     }
 }

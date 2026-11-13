@@ -99,6 +99,216 @@ pub fn normal_cdf(z: f64) -> f64 {
     0.5 * libm::erfc(-z / SQRT_2)
 }
 
+/// Nodes and weights of eight-point Gauss-Legendre quadrature on [-1, 1].
+fn gauss_legendre() -> &'static [(f64, f64); 8] {
+    static RULE: std::sync::OnceLock<[(f64, f64); 8]> = std::sync::OnceLock::new();
+    RULE.get_or_init(|| {
+        const N: usize = 8;
+        let mut rule = [(0.0, 0.0); N];
+        for (i, slot) in rule.iter_mut().enumerate() {
+            // Newton's method on the Legendre polynomial of degree N, from
+            // the usual starting guess for its i-th root.
+            let mut x = (std::f64::consts::PI * (i as f64 + 0.75) / (N as f64 + 0.5)).cos();
+            let mut derivative = 1.0;
+            for _ in 0..100 {
+                let (mut previous, mut current) = (1.0, x);
+                for degree in 2..=N {
+                    let d = degree as f64;
+                    let next = ((2.0 * d - 1.0) * x * current - (d - 1.0) * previous) / d;
+                    previous = current;
+                    current = next;
+                }
+                derivative = N as f64 * (x * current - previous) / (x * x - 1.0);
+                let step = current / derivative;
+                x -= step;
+                if step.abs() < 1e-16 {
+                    break;
+                }
+            }
+            *slot = (x, 2.0 / ((1.0 - x * x) * derivative * derivative));
+        }
+        rule
+    })
+}
+
+/// Integral of `f` from `low` to `high`, by Gauss-Legendre quadrature on
+/// `pieces` equal parts.
+fn integrate(low: f64, high: f64, pieces: usize, f: impl Fn(f64) -> f64) -> f64 {
+    let width = (high - low) / pieces as f64;
+    let mut total = 0.0;
+    for piece in 0..pieces {
+        let centre = low + width * (piece as f64 + 0.5);
+        for &(node, weight) in gauss_legendre() {
+            total += weight * f(centre + 0.5 * width * node);
+        }
+    }
+    0.5 * width * total
+}
+
+/// Probability that the range of `k` independent standard normal values is
+/// at most `w`.
+fn normal_range_cdf(w: f64, k: f64) -> f64 {
+    if w <= 0.0 {
+        return 0.0;
+    }
+    // k * integral of phi(z) * (Phi(z) - Phi(z - w))^(k - 1) over all z; the
+    // density is negligible beyond 8.5 standard deviations.
+    let density = |z: f64| {
+        let inside = normal_cdf(z) - normal_cdf(z - w);
+        (-0.5 * z * z).exp() * inside.powf(k - 1.0)
+    };
+    let integral = integrate(-8.5, 8.5 + w.min(8.5), 26, density);
+    (k * integral / (2.0 * std::f64::consts::PI).sqrt()).clamp(0.0, 1.0)
+}
+
+/// `normal_range_cdf` for one number of groups, tabulated so that the many
+/// evaluations a studentized-range probability needs are quick.
+struct RangeTable {
+    values: Vec<f64>,
+}
+
+impl RangeTable {
+    /// Spacing of the table and the range beyond which the probability is
+    /// one to within rounding.
+    const STEP: f64 = 1.0 / 128.0;
+    const LIMIT: f64 = 24.0;
+
+    fn new(k: f64) -> RangeTable {
+        let points = (Self::LIMIT / Self::STEP) as usize + 3;
+        RangeTable {
+            values: (0..points)
+                .map(|i| normal_range_cdf(i as f64 * Self::STEP, k))
+                .collect(),
+        }
+    }
+
+    /// The probability at `w`, by cubic interpolation.
+    fn at(&self, w: f64) -> f64 {
+        if w <= 0.0 {
+            return 0.0;
+        }
+        if w >= Self::LIMIT {
+            return 1.0;
+        }
+        let position = w / Self::STEP;
+        let i = position as usize;
+        let t = position - i as f64;
+        let v = &self.values;
+        // Catmull-Rom spline through the four nearest points; the value
+        // before zero mirrors the one after, as the function is even there.
+        let before = if i == 0 { v[1] } else { v[i - 1] };
+        let (p0, p1, p2, p3) = (before, v[i], v[i + 1], v[i + 2]);
+        let value = p1
+            + 0.5
+                * t
+                * (p2 - p0
+                    + t * (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3 + t * (3.0 * (p1 - p2) + p3 - p0)));
+        value.clamp(0.0, 1.0)
+    }
+}
+
+/// The table for `k` groups, built on first use and kept.
+fn range_table(k: f64) -> std::sync::Arc<RangeTable> {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, OnceLock};
+    static TABLES: OnceLock<Mutex<HashMap<u64, Arc<RangeTable>>>> = OnceLock::new();
+    let mut tables = TABLES
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    Arc::clone(
+        tables
+            .entry(k.to_bits())
+            .or_insert_with(|| Arc::new(RangeTable::new(k))),
+    )
+}
+
+/// Cumulative distribution function of the studentized range: the
+/// probability that the range of `k` group means, in units of their
+/// estimated standard error with `df` degrees of freedom, is at most `q`.
+pub fn studentized_range_cdf(q: f64, k: f64, df: f64) -> f64 {
+    if q.is_nan() || k.is_nan() || df.is_nan() || k < 2.0 || df < 1.0 {
+        return f64::NAN;
+    }
+    if q <= 0.0 {
+        return 0.0;
+    }
+    // With very many degrees of freedom the standard error is known.
+    let range = range_table(k);
+    if df > 25_000.0 {
+        return range.at(q);
+    }
+    // Average the range probability over the distribution of the estimated
+    // standard deviation s, where df * s^2 is chi-square with df degrees of
+    // freedom. Its density is negligible outside these limits.
+    let spread = 9.0 * (2.0 * df).sqrt();
+    let low = ((df - spread).max(0.0) / df).sqrt();
+    let high = ((df + spread + 40.0) / df).sqrt();
+    let ln_constant = std::f64::consts::LN_2 + 0.5 * df * (0.5 * df).ln() - ln_gamma(0.5 * df);
+    let integrand = |s: f64| {
+        if s <= 0.0 {
+            return 0.0;
+        }
+        let ln_density = ln_constant + (df - 1.0) * s.ln() - 0.5 * df * s * s;
+        ln_density.exp() * range.at(q * s)
+    };
+    // The range probability climbs from zero to one while q * s is below
+    // about 17; that stretch is integrated finely, the rest more coarsely.
+    let climb = (17.0 / q).clamp(low, high);
+    let total = integrate(low, climb, 40, integrand)
+        + if climb < high {
+            integrate(climb, high, 16, integrand)
+        } else {
+            0.0
+        };
+    total.clamp(0.0, 1.0)
+}
+
+/// Quantile of the studentized range: the `q` below which a fraction `p` of
+/// the distribution lies.
+pub fn studentized_range_ppf(p: f64, k: f64, df: f64) -> f64 {
+    if !(0.0..1.0).contains(&p) || k.is_nan() || df.is_nan() || k < 2.0 || df < 1.0 {
+        return f64::NAN;
+    }
+    if p == 0.0 {
+        return 0.0;
+    }
+    let error = |q: f64| studentized_range_cdf(q, k, df) - p;
+    // Bracket the root, then close in on it by the Illinois method.
+    let (mut low, mut high) = (0.0, 4.0);
+    let (mut f_low, mut f_high) = (-p, error(high));
+    while f_high < 0.0 {
+        (low, f_low) = (high, f_high);
+        high *= 2.0;
+        if high > 1e6 {
+            return f64::INFINITY;
+        }
+        f_high = error(high);
+    }
+    let mut side = 0;
+    for _ in 0..200 {
+        let middle = (low * f_high - high * f_low) / (f_high - f_low);
+        let f_middle = error(middle);
+        if f_middle.abs() < 1e-13 || (high - low) < 1e-11 * high {
+            return middle;
+        }
+        if f_middle < 0.0 {
+            (low, f_low) = (middle, f_middle);
+            if side == -1 {
+                f_high *= 0.5;
+            }
+            side = -1;
+        } else {
+            (high, f_high) = (middle, f_middle);
+            if side == 1 {
+                f_low *= 0.5;
+            }
+            side = 1;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// Two-sided critical value of the standard normal distribution: the z for
 /// which the central `area` lies within ±z.
 pub fn z_score(area: f64) -> f64 {
@@ -314,5 +524,107 @@ mod tests {
         for (p, dfn, dfd) in [(0.95, 2.0, 15.0), (0.99, 5.0, 114.0), (0.5, 1.0, 3.0)] {
             close(f_cdf(f_ppf(p, dfn, dfd), dfn, dfd), p, 1e-14);
         }
+    }
+
+    #[test]
+    fn quadrature_rule_is_exact_for_polynomials() {
+        let rule = gauss_legendre();
+        close(rule.iter().map(|(_, w)| w).sum::<f64>(), 2.0, 1e-14);
+        close(
+            integrate(0.0, 2.0, 1, |x| x.powi(15) + 3.0 * x * x),
+            4104.0,
+            1e-12,
+        );
+        close(
+            integrate(0.0, 1.0, 4, f64::exp),
+            std::f64::consts::E - 1.0,
+            1e-13,
+        );
+    }
+
+    #[test]
+    fn studentized_range_matches_known_values() {
+        // The range of two normal values is |difference|, which is normal
+        // with variance two.
+        for w in [0.5, 1.0, 2.5, 4.0] {
+            let expected = 2.0 * normal_cdf(w / SQRT_2) - 1.0;
+            close(normal_range_cdf(w, 2.0), expected, 1e-12);
+        }
+        // With two groups, q is the square root of twice an F(1, df)
+        // variable, so its distribution is known exactly.
+        for (q, df) in [
+            (1.0, 3.0),
+            (2.95, 20.0),
+            (4.0, 7.5),
+            (6.0, 2.0),
+            (44.69, 2.0),
+            (3.0, 500.0),
+        ] {
+            close(
+                studentized_range_cdf(q, 2.0, df),
+                f_cdf(q * q / 2.0, 1.0, df),
+                1e-9,
+            );
+        }
+        // Published upper 5% and 1% points.
+        for (p, k, df, q) in [
+            (0.95, 3.0, 10.0, 3.877),
+            (0.95, 5.0, 20.0, 4.232),
+            (0.99, 3.0, 20.0, 4.639),
+            (0.95, 4.0, 60.0, 3.737),
+            (0.95, 10.0, 120.0, 4.560),
+            (0.95, 3.0, 1e9, 3.314),
+        ] {
+            let got = studentized_range_ppf(p, k, df);
+            assert!(
+                (got - q).abs() < 1.5e-3,
+                "q({p}, {k}, {df}) = {got}, not {q}"
+            );
+            close(studentized_range_cdf(got, k, df), p, 1e-9);
+        }
+        assert_eq!(studentized_range_cdf(0.0, 3.0, 10.0), 0.0);
+        assert!(studentized_range_cdf(1.0, 1.0, 10.0).is_nan());
+        assert!(studentized_range_ppf(1.0, 3.0, 10.0).is_nan());
+    }
+
+    /// The tables of critical values that STAMP v2 looked p-values up in
+    /// agree with the distribution computed here.
+    #[test]
+    fn studentized_range_matches_the_tables_of_stamp_v2() {
+        let tables = [
+            (0.001, include_str!("../../data/tukeyQ_001.txt")),
+            (0.01, include_str!("../../data/tukeyQ_01.txt")),
+            (0.02, include_str!("../../data/tukeyQ_02.txt")),
+            (0.05, include_str!("../../data/tukeyQ_05.txt")),
+            (0.1, include_str!("../../data/tukeyQ_10.txt")),
+        ];
+        let mut checked = 0;
+        for (alpha, text) in tables {
+            for (row, line) in text.lines().skip(1).enumerate() {
+                let df = row as f64 + 2.0;
+                // A sample of the rows and columns keeps this quick. Below
+                // ten degrees of freedom the tables themselves are off, by
+                // a third at two degrees of freedom and the 0.1% level:
+                // their 34.71 for two groups should be 44.69, as the F
+                // distribution confirms in the test above.
+                if ![10.0, 17.0, 30.0, 60.0, 120.0, 200.0].contains(&df) {
+                    continue;
+                }
+                for (column, cell) in line.split('\t').skip(1).enumerate() {
+                    let k = column as f64 + 2.0;
+                    if ![2.0, 3.0, 4.0, 6.0, 10.0, 20.0, 29.0].contains(&k) {
+                        continue;
+                    }
+                    let tabled: f64 = cell.trim().parse().unwrap();
+                    let p = studentized_range_cdf(tabled, k, df);
+                    assert!(
+                        (p - (1.0 - alpha)).abs() < 5e-7,
+                        "alpha {alpha}, k {k}, df {df}: q {tabled} gives {p}"
+                    );
+                    checked += 1;
+                }
+            }
+        }
+        assert_eq!(checked, 5 * 6 * 7);
     }
 }

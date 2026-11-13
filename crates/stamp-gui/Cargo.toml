@@ -21,6 +21,7 @@ path = "src/main.rs"
 stamp-core = { workspace = true }
 stamp-plot = { workspace = true }
 eframe = { workspace = true }
+serde = { workspace = true }
 egui_extras = { workspace = true }
 png = { workspace = true }
 rfd = { workspace = true }
@@ -40,6 +41,9 @@ web-sys = { version = "0.3", features = [
     "Url",
     "Window",
 ] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
 
 # Embeds the application icon and version details in the Windows executable.
 [target.'cfg(windows)'.build-dependencies]

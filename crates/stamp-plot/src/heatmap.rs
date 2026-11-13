@@ -9,7 +9,7 @@ use crate::text;
 
 /// Colour scales for the cells, from low to high values: the fourteen of
 /// STAMP v2, under the same names.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ColorMap {
     Blues,
     BlueToRedToGreen,
@@ -211,7 +211,7 @@ impl ColorMap {
 }
 
 /// How rows or columns are ordered.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Order {
     /// By hierarchical clustering, which can also be drawn as a dendrogram.
     Cluster(Linkage),
@@ -341,7 +341,8 @@ impl Data {
 }
 
 /// Appearance of the heatmap. Lengths are in inches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct Options {
     pub width: f64,
     pub height: f64,

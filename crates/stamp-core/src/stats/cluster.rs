@@ -1,7 +1,7 @@
 //! Hierarchical clustering, for ordering the rows and columns of a heatmap.
 
 /// How the distance between two clusters is measured.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Linkage {
     /// Mean distance between members (UPGMA).
     Average,

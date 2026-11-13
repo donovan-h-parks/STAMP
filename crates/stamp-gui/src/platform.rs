@@ -76,10 +76,19 @@ impl Source {
     }
 }
 
+/// A further file that a profile needs before it can be created.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Auxiliary {
+    MothurGroups,
+    MothurNames,
+}
+
 /// Something the interface wants done with files.
 pub enum Request {
     OpenProfile,
     OpenMetadata,
+    /// Ask for a further file of a profile that is being opened.
+    OpenAuxiliary(Auxiliary),
     /// Convert another tool's files to a STAMP profile, save it and open it.
     Convert(Source),
     /// Save data under a suggested name.
@@ -93,6 +102,7 @@ pub enum Request {
 pub enum Event {
     Profile(OpenedFile),
     Metadata(OpenedFile),
+    Auxiliary(Auxiliary, OpenedFile),
     /// A converted profile, ready to be loaded.
     Converted {
         name: String,
@@ -155,7 +165,8 @@ impl Default for Platform {
     }
 }
 
-const PROFILE_EXTENSIONS: [&str; 3] = ["spf", "tsv", "txt"];
+/// STAMP profiles, BIOM tables and mothur taxonomy files.
+const PROFILE_EXTENSIONS: [&str; 6] = ["spf", "tsv", "txt", "biom", "gz", "taxonomy"];
 const METADATA_EXTENSIONS: [&str; 3] = ["tsv", "txt", "csv"];
 
 impl Platform {
@@ -188,6 +199,16 @@ async fn perform(request: Request) -> Result<Option<Event>, String> {
             .await
             .pop()
             .map(Event::Metadata)),
+        Request::OpenAuxiliary(which) => {
+            let (title, extensions): (&str, &[&str]) = match which {
+                Auxiliary::MothurGroups => ("mothur groups file", &["groups"]),
+                Auxiliary::MothurNames => ("mothur names file", &["names"]),
+            };
+            Ok(imp::open(title, extensions, false)
+                .await
+                .pop()
+                .map(|file| Event::Auxiliary(which, file)))
+        }
         Request::Save { name, bytes } => imp::save(&name, bytes).await.map(|_| None),
         Request::Convert(source) => {
             let mut files = Vec::new();

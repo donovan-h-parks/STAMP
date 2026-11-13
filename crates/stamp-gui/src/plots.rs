@@ -2,7 +2,8 @@
 
 use stamp_core::stats::results::format_p_value;
 use stamp_plot::axes::LegendPosition;
-use stamp_plot::extended_error_bar;
+use stamp_plot::axes::AXES_COLOR;
+use stamp_plot::extended_error_bar::{self, SAMPLE1_COLOR, SAMPLE2_COLOR};
 use stamp_plot::{
     feature_plots, heatmap, histogram, pca_plot, post_hoc, sample_plots, scatter, Color, Figure,
 };
@@ -93,7 +94,8 @@ impl PlotKind {
 
 /// The settings of every plot, as set in the "Configure plot" window.
 /// Lengths are in inches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct PlotSettings {
     pub error_bar: extended_error_bar::Options,
     /// Show sequence counts instead of proportions in the bars of the
@@ -128,7 +130,14 @@ pub struct PlotSettings {
     /// Show sequence counts instead of proportions in the heatmap.
     pub heatmap_sequence_counts: bool,
     /// Features drawn in red by the plots that support highlighting.
+    #[serde(skip)]
     pub highlighted: Vec<String>,
+    /// Preferences that apply to every plot: p-values below ten to this
+    /// power are shown as a bound; the colour of axes; and the colours of
+    /// the two samples of a two-sample analysis.
+    pub min_p_exponent: i32,
+    pub axes_color: Color,
+    pub sample_colors: [Color; 2],
 }
 
 impl Default for PlotSettings {
@@ -183,6 +192,9 @@ impl Default for PlotSettings {
             heatmap_only_active: false,
             heatmap_sequence_counts: false,
             highlighted: Vec::new(),
+            min_p_exponent: -15,
+            axes_color: AXES_COLOR,
+            sample_colors: [SAMPLE1_COLOR, SAMPLE2_COLOR],
         }
     }
 }
@@ -239,11 +251,35 @@ const NO_FEATURE: &str = "Select a feature in the feature table";
 
 /// Build the figure for the current results of `mode`.
 pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSettings) -> Figure {
+    let mut figure = build_plain(session, mode, kind, settings);
+    // The colours chosen in the preferences replace the built-in ones: the
+    // grey of axes wherever it draws lines or text, and, for two samples,
+    // the colours the plots give the first and second sample.
+    let samples = settings.sample_colors;
+    let recolor_samples = mode == Mode::TwoSamples && samples != [SAMPLE1_COLOR, SAMPLE2_COLOR];
+    if recolor_samples || settings.axes_color != AXES_COLOR {
+        figure.map_colors(|color, fill| {
+            if !fill && color == AXES_COLOR {
+                settings.axes_color
+            } else if recolor_samples && color == SAMPLE1_COLOR {
+                samples[0]
+            } else if recolor_samples && color == SAMPLE2_COLOR {
+                samples[1]
+            } else {
+                color
+            }
+        });
+    }
+    figure
+}
+
+fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSettings) -> Figure {
     if session.tree.is_none() {
         return Figure::message(NO_RESULTS);
     }
     let highlighted = || settings.highlighted.clone();
     let error_bar = extended_error_bar::Options {
+        min_p_value_exponent: settings.min_p_exponent,
         highlighted: highlighted(),
         ..settings.error_bar.clone()
     };
@@ -352,7 +388,7 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     .rows
                     .iter()
                     .find(|r| r.feature == name)
-                    .map(|r| format_p_value(r.p_value_corrected, -15));
+                    .map(|r| format_p_value(r.p_value_corrected, settings.min_p_exponent));
                 Some(data)
             };
             match kind {
@@ -431,7 +467,7 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     .rows
                     .iter()
                     .find(|r| r.feature == name)
-                    .map(|r| format_p_value(r.p_value_corrected, -15));
+                    .map(|r| format_p_value(r.p_value_corrected, settings.min_p_exponent));
                 Some(data)
             };
             match kind {

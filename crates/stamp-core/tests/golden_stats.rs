@@ -725,6 +725,9 @@ fn post_hoc_statistics_match_python() {
         .collect();
     let mut checked = 0;
     let (mut crashes_fixed, mut welch_rows, mut bounds) = (0, 0, 0);
+    let mut pooled_fixed = 0;
+    /// How far a confidence limit may be from Python's table-based one.
+    const STUDENTIZED_CI_REL: f64 = 5e-3;
     for case in cases("post_hoc") {
         let parent = &parents[case.id.strip_suffix("__posthoc").unwrap()];
         let profile = multi_group_profile(parent);
@@ -768,14 +771,43 @@ fn post_hoc_statistics_match_python() {
                     .unwrap_or_else(|| panic!("{context}: no row for {}", comparison.label));
                 let context = format!("{context} {}", comparison.label);
 
-                match comparison.p_value {
-                    PostHocP::Bound(bound) => {
-                        assert_eq!(bound, row[3], "{context}");
-                        bounds += 1;
-                    }
-                    PostHocP::Value(p) => {
-                        check(&context, "p-value", number(&row[3]), p, P_REL, 1e-11)
-                    }
+                let PostHocP::Value(p) = comparison.p_value;
+                // A group of one sample made Python's pooled variance, and
+                // with it the whole comparison, undefined.
+                if number(&row[5]).is_nan()
+                    && matches!(test, PostHocTest::TukeyKramer | PostHocTest::Scheffe)
+                {
+                    assert!(
+                        p.is_finite() && comparison.lower_ci.is_finite(),
+                        "{context}: {comparison:?}"
+                    );
+                    pooled_fixed += 1;
+                    continue;
+                }
+                let studentized =
+                    matches!(test, PostHocTest::TukeyKramer | PostHocTest::GamesHowell);
+                if studentized {
+                    // Python read a bound from tables; the computed value
+                    // must fall within it. The slack covers the tables'
+                    // inaccuracy at few degrees of freedom and Python's
+                    // interpolation in them for Games-Howell.
+                    let levels = [0.0, 0.001, 0.01, 0.02, 0.05, 0.1, 1.0];
+                    let (low, high) = match row[3].as_str() {
+                        ">= 0.1" => (0.1, 1.0),
+                        bound => {
+                            let level: f64 = bound.trim_start_matches("< ").parse().unwrap();
+                            let at = levels.iter().position(|l| *l == level).unwrap();
+                            (levels[at - 1], level)
+                        }
+                    };
+                    assert!(
+                        p >= low * 0.8 - 1e-12 && p <= high * 1.25,
+                        "{context}: p-value {p} outside Python's {}",
+                        row[3]
+                    );
+                    bounds += 1;
+                } else {
+                    check(&context, "p-value", number(&row[3]), p, P_REL, 1e-11);
                 }
                 check(
                     &context,
@@ -786,12 +818,34 @@ fn post_hoc_statistics_match_python() {
                     1e-11,
                 );
                 let python_ci = (number(&row[5]), number(&row[6]));
-                check_ci(
-                    &context,
-                    python_ci,
-                    (comparison.lower_ci, comparison.upper_ci),
-                    scale,
-                );
+                if studentized {
+                    // Python's limits came from its tables of critical
+                    // values, which it interpolated for Games-Howell; the
+                    // computed limits are close to them, not equal.
+                    let python_half = (python_ci.1 - python_ci.0) / 2.0;
+                    let half = (comparison.upper_ci - comparison.lower_ci) / 2.0;
+                    let difference = (half - python_half).abs() / python_half;
+                    assert!(
+                        difference < STUDENTIZED_CI_REL,
+                        "{context}: half-width {half} against Python's {python_half}"
+                    );
+                    let centre = (comparison.upper_ci + comparison.lower_ci) / 2.0;
+                    check(
+                        &context,
+                        "CI centre",
+                        comparison.effect_size,
+                        centre,
+                        1e-8,
+                        1e-9,
+                    );
+                } else {
+                    check_ci(
+                        &context,
+                        python_ci,
+                        (comparison.lower_ci, comparison.upper_ci),
+                        scale,
+                    );
+                }
                 assert_eq!(result.note, row[7], "{context}");
                 if test == PostHocTest::WelchUncorrected {
                     welch_rows += 1;
@@ -802,6 +856,7 @@ fn post_hoc_statistics_match_python() {
     }
     assert!(checked >= 18, "only {checked} post-hoc cases checked");
     assert!(crashes_fixed > 0 && welch_rows > 0 && bounds > 0);
+    assert!(pooled_fixed > 0);
 }
 
 #[test]

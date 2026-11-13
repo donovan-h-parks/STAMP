@@ -1,8 +1,6 @@
 //! Post-hoc tests: pairwise comparisons of groups after a multiple-group test.
 
-use std::sync::OnceLock;
-
-use super::dist::{f_cdf, f_ppf};
+use super::dist::{f_cdf, f_ppf, studentized_range_cdf, studentized_range_ppf};
 use super::two_group::welch;
 use super::{mean, sample_variance};
 use crate::error::{Result, StampError};
@@ -16,21 +14,20 @@ pub enum PostHocTest {
     WelchUncorrected,
 }
 
-/// p-value of a pairwise comparison. The tests based on the studentized range
-/// report a bound from tables rather than an exact value.
+/// p-value of a pairwise comparison. It is `NaN` where the comparison could
+/// not be made, such as for a group of one sample under Games-Howell.
+///
+/// STAMP v2 reported the tests based on the studentized range as a bound
+/// read from tables (`< 0.05`); they are now computed, like the others.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PostHocP {
     Value(f64),
-    /// One of `< 0.001`, `< 0.01`, `< 0.02`, `< 0.05`, `< 0.1`, `>= 0.1`.
-    Bound(&'static str),
 }
 
 impl std::fmt::Display for PostHocP {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PostHocP::Value(v) => write!(f, "{v:?}"),
-            PostHocP::Bound(b) => f.write_str(b),
-        }
+        let PostHocP::Value(v) = self;
+        write!(f, "{v:?}")
     }
 }
 
@@ -123,101 +120,32 @@ impl PostHocTest {
 /// (p-value, effect size, lower CI, upper CI) for each pair, in order.
 type PairStats = Vec<(PostHocP, f64, f64, f64)>;
 
-/// Critical values of the studentized range statistic.
-struct QTable {
-    /// One table per significance level; rows are degrees of freedom from 2
-    /// to 200, columns are numbers of groups from 2 to 30.
-    tables: Vec<(f64, Vec<Vec<f64>>)>,
-}
-
-fn q_table() -> &'static QTable {
-    static TABLE: OnceLock<QTable> = OnceLock::new();
-    TABLE.get_or_init(|| {
-        let parse = |text: &str| -> Vec<Vec<f64>> {
-            text.lines()
-                .skip(1)
-                .filter(|l| !l.trim().is_empty())
-                .map(|l| {
-                    l.split('\t')
-                        .skip(1)
-                        .map(|v| v.trim().parse().expect("number"))
-                        .collect()
-                })
-                .collect()
-        };
-        QTable {
-            tables: vec![
-                (0.001, parse(include_str!("../../data/tukeyQ_001.txt"))),
-                (0.01, parse(include_str!("../../data/tukeyQ_01.txt"))),
-                (0.02, parse(include_str!("../../data/tukeyQ_02.txt"))),
-                (0.05, parse(include_str!("../../data/tukeyQ_05.txt"))),
-                (0.1, parse(include_str!("../../data/tukeyQ_10.txt"))),
-            ],
-        }
-    })
-}
-
-impl QTable {
-    fn table(&self, alpha: f64) -> Result<&Vec<Vec<f64>>> {
-        self.tables
-            .iter()
-            .find(|(level, _)| (level - alpha).abs() < 1e-9)
-            .map(|(_, table)| table)
-            .ok_or_else(|| {
-                StampError::new(
-                    "This post-hoc test supports confidence levels of 90%, 95%, 98%, 99% and 99.9% only.",
-                )
-            })
+/// p-value and critical value of the studentized range for `k` groups and
+/// `df` degrees of freedom: the probability of a statistic above `q`, and
+/// the statistic exceeded with probability `1 - coverage`.
+///
+/// With fewer than one degree of freedom nothing can be concluded: the
+/// p-value is one and the critical value effectively infinite, as in STAMP
+/// v2.
+fn studentized_range(q: f64, k: usize, df: f64, coverage: f64) -> (f64, f64) {
+    if k < 2 || df.is_nan() || df < 1.0 {
+        return (1.0, 1000.0);
     }
-
-    /// Critical value for `k` groups and `df` degrees of freedom.
-    fn cv(&self, alpha: f64, k: usize, df: i64) -> Result<f64> {
-        let table = self.table(alpha)?;
-        if k < 2 || df < 2 {
-            return Ok(1000.0);
-        }
-        // Beyond the table, the last entries approximate infinity well.
-        let k = k.min(30);
-        let df = df.min(200) as usize;
-        Ok(table[df - 2][k - 2])
-    }
-
-    /// Critical value for fractional degrees of freedom, by linear
-    /// interpolation.
-    fn cv_interpolated(&self, alpha: f64, k: usize, df: f64) -> Result<f64> {
-        let (lower_df, upper_df) = (df.floor(), df.ceil());
-        let lower = self.cv(alpha, k, lower_df as i64)?;
-        let upper = self.cv(alpha, k, upper_df as i64)?;
-        Ok(lower + (df - lower_df) * (upper - lower))
-    }
+    let k = k as f64;
+    (
+        (1.0 - studentized_range_cdf(q, k, df)).clamp(0.0, 1.0),
+        studentized_range_ppf(coverage, k, df),
+    )
 }
-
-const BOUNDS: [(f64, &str); 5] = [
-    (0.001, "< 0.001"),
-    (0.01, "< 0.01"),
-    (0.02, "< 0.02"),
-    (0.05, "< 0.05"),
-    (0.1, "< 0.1"),
-];
-const NOT_SIGNIFICANT: &str = ">= 0.1";
 
 fn tukey_kramer(groups: &[&[f64]], coverage: f64) -> Result<(PairStats, &'static str)> {
-    let table = q_table();
+    check_coverage(coverage)?;
     let k = groups.len();
     let n: usize = groups.iter().map(|g| g.len()).sum();
-    let df = n as i64 - k as i64;
+    let df = n as f64 - k as f64;
+    let (_, q_cv) = studentized_range(0.0, k, df, coverage);
 
-    let q_cv = table.cv(1.0 - coverage, k, df)?;
-    let mut critical = [0.0; 5];
-    for (slot, (alpha, _)) in critical.iter_mut().zip(BOUNDS) {
-        *slot = table.cv(alpha, k, df)?;
-    }
-
-    let within_var = groups
-        .iter()
-        .map(|g| (g.len() as f64 - 1.0) * sample_variance(g))
-        .sum::<f64>()
-        / df as f64;
+    let within_var = pooled_sum_of_squares(groups) / df;
     let mut within_sd = within_var.sqrt();
     let mut note = "";
     if within_sd == 0.0 {
@@ -232,21 +160,20 @@ fn tukey_kramer(groups: &[&[f64]], coverage: f64) -> Result<(PairStats, &'static
                 ((1.0 / groups[i].len() as f64 + 1.0 / groups[j].len() as f64) / 2.0).sqrt();
             let es = mean(groups[i]) - mean(groups[j]);
             let q = es.abs() / (within_sd * scale);
-            let bound = BOUNDS
-                .iter()
-                .zip(critical)
-                .find(|(_, cv)| q > *cv)
-                .map_or(NOT_SIGNIFICANT, |((_, label), _)| *label);
+            let p = if df < 1.0 {
+                1.0
+            } else {
+                (1.0 - studentized_range_cdf(q, k as f64, df)).clamp(0.0, 1.0)
+            };
             let half_width = q_cv * within_sd * scale;
-            stats.push((PostHocP::Bound(bound), es, es - half_width, es + half_width));
+            stats.push((PostHocP::Value(p), es, es - half_width, es + half_width));
         }
     }
     Ok((stats, note))
 }
 
 fn games_howell(groups: &[&[f64]], coverage: f64) -> Result<(PairStats, &'static str)> {
-    let table = q_table();
-    table.table(1.0 - coverage)?;
+    check_coverage(coverage)?;
     let k = groups.len();
     let mut note = "";
 
@@ -258,7 +185,7 @@ fn games_howell(groups: &[&[f64]], coverage: f64) -> Result<(PairStats, &'static
             if groups[i].len() < 2 || groups[j].len() < 2 {
                 // The variance of a single sample is undefined.
                 note = SINGLE_SAMPLE_GROUP;
-                stats.push((PostHocP::Bound(NOT_SIGNIFICANT), es, f64::NAN, f64::NAN));
+                stats.push((PostHocP::Value(f64::NAN), es, f64::NAN, f64::NAN));
                 continue;
             }
 
@@ -276,18 +203,33 @@ fn games_howell(groups: &[&[f64]], coverage: f64) -> Result<(PairStats, &'static
 
             let scale = ((vn1 + vn2) / 2.0).sqrt();
             let q = es.abs() / scale;
-            let mut bound = NOT_SIGNIFICANT;
-            for (alpha, label) in BOUNDS {
-                if q > table.cv_interpolated(alpha, k, df)? {
-                    bound = label;
-                    break;
-                }
-            }
-            let half_width = table.cv_interpolated(1.0 - coverage, k, df)? * scale;
-            stats.push((PostHocP::Bound(bound), es, es - half_width, es + half_width));
+            let (p, q_cv) = studentized_range(q, k, df, coverage);
+            let half_width = q_cv * scale;
+            stats.push((PostHocP::Value(p), es, es - half_width, es + half_width));
         }
     }
     Ok((stats, note))
+}
+
+/// Sum over the groups of the squared deviations from the group mean. A
+/// group of a single sample has none to add; STAMP v2 took its variance,
+/// which is undefined, and so lost the whole test.
+fn pooled_sum_of_squares(groups: &[&[f64]]) -> f64 {
+    groups
+        .iter()
+        .filter(|g| g.len() > 1)
+        .map(|g| (g.len() as f64 - 1.0) * sample_variance(g))
+        .sum()
+}
+
+fn check_coverage(coverage: f64) -> Result<()> {
+    if coverage > 0.0 && coverage < 1.0 {
+        Ok(())
+    } else {
+        Err(StampError::new(
+            "The coverage of a confidence interval must lie between 0 and 1.",
+        ))
+    }
 }
 
 fn scheffe(groups: &[&[f64]], coverage: f64) -> (PairStats, &'static str) {
@@ -297,11 +239,7 @@ fn scheffe(groups: &[&[f64]], coverage: f64) -> (PairStats, &'static str) {
     let df_within = n as f64 - k as f64;
     let critical = df_between * f_ppf(coverage, df_between, df_within);
 
-    let mut within_var = groups
-        .iter()
-        .map(|g| (g.len() as f64 - 1.0) * sample_variance(g))
-        .sum::<f64>()
-        / df_within;
+    let mut within_var = pooled_sum_of_squares(groups) / df_within;
     let within_sd = within_var.sqrt();
     let mut note = "";
     if within_var == 0.0 {
@@ -362,6 +300,18 @@ mod tests {
     }
 
     fn check(c: &Comparison, label: &str, effect: f64, lower: f64, upper: f64) {
+        check_within(c, label, effect, lower, upper, 5e-8);
+    }
+
+    /// As `check`, allowing the confidence limits to differ by `tolerance`.
+    fn check_within(
+        c: &Comparison,
+        label: &str,
+        effect: f64,
+        lower: f64,
+        upper: f64,
+        tolerance: f64,
+    ) {
         assert_eq!(c.label, label);
         for (actual, expected) in [
             (c.effect_size, effect),
@@ -369,7 +319,7 @@ mod tests {
             (c.upper_ci, upper),
         ] {
             assert!(
-                (actual - expected).abs() < 5e-8,
+                (actual - expected).abs() < tolerance,
                 "{label}: expected {expected}, got {actual}"
             );
         }
@@ -381,65 +331,83 @@ mod tests {
     #[test]
     fn games_howell_values() {
         let r = run(PostHocTest::GamesHowell);
-        check(
+        check_within(
             &r.comparisons[0],
             "1 : 2",
             -32.0,
             -56.836534205367272,
             -7.163465794632728,
+            0.5,
         );
-        check(
+        check_within(
             &r.comparisons[1],
             "1 : 3",
             -1.0,
             -3.9627938823820417,
             1.9627938823820417,
+            0.5,
         );
-        check(
+        check_within(
             &r.comparisons[2],
             "2 : 3",
             31.0,
             6.1693311597445302,
             55.83066884025547,
+            0.5,
         );
-        let bounds: Vec<PostHocP> = r.comparisons.iter().map(|c| c.p_value).collect();
-        assert_eq!(
-            bounds,
-            [
-                PostHocP::Bound("< 0.02"),
-                PostHocP::Bound(">= 0.1"),
-                PostHocP::Bound("< 0.05")
-            ]
-        );
+        // STAMP v2 reported "< 0.02", ">= 0.1" and "< 0.05".
+        let p: Vec<f64> = r
+            .comparisons
+            .iter()
+            .map(|c| {
+                let PostHocP::Value(p) = c.p_value;
+                p
+            })
+            .collect();
+        assert!(p[0] > 0.01 && p[0] < 0.02, "{p:?}");
+        assert!(p[1] > 0.1, "{p:?}");
+        assert!(p[2] > 0.02 && p[2] < 0.05, "{p:?}");
     }
 
     #[test]
     fn tukey_kramer_values() {
         let r = run(PostHocTest::TukeyKramer);
-        check(
+        check_within(
             &r.comparisons[0],
             "1 : 2",
             -32.0,
             -49.172140035619407,
             -14.827859964380597,
+            2e-5,
         );
-        check(
+        check_within(
             &r.comparisons[1],
             "1 : 3",
             -1.0,
             -17.605245738594071,
             15.605245738594071,
+            2e-5,
         );
-        check(
+        check_within(
             &r.comparisons[2],
             "2 : 3",
             31.0,
             15.222589067602378,
             46.777410932397622,
+            2e-5,
         );
-        assert_eq!(r.comparisons[0].p_value, PostHocP::Bound("< 0.001"));
-        assert_eq!(r.comparisons[1].p_value, PostHocP::Bound(">= 0.1"));
-        assert_eq!(r.comparisons[2].p_value, PostHocP::Bound("< 0.001"));
+        // STAMP v2 reported "< 0.001", ">= 0.1" and "< 0.001".
+        let p: Vec<f64> = r
+            .comparisons
+            .iter()
+            .map(|c| {
+                let PostHocP::Value(p) = c.p_value;
+                p
+            })
+            .collect();
+        assert!(p[0] > 0.0 && p[0] < 0.001, "{p:?}");
+        assert!(p[1] > 0.9, "{p:?}");
+        assert!(p[2] > 0.0 && p[2] < 0.001, "{p:?}");
     }
 
     #[test]
@@ -472,9 +440,7 @@ mod tests {
             5.261333896968458E-4,
         ];
         for (c, e) in r.comparisons.iter().zip(expected) {
-            let PostHocP::Value(p) = c.p_value else {
-                panic!("expected a value")
-            };
+            let PostHocP::Value(p) = c.p_value;
             assert!((p - e).abs() < 5e-8, "expected {e}, got {p}");
         }
     }
@@ -496,22 +462,23 @@ mod tests {
             .run(&[&A, &single, &C], 0.95, &["a", "b", "c"])
             .unwrap();
         assert_eq!(r.note, SINGLE_SAMPLE_GROUP);
-        assert_eq!(r.comparisons[0].p_value, PostHocP::Bound(">= 0.1"));
+        let PostHocP::Value(p) = r.comparisons[0].p_value;
+        assert!(p.is_nan());
         assert!(r.comparisons[0].lower_ci.is_nan());
         assert!(r.comparisons[1].lower_ci.is_finite());
     }
 
     #[test]
-    fn unsupported_coverage_and_names() {
-        assert!(PostHocTest::TukeyKramer
-            .run(&[&A, &B], 0.97, &["a", "b"])
-            .is_err());
-        assert!(PostHocTest::GamesHowell
-            .run(&[&A, &B], 0.97, &["a", "b"])
-            .is_err());
-        assert!(PostHocTest::Scheffe
-            .run(&[&A, &B], 0.97, &["a", "b"])
-            .is_ok());
+    fn any_coverage_is_supported_and_names_are_checked() {
+        // STAMP v2 had tables for five coverages only.
+        for test in [PostHocTest::TukeyKramer, PostHocTest::GamesHowell] {
+            let narrow = test.run(&[&A, &B, &C], 0.90, &["a", "b", "c"]).unwrap();
+            let odd = test.run(&[&A, &B, &C], 0.97, &["a", "b", "c"]).unwrap();
+            let wide = test.run(&[&A, &B, &C], 0.99, &["a", "b", "c"]).unwrap();
+            let width = |r: &PostHocResult| r.comparisons[0].upper_ci - r.comparisons[0].lower_ci;
+            assert!(width(&narrow) < width(&odd) && width(&odd) < width(&wide));
+            assert!(test.run(&[&A, &B], 1.0, &["a", "b"]).is_err());
+        }
         assert!(PostHocTest::Scheffe.run(&[&A, &B], 0.95, &["a"]).is_err());
         for test in PostHocTest::ALL {
             assert_eq!(PostHocTest::from_name(test.name()), Some(test));
@@ -519,13 +486,32 @@ mod tests {
     }
 
     #[test]
-    fn q_table_lookup() {
-        let table = q_table();
-        assert_eq!(table.cv(0.05, 2, 2).unwrap(), 6.079637419);
-        assert_eq!(table.cv(0.05, 3, 3).unwrap(), 5.909663249);
-        assert_eq!(table.cv(0.05, 2, 5000).unwrap(), 2.788682383);
-        assert_eq!(table.cv(0.05, 1, 10).unwrap(), 1000.0);
-        let mid = table.cv_interpolated(0.05, 2, 2.5).unwrap();
-        assert!((mid - (6.079637419 + 4.500658726) / 2.0).abs() < 1e-12);
+    fn two_groups_agree_with_the_t_test() {
+        // With two groups Tukey-Kramer is the equal-variance t-test.
+        let r = PostHocTest::TukeyKramer
+            .run(&[&A, &C], 0.95, &["a", "c"])
+            .unwrap();
+        let PostHocP::Value(p) = r.comparisons[0].p_value;
+        let (na, nc) = (A.len() as f64, C.len() as f64);
+        let pooled =
+            ((na - 1.0) * sample_variance(&A) + (nc - 1.0) * sample_variance(&C)) / (na + nc - 2.0);
+        let t = (mean(&A) - mean(&C)) / (pooled * (1.0 / na + 1.0 / nc)).sqrt();
+        let expected = 2.0 * (1.0 - super::super::dist::t_cdf(t.abs(), na + nc - 2.0));
+        assert!((p - expected).abs() < 1e-9, "{p} against {expected}");
+    }
+
+    #[test]
+    fn a_single_sample_group_does_not_spoil_the_pooled_variance() {
+        let single: [f64; 1] = [3.0];
+        for test in [PostHocTest::TukeyKramer, PostHocTest::Scheffe] {
+            let r = test
+                .run(&[&A, &single, &C], 0.95, &["a", "b", "c"])
+                .unwrap();
+            for c in &r.comparisons {
+                let PostHocP::Value(p) = c.p_value;
+                assert!((0.0..=1.0).contains(&p), "{test:?} {}: {p}", c.label);
+                assert!(c.lower_ci < c.effect_size && c.effect_size < c.upper_ci);
+            }
+        }
     }
 }

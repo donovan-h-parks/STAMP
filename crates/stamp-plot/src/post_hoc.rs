@@ -68,22 +68,12 @@ pub fn plot_with_colors(
             let Some(comparison) = comparisons.next() else {
                 break;
             };
-            let (p_text, significant, p_numeric) = match comparison.p_value {
-                PostHocP::Value(p) => (format_p_value(p, -15), p < alpha, p),
-                // Bounds read "< 0.05" or ">= 0.1"; show them with proper signs.
-                PostHocP::Bound(bound) => {
-                    let limit: f64 = bound
-                        .trim_start_matches(['<', '>', '=', ' '])
-                        .parse()
-                        .unwrap_or(1.0);
-                    let below = bound.starts_with('<');
-                    let text = bound.replace(">= ", "\u{2265} ");
-                    (
-                        text,
-                        below && limit <= alpha + 1e-12,
-                        if below { limit } else { 1.0 },
-                    )
-                }
+            let PostHocP::Value(p) = comparison.p_value;
+            // A comparison that could not be made has no p-value.
+            let (p_text, significant, p_numeric) = if p.is_nan() {
+                ("n/a".to_string(), false, 1.0)
+            } else {
+                (format_p_value(p, -15), p < alpha, p)
             };
             if only_significant && !significant {
                 continue;
@@ -177,13 +167,10 @@ mod tests {
         let figure = plot(&profile, "x", &result, 0.95, false, &Options::default());
         let texts = texts(&figure);
         for expected in [
-            "x",
-            "A : B",
-            "A : C",
-            "B : C",
-            "< 0.001",
-            "\u{2265} 0.1",
-            "p-value",
+            "x", "A : B", "A : C", "B : C",
+            // Computed p-values, where STAMP v2 showed "< 0.001" and
+            // ">= 0.1".
+            "2.04e-6", "1.000", "p-value",
         ] {
             assert!(
                 texts.iter().any(|t| t == expected),

@@ -66,7 +66,7 @@ pub struct Data {
 }
 
 /// Order of the rows, top to bottom.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SortBy {
     /// Smallest p-value first.
     PValues,
@@ -77,7 +77,7 @@ pub enum SortBy {
 }
 
 /// Where the legend naming the two samples or groups goes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Legend {
     None,
     UpperLeft,
@@ -98,7 +98,8 @@ impl Legend {
 }
 
 /// Appearance of the plot. Lengths are in inches unless stated.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct Options {
     pub width: f64,
     pub row_height: f64,

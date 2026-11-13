@@ -12,7 +12,7 @@ use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
 use crate::text;
 
 /// What is plotted for each sample.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Field {
     Proportion,
     SequenceCount,
@@ -133,7 +133,8 @@ impl FeatureData {
 }
 
 /// Appearance of the bar plot. Lengths are in inches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct BarOptions {
     /// Width given to each sample.
     pub column_width: f64,
@@ -279,7 +280,8 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
 }
 
 /// Appearance of the box plot. Lengths are in inches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct BoxOptions {
     pub width: f64,
     pub height: f64,

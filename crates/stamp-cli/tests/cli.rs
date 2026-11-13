@@ -553,12 +553,6 @@ fn problems_are_reported_clearly() {
         failure(&with("two-samples", &iron, &["--profile-level", "Genus"]))
             .contains("Unknown hierarchical level 'Genus'")
     );
-    assert!(failure(&with(
-        "post-hoc",
-        &ENTEROTYPES,
-        &["--feature", "Bacteroides", "--coverage", "0.97"]
-    ))
-    .contains("supports confidence levels"));
 }
 
 #[test]
@@ -778,7 +772,8 @@ fn every_plot_type_can_be_drawn() {
         &directory,
         "post-hoc",
     );
-    assert!(has(&post_hoc, "Enterotype 1 : Enterotype 2") && has(&post_hoc, "&lt; 0.001"));
+    // p-values are computed; STAMP v2 showed bounds such as "< 0.001".
+    assert!(has(&post_hoc, "Enterotype 1 : Enterotype 2") && !has(&post_hoc, "&lt; 0.001"));
 
     // Plot types that do not apply are refused, with nothing written.
     let refused = directory.join("refused.svg");

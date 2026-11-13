@@ -110,7 +110,8 @@ fn bars(
 }
 
 /// Appearance of the p-value histogram. Lengths are in inches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct PValueOptions {
     pub width: f64,
     pub height: f64,
@@ -122,7 +123,7 @@ pub struct PValueOptions {
     pub inset: Option<Inset>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Inset {
     /// Size as a percentage of the main plot.
     pub width_percent: f64,
@@ -264,7 +265,8 @@ pub fn p_value_histogram(p_values: &[f64], options: &PValueOptions) -> Figure {
 }
 
 /// Appearance of the sequence histogram. Lengths are in inches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct SequenceOptions {
     pub width: f64,
     pub height: f64,

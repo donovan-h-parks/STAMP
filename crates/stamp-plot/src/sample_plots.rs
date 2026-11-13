@@ -25,7 +25,8 @@ fn shorten(name: &str, limit: Option<usize>) -> String {
 // ------------------------------------------------------------ profile bar
 
 /// Appearance of the profile bar plot. Lengths are in inches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct ProfileBarOptions {
     /// Width given to each feature.
     pub column_width: f64,
@@ -246,7 +247,7 @@ pub fn profile_bar<'a>(
 // ---------------------------------------------------- bar plot of a field
 
 /// The statistic shown by the two-sample bar plot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum BarField {
     Sequences,
     ParentSequences,
@@ -257,7 +258,8 @@ pub enum BarField {
 }
 
 /// Appearance of the two-sample bar plot. Lengths are in inches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct StatBarOptions {
     pub width: f64,
     pub row_height: f64,
@@ -454,7 +456,8 @@ pub fn stat_bar<'a>(
 // ------------------------------------------------- multiple comparisons
 
 /// Appearance of the multiple-comparison plots. Lengths are in inches.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct MultCompOptions {
     pub width: f64,
     pub height: f64,

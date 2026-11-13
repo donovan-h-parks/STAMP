@@ -16,6 +16,9 @@ stamp-plot = { path = "crates/stamp-plot" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# Reads BIOM 2.x tables (HDF5) without the C library, so that it also works in
+# the browser.
+hdf5-pure = { version = "0.48", default-features = false, features = ["std", "deflate"] }
 clap = { version = "4", features = ["derive"] }
 # OpenGL / WebGL2 rendering: the most widely supported backend on older
 # desktops, remote sessions and every current browser.
@@ -25,6 +28,8 @@ eframe = { version = "0.37", default-features = false, features = [
     "default_fonts",
     "glow",
     "links",
+    # Remembers the window layout and the user's settings between runs.
+    "persistence",
     "wayland",
     "web_screen_reader",
     "x11",

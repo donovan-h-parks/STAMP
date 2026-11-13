@@ -22,6 +22,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             let mut app = stamp_gui::StampApp::new(&cc.egui_ctx);
+            app.restore_from(&cc.egui_ctx, cc.storage);
             let read = |path: &String| {
                 let bytes = std::fs::read(path).ok()?;
                 let name = std::path::Path::new(path)
@@ -87,7 +88,12 @@ fn main() {
             .start(
                 canvas,
                 eframe::WebOptions::default(),
-                Box::new(|cc| Ok(Box::new(stamp_gui::StampApp::new(&cc.egui_ctx)))),
+                Box::new(|cc| {
+                    let mut app = stamp_gui::StampApp::new(&cc.egui_ctx);
+                    // Settings are kept in the browser's local storage.
+                    app.restore_from(&cc.egui_ctx, cc.storage);
+                    Ok(Box::new(app))
+                }),
             )
             .await;
 

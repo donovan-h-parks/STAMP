@@ -9,9 +9,9 @@ use stamp_core::stats::correction::Correction;
 use stamp_core::stats::multi_group::{MultiGroupEffectSize, MultiGroupTest};
 use stamp_core::stats::post_hoc::{PostHocResult, PostHocTest};
 use stamp_core::stats::results::{
-    run_group_analysis, run_multi_group_analysis, run_post_hoc, run_sample_analysis, GroupAnalysis,
-    GroupFilter, GroupResults, GroupRow, MultiGroupAnalysis, MultiGroupFilter, MultiGroupResults,
-    MultiGroupRow, SampleAnalysis, SampleFilter, SampleResults, SampleRow,
+    run_post_hoc, Control, GroupAnalysis, GroupFilter, GroupResults, GroupRow, GroupRun,
+    MultiGroupAnalysis, MultiGroupFilter, MultiGroupResults, MultiGroupRow, MultiGroupRun,
+    SampleAnalysis, SampleFilter, SampleResults, SampleRow, SampleRun, Step,
 };
 use stamp_core::stats::two_group::GroupTest;
 use stamp_core::stats::two_sample::SampleTest;
@@ -135,12 +135,48 @@ pub struct Session {
     pub selected_feature: Option<String>,
     /// Colours the user has chosen for groups, by group name.
     group_colors: std::collections::HashMap<String, stamp_plot::Color>,
+    /// Colour of the "All other samples" group.
+    pub other_samples_color: stamp_plot::Color,
 
     /// Which analyses are out of date.
     dirty: [bool; 3],
     jobs: [Option<Job<Outcome>>; 3],
     /// Increases whenever results change, so that views know to refresh.
     pub generation: u64,
+}
+
+/// How a run paces itself inside a job: it reports its progress, stops
+/// for good once the job is cancelled, and pauses when its time is up.
+fn pace<'a>(
+    progress: &'a crate::jobs::Progress,
+    out_of_time: &'a dyn Fn() -> bool,
+) -> impl FnMut(usize, usize) -> Control + 'a {
+    move |done, total| {
+        if !progress.report(done, total) {
+            Control::Cancel
+        } else if out_of_time() {
+            Control::Pause
+        } else {
+            Control::Continue
+        }
+    }
+}
+
+/// What a job's step returns after advancing a run: nothing yet if the run
+/// paused, and otherwise the outcome, built from the profile and the
+/// results (`None` if the run was cancelled).
+fn finish<P, R, S>(
+    step: Step<S>,
+    state: &mut Option<(P, R, stamp_core::stats::StampRng)>,
+    outcome: impl FnOnce(P, Option<S>) -> Finished,
+) -> Option<Outcome> {
+    let results = match step {
+        Step::Paused => return None,
+        Step::Cancelled => None,
+        Step::Done(results) => Some(results),
+    };
+    let (profile, _, _) = state.take()?;
+    Some(Ok(outcome(profile, results)))
 }
 
 fn mode_index(mode: Mode) -> usize {
@@ -205,6 +241,7 @@ impl Default for Session {
             },
             selected_feature: None,
             group_colors: std::collections::HashMap::new(),
+            other_samples_color: stamp_plot::Color::rgb(127, 127, 127),
             dirty: [false; 3],
             jobs: [None, None, None],
             generation: 0,
@@ -219,6 +256,7 @@ impl Session {
         *self = Session {
             stats: self.stats,
             seed: self.seed,
+            other_samples_color: self.other_samples_color,
             ..Session::default()
         };
         self.profile_name = name.to_string();
@@ -259,7 +297,7 @@ impl Session {
             return *color;
         }
         if group == stamp_core::ALL_OTHER_SAMPLES {
-            return stamp_plot::Color::rgb(127, 127, 127);
+            return self.other_samples_color;
         }
         let position = self
             .grouping()
@@ -435,18 +473,25 @@ impl Session {
             Mode::TwoSamples => {
                 let (s1, s2) = (self.samples.sample1.clone(), self.samples.sample2.clone());
                 let analysis = self.samples.analysis;
-                Some(Job::spawn(move |progress| {
-                    let profile = tree
-                        .sample_profile(&s1, &s2, parent.as_deref(), &level, unclassified)
-                        .map_err(|e| e.to_string())?;
-                    let results = run_sample_analysis(
-                        &profile,
-                        analysis,
-                        &stats,
-                        &mut rng_from_seed(seed),
-                        &mut |d, t| progress.report(d, t),
-                    );
-                    Ok(Finished::Samples(results.map(|r| (profile, r))))
+                // The profile, the run and its random numbers, made on the
+                // first step and kept until the last.
+                let mut state = None;
+                Some(Job::spawn_steps(move |progress, out_of_time| {
+                    if state.is_none() {
+                        match tree.sample_profile(&s1, &s2, parent.as_deref(), &level, unclassified)
+                        {
+                            Ok(profile) => {
+                                let run = SampleRun::new(analysis, &stats);
+                                state = Some((profile, run, rng_from_seed(seed)));
+                            }
+                            Err(error) => return Some(Err(error.to_string())),
+                        }
+                    }
+                    let (profile, run, rng) = state.as_mut()?;
+                    let step = run.advance(profile, rng, &mut pace(progress, out_of_time));
+                    finish(step, &mut state, |profile, results| {
+                        Finished::Samples(results.map(|r| (profile, r)))
+                    })
                 }))
             }
             Mode::TwoGroups => {
@@ -456,34 +501,37 @@ impl Session {
                 };
                 let (g1, g2) = (self.groups.group1.clone(), self.groups.group2.clone());
                 let analysis = self.groups.analysis;
-                Some(Job::spawn(move |progress| {
-                    let second = match &g2 {
-                        Some(name) => SecondGroup::Named(name),
-                        None => SecondGroup::AllOtherSamples,
-                    };
-                    let profile = tree
-                        .group_profile(
+                let mut state = None;
+                Some(Job::spawn_steps(move |progress, out_of_time| {
+                    if state.is_none() {
+                        let second = match &g2 {
+                            Some(name) => SecondGroup::Named(name),
+                            None => SecondGroup::AllOtherSamples,
+                        };
+                        let profile = match tree.group_profile(
                             &groups,
                             &g1,
                             second,
                             parent.as_deref(),
                             &level,
                             unclassified,
-                        )
-                        .map_err(|e| e.to_string())?;
-                    if profile.samples_in_group1().is_empty()
-                        || profile.samples_in_group2().is_empty()
-                    {
-                        return Err("Both groups need at least one sample.".to_string());
+                        ) {
+                            Ok(profile) => profile,
+                            Err(error) => return Some(Err(error.to_string())),
+                        };
+                        if profile.samples_in_group1().is_empty()
+                            || profile.samples_in_group2().is_empty()
+                        {
+                            return Some(Err("Both groups need at least one sample.".to_string()));
+                        }
+                        let run = GroupRun::new(analysis, &stats);
+                        state = Some((profile, run, rng_from_seed(seed)));
                     }
-                    let results = run_group_analysis(
-                        &profile,
-                        analysis,
-                        &stats,
-                        &mut rng_from_seed(seed),
-                        &mut |d, t| progress.report(d, t),
-                    );
-                    Ok(Finished::Groups(results.map(|r| (profile, r))))
+                    let (profile, run, rng) = state.as_mut()?;
+                    let step = run.advance(profile, rng, &mut pace(progress, out_of_time));
+                    finish(step, &mut state, |profile, results| {
+                        Finished::Groups(results.map(|r| (profile, r)))
+                    })
                 }))
             }
             Mode::MultipleGroups => {
@@ -498,24 +546,29 @@ impl Session {
                     self.error = Some("Select at least two groups.".to_string());
                     return None;
                 }
-                Some(Job::spawn(move |progress| {
-                    let names: Vec<&str> = active.iter().map(String::as_str).collect();
-                    let profile = tree
-                        .multi_group_profile(
+                let mut state = None;
+                Some(Job::spawn_steps(move |progress, out_of_time| {
+                    if state.is_none() {
+                        let names: Vec<&str> = active.iter().map(String::as_str).collect();
+                        match tree.multi_group_profile(
                             &groups,
                             Some(&names),
                             parent.as_deref(),
                             &level,
                             unclassified,
-                        )
-                        .map_err(|e| e.to_string())?;
-                    let results = run_multi_group_analysis(
-                        &profile,
-                        analysis,
-                        &mut rng_from_seed(seed),
-                        &mut |d, t| progress.report(d, t),
-                    );
-                    Ok(Finished::Multi(results.map(|r| (profile, r))))
+                        ) {
+                            Ok(profile) => {
+                                let run = MultiGroupRun::new(analysis);
+                                state = Some((profile, run, rng_from_seed(seed)));
+                            }
+                            Err(error) => return Some(Err(error.to_string())),
+                        }
+                    }
+                    let (profile, run, rng) = state.as_mut()?;
+                    let step = run.advance(profile, rng, &mut pace(progress, out_of_time));
+                    finish(step, &mut state, |profile, results| {
+                        Finished::Multi(results.map(|r| (profile, r)))
+                    })
                 }))
             }
         }

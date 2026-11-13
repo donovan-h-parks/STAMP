@@ -6,7 +6,7 @@
 use crate::text;
 
 /// An RGBA colour.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -210,6 +210,28 @@ pub struct Figure {
 }
 
 impl Figure {
+    /// Replace colours throughout the figure. `map` is given each colour
+    /// and whether it is the fill of a shape (as opposed to a line, an
+    /// outline or text), and returns the colour to use instead.
+    pub fn map_colors(&mut self, map: impl Fn(Color, bool) -> Color) {
+        for shape in &mut self.shapes {
+            match shape {
+                Shape::Line { stroke, .. } => stroke.color = map(stroke.color, false),
+                Shape::Rect { fill, stroke, .. }
+                | Shape::Circle { fill, stroke, .. }
+                | Shape::Polygon { fill, stroke, .. } => {
+                    if let Some(fill) = fill {
+                        *fill = map(*fill, true);
+                    }
+                    if let Some(stroke) = stroke {
+                        stroke.color = map(stroke.color, false);
+                    }
+                }
+                Shape::Text { style, .. } => style.color = map(style.color, false),
+            }
+        }
+    }
+
     pub fn new(width: f64, height: f64) -> Figure {
         Figure {
             width,

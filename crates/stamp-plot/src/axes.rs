@@ -236,7 +236,7 @@ pub fn corner_note(figure: &mut Figure, frame: &Frame, text: &str) {
 }
 
 /// Where a legend goes within a frame.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum LegendPosition {
     None,
     /// Wherever the legend covers the least of what is drawn.

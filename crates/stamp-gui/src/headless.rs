@@ -152,6 +152,25 @@ impl Renderer {
         self.frame(Vec::new(), &mut ui);
     }
 
+    /// Press and release a key while Ctrl (Command on macOS) is held, as for
+    /// a keyboard shortcut.
+    pub fn press_shortcut(&mut self, key: egui::Key, mut ui: impl FnMut(&mut egui::Ui)) {
+        let modifiers = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        let event = |pressed| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers,
+        };
+        self.frame(vec![event(true)], &mut ui);
+        self.frame(vec![event(false)], &mut ui);
+    }
+
     /// Run one frame of `ui` and paint it.
     pub fn render(&mut self, mut ui: impl FnMut(&mut egui::Ui)) -> Image {
         let primitives = self.frame(Vec::new(), &mut ui);

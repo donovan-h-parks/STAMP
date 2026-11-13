@@ -31,6 +31,8 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 17 | done | `plugins/multiGroups/postHoc/WelchUncorrected.py` | Effect sizes and confidence limits were 10,000 times too large, because percentages were converted to percentages twice. p-values were unaffected. | Reported in percent, like the other post-hoc tests. |
 | 18 | done | `plugins/samples/statisticalTests/DiffBetweenProp.py`, `plugins/groups/statisticalTests/White.py` | A parent category with no sequences in one sample caused a division by zero that aborted the whole analysis. | The feature is reported as a degenerate case (difference-between-proportions test), or its proportion is taken as zero (White's test). |
 | 19 | done | `plugins/groups/statisticalTests/White.py` | A permutation that reproduces the observed split of values gives the observed t statistic again, but rounding could make it count as "more extreme", inflating p-values of features with many tied values. | Statistics within rounding error of the observed one are not counted as more extreme. |
+| 20 | done | `plugins/multiGroups/postHoc/TukeyKramer.py`, `Scheffe.py` | A group with a single sample made the pooled within-group variance undefined (the variance of one value), so every comparison of the test came out as "not significant" with no confidence limits. | A single-sample group adds nothing to the pooled sum of squares, as the method defines it, and the test is carried out. |
+| 21 | done | `data/tukeyQ_*.txt` | The tables of critical values of the studentized range were inaccurate below ten degrees of freedom: at two degrees of freedom and the 0.1% level the entry for two groups is 34.71 where the true value is 44.69. | The distribution is computed (behaviour change 47). It agrees with the tables to seven decimal places from ten degrees of freedom upwards. |
 
 ## Behaviour changes
 
@@ -44,7 +46,7 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 6 | done | Benjamini-Hochberg uses the standard adjustment (as R's `p.adjust(method = "BH")`): `p * n / rank` followed by a running minimum from the largest p-value down, capped at 1. Python omitted the running minimum, so tied p-values could get different corrected values and corrected values were not monotonic. Corrected p-values can therefore be smaller than in STAMP v2, never larger. The `corr:Benjamini-Hochberg FDR` columns in `tests/golden` hold the old values and are an expected difference. |
 | 7 | done | Features, and the rows of converted profiles, are kept in order of first appearance in the input. Python used dictionary order, which was arbitrary. |
 | 8 | done | Counts written by the BIOM and CoMet converters use the shortest exact decimal form instead of Python's 12 significant digits. |
-| 9 | done | BIOM 2.x (HDF5) tables are detected and rejected with advice to convert to JSON. |
+| 9 | done | BIOM 2.x (HDF5) tables are read as well as BIOM 1.0 (JSON) tables, which is all v2 read. The `hdf5-pure` crate reads them without the HDF5 C library, so this also works in the browser. Tables written by biom-format 2.1 give the same profile from either format. |
 | 10 | done | The COG lookup table is a compact extract (`crates/stamp-core/data/cog_codes.tsv`) of `whog.txt`, embedded in the program. |
 | 11 | done | Bonferroni-corrected p-values are capped at 1. Python reported `p * n` even when it exceeded 1. |
 | 12 | done | Resampling methods (bootstrap, permutation, White's test, Storey's FDR) draw from a ChaCha8 generator seeded by the user, so results are reproducible but are not the same random draws as any Python run. |
@@ -82,11 +84,14 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 44 | done | Pausing recalculation (v2's "Recalculate statistics and plots" toggle) is not offered and is not planned. |
 | 45 | done | The feature shown by the bar, box and post-hoc plots stays selected when a test is re-run, a sample is switched off or a filter changes, whether or not it passes the filters. It changes only when the feature no longer exists, for example after a change of profile level. |
 | 46 | done | The "Configure plot" window groups related options in titled frames as v2 does ("Figure size", "Sort rows", "Legend position" and so on), under v2's labels. An option that depends on another is greyed out rather than hidden: the height of the PCA plot under "Fixed pixels per unit distance", for example. Legend positions are chosen from a list instead of radio buttons, and the options v2 left outside any frame are gathered in an "Other options" frame at the bottom. |
+| 47 | done | Tukey-Kramer and Games-Howell report computed p-values and confidence limits from the studentized range distribution, where v2 reported a bound read from tables (`< 0.05`) and limits from the same tables, interpolated for Games-Howell. Every computed p-value of the reference cases lies within v2's bound, and the limits differ from v2's by at most 0.25%. Any coverage can be used, not only the five that had tables. A comparison that cannot be made (a single-sample group under Games-Howell) has no p-value rather than ">= 0.1". |
+| 48 | done | File > Load profile opens BIOM tables and mothur taxonomy files as well as STAMP profiles, telling them apart by their content or name. A BIOM table with observation metadata asks which field gives the hierarchy; a mothur taxonomy file asks for its groups file and, optionally, its names file. The profile is loaded without first being saved as a file. |
+| 49 | done | Added to the graphical application from v2: keyboard shortcuts (Ctrl+O, Ctrl+S, Ctrl+Q, Ctrl+W, Ctrl+P, Ctrl+L, Ctrl+M, Ctrl+T; in a browser those the browser keeps for itself do not reach the page); sending a copy of the plot to a window of its own (a separate window on the desktop, a floating one in the browser); remembering the layout, preferences and plot settings between runs; preferences for the smallest p-value reported and for the colours of the two samples, of "All other samples" and of axes; a tooltip listing the samples of each group; and "q-value filter" as the name of the p-value filter under a false discovery rate correction. Menu items have icons (Phosphor Icons, MIT licence). |
+| 50 | done | As in v2, a group unticked in the group list is no longer offered as Group 1 or Group 2, and a sample switched off in the metadata table is no longer offered in the two-sample analysis. If the group or sample in use is removed this way, the next one takes its place. |
+| 51 | done | In the browser, analyses are carried out a few features at a time between redraws, so the page keeps responding and shows progress during long resampling tests, and they can be cancelled. This is done on the page's own thread rather than in a web worker. White's test, which works on all features at once, is still done in one piece. |
 
 ## Kept as is
 
-* Tukey-Kramer and Games-Howell report binned p-values from the critical-value
-  tables. Exact studentized-range p-values are a later enhancement.
 * Effect-size filters combine as in Python: a feature is removed only if it
   fails **both** filters under "AND", and if it fails **either** under "OR".
   The filters are worded as removal rules ("filter out features with an effect
@@ -115,36 +120,19 @@ numerical methods rather than from different formulas:
 
 * Signed installers. The desktop applications are distributed as plain
   archives, unsigned (see `docs/RELEASING.md`).
-* In the browser build, running analyses in a web worker so that long
-  resampling tests do not hold the page while they run.
-* In the graphical application (found by comparing it with STAMP v2 control
-  by control):
-  * opening profiles in formats other than SPF (BIOM, MG-RAST, mothur, RITA,
-    CoMet) from File > Load profile, with the choices the v2 converters
-    offered: BIOM metadata field, MG-RAST level headings, RITA groups to
-    retain, and the treatment of multi-category COGs;
-  * keyboard shortcuts (Ctrl+O, Ctrl+S, Ctrl+Q and those that show panels);
-  * remembering the window layout, preferences and plot settings between
-    runs;
-  * preferences for the smallest p-value reported (fixed at 1e-15) and for
-    the colour of "All other samples" (fixed at grey);
-  * customising sample and axis colours (group colours can be changed);
-  * leaving an unticked group out of the Group 1 and Group 2 lists
-    (unticking affects the multiple-group analysis only), and a tooltip
-    listing the samples of each group;
-  * renaming the "p-value filter" to "q-value filter" under a false
-    discovery rate correction;
-  * removing switched-off samples from the sample lists of the two-sample
-    analysis;
-  * sending a plot to its own window.
+* In the graphical application: opening MG-RAST, RITA and CoMet profiles
+  and adding COG categories from File > Load profile, with the choices the
+  v2 converters offered (MG-RAST level headings, RITA groups to retain, the
+  treatment of multi-category COGs). The command line converts all of them.
 * The stand-alone `checkHierarchy.py` script, which lists every row of a
   profile with an unclassified parent or several parents. The loader stops
   at the first such row.
 
 ## Open questions
 
-* **BIOM 2.x (HDF5).** Not supported in this port so far (see behaviour
-  change 9). Supporting it needs an HDF5 reader that also works in the browser.
+* **White's test in the browser.** It is the one analysis still done in a
+  single piece there (behaviour change 51). Making it resumable, or moving
+  analyses to a web worker, would remove the pause on very large profiles.
 * **Example profiles the reader rejects.** `examples/EBPR/MartinEBPR.spf`,
   `examples/EBPR/MartinEBPR_A_phosphatis.spf`, `examples/FinegoldAutism/Autism.spf`
   and `examples/MouseGut-IMG-M/MouseGut.COG.profile.tsv` fail the hierarchy

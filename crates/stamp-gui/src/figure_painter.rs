@@ -19,6 +19,7 @@ pub fn install_plot_font(ctx: &egui::Context) {
         FontFamily::Name(PLOT_FONT.into()),
         vec![PLOT_FONT.to_owned()],
     );
+    crate::icons::add_to_fonts(&mut fonts);
     ctx.set_fonts(fonts);
 }
 

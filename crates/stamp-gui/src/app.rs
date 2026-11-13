@@ -22,7 +22,8 @@ use stamp_core::Unclassified;
 use stamp_plot::Figure;
 
 use crate::figure_painter;
-use crate::platform::{self, Event, Platform, Request};
+use crate::icons;
+use crate::platform::{self, Auxiliary, Event, OpenedFile, Platform, Request};
 use crate::plot_config;
 use crate::plots::{self, PlotKind, PlotSettings};
 use crate::select_features::{FeatureSelection, Outcome};
@@ -343,6 +344,7 @@ impl FilterUi {
     /// `measures` names the effect-size measures and `count_kinds` the
     /// sequence-count filters; an empty `count_kinds` hides those filters.
     /// `second_label` is "Sample 2 (<):" or "Group 2 (<):".
+    #[allow(clippy::too_many_arguments)]
     fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -351,13 +353,20 @@ impl FilterUi {
         count_kinds: &[&str],
         second_label: &str,
         active_features: (usize, usize),
+        false_discovery_rate: bool,
     ) -> bool {
         let before = self.clone();
+        // Under a false discovery rate correction the values are q-values.
+        let p_label = if false_discovery_rate {
+            "q-value filter (>):"
+        } else {
+            "p-value filter (>):"
+        };
 
         egui::Grid::new(format!("{id}-p-filter"))
             .num_columns(2)
             .show(ui, |ui| {
-                ui.checkbox(&mut self.p_enabled, "p-value filter (>):");
+                ui.checkbox(&mut self.p_enabled, p_label);
                 ui.add_enabled(
                     self.p_enabled,
                     egui::DragValue::new(&mut self.p_value)
@@ -481,6 +490,89 @@ const GROUP_COUNT_KINDS: [&str; 4] = [
     "independent, maximum",
 ];
 
+/// Keyboard shortcuts, as in STAMP v2. In a browser some of them belong to
+/// the browser itself and never reach the page.
+mod shortcut {
+    use eframe::egui::{Key, KeyboardShortcut, Modifiers};
+
+    const fn command(key: Key) -> KeyboardShortcut {
+        KeyboardShortcut::new(Modifiers::COMMAND, key)
+    }
+    pub const LOAD_PROFILE: KeyboardShortcut = command(Key::O);
+    pub const SAVE_PLOT: KeyboardShortcut = command(Key::S);
+    pub const EXIT: KeyboardShortcut = command(Key::Q);
+    pub const PLOT_WINDOW: KeyboardShortcut = command(Key::W);
+    pub const PROPERTIES: KeyboardShortcut = command(Key::P);
+    pub const GROUPS: KeyboardShortcut = command(Key::L);
+    pub const METADATA: KeyboardShortcut = command(Key::M);
+    pub const RESULTS: KeyboardShortcut = command(Key::T);
+}
+
+/// A profile in another format that is being opened: the file, and what
+/// still has to be chosen before a STAMP profile can be made from it.
+enum PendingProfile {
+    /// A BIOM table: which observation metadata gives the hierarchy.
+    Biom {
+        file: OpenedFile,
+        fields: Vec<String>,
+        chosen: Option<String>,
+    },
+    /// A mothur taxonomy file: its groups file and, optionally, names file.
+    Mothur {
+        taxonomy: OpenedFile,
+        groups: Option<OpenedFile>,
+        names: Option<OpenedFile>,
+    },
+}
+
+/// A plot sent to a window of its own: a copy that stays as it was while
+/// the main window moves on.
+struct PlotWindow {
+    id: u64,
+    title: String,
+    figure: Figure,
+}
+
+/// What is remembered from one run to the next: the layout of the window,
+/// the preferences and the settings of the plots.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct Saved {
+    pub dark_mode: bool,
+    pub show_profile_panel: bool,
+    pub show_properties_panel: bool,
+    pub show_feature_table: bool,
+    pub show_metadata_table: bool,
+    pub zoom: f32,
+    pub seed: u64,
+    pub replicates: usize,
+    pub pseudocount: f64,
+    pub other_samples_color: stamp_plot::Color,
+    pub plots: PlotSettings,
+}
+
+impl Default for Saved {
+    fn default() -> Self {
+        let session = Session::default();
+        Saved {
+            dark_mode: true,
+            show_profile_panel: true,
+            show_properties_panel: true,
+            show_feature_table: true,
+            show_metadata_table: false,
+            zoom: DEFAULT_ZOOM,
+            seed: session.seed,
+            replicates: session.stats.replicates,
+            pseudocount: session.stats.pseudocount,
+            other_samples_color: session.other_samples_color,
+            plots: PlotSettings::default(),
+        }
+    }
+}
+
+/// Key under which [`Saved`] is stored.
+const STORAGE_KEY: &str = "stamp";
+
 /// The features chosen by hand for one kind of analysis ("Select specific
 /// features"). The choice is kept while it is switched off.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -575,6 +667,11 @@ pub struct StampApp {
     /// The resolution being chosen for a PNG image, while that window is
     /// open.
     png_dpi: Option<f64>,
+    plot_windows: Vec<PlotWindow>,
+    next_plot_window: u64,
+    pending_profile: Option<PendingProfile>,
+    /// The theme of the last frame, for storing between runs.
+    saved_theme_is_dark: bool,
     metadata_filter: MetadataFilterUi,
     /// The hierarchical level and the name at that level whose features are
     /// drawn in red.
@@ -678,6 +775,10 @@ impl StampApp {
             show_correction_info: false,
             results_only_active: false,
             png_dpi: None,
+            plot_windows: Vec::new(),
+            next_plot_window: 1,
+            pending_profile: None,
+            saved_theme_is_dark: true,
             metadata_filter: MetadataFilterUi::default(),
             highlight_level: None,
             highlight_value: String::new(),
@@ -746,6 +847,189 @@ impl StampApp {
         let chosen = self.selections[mode_slot(self.mode)].chosen.as_ref();
         if let Some(profile) = self.current_profile() {
             self.select_dialog = Some((self.mode, FeatureSelection::new(profile, chosen)));
+        }
+    }
+
+    /// Open a profile in any of the formats that are read: a STAMP profile
+    /// is loaded at once; a BIOM table (JSON or HDF5) or a mothur taxonomy
+    /// file first asks for what it needs.
+    pub fn open_profile_file(&mut self, file: OpenedFile) {
+        use stamp_core::import::biom;
+        self.pending_profile = None;
+        if biom::looks_like_biom(&file.bytes) {
+            match biom::metadata_fields(&file.bytes) {
+                // Without metadata there is nothing to choose.
+                Ok(fields) if fields.is_empty() => {
+                    self.pending_profile = Some(PendingProfile::Biom {
+                        file,
+                        fields,
+                        chosen: None,
+                    });
+                    self.accept_pending_profile();
+                }
+                Ok(fields) => {
+                    // The fields the usual pipelines write are offered first.
+                    let chosen = biom::COMMON_METADATA_FIELDS
+                        .iter()
+                        .map(|(field, _)| field.to_string())
+                        .find(|field| fields.contains(field));
+                    self.pending_profile = Some(PendingProfile::Biom {
+                        file,
+                        fields,
+                        chosen,
+                    });
+                }
+                Err(error) => {
+                    self.notice = Some(format!("Could not load {}:\n{error}", file.name));
+                }
+            }
+        } else if file.name.to_lowercase().ends_with(".taxonomy") {
+            self.pending_profile = Some(PendingProfile::Mothur {
+                taxonomy: file,
+                groups: None,
+                names: None,
+            });
+        } else {
+            self.load_profile(&file.name, &file.text());
+        }
+    }
+
+    /// The kind of profile waiting for a choice before it can be loaded:
+    /// `"BIOM"` or `"mothur"`.
+    pub fn pending_profile(&self) -> Option<&'static str> {
+        match self.pending_profile {
+            Some(PendingProfile::Biom { .. }) => Some("BIOM"),
+            Some(PendingProfile::Mothur { .. }) => Some("mothur"),
+            None => None,
+        }
+    }
+
+    /// Choose the observation metadata that gives a BIOM table's hierarchy;
+    /// `None` uses the observation ids alone.
+    pub fn choose_biom_field(&mut self, field: Option<&str>) {
+        if let Some(PendingProfile::Biom { chosen, .. }) = &mut self.pending_profile {
+            *chosen = field.map(str::to_string);
+        }
+    }
+
+    /// Make a STAMP profile from the file being opened, with the choices
+    /// made so far, and load it.
+    pub fn accept_pending_profile(&mut self) {
+        use stamp_core::import::{biom, mothur};
+        let (name, converted) = match self.pending_profile.take() {
+            Some(PendingProfile::Biom { file, chosen, .. }) => {
+                let spf = biom::to_spf(&file.bytes, chosen.as_deref());
+                (file.name, spf)
+            }
+            Some(PendingProfile::Mothur {
+                taxonomy,
+                groups: Some(groups),
+                names,
+            }) => {
+                let names = names.map(|file| file.text());
+                let spf = mothur::to_spf(&taxonomy.text(), &groups.text(), names.as_deref());
+                (taxonomy.name, spf)
+            }
+            // A groups file is required.
+            other => {
+                self.pending_profile = other;
+                return;
+            }
+        };
+        match converted {
+            Ok(spf) => self.load_profile(&name, &spf),
+            Err(error) => self.notice = Some(format!("Could not load {name}:\n{error}")),
+        }
+    }
+
+    /// What would be remembered for the next run.
+    pub fn saved(&self, ctx: &egui::Context) -> Saved {
+        Saved {
+            dark_mode: ctx.theme() == egui::Theme::Dark,
+            show_profile_panel: self.show_profile_panel,
+            show_properties_panel: self.show_properties_panel,
+            show_feature_table: self.show_feature_table,
+            show_metadata_table: self.show_metadata_table,
+            zoom: self.zoom,
+            seed: self.session.seed,
+            replicates: self.session.stats.replicates,
+            pseudocount: self.session.stats.pseudocount,
+            other_samples_color: self.session.other_samples_color,
+            plots: self.plot_settings.clone(),
+        }
+    }
+
+    /// Return to what was remembered from an earlier run.
+    pub fn restore(&mut self, ctx: &egui::Context, saved: Saved) {
+        set_dark_mode(ctx, saved.dark_mode);
+        self.show_profile_panel = saved.show_profile_panel;
+        self.show_properties_panel = saved.show_properties_panel;
+        self.show_feature_table = saved.show_feature_table;
+        self.show_metadata_table = saved.show_metadata_table;
+        self.set_zoom(saved.zoom);
+        self.session.seed = saved.seed;
+        self.session.stats.replicates = saved.replicates.clamp(10, 1_000_000);
+        self.session.stats.pseudocount = saved.pseudocount.clamp(0.0, 10.0);
+        self.session.other_samples_color = saved.other_samples_color;
+        self.plot_settings = saved.plots;
+        self.session.invalidate_all();
+        self.view_dirty = true;
+    }
+
+    /// Restore what the last run stored, if anything.
+    pub fn restore_from(&mut self, ctx: &egui::Context, storage: Option<&dyn eframe::Storage>) {
+        if let Some(saved) = storage.and_then(|s| eframe::get_value::<Saved>(s, STORAGE_KEY)) {
+            self.restore(ctx, saved);
+        }
+    }
+
+    /// Send a copy of the current plot to a window of its own.
+    pub fn send_plot_to_window(&mut self) {
+        if self.session.tree.is_none() {
+            return;
+        }
+        let id = self.next_plot_window;
+        self.next_plot_window += 1;
+        self.plot_windows.push(PlotWindow {
+            id,
+            title: format!("{} ({id})", self.plot_kind().name()),
+            figure: self.figure.clone(),
+        });
+    }
+
+    /// The number of plots open in windows of their own.
+    pub fn plot_window_count(&self) -> usize {
+        self.plot_windows.len()
+    }
+
+    /// Act on the keyboard shortcuts pressed this frame.
+    fn handle_shortcuts(&mut self, ctx: &egui::Context) {
+        let pressed =
+            |shortcut: &egui::KeyboardShortcut| ctx.input_mut(|i| i.consume_shortcut(shortcut));
+        let loaded = self.session.tree.is_some();
+        if pressed(&shortcut::LOAD_PROFILE) {
+            self.platform.request(Request::OpenProfile, ctx);
+        }
+        if pressed(&shortcut::SAVE_PLOT) && loaded {
+            self.png_dpi = Some(platform::DEFAULT_DPI);
+        }
+        if pressed(&shortcut::PLOT_WINDOW) {
+            self.send_plot_to_window();
+        }
+        if pressed(&shortcut::PROPERTIES) {
+            self.show_properties_panel = !self.show_properties_panel;
+        }
+        if pressed(&shortcut::GROUPS) {
+            self.show_profile_panel = !self.show_profile_panel;
+        }
+        if pressed(&shortcut::METADATA) {
+            self.show_metadata_table = !self.show_metadata_table;
+        }
+        if pressed(&shortcut::RESULTS) {
+            self.show_table = !self.show_table;
+        }
+        if cfg!(not(target_arch = "wasm32")) && pressed(&shortcut::EXIT) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
 
@@ -1064,7 +1348,17 @@ impl StampApp {
     fn handle_file_events(&mut self) {
         for event in self.platform.poll() {
             match event {
-                Event::Profile(file) => self.load_profile(&file.name, &file.text()),
+                Event::Profile(file) => self.open_profile_file(file),
+                Event::Auxiliary(which, file) => {
+                    if let Some(PendingProfile::Mothur { groups, names, .. }) =
+                        &mut self.pending_profile
+                    {
+                        match which {
+                            Auxiliary::MothurGroups => *groups = Some(file),
+                            Auxiliary::MothurNames => *names = Some(file),
+                        }
+                    }
+                }
                 Event::Metadata(file) => self.load_metadata(&file.name, &file.text()),
                 Event::Converted { name, spf } => self.load_profile(&name, &spf),
                 Event::Failed(message) => self.notice = Some(message),
@@ -1124,12 +1418,13 @@ impl StampApp {
             &self.plot_settings,
         );
         let s = &self.session;
+        let min_exponent = self.plot_settings.min_p_exponent;
         let feature_row =
             |feature: &str, effect: f64, p: f64, corrected: f64, note: &str| FeatureRow {
                 feature: feature.to_string(),
                 effect_size: format!("{effect:.3}"),
-                p_value: format_p_value(p, -15),
-                p_value_corrected: format_p_value(corrected, -15),
+                p_value: format_p_value(p, min_exponent),
+                p_value_corrected: format_p_value(corrected, min_exponent),
                 note: note.to_string(),
                 active: false,
             };
@@ -1243,9 +1538,14 @@ impl StampApp {
     /// Draw the whole interface for one frame.
     pub fn draw(&mut self, ui: &mut egui::Ui) {
         self.handle_file_events();
+        self.handle_shortcuts(ui.ctx());
         if self.session.update(self.mode) {
+            // On the desktop the work is on another thread and is looked in
+            // on now and then. In the browser each frame does a slice of
+            // it, so the next frame should follow at once.
+            let wait = if cfg!(target_arch = "wasm32") { 0 } else { 50 };
             ui.ctx()
-                .request_repaint_after(std::time::Duration::from_millis(50));
+                .request_repaint_after(std::time::Duration::from_millis(wait));
         }
         if self.session.generation != self.seen_generation {
             self.seen_generation = self.session.generation;
@@ -1280,55 +1580,64 @@ impl StampApp {
 
     fn menu(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        // A menu item with an icon and, where it has one, its shortcut.
+        let item = |icon: &str, text: &str, shortcut: Option<&egui::KeyboardShortcut>| {
+            let button = egui::Button::new(icons::label(icon, text));
+            match shortcut {
+                Some(shortcut) => button.shortcut_text(ctx.format_shortcut(shortcut)),
+                None => button,
+            }
+        };
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
                 let loaded = self.session.tree.is_some();
-                if ui.button("Load profile...").clicked() {
+                let load = item(
+                    icons::FOLDER_OPEN,
+                    "Load profile...",
+                    Some(&shortcut::LOAD_PROFILE),
+                );
+                if ui.add(load).clicked() {
                     self.platform.request(Request::OpenProfile, &ctx);
                 }
-                if ui
-                    .add_enabled(loaded, egui::Button::new("Load metadata..."))
-                    .clicked()
-                {
+                let metadata = item(icons::TAG, "Load metadata...", None);
+                if ui.add_enabled(loaded, metadata).clicked() {
                     self.platform.request(Request::OpenMetadata, &ctx);
                 }
-                if ui.button("Open example data").clicked() {
+                if ui
+                    .add(item(icons::FLASK, "Open example data", None))
+                    .clicked()
+                {
                     self.load_example();
                 }
                 ui.separator();
                 ui.add_enabled_ui(loaded, |ui| {
-                    ui.menu_button("Save plot as", |ui| {
-                        for (label, name) in [
-                            ("PNG image", "plot.png"),
-                            ("SVG image", "plot.svg"),
-                            ("PDF document", "plot.pdf"),
+                    ui.menu_button(icons::label(icons::FLOPPY_DISK, "Save plot as"), |ui| {
+                        let png = item(icons::FILE_PNG, "PNG image", Some(&shortcut::SAVE_PLOT));
+                        if ui.add(png).clicked() {
+                            // The resolution is asked for first.
+                            self.png_dpi = Some(platform::DEFAULT_DPI);
+                        }
+                        for (icon, label, name) in [
+                            (icons::FILE_SVG, "SVG image", "plot.svg"),
+                            (icons::FILE_PDF, "PDF document", "plot.pdf"),
                         ] {
-                            if !ui.button(label).clicked() {
+                            if !ui.add(item(icon, label, None)).clicked() {
                                 continue;
                             }
-                            if name.ends_with(".png") {
-                                // The resolution is asked for first.
-                                self.png_dpi = Some(platform::DEFAULT_DPI);
-                            } else {
-                                match platform::encode_plot(
-                                    &self.figure,
-                                    name,
-                                    platform::DEFAULT_DPI,
-                                ) {
-                                    Ok(bytes) => self.platform.request(
-                                        Request::Save {
-                                            name: name.to_string(),
-                                            bytes,
-                                        },
-                                        &ctx,
-                                    ),
-                                    Err(message) => self.notice = Some(message),
-                                }
+                            match platform::encode_plot(&self.figure, name, platform::DEFAULT_DPI) {
+                                Ok(bytes) => self.platform.request(
+                                    Request::Save {
+                                        name: name.to_string(),
+                                        bytes,
+                                    },
+                                    &ctx,
+                                ),
+                                Err(message) => self.notice = Some(message),
                             }
                         }
                     });
                 });
-                let save_table = egui::Button::new("Save results table...");
+                let save_table = item(icons::DOWNLOAD, "Save results table...", None);
                 if ui
                     .add_enabled(!self.table.rows.is_empty(), save_table)
                     .clicked()
@@ -1338,31 +1647,90 @@ impl StampApp {
                 // A web page is closed with its tab.
                 if cfg!(not(target_arch = "wasm32")) {
                     ui.separator();
-                    if ui.button("Exit").clicked() {
+                    let exit = item(icons::SIGN_OUT, "Exit", Some(&shortcut::EXIT));
+                    if ui.add(exit).clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 }
             });
             ui.menu_button("View", |ui| {
-                ui.checkbox(&mut self.show_profile_panel, "Profile and groups");
-                ui.checkbox(&mut self.show_properties_panel, "Properties");
-                ui.checkbox(&mut self.show_feature_table, "Feature table");
-                ui.checkbox(&mut self.show_metadata_table, "Metadata table");
+                // A panel that is shown has its item drawn as selected.
+                let toggle =
+                    |ui: &mut egui::Ui,
+                     shown: &mut bool,
+                     icon: &str,
+                     text: &str,
+                     shortcut: Option<&egui::KeyboardShortcut>| {
+                        if ui
+                            .add(item(icon, text, shortcut).selected(*shown))
+                            .clicked()
+                        {
+                            *shown = !*shown;
+                        }
+                    };
+                toggle(
+                    ui,
+                    &mut self.show_profile_panel,
+                    icons::SIDEBAR,
+                    "Profile and groups",
+                    Some(&shortcut::GROUPS),
+                );
+                toggle(
+                    ui,
+                    &mut self.show_properties_panel,
+                    icons::SLIDERS,
+                    "Properties",
+                    Some(&shortcut::PROPERTIES),
+                );
+                toggle(
+                    ui,
+                    &mut self.show_feature_table,
+                    icons::LIST,
+                    "Feature table",
+                    None,
+                );
+                toggle(
+                    ui,
+                    &mut self.show_metadata_table,
+                    icons::ROWS,
+                    "Metadata table",
+                    Some(&shortcut::METADATA),
+                );
                 ui.separator();
-                ui.checkbox(&mut self.show_table, "Results table");
+                toggle(
+                    ui,
+                    &mut self.show_table,
+                    icons::TABLE,
+                    "Results table",
+                    Some(&shortcut::RESULTS),
+                );
+                let window = item(
+                    icons::WINDOW_OUT,
+                    "Send plot to window",
+                    Some(&shortcut::PLOT_WINDOW),
+                );
+                if ui
+                    .add_enabled(self.session.tree.is_some(), window)
+                    .clicked()
+                {
+                    self.send_plot_to_window();
+                }
             });
             ui.menu_button("Settings", |ui| {
-                let mut dark = ctx.theme() == egui::Theme::Dark;
-                if ui.checkbox(&mut dark, "Dark mode").changed() {
-                    set_dark_mode(&ctx, dark);
+                let dark = ctx.theme() == egui::Theme::Dark;
+                if ui
+                    .add(item(icons::MOON, "Dark mode", None).selected(dark))
+                    .clicked()
+                {
+                    set_dark_mode(&ctx, !dark);
                 }
                 ui.separator();
-                if ui.button("Preferences...").clicked() {
+                if ui.add(item(icons::GEAR, "Preferences...", None)).clicked() {
                     self.show_preferences = true;
                 }
             });
             ui.menu_button("Help", |ui| {
-                if ui.button("About STAMP").clicked() {
+                if ui.add(item(icons::INFO, "About STAMP", None)).clicked() {
                     self.show_about = true;
                 }
             });
@@ -1517,7 +1885,12 @@ impl StampApp {
                 }
                 let mut active = position.is_some();
                 let checkbox = egui::Checkbox::new(&mut active, format!("{name} ({size})"));
-                if ui.add_enabled(size > 0, checkbox).changed() {
+                let members = groups.samples(name).unwrap_or_default().join("\n");
+                let response = ui
+                    .add_enabled(size > 0, checkbox)
+                    .on_hover_text(members)
+                    .on_disabled_hover_text("Every sample of this group is switched off");
+                if response.changed() {
                     if active {
                         self.session.multi.active_groups.push(name.clone());
                         self.session.multi.active_groups.sort();
@@ -1561,13 +1934,41 @@ impl StampApp {
 
         match mode {
             Mode::TwoSamples => {
-                let samples = strings(
-                    self.session
-                        .tree
-                        .as_ref()
-                        .map(|t| t.sample_names().to_vec())
-                        .unwrap_or_default(),
-                );
+                // Samples switched off in the metadata table are not offered.
+                let metadata = self.session.metadata.as_ref();
+                let names: Vec<String> = self
+                    .session
+                    .tree
+                    .as_ref()
+                    .map(|t| t.sample_names().to_vec())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|name| {
+                        metadata.is_none_or(|m| !m.samples().contains(name) || m.is_active(name))
+                    })
+                    .collect();
+                if names.len() >= 2 {
+                    let state = &mut self.session.samples;
+                    if !names.contains(&state.sample1) {
+                        let other = state.sample2.clone();
+                        state.sample1 = names
+                            .iter()
+                            .find(|n| **n != other)
+                            .cloned()
+                            .unwrap_or_default();
+                        rerun = true;
+                    }
+                    if !names.contains(&state.sample2) {
+                        let other = state.sample1.clone();
+                        state.sample2 = names
+                            .iter()
+                            .find(|n| **n != other)
+                            .cloned()
+                            .unwrap_or_default();
+                        rerun = true;
+                    }
+                }
+                let samples = strings(&names);
                 let state = &mut self.session.samples;
                 egui::Grid::new("sample-stats")
                     .num_columns(2)
@@ -1630,7 +2031,38 @@ impl StampApp {
                     ui.label("Load a metadata file to compare groups.");
                     return;
                 };
-                let names: Vec<String> = groups.names().map(str::to_string).collect();
+                // Groups unticked in the group list are not offered.
+                let active = &self.session.multi.active_groups;
+                let names: Vec<String> = groups
+                    .names()
+                    .filter(|name| active.iter().any(|a| a == name))
+                    .map(str::to_string)
+                    .collect();
+                if names.is_empty() {
+                    ui.label("Tick at least one group in the group list.");
+                    return;
+                }
+                {
+                    let state = &mut self.session.groups;
+                    if !names.contains(&state.group1) {
+                        let other = state.group2.clone();
+                        state.group1 = names
+                            .iter()
+                            .find(|n| Some(*n) != other.as_ref())
+                            .unwrap_or(&names[0])
+                            .clone();
+                        rerun = true;
+                    }
+                    if state
+                        .group2
+                        .as_ref()
+                        .is_some_and(|second| !names.contains(second) || *second == state.group1)
+                    {
+                        // "All other samples" if no other group is left.
+                        state.group2 = names.iter().find(|n| **n != state.group1).cloned();
+                        rerun = true;
+                    }
+                }
                 let mut seconds: Vec<(Option<String>, String)> =
                     names.iter().map(|n| (Some(n.clone()), n.clone())).collect();
                 seconds.push((None, stamp_core::ALL_OTHER_SAMPLES.to_string()));
@@ -1743,6 +2175,12 @@ impl StampApp {
             return;
         }
         let counts = self.session.feature_counts(mode);
+        let fdr = match mode {
+            Mode::TwoSamples => self.session.samples.analysis.correction,
+            Mode::TwoGroups => self.session.groups.analysis.correction,
+            Mode::MultipleGroups => self.session.multi.analysis.correction,
+        }
+        .is_false_discovery_rate();
         let selection = &mut self.selections[mode_slot(mode)];
         let mut open_dialog = false;
         let mut selection_changed = false;
@@ -1770,6 +2208,7 @@ impl StampApp {
                         &SAMPLE_COUNT_KINDS,
                         "Sample 2 (<):",
                         counts,
+                        fdr,
                     )
                 }
                 Mode::TwoGroups => {
@@ -1782,9 +2221,12 @@ impl StampApp {
                         &GROUP_COUNT_KINDS,
                         "Group 2 (<):",
                         counts,
+                        fdr,
                     )
                 }
-                Mode::MultipleGroups => filter.show(ui, "multi", &["Eta-squared"], &[], "", counts),
+                Mode::MultipleGroups => {
+                    filter.show(ui, "multi", &["Eta-squared"], &[], "", counts, fdr)
+                }
             };
         if changed {
             self.apply_filters();
@@ -2097,6 +2539,88 @@ impl StampApp {
         }
     }
 
+    /// The window that asks what a BIOM table or mothur taxonomy file needs
+    /// before it becomes a profile.
+    fn pending_profile_window(&mut self, ctx: &egui::Context) {
+        let (mut accept, mut cancel) = (false, false);
+        let mut ask = None;
+        match &mut self.pending_profile {
+            None => return,
+            Some(PendingProfile::Biom {
+                file,
+                fields,
+                chosen,
+            }) => {
+                egui::Window::new("BIOM table")
+                    .collapsible(false)
+                    .resizable(false)
+                    .default_pos([400.0, 180.0])
+                    .show(ctx, |ui| {
+                        ui.label(RichText::new(&file.name).strong());
+                        ui.horizontal(|ui| {
+                            ui.label("Hierarchy from:");
+                            let mut options: Vec<(Option<String>, String)> =
+                                vec![(None, "Observation ids only".to_string())];
+                            options.extend(fields.iter().map(|f| (Some(f.clone()), f.clone())));
+                            choose(ui, "biom-field", chosen, &options);
+                        });
+                        ui.horizontal(|ui| {
+                            accept = ui.button("OK").clicked();
+                            cancel = ui.button("Cancel").clicked();
+                        });
+                    });
+            }
+            Some(PendingProfile::Mothur {
+                taxonomy,
+                groups,
+                names,
+            }) => {
+                egui::Window::new("mothur files")
+                    .collapsible(false)
+                    .resizable(false)
+                    .default_pos([400.0, 180.0])
+                    .show(ctx, |ui| {
+                        let name = |file: &Option<OpenedFile>, missing: &str| match file {
+                            Some(file) => file.name.clone(),
+                            None => missing.to_string(),
+                        };
+                        egui::Grid::new("mothur-files")
+                            .num_columns(3)
+                            .show(ui, |ui| {
+                                ui.label("Taxonomy file:");
+                                ui.label(RichText::new(&taxonomy.name).strong());
+                                ui.end_row();
+                                ui.label("Groups file:");
+                                ui.label(name(groups, "not chosen"));
+                                if ui.button("Choose...").clicked() {
+                                    ask = Some(Auxiliary::MothurGroups);
+                                }
+                                ui.end_row();
+                                ui.label("Names file (optional):");
+                                ui.label(name(names, "none"));
+                                if ui.button("Choose...").clicked() {
+                                    ask = Some(Auxiliary::MothurNames);
+                                }
+                                ui.end_row();
+                            });
+                        ui.horizontal(|ui| {
+                            let create = egui::Button::new("Create profile");
+                            accept = ui.add_enabled(groups.is_some(), create).clicked();
+                            cancel = ui.button("Cancel").clicked();
+                        });
+                    });
+            }
+        }
+        if let Some(which) = ask {
+            self.platform.request(Request::OpenAuxiliary(which), ctx);
+        }
+        if cancel {
+            self.pending_profile = None;
+        } else if accept {
+            self.accept_pending_profile();
+        }
+    }
+
     fn windows(&mut self, ctx: &egui::Context) {
         let mut select = None;
         let mut download = false;
@@ -2191,6 +2715,8 @@ impl StampApp {
             self.select_dialog = None;
         }
 
+        self.pending_profile_window(ctx);
+
         let lines = self.correction_info();
         egui::Window::new("Multiple test correction")
             .open(&mut self.show_correction_info)
@@ -2256,6 +2782,7 @@ impl StampApp {
         self.show_plot_config = open && !close;
 
         let mut changed = false;
+        let (mut redraw, mut restore_defaults) = (false, false);
         egui::Window::new("Preferences")
             .open(&mut self.show_preferences)
             .resizable(false)
@@ -2282,10 +2809,92 @@ impl StampApp {
                         });
                     });
                 ui.label("The seed makes bootstrap and permutation results repeatable.");
+                ui.separator();
+                egui::Grid::new("preferences-display")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        redraw |= row(ui, "Smallest p-value reported:", |ui| {
+                            let exponent =
+                                egui::DragValue::new(&mut self.plot_settings.min_p_exponent)
+                                    .range(-300..=-3)
+                                    .prefix("1e");
+                            ui.add(exponent).changed()
+                        });
+                        let color = |ui: &mut egui::Ui, color: &mut stamp_plot::Color| {
+                            let mut rgb = [color.r, color.g, color.b];
+                            let changed = ui.color_edit_button_srgb(&mut rgb).changed();
+                            if changed {
+                                *color = stamp_plot::Color::rgb(rgb[0], rgb[1], rgb[2]);
+                            }
+                            changed
+                        };
+                        let [sample1, sample2] = &mut self.plot_settings.sample_colors;
+                        redraw |= row(ui, "Colour of sample 1:", |ui| color(ui, sample1));
+                        redraw |= row(ui, "Colour of sample 2:", |ui| color(ui, sample2));
+                        redraw |= row(ui, "Colour of \"All other samples\":", |ui| {
+                            color(ui, &mut self.session.other_samples_color)
+                        });
+                        redraw |= row(ui, "Colour of axes:", |ui| {
+                            color(ui, &mut self.plot_settings.axes_color)
+                        });
+                    });
+                if ui.button("Restore defaults").clicked() {
+                    restore_defaults = true;
+                }
             });
+        if restore_defaults {
+            let defaults = Saved::default();
+            self.session.seed = defaults.seed;
+            self.session.stats.replicates = defaults.replicates;
+            self.session.stats.pseudocount = defaults.pseudocount;
+            self.session.other_samples_color = defaults.other_samples_color;
+            self.plot_settings.min_p_exponent = defaults.plots.min_p_exponent;
+            self.plot_settings.sample_colors = defaults.plots.sample_colors;
+            self.plot_settings.axes_color = defaults.plots.axes_color;
+            changed = true;
+        }
+        self.view_dirty |= redraw || restore_defaults;
         if changed {
             self.session.invalidate_all();
         }
+
+        // Plots in windows of their own: separate windows on the desktop,
+        // floating ones in the browser.
+        let mut closed = Vec::new();
+        for window in &self.plot_windows {
+            let size = [
+                (window.figure.width as f32 + 24.0).clamp(240.0, 1400.0),
+                (window.figure.height as f32 + 60.0).clamp(200.0, 1000.0),
+            ];
+            let builder = egui::ViewportBuilder::default()
+                .with_title(format!("STAMP - {}", window.title))
+                .with_inner_size(size);
+            let id = egui::ViewportId::from_hash_of(("plot-window", window.id));
+            ctx.show_viewport_immediate(id, builder, |ui, class| {
+                let embedded = class == egui::ViewportClass::EmbeddedWindow;
+                let mut contents = |ui: &mut egui::Ui| {
+                    if ui.button("Close").clicked() {
+                        closed.push(window.id);
+                    }
+                    let space = ui.available_size();
+                    egui::ScrollArea::both()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            figure_painter::show(ui, &window.figure, 1.0, space);
+                        });
+                };
+                if embedded {
+                    contents(ui);
+                } else {
+                    egui::CentralPanel::default().show(ui, contents);
+                }
+                if ui.ctx().input(|i| i.viewport().close_requested()) {
+                    closed.push(window.id);
+                }
+            });
+        }
+        self.plot_windows
+            .retain(|window| !closed.contains(&window.id));
 
         egui::Window::new("About STAMP")
             .open(&mut self.show_about)
@@ -2334,7 +2943,15 @@ fn shorten_number(cell: &str) -> String {
 
 impl eframe::App for StampApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // The frame just drawn decides what `save` stores.
+        self.saved_theme_is_dark = ui.ctx().theme() == egui::Theme::Dark;
         self.draw(ui);
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        let mut saved = self.saved(&egui::Context::default());
+        saved.dark_mode = self.saved_theme_is_dark;
+        eframe::set_value(storage, STORAGE_KEY, &saved);
     }
 }
 
