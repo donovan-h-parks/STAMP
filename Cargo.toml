@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/stamp-core", "crates/stamp-plot", "crates/stamp-cli", "crates/stamp-gui"]
 
 [workspace.package]
-version = "3.0.0-alpha.0"
+version = "3.0.0"
 edition = "2021"
 rust-version = "1.95"
 license = "GPL-3.0-or-later"

@@ -37,10 +37,47 @@ const DEFAULT_ZOOM: f32 = 1.15;
 
 /// Example data built into the application: gut enterotypes from Arumugam et
 /// al. (2011).
-const EXAMPLE_PROFILE: &str =
+const ENTEROTYPES_PROFILE: &str =
     include_str!("../../../examples/EnterotypesArumugam/Enterotypes.profile.spf");
-const EXAMPLE_METADATA: &str =
+const ENTEROTYPES_METADATA: &str =
     include_str!("../../../examples/EnterotypesArumugam/Enterotypes.metadata.tsv");
+/// Microbial communities of coal seams, from An et al. (2013); a profile of
+/// sequence counts down to species. Compressed when the program is built.
+const COAL_PROFILE_GZ: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/coal.spf.gz"));
+const COAL_METADATA: &str = include_str!("../../../examples/CoalSeamGas/coal.metadata.tsv");
+
+/// The datasets built into the application.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Example {
+    /// Proportions of phyla and genera in gut samples of three enterotypes.
+    Enterotypes,
+    /// Counts of sequences in coal-seam samples, with a full taxonomy.
+    CoalSeamGas,
+}
+
+impl Example {
+    pub const ALL: [Example; 2] = [Example::Enterotypes, Example::CoalSeamGas];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Example::Enterotypes => "Enterotypes",
+            Example::CoalSeamGas => "Coal seam gas",
+        }
+    }
+
+    /// What the dataset is, for a tooltip.
+    pub fn description(self) -> &'static str {
+        match self {
+            Example::Enterotypes => {
+                "Gut enterotypes (Arumugam et al., 2011): proportions of phyla and genera in 39 samples"
+            }
+            Example::CoalSeamGas => {
+                "Coal seam microbial communities (An et al., 2013): sequence counts in 44 samples, \
+                 domain to species"
+            }
+        }
+    }
+}
 
 /// Width of the combo boxes in the side panels, in points.
 const COMBO_WIDTH: f32 = 132.0;
@@ -1323,8 +1360,30 @@ impl StampApp {
 
     /// Load the example that ships inside the application.
     pub fn load_example(&mut self) {
-        self.load_profile("Enterotypes.profile.spf", EXAMPLE_PROFILE);
-        self.load_metadata("Enterotypes.metadata.tsv", EXAMPLE_METADATA);
+        self.load_example_data(Example::Enterotypes);
+    }
+
+    /// Load one of the datasets that ship inside the application.
+    pub fn load_example_data(&mut self, example: Example) {
+        match example {
+            Example::Enterotypes => {
+                self.load_profile("Enterotypes.profile.spf", ENTEROTYPES_PROFILE);
+                self.load_metadata("Enterotypes.metadata.tsv", ENTEROTYPES_METADATA);
+            }
+            Example::CoalSeamGas => {
+                use std::io::Read;
+                let mut spf = String::new();
+                match flate2::read::GzDecoder::new(COAL_PROFILE_GZ).read_to_string(&mut spf) {
+                    Ok(_) => {
+                        self.load_profile("coal.spf", &spf);
+                        self.load_metadata("coal.metadata.tsv", COAL_METADATA);
+                    }
+                    Err(error) => {
+                        self.notice = Some(format!("The example could not be read: {error}"));
+                    }
+                }
+            }
+        }
     }
 
     /// Hand the application the outcome of a file request, as the file
@@ -1620,12 +1679,16 @@ impl StampApp {
                 if ui.add_enabled(loaded, metadata).clicked() {
                     self.platform.request(Request::OpenMetadata, &ctx);
                 }
-                if ui
-                    .add(item(icons::FLASK, "Open example data", None))
-                    .clicked()
-                {
-                    self.load_example();
-                }
+                ui.menu_button(icons::label(icons::FLASK, "Open example data"), |ui| {
+                    for example in Example::ALL {
+                        let entry = ui
+                            .button(example.name())
+                            .on_hover_text(example.description());
+                        if entry.clicked() {
+                            self.load_example_data(example);
+                        }
+                    }
+                });
                 ui.separator();
                 ui.add_enabled_ui(loaded, |ui| {
                     ui.menu_button(icons::label(icons::FLOPPY_DISK, "Save plot as"), |ui| {

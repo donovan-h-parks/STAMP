@@ -331,6 +331,17 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
                     ..Default::default()
                 },
             ),
+            PlotTypeArg::Rarefaction => {
+                let names = profile.profile.sample_names.clone();
+                rarefaction_figure(
+                    &tree,
+                    &names,
+                    profile_level,
+                    vec![0, 1],
+                    names.clone(),
+                    plot,
+                )?
+            }
             other => return Err(unavailable(other, "two samples")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;
@@ -467,6 +478,20 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     },
                 )
             }
+            PlotTypeArg::Rarefaction => {
+                let first = profile.samples_in_group1().len();
+                let samples = &profile.profile.sample_names;
+                rarefaction_figure(
+                    &tree,
+                    samples,
+                    profile_level,
+                    (0..samples.len())
+                        .map(|i| usize::from(i >= first))
+                        .collect(),
+                    vec![profile.group_name1.clone(), profile.group_name2.clone()],
+                    plot,
+                )?
+            }
             other => return Err(unavailable(other, "two groups")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;
@@ -595,6 +620,19 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                     ..Default::default()
                 },
             ),
+            PlotTypeArg::Rarefaction => rarefaction_figure(
+                &tree,
+                &profile.profile.sample_names,
+                levels(&tree, &args.profile).1,
+                profile
+                    .samples_in_groups()
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                    .collect(),
+                profile.group_names.clone(),
+                plot,
+            )?,
             other => return Err(unavailable(other, "several groups")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;
@@ -651,6 +689,27 @@ fn unavailable(kind: PlotTypeArg, context: &str) -> String {
         .map(|v| v.get_name().to_string())
         .unwrap_or_default();
     format!("the {name} plot is not available for {context}")
+}
+
+/// Rarefaction curves of some samples of a profile, coloured by group.
+fn rarefaction_figure(
+    tree: &ProfileTree,
+    samples: &[String],
+    profile_level: &str,
+    sample_groups: Vec<usize>,
+    groups: Vec<String>,
+    plot: &PlotArgs,
+) -> CliResult<stamp_plot::Figure> {
+    use stamp_plot::rarefaction;
+    let data = rarefaction::Data::from_tree(tree, samples, profile_level, sample_groups, groups)?;
+    Ok(rarefaction::plot(
+        &data,
+        &rarefaction::Options {
+            width: plot.plot_width,
+            height: plot.plot_height.unwrap_or(5.0),
+            ..Default::default()
+        },
+    ))
 }
 
 /// Options of the extended error bar (and post-hoc) plot from the command line.

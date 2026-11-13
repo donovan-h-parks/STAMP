@@ -3639,7 +3639,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "stamp-cli"
-version = "3.0.0-alpha.0"
+version = "3.0.0"
 dependencies = [
  "clap",
  "serde",
@@ -3650,7 +3650,7 @@ dependencies = [
 
 [[package]]
 name = "stamp-core"
-version = "3.0.0-alpha.0"
+version = "3.0.0"
 dependencies = [
  "flate2",
  "hdf5-pure",
@@ -3666,10 +3666,11 @@ dependencies = [
 
 [[package]]
 name = "stamp-gui"
-version = "3.0.0-alpha.0"
+version = "3.0.0"
 dependencies = [
  "eframe",
  "egui_extras",
+ "flate2",
  "js-sys",
  "png 0.17.16",
  "rfd",
@@ -3685,7 +3686,7 @@ dependencies = [
 
 [[package]]
 name = "stamp-plot"
-version = "3.0.0-alpha.0"
+version = "3.0.0"
 dependencies = [
  "resvg 0.50.0",
  "serde",

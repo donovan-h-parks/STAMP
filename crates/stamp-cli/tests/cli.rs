@@ -775,6 +775,41 @@ fn every_plot_type_can_be_drawn() {
     // p-values are computed; STAMP v2 showed bounds such as "< 0.001".
     assert!(has(&post_hoc, "Enterotype 1 : Enterotype 2") && !has(&post_hoc, "&lt; 0.001"));
 
+    // Rarefaction curves need counts of sequences; the coal-seam profile
+    // has them and the enterotype profile does not.
+    let coal = [
+        "--profile",
+        "examples/CoalSeamGas/coal.spf",
+        "--metadata",
+        "examples/CoalSeamGas/coal.metadata.tsv",
+        "--field",
+        "Core vs. Water",
+    ];
+    let rarefaction = svg_plot(
+        "multi-groups",
+        &coal,
+        &["--plot-type", "rarefaction"],
+        &directory,
+        "rarefaction",
+    );
+    assert!(
+        has(&rarefaction, "Expected number of features")
+            && has(&rarefaction, "Number of sequences")
+    );
+    let unwritten = directory.join("rarefaction-fractions.svg");
+    assert!(failure(&with(
+        "multi-groups",
+        &multi,
+        &[
+            "--plot-type",
+            "rarefaction",
+            "--plot",
+            unwritten.to_str().unwrap()
+        ]
+    ))
+    .contains("Rarefaction needs counts"));
+    assert!(!unwritten.exists());
+
     // Plot types that do not apply are refused, with nothing written.
     let refused = directory.join("refused.svg");
     let message = failure(&with(

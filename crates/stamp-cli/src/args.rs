@@ -157,6 +157,8 @@ pub enum PlotTypeArg {
     Heatmap,
     /// Every pair of groups for one feature
     PostHoc,
+    /// Expected number of features against sequences read, per sample
+    Rarefaction,
 }
 
 #[derive(Clone, Copy, ValueEnum)]

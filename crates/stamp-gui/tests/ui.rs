@@ -135,6 +135,18 @@ fn every_plot_of_every_mode_renders() {
                 .to_lowercase()
                 .replace([' ', '-'], "_");
             let image = harness.screenshot(&name);
+            if kind == PlotKind::Rarefaction {
+                // The example holds fractional values, which cannot be
+                // rarefied; the plot says so instead.
+                let figure = harness.app.figure();
+                assert!(
+                    matches!(&figure.shapes[0], stamp_plot::Shape::Text { text, .. }
+                        if text.contains("Rarefaction needs counts")),
+                    "{mode:?}: {:?}",
+                    figure.shapes.first()
+                );
+                continue;
+            }
             assert!(
                 harness.app.figure().shapes.len() > 5,
                 "{mode:?} {kind:?} drew nothing"
@@ -1206,4 +1218,161 @@ fn scatter_plot_tooltips_say_what_stamp_v2_did() {
             "missing {expected:?} in {samples:?}"
         );
     }
+}
+
+#[test]
+fn rarefaction_curves_for_samples_and_groups() {
+    let mut harness = Harness::new();
+    harness
+        .app
+        .open_profile_file(opened("../../examples/CoalSeamGas/coal.spf"));
+    harness.app.load_metadata(
+        "coal.metadata.tsv",
+        &example("CoalSeamGas/coal.metadata.tsv"),
+    );
+    harness.app.set_p_value_filter(None);
+    assert_eq!(harness.app.notice(), None);
+    // A level with enough categories for the curves to be worth looking at.
+    harness.app.session.profile_level = "Family".to_string();
+    harness.app.session.invalidate_all();
+    harness.app.show_feature_table(false);
+    let curves = |app: &StampApp| {
+        app.figure()
+            .shapes
+            .iter()
+            .filter(|s| {
+                matches!(s, stamp_plot::Shape::Line { points, stroke }
+                    if points.len() > 2 && stroke.dash.is_none())
+            })
+            .count()
+    };
+
+    // Two groups: a curve for each sample of the two groups.
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.app.set_plot_kind(PlotKind::Rarefaction);
+    harness.settle();
+    let (in_groups, first_group) = {
+        let (profile, _) = harness.app.session.groups.output.as_ref().unwrap();
+        (
+            profile.profile.sample_names.len(),
+            profile.group_name1.clone(),
+        )
+    };
+    assert!(in_groups >= 4);
+    assert_eq!(curves(&harness.app), in_groups);
+    let image = harness.screenshot("rarefaction_two_groups");
+    assert!(ink(&image, 300, 120, 950, 700) > 0.01);
+    // The curves take the colours of their groups.
+    let color = harness.app.session.group_color(&first_group);
+    assert!(harness
+        .app
+        .figure()
+        .shapes
+        .iter()
+        .any(|s| matches!(s, stamp_plot::Shape::Line { stroke, .. } if stroke.color == color)));
+
+    // Multiple groups: every sample of the ticked groups.
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::Rarefaction);
+    harness.settle();
+    let in_groups = {
+        let (profile, _) = harness.app.session.multi.output.as_ref().unwrap();
+        profile.profile.sample_names.len()
+    };
+    assert_eq!(curves(&harness.app), in_groups);
+    harness.screenshot("rarefaction_multiple_groups");
+
+    // Two samples: two curves; Chao1 adds a dashed line for each.
+    harness.app.set_mode(Mode::TwoSamples);
+    harness.app.set_plot_kind(PlotKind::Rarefaction);
+    harness.settle();
+    assert_eq!(curves(&harness.app), 2);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.rarefaction.show_chao1 = true;
+    settings.rarefaction.truncate_to_smallest = true;
+    harness.app.set_plot_settings(settings);
+    harness.app.show_plot_config(true);
+    harness.settle();
+    let dashed = harness
+        .app
+        .figure()
+        .shapes
+        .iter()
+        .filter(|s| {
+            matches!(s, stamp_plot::Shape::Line { points, stroke }
+                if points.len() == 2 && stroke.dash.is_some())
+        })
+        .count();
+    assert_eq!(dashed, 2);
+    harness.screenshot("rarefaction_two_samples");
+
+    // The level of the hierarchy decides what is counted.
+    let features = |app: &StampApp| -> f64 {
+        app.figure()
+            .regions
+            .iter()
+            .filter_map(|r| {
+                let line = r
+                    .tooltip
+                    .lines()
+                    .find(|l| l.starts_with("Features observed: "))?;
+                line["Features observed: ".len()..].parse().ok()
+            })
+            .fold(0.0, f64::max)
+    };
+    let at_species = {
+        harness.app.session.profile_level = "Species".to_string();
+        harness.app.session.invalidate_all();
+        harness.settle();
+        harness.settle();
+        features(&harness.app)
+    };
+    let at_phylum = {
+        harness.app.session.profile_level = "Phylum".to_string();
+        harness.app.session.invalidate_all();
+        harness.settle();
+        harness.settle();
+        features(&harness.app)
+    };
+    // In this dataset few sequences are classified to species, and the
+    // unclassified ones are not counted, so fewer species than phyla show.
+    assert!(
+        at_phylum >= 1.0 && at_species >= 1.0 && at_species != at_phylum,
+        "{at_species} species, {at_phylum} phyla"
+    );
+}
+
+#[test]
+fn both_built_in_examples_load() {
+    use stamp_gui::app::Example;
+    assert_eq!(
+        Example::ALL.map(Example::name),
+        ["Enterotypes", "Coal seam gas"]
+    );
+    let mut harness = Harness::new();
+    harness.app.load_example_data(Example::CoalSeamGas);
+    harness.settle();
+    assert_eq!(harness.app.notice(), None);
+    let session = &harness.app.session;
+    let tree = session.tree.as_ref().expect("the coal-seam profile loaded");
+    assert_eq!(tree.num_samples(), 44);
+    assert_eq!(tree.hierarchy_headings().len(), 7);
+    assert_eq!(session.profile_name, "coal.spf");
+    assert!(session.metadata.is_some());
+    // It is the same data as the example file in the repository.
+    let from_file = stamp_core::ProfileTree::read(&example("CoalSeamGas/coal.spf")).unwrap();
+    assert_eq!(tree.num_leaves(), from_file.num_leaves());
+    assert_eq!(
+        tree.sample_total("573857"),
+        from_file.sample_total("573857")
+    );
+    // Its counts are whole numbers, so it can be rarefied.
+    harness.app.set_plot_kind(PlotKind::Rarefaction);
+    harness.settle();
+    assert!(harness.app.figure().shapes.len() > 10);
+
+    harness.app.load_example_data(Example::Enterotypes);
+    harness.settle();
+    assert_eq!(harness.app.session.profile_name, "Enterotypes.profile.spf");
+    assert_eq!(harness.app.session.tree.as_ref().unwrap().num_samples(), 39);
 }

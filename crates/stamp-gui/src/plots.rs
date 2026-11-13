@@ -5,7 +5,8 @@ use stamp_plot::axes::LegendPosition;
 use stamp_plot::axes::AXES_COLOR;
 use stamp_plot::extended_error_bar::{self, SAMPLE1_COLOR, SAMPLE2_COLOR};
 use stamp_plot::{
-    feature_plots, heatmap, histogram, pca_plot, post_hoc, sample_plots, scatter, Color, Figure,
+    feature_plots, heatmap, histogram, pca_plot, post_hoc, rarefaction, sample_plots, scatter,
+    Color, Figure,
 };
 
 use crate::session::{Mode, Session};
@@ -24,6 +25,7 @@ pub enum PlotKind {
     Pca,
     Heatmap,
     PostHoc,
+    Rarefaction,
 }
 
 impl PlotKind {
@@ -40,6 +42,7 @@ impl PlotKind {
             PlotKind::Pca => "PCA plot",
             PlotKind::Heatmap => "Heatmap plot",
             PlotKind::PostHoc => "Post-hoc plot",
+            PlotKind::Rarefaction => "Rarefaction curves",
         }
     }
 
@@ -54,6 +57,7 @@ impl PlotKind {
                 PlotKind::SequenceHistogram,
                 PlotKind::PValueHistogram,
                 PlotKind::MultipleComparison,
+                PlotKind::Rarefaction,
             ],
             Mode::TwoGroups => &[
                 PlotKind::ExtendedErrorBar,
@@ -62,6 +66,7 @@ impl PlotKind {
                 PlotKind::Scatter,
                 PlotKind::Pca,
                 PlotKind::Heatmap,
+                PlotKind::Rarefaction,
             ],
             Mode::MultipleGroups => &[
                 PlotKind::Pca,
@@ -69,6 +74,7 @@ impl PlotKind {
                 PlotKind::Bar,
                 PlotKind::Box,
                 PlotKind::PostHoc,
+                PlotKind::Rarefaction,
             ],
         }
     }
@@ -125,6 +131,7 @@ pub struct PlotSettings {
     pub feature_field: feature_plots::Field,
     pub pca: pca_plot::Options,
     pub heatmap: heatmap::Options,
+    pub rarefaction: rarefaction::Options,
     /// Draw only the features that pass the filters in the heatmap.
     pub heatmap_only_active: bool,
     /// Show sequence counts instead of proportions in the heatmap.
@@ -196,6 +203,7 @@ impl Default for PlotSettings {
                 height: 6.0,
                 ..Default::default()
             },
+            rarefaction: rarefaction::Options::default(),
             heatmap_only_active: false,
             heatmap_sequence_counts: false,
             highlighted: Vec::new(),
@@ -243,6 +251,7 @@ impl PlotSettings {
             }
             PlotKind::MultipleComparison => self.multiple_comparison = defaults.multiple_comparison,
             PlotKind::Pca => self.pca = defaults.pca,
+            PlotKind::Rarefaction => self.rarefaction = defaults.rarefaction,
             PlotKind::Heatmap => {
                 self.heatmap = defaults.heatmap;
                 self.heatmap_only_active = defaults.heatmap_only_active;
@@ -278,6 +287,28 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
         });
     }
     figure
+}
+
+/// The rarefaction curves of some samples, coloured by group.
+fn rarefaction_curves(
+    session: &Session,
+    samples: &[String],
+    sample_groups: Vec<usize>,
+    groups: Vec<String>,
+    colors: Vec<Color>,
+    settings: &PlotSettings,
+) -> Figure {
+    let Some(tree) = &session.tree else {
+        return Figure::message(NO_RESULTS);
+    };
+    match rarefaction::Data::from_tree(tree, samples, &session.profile_level, sample_groups, groups)
+    {
+        Ok(mut data) => {
+            data.group_colors = colors;
+            rarefaction::plot(&data, &settings.rarefaction)
+        }
+        Err(message) => Figure::message(&message),
+    }
 }
 
 fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSettings) -> Figure {
@@ -377,6 +408,19 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                 PlotKind::MultipleComparison => {
                     sample_plots::multiple_comparison(results, &settings.multiple_comparison)
                 }
+                PlotKind::Rarefaction => {
+                    // Each sample is its own "group"; their colours are the
+                    // two sample colours.
+                    let names = profile.profile.sample_names.clone();
+                    rarefaction_curves(
+                        session,
+                        &names,
+                        vec![0, 1],
+                        names.clone(),
+                        vec![SAMPLE1_COLOR, SAMPLE2_COLOR],
+                        settings,
+                    )
+                }
                 _ => Figure::message("This plot is not available for two samples"),
             }
         }
@@ -449,6 +493,20 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                             )
                         },
                         &settings.heatmap,
+                    )
+                }
+                PlotKind::Rarefaction => {
+                    let first = profile.samples_in_group1().len();
+                    let samples = &profile.profile.sample_names;
+                    rarefaction_curves(
+                        session,
+                        samples,
+                        (0..samples.len())
+                            .map(|i| usize::from(i >= first))
+                            .collect(),
+                        vec![profile.group_name1.clone(), profile.group_name2.clone()],
+                        vec![color1, color2],
+                        settings,
                     )
                 }
                 _ => Figure::message("This plot is not available for two groups"),
@@ -529,6 +587,19 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     (_, Some(Err(message))) => Figure::message(&message),
                     _ => Figure::message(NO_FEATURE),
                 },
+                PlotKind::Rarefaction => rarefaction_curves(
+                    session,
+                    &profile.profile.sample_names,
+                    profile
+                        .samples_in_groups()
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                        .collect(),
+                    profile.group_names.clone(),
+                    colors.clone(),
+                    settings,
+                ),
                 _ => Figure::message("This plot is not available for multiple groups"),
             }
         }

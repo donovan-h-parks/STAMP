@@ -49,7 +49,7 @@ trunk build --release            # writes the site to crates/stamp-gui/dist
 trunk serve --release            # or: build and open it at http://127.0.0.1:8080
 ```
 
-In the browser, files are opened with the browser's file picker and results are saved as downloads. File > Open example data loads a built-in dataset. Analyses run on the page's single thread, so a long resampling test (bootstrap, permutation, White's test with many features) holds the page until it finishes.
+In the browser, files are opened with the browser's file picker and results are saved as downloads. File > Open example data loads one of two built-in datasets. Analyses run on the page's single thread, a few features at a time, so the page keeps responding and shows progress during a long resampling test; White's test is the exception and holds the page until it finishes.
 
 ### Command line
 
@@ -92,7 +92,7 @@ stamp-cli two-samples --profile examples/IronMineEdwards/EdwardsIronMine.spf \
 
 ![Extended error bar plot of the iron mine example](docs/images/extended_error_bar.png)
 
-`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `pca`, `heatmap` and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
+`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `pca`, `heatmap`, `rarefaction` and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
 
 ```bash
 stamp-cli multi-groups --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \

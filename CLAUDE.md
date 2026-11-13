@@ -8,6 +8,16 @@ STAMP (statistical analysis of taxonomic and functional profiles) being ported f
 
 `docs/CHANGES_FROM_PYTHON.md` is the record of every deliberate difference from the Python version: bugs fixed, behaviour changes, what is not yet ported, and open questions. **Any change that makes the port behave differently from STAMP v2, or that fixes a v2 bug, gets an entry there.** Read it before concluding that a difference from the Python code is a mistake.
 
+## Files to keep up to date
+
+- **`CURRENT_TASK.md`** always says what is being worked on, so that a session that ends unexpectedly (a lost connection, a server crash) can be picked up by the next one. Read it at the start of a session. Update it when a task starts (what was asked, the plan), at each meaningful step (what is done, what is left, anything half-finished on disk), and when the task finishes (set the status to idle and note what was completed and whether it was committed).
+- **`NEW_FEATURES.md`** lists the features of the Rust port that STAMP v2 did not have. Add an entry whenever such a feature is added.
+- **`docs/CHANGES_FROM_PYTHON.md`**, as described above, for differences from v2 and fixed v2 bugs.
+
+## Version
+
+The Rust port is **STAMP v3.0.0**. The version is set once, in `[workspace.package]` of the root `Cargo.toml`, and every crate and the About window take it from there. STAMP v2 is the Python version in `legacy/`.
+
 ## Commands
 
 The compiler is pinned in `rust-toolchain.toml` (rustup installs it on first use, with the wasm target).

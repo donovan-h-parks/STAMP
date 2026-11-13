@@ -674,6 +674,22 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.number("x-axis limit:", &mut o.significant_limit, 0.01, 0.01..=1.0);
             });
         }
+        PlotKind::Rarefaction => {
+            let o = &mut settings.rarefaction;
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Curves", |rows| {
+                rows.count("Sampling points:", &mut o.points, 2..=1000);
+                rows.check(
+                    "Truncate to the smallest sample",
+                    &mut o.truncate_to_smallest,
+                );
+                rows.check("Show Chao1 estimates", &mut o.show_chao1);
+            });
+            dialog.legend(&mut o.legend);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.check("Label samples", &mut o.label_samples);
+            });
+        }
         PlotKind::Pca => {
             let o = &mut settings.pca;
             dialog.group("Figure size", |rows| {

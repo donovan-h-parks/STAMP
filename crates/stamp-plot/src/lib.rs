@@ -25,6 +25,7 @@ pub mod heatmap;
 pub mod histogram;
 pub mod pca_plot;
 pub mod post_hoc;
+pub mod rarefaction;
 pub mod sample_plots;
 pub mod scatter;
 pub mod svg;
