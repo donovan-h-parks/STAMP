@@ -10,6 +10,7 @@ pub mod jobs;
 pub mod platform;
 pub mod plot_config;
 pub mod plots;
+pub mod select_features;
 pub mod session;
 
 pub use app::StampApp;

@@ -590,3 +590,87 @@ fn features_are_highlighted_in_red() {
     harness.settle();
     assert!(red(harness.app.figure()).is_empty());
 }
+
+#[test]
+fn specific_features_can_be_selected() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    assert_eq!(harness.app.results_table().rows.len(), 17);
+
+    harness.app.open_select_features();
+    // The window takes a few frames to appear in full.
+    for _ in 0..4 {
+        harness.settle();
+    }
+    let image = harness.screenshot("select_features");
+    assert!(ink(&image, 330, 110, 900, 500) > 0.02);
+
+    // Only the chosen features reach the table, the plot and the count.
+    harness
+        .app
+        .set_selected_features(Some(&["Firmicutes", "Bacteroidetes"]));
+    harness.settle();
+    assert_eq!(harness.app.results_table().rows.len(), 2);
+    assert_eq!(harness.app.session.feature_counts(Mode::TwoGroups), (17, 2));
+    let active: Vec<String> = harness
+        .app
+        .feature_table()
+        .iter()
+        .filter(|r| r.active)
+        .map(|r| r.feature.clone())
+        .collect();
+    assert_eq!(active, ["Bacteroidetes", "Firmicutes"]);
+    harness.screenshot("selected_features");
+
+    // The other analyses keep all of their features.
+    harness.app.set_mode(Mode::TwoSamples);
+    harness.settle();
+    assert_eq!(harness.app.results_table().rows.len(), 17);
+
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.app.set_selected_features(None);
+    harness.settle();
+    assert_eq!(harness.app.results_table().rows.len(), 17);
+}
+
+#[test]
+fn tables_are_sorted_by_their_headings() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let p_values = |app: &StampApp| -> Vec<f64> {
+        app.feature_table()
+            .iter()
+            .map(|r| r.p_value.parse().unwrap())
+            .collect()
+    };
+
+    // The p-value column: ascending, then descending.
+    harness.app.sort_feature_table(2);
+    harness.settle();
+    let ascending = p_values(&harness.app);
+    assert!(ascending.windows(2).all(|pair| pair[0] <= pair[1]));
+    assert_eq!(harness.app.feature_table()[0].feature, "Unclassified");
+    harness.screenshot("sorted_tables");
+    harness.app.sort_feature_table(2);
+    let descending = p_values(&harness.app);
+    assert!(descending.windows(2).all(|pair| pair[0] >= pair[1]));
+
+    // The feature column: alphabetical, then reversed.
+    harness.app.sort_feature_table(0);
+    assert_eq!(harness.app.feature_table()[0].feature, "Acidobacteria");
+    harness.app.sort_feature_table(0);
+    assert_eq!(harness.app.feature_table()[0].feature, "Verrucomicrobia");
+
+    // The results table sorts the same way, by any of its columns.
+    let table = harness.app.results_table().clone();
+    assert_eq!(
+        harness.app.results_table_order(),
+        (0..17).collect::<Vec<_>>()
+    );
+    harness.app.sort_results_table(0);
+    let order = harness.app.results_table_order();
+    assert_eq!(table.rows[order[0]][0], "Acidobacteria");
+    harness.app.sort_results_table(0);
+    let order = harness.app.results_table_order();
+    assert_eq!(table.rows[order[0]][0], "Verrucomicrobia");
+}

@@ -69,9 +69,12 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 31 | done | In light mode the text of active controls is black. |
 | 32 | done | The plot type, a "Configure plot" button, the zoom and the highlight choices sit beneath the plot. "Configure plot" opens a window with the settings of the plot being shown; changes apply as they are made rather than on OK, and "Restore defaults" undoes them. One set of settings is kept for each kind of plot, shared between the analysis types where the plot is the same (the extended error bar, scatter, PCA and heatmap plots). |
 | 33 | done | The feature table is shown beside every plot, not only those of a single feature, and can be hidden from the View menu. |
-| 34 | done | The metadata table (View > Metadata table) runs along the bottom of the window. As in v2, samples are switched off by unticking them, with "Select all" and "Remove all", or by a rule that adds or removes all samples whose value of a field is less than, equal to or greater than a chosen value. The table cannot be sorted by a column, and switching a sample off does not remove it from the sample lists of the two-sample analysis. |
+| 34 | done | The metadata table (View > Metadata table) runs along the bottom of the window. As in v2, samples are switched off by unticking them, with "Select all" and "Remove all", or by a rule that adds or removes all samples whose value of a field is less than, equal to or greater than a chosen value. Switching a sample off does not remove it from the sample lists of the two-sample analysis. |
 | 35 | done | Highlighting: a hierarchical level and a name at that level are chosen beneath the plot, and the features under that name are drawn in red in the extended error bar, scatter, two-sample bar and profile bar plots. One choice is shared by the three analysis types. |
 | 36 | done | Legend position: the bar, profile bar, sequence histogram and PCA plots offer Best, Upper right, Centre right, Lower right, Upper left, Centre left, Lower left and None. "Best" takes the first of those places (in matplotlib's order of preference) that covers the fewest drawn shapes; it is a simpler rule than matplotlib's, so it can choose a different corner than v2 did. The extended error bar plot keeps its own choices (around the whole figure), and the heatmap's legend can only be shown or hidden. |
+| 37 | done | "Select specific features" in the Filtering section opens the "Select features" window, as in v2: features are listed at any hierarchical level and moved between the selected and filtered lists. A name is matched at the listed level only (v2 matched it at any level). The choice is kept for each analysis type and is cleared when the profile level, parent level or treatment of unclassified sequences changes, because the features are then different ones. |
+| 38 | done | The feature, results and metadata tables are sorted by clicking a column heading; a second click reverses the order. Numbers sort by value and text without regard to case. A downloaded results table keeps its original order. |
+| 39 | done | The graphical application no longer has "Create profile from" in its File menu. Profiles in other formats are to be opened directly through File > Load profile; for now it reads STAMP profiles (SPF) only. The converters remain available as `stamp-cli convert`. |
 
 ## Kept as is
 
@@ -107,13 +110,48 @@ numerical methods rather than from different formulas:
   archives, unsigned (see `docs/RELEASING.md`).
 * In the browser build, running analyses in a web worker so that long
   resampling tests do not hold the page while they run.
-* In the graphical application:
+* In the graphical application (found by comparing it with STAMP v2 control
+  by control):
+  * opening profiles in formats other than SPF (BIOM, MG-RAST, mothur, RITA,
+    CoMet) from File > Load profile, with the choices the v2 converters
+    offered: BIOM metadata field, MG-RAST level headings, RITA groups to
+    retain, and the treatment of multi-category COGs;
+  * pausing recalculation ("Recalculate statistics and plots" in the status
+    bar), to change several settings before the tests are run again;
+  * the multiple-test-correction information window (number of significant
+    features, corrected error rate, Storey's estimate of pi0), which the
+    command line prints;
+  * the profile summary in the status bar: parent categories and sequences
+    in each sample or group;
+  * keyboard shortcuts (Ctrl+O, Ctrl+S, Ctrl+Q and those that show panels);
+  * remembering the window layout, preferences and plot settings between
+    runs;
+  * choosing the resolution of a saved PNG (300 dpi is used; the command
+    line has `--plot-dpi`);
+  * preferences for the smallest p-value reported (fixed at 1e-15) and for
+    the colour of "All other samples" (fixed at grey);
   * customising sample and axis colours (group colours can be changed);
-  * the "select features" dialog;
-  * choices in the file converters (BIOM metadata field, MG-RAST level
-    headings, treatment of multi-category COGs), which the command line has;
+  * showing all features, not only the active ones, in the results table;
+  * leaving an unticked group out of the Group 1 and Group 2 lists
+    (unticking affects the multiple-group analysis only), and a tooltip
+    listing the samples of each group;
+  * renaming the "p-value filter" to "q-value filter" under a false
+    discovery rate correction;
+  * removing switched-off samples from the sample lists of the two-sample
+    analysis;
   * sending a plot to its own window.
-* Plot options that are not carried over yet: the heatmap's colouring of
+* The stand-alone `checkHierarchy.py` script, which lists every row of a
+  profile with an unclassified parent or several parents. The loader stops
+  at the first such row.
+* Plot options that are not carried over yet: sequence counts instead of
+  proportions in the bars of the two-sample extended error bar plot;
+  uncorrected p-values in the p-value histogram; a logarithmic axis in the
+  multiple comparison plots; showing all features rather than only the
+  active ones in the profile bar plot and the heatmaps; choosing "PC3 vs.
+  PC2" and "PC1 vs. PC3" separately and rotating PC3 labels in the PCA
+  plot; sorting, standard deviations and "filter rows above the nominal
+  level" in the post-hoc plot; and placing the heatmap's legend.
+* Further plot options not carried over: the heatmap's colouring of
   clusters below a distance threshold and eight of its fourteen colour maps
   (Blues, Reds, Grayscale, Orange to red, Yellow to orange to red and Blue to
   white to red are available); the PCA plot's "fixed pixels per unit
@@ -122,6 +160,9 @@ numerical methods rather than from different formulas:
 
 ## Open questions
 
+* **p-value filter at start-up.** STAMP v2 starts with the p-value filter
+  switched on (at 0.05) in all three analysis types; this port starts with
+  it off. Which default to keep has not been decided.
 * **BIOM 2.x (HDF5).** Not supported in this port so far (see behaviour
   change 9). Supporting it needs an HDF5 reader that also works in the browser.
 * **Example profiles the reader rejects.** `examples/EBPR/MartinEBPR.spf`,

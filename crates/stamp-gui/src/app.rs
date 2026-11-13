@@ -22,9 +22,10 @@ use stamp_core::Unclassified;
 use stamp_plot::Figure;
 
 use crate::figure_painter;
-use crate::platform::{self, Event, Platform, Request, Source};
+use crate::platform::{self, Event, Platform, Request};
 use crate::plot_config;
 use crate::plots::{self, PlotKind, PlotSettings};
+use crate::select_features::{FeatureSelection, Outcome};
 use crate::session::{Mode, Relation, Session};
 
 const COVERAGES: [f64; 5] = [0.90, 0.95, 0.98, 0.99, 0.999];
@@ -98,6 +99,102 @@ fn strings(items: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<(String, Str
 /// reaches the row.
 fn plain_label(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) {
     ui.add(egui::Label::new(text).selectable(false));
+}
+
+/// Order of two table cells: numbers by value (a p-value shown as a bound,
+/// such as `< 1e-15`, by its bound), ahead of text, which is compared
+/// without regard to case.
+fn compare_cells(a: &str, b: &str) -> std::cmp::Ordering {
+    let number = |cell: &str| {
+        cell.trim()
+            .trim_start_matches('<')
+            .trim()
+            .parse::<f64>()
+            .ok()
+    };
+    match (number(a), number(b)) {
+        (Some(x), Some(y)) => x.total_cmp(&y),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.to_lowercase().cmp(&b.to_lowercase()),
+    }
+}
+
+/// The column a table is sorted by, chosen by clicking its heading.
+/// Clicking the same heading again reverses the order.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SortState {
+    column: Option<usize>,
+    descending: bool,
+}
+
+impl SortState {
+    /// Sort by `column`, or reverse the order if it is already sorted by it.
+    pub fn click(&mut self, column: usize) {
+        if self.column == Some(column) {
+            self.descending = !self.descending;
+        } else {
+            *self = SortState {
+                column: Some(column),
+                descending: false,
+            };
+        }
+    }
+
+    /// The order in which to show `count` rows, given the text of each
+    /// row's cell in a column. Rows that compare equal keep their order.
+    pub fn order<'a>(&self, count: usize, cell: impl Fn(usize, usize) -> &'a str) -> Vec<usize> {
+        let mut order: Vec<usize> = (0..count).collect();
+        if let Some(column) = self.column {
+            order.sort_by(|&a, &b| {
+                let ordering = compare_cells(cell(a, column), cell(b, column));
+                if self.descending {
+                    ordering.reverse()
+                } else {
+                    ordering
+                }
+            });
+        }
+        order
+    }
+
+    /// A column heading that sorts the table when clicked. An arrow marks
+    /// the sorted column: pointing up for ascending order.
+    fn heading(&mut self, ui: &mut egui::Ui, column: usize, text: &str) {
+        let mut clicked = false;
+        // Wrapped, so that a long heading does not widen its column.
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            if self.column == Some(column) {
+                // Drawn rather than written: the fonts lack arrow glyphs.
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 12.0), egui::Sense::hover());
+                let (centre, half) = (rect.center(), 3.5);
+                let tip = if self.descending { half } else { -half };
+                let points = vec![
+                    egui::pos2(centre.x, centre.y + tip),
+                    egui::pos2(centre.x + half, centre.y - tip),
+                    egui::pos2(centre.x - half, centre.y - tip),
+                ];
+                let color = ui.visuals().strong_text_color();
+                ui.painter().add(egui::Shape::convex_polygon(
+                    points,
+                    color,
+                    egui::Stroke::NONE,
+                ));
+            }
+            let label = egui::Label::new(RichText::new(text).strong())
+                .selectable(false)
+                .sense(egui::Sense::click());
+            clicked = ui
+                .add(label)
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text("Click to sort by this column; click again to reverse the order")
+                .clicked();
+        });
+        if clicked {
+            self.click(column);
+        }
+    }
 }
 
 /// A labelled row of a settings grid.
@@ -384,6 +481,15 @@ const GROUP_COUNT_KINDS: [&str; 4] = [
     "independent, maximum",
 ];
 
+/// The features chosen by hand for one kind of analysis ("Select specific
+/// features"). The choice is kept while it is switched off.
+#[derive(Debug, Clone, Default, PartialEq)]
+struct SelectionUi {
+    enabled: bool,
+    /// `None` until features have been chosen: every feature is selected.
+    chosen: Option<std::collections::HashSet<String>>,
+}
+
 /// The rule in the metadata table for switching samples on or off: add or
 /// remove all samples whose `field` stands in `relation` to `value`.
 #[derive(Debug, Clone, PartialEq)]
@@ -417,6 +523,19 @@ pub struct FeatureRow {
     pub active: bool,
 }
 
+impl FeatureRow {
+    /// The cells of the row, in the order of the table's columns.
+    fn cells(&self) -> [&str; 5] {
+        [
+            &self.feature,
+            &self.effect_size,
+            &self.p_value,
+            &self.p_value_corrected,
+            &self.note,
+        ]
+    }
+}
+
 /// The STAMP application: one analysis session and its window.
 pub struct StampApp {
     pub session: Session,
@@ -425,6 +544,10 @@ pub struct StampApp {
     plot_settings: PlotSettings,
     zoom: f32,
     filters: [FilterUi; 3],
+    selections: [SelectionUi; 3],
+    /// The "Select features" window, while it is open, and the analysis it
+    /// belongs to.
+    select_dialog: Option<(Mode, FeatureSelection)>,
     /// The current plot and tables, rebuilt when `view_dirty` is set.
     figure: Figure,
     table: Table,
@@ -440,6 +563,10 @@ pub struct StampApp {
     show_properties_panel: bool,
     show_feature_table: bool,
     show_only_active_features: bool,
+    /// The sorting of the feature, results and metadata tables.
+    feature_sort: SortState,
+    table_sort: SortState,
+    metadata_sort: SortState,
     show_metadata_table: bool,
     show_plot_config: bool,
     metadata_filter: MetadataFilterUi,
@@ -521,6 +648,8 @@ impl StampApp {
                 FilterUi::default(),
                 FilterUi::default(),
             ],
+            selections: Default::default(),
+            select_dialog: None,
             figure: Figure::message("Load a profile to begin"),
             table: Table {
                 headings: Vec::new(),
@@ -535,6 +664,9 @@ impl StampApp {
             show_properties_panel: true,
             show_feature_table: true,
             show_only_active_features: false,
+            feature_sort: SortState::default(),
+            table_sort: SortState::default(),
+            metadata_sort: SortState::default(),
             show_metadata_table: false,
             show_plot_config: false,
             metadata_filter: MetadataFilterUi::default(),
@@ -589,6 +721,23 @@ impl StampApp {
     /// Open or close the "Configure plot" window.
     pub fn show_plot_config(&mut self, show: bool) {
         self.show_plot_config = show;
+    }
+
+    /// Limit the current analysis to features chosen by hand, as "Select
+    /// specific features" does; `None` returns to every feature.
+    pub fn set_selected_features(&mut self, features: Option<&[&str]>) {
+        let selection = &mut self.selections[mode_slot(self.mode)];
+        selection.enabled = features.is_some();
+        selection.chosen = features.map(|names| names.iter().map(|n| n.to_string()).collect());
+        self.apply_filters();
+    }
+
+    /// Open the "Select features" window for the current analysis.
+    pub fn open_select_features(&mut self) {
+        let chosen = self.selections[mode_slot(self.mode)].chosen.as_ref();
+        if let Some(profile) = self.current_profile() {
+            self.select_dialog = Some((self.mode, FeatureSelection::new(profile, chosen)));
+        }
     }
 
     /// The settings of every plot.
@@ -669,10 +818,35 @@ impl StampApp {
     /// The features listed beside single-feature plots, honouring the "show
     /// only active features" choice.
     pub fn feature_table(&self) -> Vec<&FeatureRow> {
-        self.feature_rows
+        let rows: Vec<&FeatureRow> = self
+            .feature_rows
             .iter()
             .filter(|row| row.active || !self.show_only_active_features)
+            .collect();
+        self.feature_sort
+            .order(rows.len(), |row, column| rows[row].cells()[column.min(4)])
+            .into_iter()
+            .map(|index| rows[index])
             .collect()
+    }
+
+    /// Sort the feature table by a column, as clicking its heading does;
+    /// a second time reverses the order.
+    pub fn sort_feature_table(&mut self, column: usize) {
+        self.feature_sort.click(column);
+    }
+
+    /// The order in which the rows of the results table are shown.
+    pub fn results_table_order(&self) -> Vec<usize> {
+        let rows = &self.table.rows;
+        self.table_sort.order(rows.len(), |row, column| {
+            rows[row].get(column).map_or("", String::as_str)
+        })
+    }
+
+    /// Sort the results table by a column, as clicking its heading does.
+    pub fn sort_results_table(&mut self, column: usize) {
+        self.table_sort.click(column);
     }
 
     pub fn set_show_only_active_features(&mut self, only_active: bool) {
@@ -709,9 +883,12 @@ impl StampApp {
         match self.session.load_profile(name, text) {
             Ok(()) => {
                 self.filters = Default::default();
+                self.selections = Default::default();
+                self.select_dialog = None;
                 self.highlight_level = None;
                 self.highlight_value.clear();
                 self.metadata_filter = MetadataFilterUi::default();
+                self.metadata_sort = SortState::default();
                 self.mode = Mode::TwoSamples;
                 self.apply_filters();
             }
@@ -774,6 +951,14 @@ impl StampApp {
     /// Copy the filter controls into the session's filters.
     fn apply_filters(&mut self) {
         let effect = |enabled: bool, minimum: f64| enabled.then_some(minimum);
+
+        let selected = |mode: Mode| {
+            let selection = &self.selections[mode_slot(mode)];
+            selection.chosen.clone().filter(|_| selection.enabled)
+        };
+        self.session.samples.filter.selected_features = selected(Mode::TwoSamples);
+        self.session.groups.filter.selected_features = selected(Mode::TwoGroups);
+        self.session.multi.filter.selected_features = selected(Mode::MultipleGroups);
 
         let f = &self.filters[mode_slot(Mode::TwoSamples)];
         let filter = &mut self.session.samples.filter;
@@ -900,6 +1085,10 @@ impl StampApp {
         // The feature table starts in alphabetical order, as in STAMP v2.
         feature_rows.sort_by(|a, b| a.feature.cmp(&b.feature));
 
+        // A different analysis has different columns.
+        if table.headings != self.table.headings {
+            self.table_sort = SortState::default();
+        }
         self.table = table;
         self.table_features = features;
         self.feature_rows = feature_rows;
@@ -962,13 +1151,6 @@ impl StampApp {
                 if ui.button("Open example data").clicked() {
                     self.load_example();
                 }
-                ui.menu_button("Create profile from", |ui| {
-                    for source in Source::ALL {
-                        if ui.button(source.name()).clicked() {
-                            self.platform.request(Request::Convert(source), &ctx);
-                        }
-                    }
-                });
                 ui.separator();
                 ui.add_enabled_ui(loaded, |ui| {
                     ui.menu_button("Save plot as", |ui| {
@@ -1135,6 +1317,10 @@ impl StampApp {
                 });
             });
         if changed {
+            // Features chosen by hand belong to one profile level.
+            self.selections = Default::default();
+            self.select_dialog = None;
+            self.apply_filters();
             self.session.invalidate_all();
         }
     }
@@ -1384,32 +1570,49 @@ impl StampApp {
             return;
         }
         let counts = self.session.feature_counts(mode);
+        let selection = &mut self.selections[mode_slot(mode)];
+        let mut open_dialog = false;
+        let mut selection_changed = false;
+        ui.horizontal(|ui| {
+            selection_changed = ui
+                .checkbox(&mut selection.enabled, "Select specific features")
+                .changed();
+            let button = egui::Button::new("Select features");
+            open_dialog = ui.add_enabled(selection.enabled, button).clicked();
+        });
+        ui.separator();
+        if open_dialog {
+            self.open_select_features();
+        }
         let filter = &mut self.filters[mode_slot(mode)];
-        let changed = match mode {
-            Mode::TwoSamples => {
-                let measures: Vec<&str> = SampleEffectSize::ALL.iter().map(|m| m.name()).collect();
-                filter.show(
-                    ui,
-                    "samples",
-                    &measures,
-                    &SAMPLE_COUNT_KINDS,
-                    "Sample 2 (<):",
-                    counts,
-                )
-            }
-            Mode::TwoGroups => {
-                let measures: Vec<&str> = GroupEffectSize::ALL.iter().map(|m| m.name()).collect();
-                filter.show(
-                    ui,
-                    "groups",
-                    &measures,
-                    &GROUP_COUNT_KINDS,
-                    "Group 2 (<):",
-                    counts,
-                )
-            }
-            Mode::MultipleGroups => filter.show(ui, "multi", &["Eta-squared"], &[], "", counts),
-        };
+        let changed = selection_changed
+            | match mode {
+                Mode::TwoSamples => {
+                    let measures: Vec<&str> =
+                        SampleEffectSize::ALL.iter().map(|m| m.name()).collect();
+                    filter.show(
+                        ui,
+                        "samples",
+                        &measures,
+                        &SAMPLE_COUNT_KINDS,
+                        "Sample 2 (<):",
+                        counts,
+                    )
+                }
+                Mode::TwoGroups => {
+                    let measures: Vec<&str> =
+                        GroupEffectSize::ALL.iter().map(|m| m.name()).collect();
+                    filter.show(
+                        ui,
+                        "groups",
+                        &measures,
+                        &GROUP_COUNT_KINDS,
+                        "Group 2 (<):",
+                        counts,
+                    )
+                }
+                Mode::MultipleGroups => filter.show(ui, "multi", &["Eta-squared"], &[], "", counts),
+            };
         if changed {
             self.apply_filters();
         }
@@ -1539,6 +1742,7 @@ impl StampApp {
         let StampApp {
             session,
             metadata_filter: filter,
+            metadata_sort: sort,
             ..
         } = self;
         ui.add_space(2.0);
@@ -1613,6 +1817,12 @@ impl StampApp {
         });
         ui.separator();
 
+        let order = sort.order(samples.len(), |row, column| match column {
+            0 => samples[row].as_str(),
+            _ => metadata
+                .value(&samples[row], &fields[(column - 1).min(fields.len() - 1)])
+                .unwrap_or_default(),
+        });
         egui::ScrollArea::horizontal().show(ui, |ui| {
             TableBuilder::new(ui)
                 .id_salt("metadata-table")
@@ -1623,18 +1833,14 @@ impl StampApp {
                     fields.len(),
                 )
                 .header(20.0, |mut header| {
-                    header.col(|ui| {
-                        ui.strong("Sample");
-                    });
-                    for field in fields {
-                        header.col(|ui| {
-                            ui.strong(field);
-                        });
+                    header.col(|ui| sort.heading(ui, 0, "Sample"));
+                    for (column, field) in fields.iter().enumerate() {
+                        header.col(|ui| sort.heading(ui, column + 1, field));
                     }
                 })
                 .body(|body| {
                     body.rows(20.0, samples.len(), |mut table_row| {
-                        let sample = &samples[table_row.index()];
+                        let sample = &samples[order[table_row.index()]];
                         table_row.col(|ui| {
                             let mut active = metadata.is_active(sample);
                             if ui.checkbox(&mut active, sample).changed() {
@@ -1665,11 +1871,8 @@ impl StampApp {
             "Show only active features",
         );
         ui.separator();
-        let rows: Vec<&FeatureRow> = self
-            .feature_rows
-            .iter()
-            .filter(|row| row.active || !self.show_only_active_features)
-            .collect();
+        let mut sort = self.feature_sort;
+        let rows = self.feature_table();
         if rows.is_empty() {
             ui.label("No features to show.");
             return;
@@ -1692,10 +1895,8 @@ impl StampApp {
                 .columns(Column::auto().at_least(60.0).resizable(true), 3)
                 .column(Column::remainder().at_least(60.0).clip(true))
                 .header(20.0, |mut header| {
-                    for heading in headings {
-                        header.col(|ui| {
-                            ui.strong(heading);
-                        });
+                    for (column, heading) in headings.into_iter().enumerate() {
+                        header.col(|ui| sort.heading(ui, column, heading));
                     }
                 })
                 .body(|body| {
@@ -1703,13 +1904,7 @@ impl StampApp {
                         let feature = rows[table_row.index()];
                         table_row
                             .set_selected(selected.as_deref() == Some(feature.feature.as_str()));
-                        for cell in [
-                            &feature.feature,
-                            &feature.effect_size,
-                            &feature.p_value,
-                            &feature.p_value_corrected,
-                            &feature.note,
-                        ] {
+                        for cell in feature.cells() {
                             table_row.col(|ui| {
                                 plain_label(ui, cell);
                             });
@@ -1723,6 +1918,7 @@ impl StampApp {
                     });
                 });
         });
+        self.feature_sort = sort;
         if let Some(feature) = select {
             self.select_feature(&feature);
         }
@@ -1731,6 +1927,8 @@ impl StampApp {
     fn windows(&mut self, ctx: &egui::Context) {
         let mut select = None;
         let mut download = false;
+        let mut sort = self.table_sort;
+        let order = self.results_table_order();
         egui::Window::new("Results table")
             .open(&mut self.show_table)
             .default_size([760.0, 320.0])
@@ -1759,15 +1957,13 @@ impl StampApp {
                             self.table.headings.len(),
                         )
                         .header(20.0, |mut header| {
-                            for heading in &self.table.headings {
-                                header.col(|ui| {
-                                    ui.strong(heading);
-                                });
+                            for (column, heading) in self.table.headings.iter().enumerate() {
+                                header.col(|ui| sort.heading(ui, column, heading));
                             }
                         })
                         .body(|body| {
                             body.rows(18.0, self.table.rows.len(), |mut row| {
-                                let index = row.index();
+                                let index = order[row.index()];
                                 row.set_selected(
                                     selected == self.table_features.get(index).map(String::as_str),
                                 );
@@ -1789,8 +1985,32 @@ impl StampApp {
         if let Some(feature) = select {
             self.select_feature(&feature);
         }
+        self.table_sort = sort;
         if download {
             self.download_table(ctx);
+        }
+
+        let mut outcome = Outcome::Open;
+        if let Some((_, selection)) = &mut self.select_dialog {
+            let mut open = true;
+            egui::Window::new("Select features")
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(false)
+                .default_pos([330.0, 110.0])
+                .show(ctx, |ui| outcome = selection.show(ui));
+            if !open {
+                outcome = Outcome::Cancelled;
+            }
+        }
+        if outcome != Outcome::Open {
+            if let (Outcome::Accepted, Some((mode, selection))) =
+                (outcome, self.select_dialog.take())
+            {
+                self.selections[mode_slot(mode)].chosen = Some(selection.selected().clone());
+                self.apply_filters();
+            }
+            self.select_dialog = None;
         }
 
         let (mode, kind) = (self.mode, self.plot_kind());
@@ -1902,6 +2122,40 @@ impl eframe::App for StampApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tables_sort_by_a_clicked_column() {
+        let rows = [
+            ["beta", "0.5", "x"],
+            ["Alpha", "< 1e-15", "x"],
+            ["gamma", "0.03", "x"],
+            ["delta", "nan", "x"],
+        ];
+        let cell = |row: usize, column: usize| rows[row][column];
+        let mut sort = SortState::default();
+        assert_eq!(sort.order(4, cell), [0, 1, 2, 3]);
+
+        // Text ignores case; a second click reverses the order.
+        sort.click(0);
+        assert_eq!(sort.order(4, cell), [1, 0, 3, 2]);
+        sort.click(0);
+        assert_eq!(sort.order(4, cell), [2, 3, 0, 1]);
+
+        // Numbers sort by value, a bound by its bound, and nan last.
+        sort.click(1);
+        assert_eq!(sort.order(4, cell), [1, 2, 0, 3]);
+        sort.click(1);
+        assert_eq!(sort.order(4, cell), [3, 0, 2, 1]);
+
+        // Equal cells keep their order.
+        sort.click(2);
+        assert_eq!(sort.order(4, cell), [0, 1, 2, 3]);
+        assert_eq!(
+            compare_cells("10", "9"),
+            std::cmp::Ordering::Greater,
+            "numbers are not compared as text"
+        );
+    }
 
     #[test]
     fn table_numbers_are_shortened_for_display() {
