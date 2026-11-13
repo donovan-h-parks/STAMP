@@ -54,6 +54,9 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 16 | done | In saved tables, whole numbers such as counts are written without a decimal point (`5`, not `5.0`), and other numbers in their shortest exact form. Column headings are unchanged. |
 | 17 | done | Plots are drawn by STAMP itself rather than by matplotlib, following the same layout, font (DejaVu Sans, bundled) and colours. Small details differ, such as the exact choice of axis ticks. |
 | 18 | done | In the extended error bar plot, sorting by effect size treats ratios symmetrically (0.5 and 2 are the same size of effect), and a confidence interval that runs past fixed axis limits is clipped at the axis without an end cap. |
+| 19 | done | The heatmap clusters features and samples on the Euclidean distances between their abundance vectors. STAMP v2 passed the distance matrix to SciPy in a form that made it cluster the rows of the distance matrix itself, which gives a different tree. |
+| 20 | done | The PCA plot uses a standard principal component analysis (matching NumPy's SVD). The sign of each component, which is arbitrary, is chosen so that the sample furthest from the origin is positive. |
+| 21 | done | Every plot type can be drawn from the command line with `--plot` and `--plot-type`. |
 
 ## Kept as is
 
@@ -85,10 +88,13 @@ numerical methods rather than from different formulas:
 
 ## Not yet ported
 
-* Plots other than the extended error bar plot: bar, box, scatter, profile
-  bar, sequence histogram, p-value histogram, multiple-comparison plots,
-  heatmap, PCA and post-hoc plots.
 * The graphical application.
+* Plot options that are not carried over yet: the heatmap's colouring of
+  clusters below a distance threshold and eight of its fourteen colour maps
+  (Blues, Reds, Grayscale, Orange to red, Yellow to orange to red and Blue to
+  white to red are available); the PCA plot's "fixed pixels per unit
+  distance"; and choosing sequence counts instead of proportions in the
+  group bar, box and heatmap plots from the command line.
 
 ## Open questions
 

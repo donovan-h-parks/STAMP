@@ -16,6 +16,7 @@ rand = { workspace = true }
 rand_chacha = { workspace = true }
 rand_distr = { workspace = true }
 libm = { workspace = true }
+kodama = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }

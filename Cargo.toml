@@ -23,6 +23,7 @@ rand = { version = "0.10", default-features = false, features = ["std"] }
 rand_chacha = { version = "0.10", default-features = false }
 rand_distr = "0.6"
 libm = "0.2"
+kodama = "0.3"
 ttf-parser = "0.25"
 resvg = "0.50"
 svg2pdf = "0.13"

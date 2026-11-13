@@ -15,10 +15,18 @@
 //!
 //! This crate must stay free of egui and of filesystem access.
 
+pub mod axes;
 pub mod axis;
 pub mod export;
 pub mod extended_error_bar;
+pub mod feature_plots;
 pub mod figure;
+pub mod heatmap;
+pub mod histogram;
+pub mod pca_plot;
+pub mod post_hoc;
+pub mod sample_plots;
+pub mod scatter;
 pub mod svg;
 pub mod text;
 

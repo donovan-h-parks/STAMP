@@ -96,13 +96,23 @@ pub struct ResamplingArgs {
     pub pseudocount: f64,
 }
 
-/// Options for drawing the results as an extended error bar plot.
+/// Options for drawing the results as a plot.
 #[derive(Args)]
 pub struct PlotArgs {
-    /// Also draw the (filtered) results as an extended error bar plot, saved
-    /// to this file; the extension chooses the format: .png, .svg or .pdf
+    /// Also draw the (filtered) results as a plot, saved to this file; the
+    /// extension chooses the format: .png, .svg or .pdf
     #[arg(long, value_name = "FILE")]
     pub plot: Option<PathBuf>,
+    /// Kind of plot [default: extended-error-bar for two samples or groups,
+    /// heatmap for several groups, post-hoc for the post-hoc command]
+    #[arg(long, value_enum, value_name = "TYPE")]
+    pub plot_type: Option<PlotTypeArg>,
+    /// Feature shown by the bar and box plots [default: the most significant]
+    #[arg(long, value_name = "FEATURE")]
+    pub plot_feature: Option<String>,
+    /// Height of the plot, in inches, for plots of fixed height
+    #[arg(long, value_name = "INCHES")]
+    pub plot_height: Option<f64>,
     /// Resolution of a PNG plot, in dots per inch
     #[arg(long, default_value_t = 300.0, value_name = "DPI")]
     pub plot_dpi: f64,
@@ -121,6 +131,32 @@ pub struct PlotArgs {
     /// Show uncorrected p-values in the plot
     #[arg(long)]
     pub plot_uncorrected_p_values: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum PlotTypeArg {
+    /// Proportions, effect sizes with confidence intervals, and p-values
+    ExtendedErrorBar,
+    /// One feature in every sample (groups), or one statistic per feature (two samples)
+    Bar,
+    /// Distribution of one feature in each group
+    Box,
+    /// Most abundant features in two samples
+    ProfileBar,
+    /// Every feature in one sample or group against the other
+    Scatter,
+    /// Sequence counts of the features of two samples
+    SequenceHistogram,
+    /// Corrected p-values
+    PValueHistogram,
+    /// Three views of the multiple-test correction
+    MultipleComparison,
+    /// Samples on their principal components
+    Pca,
+    /// Features against samples, clustered
+    Heatmap,
+    /// Every pair of groups for one feature
+    PostHoc,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -261,6 +297,8 @@ pub struct MultiGroupsArgs {
     /// Seed of the random number generator (used by the Storey correction)
     #[arg(long, default_value_t = 1)]
     pub seed: u64,
+    #[command(flatten)]
+    pub plot: PlotArgs,
 }
 
 #[derive(Args)]
@@ -281,6 +319,8 @@ pub struct PostHocArgs {
     /// Nominal coverage of the confidence intervals
     #[arg(long, default_value_t = 0.95)]
     pub coverage: f64,
+    #[command(flatten)]
+    pub plot: PlotArgs,
 }
 
 #[derive(Args)]

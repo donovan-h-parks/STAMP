@@ -643,3 +643,157 @@ fn plots_are_written_in_each_format() {
     .contains("use a .png, .svg or .pdf extension"));
     fs::remove_dir_all(&directory).unwrap();
 }
+
+/// Render one plot as SVG and return its text.
+fn svg_plot(
+    command: &str,
+    base: &[&str],
+    extra: &[&str],
+    directory: &std::path::Path,
+    name: &str,
+) -> String {
+    let path = directory.join(format!("{name}.svg"));
+    let mut args = with(command, base, extra);
+    args.extend_from_slice(&["--plot", path.to_str().unwrap(), "--output", "/dev/null"]);
+    stdout(&args);
+    fs::read_to_string(&path).unwrap()
+}
+
+#[test]
+fn every_plot_type_can_be_drawn() {
+    let directory =
+        std::env::temp_dir().join(format!("stamp-cli-plot-types-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let has = |svg: &str, label: &str| svg.contains(&format!(">{label}</text>"));
+
+    let iron = [
+        "--profile",
+        "examples/IronMineEdwards/EdwardsIronMine.spf",
+        "--sample1",
+        "Black",
+        "--sample2",
+        "Red",
+        "--profile-level",
+        "Classification",
+        "--correction",
+        "benjamini-hochberg",
+    ];
+    for (kind, label) in [
+        ("bar", "Proportion of sequences (%)"),
+        ("profile-bar", "Proportion of sequences (%)"),
+        ("scatter", "Black (%)"),
+        ("sequence-histogram", "Sequences"),
+        ("p-value-histogram", "p-value (corrected)"),
+        ("multiple-comparison", "# significant features"),
+    ] {
+        let svg = svg_plot(
+            "two-samples",
+            &iron,
+            &["--plot-type", kind],
+            &directory,
+            kind,
+        );
+        assert!(has(&svg, label), "two-samples {kind}: no {label:?}");
+    }
+
+    let two = [
+        "--group1",
+        "Enterotype 1",
+        "--group2",
+        "Enterotype 3",
+        "--significance",
+        "0.05",
+    ];
+    let groups: Vec<&str> = ENTEROTYPES.iter().chain(&two).copied().collect();
+    for (kind, label) in [
+        ("bar", "Proportion of sequences (%)"),
+        ("box", "Enterotype 3"),
+        ("scatter", "Enterotype 1 (%)"),
+        ("heatmap", "Enterotype 3"),
+    ] {
+        let svg = svg_plot(
+            "two-groups",
+            &groups,
+            &["--plot-type", kind],
+            &directory,
+            &format!("g-{kind}"),
+        );
+        assert!(has(&svg, label), "two-groups {kind}: no {label:?}");
+    }
+    let pca = svg_plot(
+        "two-groups",
+        &groups,
+        &["--plot-type", "pca"],
+        &directory,
+        "g-pca",
+    );
+    assert!(pca.contains(">PC1 (") && pca.contains(">PC3 ("));
+    let chosen = svg_plot(
+        "two-groups",
+        &groups,
+        &["--plot-type", "box", "--plot-feature", "Prevotella"],
+        &directory,
+        "g-box-feature",
+    );
+    assert!(has(&chosen, "Prevotella"));
+
+    let three = [
+        "--group",
+        "Enterotype 1",
+        "--group",
+        "Enterotype 2",
+        "--group",
+        "Enterotype 3",
+    ];
+    let multi: Vec<&str> = ENTEROTYPES.iter().chain(&three).copied().collect();
+    let filtered = [
+        "--correction",
+        "benjamini-hochberg",
+        "--significance",
+        "0.05",
+    ];
+    let heatmap = svg_plot("multi-groups", &multi, &filtered, &directory, "m-heatmap");
+    assert!(has(&heatmap, "Bacteroides") && has(&heatmap, "Enterotype 2"));
+    for kind in ["pca", "bar", "box"] {
+        let svg = svg_plot(
+            "multi-groups",
+            &multi,
+            &["--plot-type", kind],
+            &directory,
+            &format!("m-{kind}"),
+        );
+        assert!(svg.len() > 2000, "multi-groups {kind}");
+    }
+    let post_hoc = svg_plot(
+        "post-hoc",
+        &multi,
+        &["--feature", "Bacteroides"],
+        &directory,
+        "post-hoc",
+    );
+    assert!(has(&post_hoc, "Enterotype 1 : Enterotype 2") && has(&post_hoc, "&lt; 0.001"));
+
+    // Plot types that do not apply are refused, with nothing written.
+    let refused = directory.join("refused.svg");
+    let message = failure(&with(
+        "two-samples",
+        &iron,
+        &["--plot-type", "pca", "--plot", refused.to_str().unwrap()],
+    ));
+    assert!(message.contains("the pca plot is not available for two samples"));
+    assert!(!refused.exists());
+    let message = failure(&with(
+        "two-groups",
+        &groups,
+        &[
+            "--plot-type",
+            "box",
+            "--plot-feature",
+            "Nope",
+            "--plot",
+            refused.to_str().unwrap(),
+        ],
+    ));
+    assert!(message.contains("unknown feature 'Nope'"));
+    fs::remove_dir_all(&directory).unwrap();
+}

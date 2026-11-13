@@ -32,6 +32,10 @@ pub struct Row {
     pub upper_ci: f64,
     pub p_value: f64,
     pub p_value_corrected: f64,
+    /// Text shown in place of the formatted p-value, such as `< 0.001`.
+    pub p_text: Option<String>,
+    /// Colours for this row's two bars, overriding the plot's two colours.
+    pub colors: Option<(Color, Color)>,
 }
 
 /// Everything shown in an extended error bar plot.
@@ -55,6 +59,8 @@ pub struct Data {
     pub false_discovery_rate: bool,
     /// Whether any multiple-test correction was applied.
     pub corrected: bool,
+    /// Heading drawn in the top-left corner, such as a feature name.
+    pub heading: Option<String>,
 }
 
 /// Order of the rows, top to bottom.
@@ -168,6 +174,8 @@ impl Data {
                     upper_ci: r.upper_ci,
                     p_value: r.p_value,
                     p_value_corrected: r.p_value_corrected,
+                    p_text: None,
+                    colors: None,
                 })
                 .collect(),
             name1: profile.profile.sample_names[0].clone(),
@@ -180,6 +188,7 @@ impl Data {
             coverage: results.analysis.coverage,
             false_discovery_rate: results.correction.method.is_false_discovery_rate(),
             corrected: results.correction.method != stamp_core::stats::correction::Correction::None,
+            heading: None,
         }
     }
 
@@ -203,6 +212,8 @@ impl Data {
                     upper_ci: r.upper_ci,
                     p_value: r.p_value,
                     p_value_corrected: r.p_value_corrected,
+                    p_text: None,
+                    colors: None,
                 })
                 .collect(),
             name1: profile.group_name1.clone(),
@@ -215,6 +226,7 @@ impl Data {
             coverage: results.analysis.coverage,
             false_discovery_rate: results.correction.method.is_false_discovery_rate(),
             corrected: results.correction.method != stamp_core::stats::correction::Correction::None,
+            heading: None,
         }
     }
 }
@@ -428,8 +440,9 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                     }
                 }
             };
-            bar(d.row.value1, d.row.std_dev1, y - bar_height, data.color1);
-            bar(d.row.value2, d.row.std_dev2, y, data.color2);
+            let (color1, color2) = d.row.colors.unwrap_or((data.color1, data.color2));
+            bar(d.row.value1, d.row.std_dev1, y - bar_height, color1);
+            bar(d.row.value2, d.row.std_dev2, y, color2);
         }
         let ticks = [
             (left, "0.0".to_string()),
@@ -487,11 +500,8 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                 }
             }
             if (ticks.min..=ticks.max).contains(&d.effect) {
-                let color = if d.favours_second {
-                    data.color2
-                } else {
-                    data.color1
-                };
+                let (color1, color2) = d.row.colors.unwrap_or((data.color1, data.color2));
+                let color = if d.favours_second { color2 } else { color1 };
                 figure.circle(
                     x_scale.map(d.effect),
                     y,
@@ -502,11 +512,6 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             }
         }
 
-        let p_shown = if options.show_corrected_p_values {
-            d.row.p_value_corrected
-        } else {
-            d.row.p_value
-        };
         let tooltip = format!(
             "{}\n{}: {:.3}\n{}: {:.3}\n{}: {:.3} ({:.3} to {:.3})\n{}: {}",
             d.row.feature,
@@ -519,7 +524,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             d.row.lower_ci,
             d.row.upper_ci,
             p_value_title(data, options),
-            format_p_value(p_shown, options.min_p_value_exponent),
+            p_text(d.row, options),
         );
         figure.region(0.0, y - unit / 2.0, width, unit, &d.row.feature, tooltip);
     }
@@ -546,15 +551,10 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     // p-values.
     if options.show_p_values {
         for (index, d) in drawn.iter().enumerate() {
-            let p = if options.show_corrected_p_values {
-                d.row.p_value_corrected
-            } else {
-                d.row.p_value
-            };
             figure.text(
                 right + tick_pad,
                 row_y(index),
-                format_p_value(p, options.min_p_value_exponent),
+                p_text(d.row, options),
                 label_style.align(HAlign::Left, VAlign::Middle),
             );
         }
@@ -575,8 +575,29 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         );
     }
 
+    if let Some(heading) = &data.heading {
+        figure.text(
+            2.0,
+            3.0,
+            heading.clone(),
+            label_style.align(HAlign::Left, VAlign::Top),
+        );
+    }
     draw_legend(&mut figure, data, options);
     figure
+}
+
+/// The p-value text of a row.
+fn p_text(row: &Row, options: &Options) -> String {
+    if let Some(text) = &row.p_text {
+        return text.clone();
+    }
+    let p = if options.show_corrected_p_values {
+        row.p_value_corrected
+    } else {
+        row.p_value
+    };
+    format_p_value(p, options.min_p_value_exponent)
 }
 
 fn p_value_title(data: &Data, options: &Options) -> String {
@@ -651,6 +672,8 @@ mod tests {
             upper_ci: effect + half_width,
             p_value: p,
             p_value_corrected: (p * 3.0).min(1.0),
+            p_text: None,
+            colors: None,
         }
     }
 
@@ -671,6 +694,7 @@ mod tests {
             coverage: 0.95,
             false_discovery_rate: false,
             corrected: true,
+            heading: None,
         }
     }
 

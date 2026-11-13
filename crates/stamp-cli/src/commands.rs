@@ -265,9 +265,75 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
 
     let rows = results.filter(&filter, &settings);
     if let Some(path) = &args.plot.plot {
-        let data =
-            extended_error_bar::Data::from_sample_results(&profile, &results, rows.iter().copied());
-        save_plot(path, &data, &args.plot)?;
+        use stamp_plot::{histogram, sample_plots, scatter};
+        let plot = &args.plot;
+        let kind = plot.plot_type.unwrap_or(PlotTypeArg::ExtendedErrorBar);
+        let size = |default: f64| plot.plot_height.unwrap_or(default);
+        let figure = match kind {
+            PlotTypeArg::ExtendedErrorBar => {
+                let data = extended_error_bar::Data::from_sample_results(
+                    &profile,
+                    &results,
+                    rows.iter().copied(),
+                );
+                extended_error_bar::plot(&data, &error_bar_options(plot))
+            }
+            PlotTypeArg::Bar => sample_plots::stat_bar(
+                &profile,
+                &results,
+                rows.iter().copied(),
+                &sample_plots::StatBarOptions {
+                    width: plot.plot_width,
+                    row_height: plot.plot_row_height,
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::ProfileBar => sample_plots::profile_bar(
+                &profile,
+                rows.iter().copied(),
+                &sample_plots::ProfileBarOptions {
+                    height: size(6.0),
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::Scatter => scatter::plot(
+                &scatter::Data::from_sample_profile(&profile),
+                &scatter::Options {
+                    width: plot.plot_width,
+                    height: size(7.0),
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::SequenceHistogram => histogram::sequence_histogram(
+                &profile,
+                &histogram::SequenceOptions {
+                    width: plot.plot_width,
+                    height: size(7.0),
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::PValueHistogram => {
+                let p: Vec<f64> = results.rows.iter().map(|r| r.p_value_corrected).collect();
+                histogram::p_value_histogram(
+                    &p,
+                    &histogram::PValueOptions {
+                        width: plot.plot_width,
+                        height: size(7.0),
+                        ..Default::default()
+                    },
+                )
+            }
+            PlotTypeArg::MultipleComparison => sample_plots::multiple_comparison(
+                &results,
+                &sample_plots::MultCompOptions {
+                    width: plot.plot_width,
+                    height: size(3.5),
+                    ..Default::default()
+                },
+            ),
+            other => return Err(unavailable(other, "two samples")),
+        };
+        write_figure(path, &figure, plot.plot_dpi)?;
     }
     let table = sample_table(&profile, &results, rows);
     write_table(args.profile.output.as_deref(), &table)
@@ -326,9 +392,84 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
 
     let rows = results.filter(&profile, &filter, &settings);
     if let Some(path) = &args.plot.plot {
-        let data =
-            extended_error_bar::Data::from_group_results(&profile, &results, rows.iter().copied());
-        save_plot(path, &data, &args.plot)?;
+        use stamp_plot::{feature_plots, heatmap, pca_plot, scatter};
+        let plot = &args.plot;
+        let kind = plot.plot_type.unwrap_or(PlotTypeArg::ExtendedErrorBar);
+        let size = |default: f64| plot.plot_height.unwrap_or(default);
+        // The bar and box plots show one feature, with its corrected p-value.
+        let feature_data = || -> CliResult<feature_plots::FeatureData> {
+            let name = plot
+                .plot_feature
+                .clone()
+                .or_else(|| rows.first().map(|r| r.feature.clone()))
+                .ok_or("no feature passes the filters; name one with --plot-feature")?;
+            let mut data = feature_plots::FeatureData::from_group_profile(
+                &profile,
+                &name,
+                feature_plots::Field::Proportion,
+            )
+            .ok_or_else(|| format!("unknown feature '{name}'"))?;
+            data.p_value = results
+                .rows
+                .iter()
+                .find(|r| r.feature == name)
+                .map(|r| stamp_core::stats::results::format_p_value(r.p_value_corrected, -15));
+            Ok(data)
+        };
+        let figure = match kind {
+            PlotTypeArg::ExtendedErrorBar => {
+                let data = extended_error_bar::Data::from_group_results(
+                    &profile,
+                    &results,
+                    rows.iter().copied(),
+                );
+                extended_error_bar::plot(&data, &error_bar_options(plot))
+            }
+            PlotTypeArg::Bar => feature_plots::bar_plot(
+                &feature_data()?,
+                &feature_plots::BarOptions {
+                    height: size(6.0),
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::Box => feature_plots::box_plot(
+                &feature_data()?,
+                &feature_plots::BoxOptions {
+                    width: plot.plot_width,
+                    height: size(7.0),
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::Scatter => scatter::plot(
+                &scatter::Data::from_group_profile(&profile, scatter::Spread::Percentiles2And98),
+                &scatter::Options {
+                    width: plot.plot_width,
+                    height: size(7.0),
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::Pca => pca_plot::plot(
+                &pca_plot::Data::from_group_profile(&profile),
+                &pca_plot::Options {
+                    width: plot.plot_width,
+                    height: size(6.0),
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::Heatmap => {
+                let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
+                heatmap::plot(
+                    &heatmap::Data::from_group_profile(&profile, Some(&names)),
+                    &heatmap::Options {
+                        width: plot.plot_width,
+                        height: size(7.0),
+                        ..Default::default()
+                    },
+                )
+            }
+            other => return Err(unavailable(other, "two groups")),
+        };
+        write_figure(path, &figure, plot.plot_dpi)?;
     }
     let table = group_table(&profile, &results, rows);
     write_table(args.profile.output.as_deref(), &table)
@@ -395,7 +536,70 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
         significance: args.significance,
         min_effect_size: args.min_effect_size,
     };
-    let table = multi_group_table(&profile, &results, results.filter(&filter));
+    let rows = results.filter(&filter);
+    if let Some(path) = &args.plot.plot {
+        use stamp_plot::{feature_plots, heatmap, pca_plot};
+        let plot = &args.plot;
+        let size = |default: f64| plot.plot_height.unwrap_or(default);
+        let feature_data = || -> CliResult<feature_plots::FeatureData> {
+            let name = plot
+                .plot_feature
+                .clone()
+                .or_else(|| rows.first().map(|r| r.feature.clone()))
+                .ok_or("no feature passes the filters; name one with --plot-feature")?;
+            let mut data = feature_plots::FeatureData::from_multi_group_profile(
+                &profile,
+                &name,
+                feature_plots::Field::Proportion,
+            )
+            .ok_or_else(|| format!("unknown feature '{name}'"))?;
+            data.p_value = results
+                .rows
+                .iter()
+                .find(|r| r.feature == name)
+                .map(|r| stamp_core::stats::results::format_p_value(r.p_value_corrected, -15));
+            Ok(data)
+        };
+        let figure = match plot.plot_type.unwrap_or(PlotTypeArg::Heatmap) {
+            PlotTypeArg::Heatmap => {
+                let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
+                heatmap::plot(
+                    &heatmap::Data::from_multi_group_profile(&profile, Some(&names)),
+                    &heatmap::Options {
+                        width: plot.plot_width,
+                        height: size(7.0),
+                        ..Default::default()
+                    },
+                )
+            }
+            PlotTypeArg::Pca => pca_plot::plot(
+                &pca_plot::Data::from_multi_group_profile(&profile),
+                &pca_plot::Options {
+                    width: plot.plot_width,
+                    height: size(6.0),
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::Bar => feature_plots::bar_plot(
+                &feature_data()?,
+                &feature_plots::BarOptions {
+                    height: size(6.0),
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::Box => feature_plots::box_plot(
+                &feature_data()?,
+                &feature_plots::BoxOptions {
+                    width: plot.plot_width,
+                    height: size(7.0),
+                    ..Default::default()
+                },
+            ),
+            other => return Err(unavailable(other, "several groups")),
+        };
+        write_figure(path, &figure, plot.plot_dpi)?;
+    }
+    let table = multi_group_table(&profile, &results, rows);
     write_table(args.profile.output.as_deref(), &table)
 }
 
@@ -412,6 +616,24 @@ fn post_hoc(args: PostHocArgs) -> CliResult {
             args.test.into(),
             args.coverage,
         ))?;
+        if let (Some(path), true) = (&args.plot.plot, combined.is_none()) {
+            match args.plot.plot_type.unwrap_or(PlotTypeArg::PostHoc) {
+                PlotTypeArg::PostHoc => {}
+                other => return Err(unavailable(other, "the post-hoc command")),
+            }
+            if args.features.len() > 1 {
+                eprintln!("warning: the plot shows the first feature only ({feature})");
+            }
+            let figure = stamp_plot::post_hoc::plot(
+                &profile,
+                feature,
+                &result,
+                args.coverage,
+                false,
+                &error_bar_options(&args.plot),
+            );
+            write_figure(path, &figure, args.plot.plot_dpi)?;
+        }
         let table = post_hoc_table(feature, &result, args.coverage);
         match &mut combined {
             Some(all) => all.rows.extend(table.rows),
@@ -424,18 +646,16 @@ fn post_hoc(args: PostHocArgs) -> CliResult {
     )
 }
 
-/// Draw an extended error bar plot and save it in the format of its extension.
-fn save_plot(path: &Path, data: &extended_error_bar::Data, args: &PlotArgs) -> CliResult {
-    let format = Format::from_file_name(&path.to_string_lossy()).ok_or_else(|| {
-        format!(
-            "cannot tell the image format of {}: use a .png, .svg or .pdf extension",
-            path.display()
-        )
-    })?;
-    if data.rows.is_empty() {
-        eprintln!("warning: no features pass the filters, so the plot is empty");
-    }
-    let options = extended_error_bar::Options {
+fn unavailable(kind: PlotTypeArg, context: &str) -> String {
+    let name = clap::ValueEnum::to_possible_value(&kind)
+        .map(|v| v.get_name().to_string())
+        .unwrap_or_default();
+    format!("the {name} plot is not available for {context}")
+}
+
+/// Options of the extended error bar (and post-hoc) plot from the command line.
+fn error_bar_options(args: &PlotArgs) -> extended_error_bar::Options {
+    extended_error_bar::Options {
         width: args.plot_width,
         row_height: args.plot_row_height,
         sort_by: match args.plot_sort_by {
@@ -454,9 +674,24 @@ fn save_plot(path: &Path, data: &extended_error_bar::Data, args: &PlotArgs) -> C
         },
         show_corrected_p_values: !args.plot_uncorrected_p_values,
         ..Default::default()
-    };
-    let figure = extended_error_bar::plot(data, &options);
-    let bytes = export(&figure, format, args.plot_dpi).map_err(|e| e.to_string())?;
+    }
+}
+
+/// Save a figure in the format of the file's extension.
+fn write_figure(path: &Path, figure: &stamp_plot::Figure, dpi: f64) -> CliResult {
+    let format = Format::from_file_name(&path.to_string_lossy()).ok_or_else(|| {
+        format!(
+            "cannot tell the image format of {}: use a .png, .svg or .pdf extension",
+            path.display()
+        )
+    })?;
+    if figure.regions.is_empty() && figure.shapes.len() == 1 {
+        // A figure holding only a message: nothing could be plotted.
+        if let stamp_plot::Shape::Text { text, .. } = &figure.shapes[0] {
+            eprintln!("warning: the plot is empty: {text}");
+        }
+    }
+    let bytes = export(figure, format, dpi).map_err(|e| e.to_string())?;
     fs::write(path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))
 }
 

@@ -2,15 +2,18 @@
 //! corrections.
 
 pub mod ci;
+pub mod cluster;
 pub mod correction;
 pub mod dist;
 pub mod effect_size;
 pub mod multi_group;
+pub mod pca;
 pub mod post_hoc;
 pub mod results;
 pub mod table;
 pub mod two_group;
 pub mod two_sample;
+pub mod wilson;
 
 use rand::SeedableRng;
 

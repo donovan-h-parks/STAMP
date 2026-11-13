@@ -66,6 +66,17 @@ stamp-cli two-samples --profile examples/IronMineEdwards/EdwardsIronMine.spf \
 
 ![Extended error bar plot of the iron mine example](docs/images/extended_error_bar.png)
 
+`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `pca`, `heatmap` and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
+
+```bash
+stamp-cli multi-groups --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \
+    --metadata examples/EnterotypesArumugam/Enterotypes.metadata.tsv --field Enterotype \
+    --group "Enterotype 1" --group "Enterotype 2" --group "Enterotype 3" \
+    --correction benjamini-hochberg --significance 0.05 --plot enterotypes.png
+```
+
+![Heatmap of the enterotype example](docs/images/heatmap.png)
+
 Run `stamp-cli <command> --help` for every option. Resampling methods take `--seed`, so a run can be repeated exactly.
 
 ## License
