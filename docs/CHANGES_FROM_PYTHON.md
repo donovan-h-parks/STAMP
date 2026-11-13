@@ -49,6 +49,9 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 11 | done | Bonferroni-corrected p-values are capped at 1. Python reported `p * n` even when it exceeded 1. |
 | 12 | done | Resampling methods (bootstrap, permutation, White's test, Storey's FDR) draw from a ChaCha8 generator seeded by the user, so results are reproducible but are not the same random draws as any Python run. |
 | 13 | done | The number of significant features is counted as corrected p-value <= alpha for every correction. Python used `<` for Benjamini-Hochberg and `<=` elsewhere. |
+| 14 | done | A command-line interface (`stamp-cli`) is new; STAMP v2 was graphical only. |
+| 15 | done | Asking for a one-sided p-value from a test that has none (chi-square and G-tests) is an error. STAMP v2 reported an infinite p-value. |
+| 16 | done | In saved tables, whole numbers such as counts are written without a decimal point (`5`, not `5.0`), and other numbers in their shortest exact form. Column headings are unchanged. |
 
 ## Kept as is
 

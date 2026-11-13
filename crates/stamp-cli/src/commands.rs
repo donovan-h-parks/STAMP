@@ -1,0 +1,537 @@
+//! Implementation of the commands.
+
+use std::fs;
+use std::io::Write;
+use std::path::Path;
+
+use stamp_core::import::{biom, cog, comet, mgrast, mothur, rita, NamedText};
+use stamp_core::stats::correction::Correction;
+use stamp_core::stats::multi_group::MultiGroupEffectSize;
+use stamp_core::stats::results::{
+    run_group_analysis, run_multi_group_analysis, run_post_hoc, run_sample_analysis,
+    CorrectionSummary, GroupAnalysis, GroupCountFilter, GroupFilter, MultiGroupAnalysis,
+    MultiGroupFilter, SampleAnalysis, SampleCountFilter, SampleFilter,
+};
+use stamp_core::stats::table::{
+    group_table, multi_group_table, post_hoc_table, sample_table, Table,
+};
+use stamp_core::stats::{rng_from_seed, StatsSettings};
+use stamp_core::{Groups, Metadata, MultiGroupProfile, ProfileTree, SecondGroup};
+
+use crate::args::*;
+
+type CliResult<T = ()> = Result<T, String>;
+
+pub fn run(cli: Cli) -> CliResult {
+    match cli.command {
+        Command::Info(args) => info(args),
+        Command::TwoSamples(args) => two_samples(args),
+        Command::TwoGroups(args) => two_groups(args),
+        Command::MultiGroups(args) => multi_groups(args),
+        Command::PostHoc(args) => post_hoc(args),
+        Command::Convert(args) => convert(args.format),
+    }
+}
+
+// ------------------------------------------------------------------- files
+
+fn read_bytes(path: &Path) -> CliResult<Vec<u8>> {
+    fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))
+}
+
+fn read_text(path: &Path) -> CliResult<String> {
+    Ok(stamp_core::text::decode(&read_bytes(path)?).into_owned())
+}
+
+fn write_output(path: Option<&Path>, text: &str) -> CliResult {
+    match path {
+        Some(path) => {
+            fs::write(path, text).map_err(|e| format!("cannot write {}: {e}", path.display()))
+        }
+        None => {
+            // A closed pipe (for example `| head`) is not an error.
+            let _ = std::io::stdout().lock().write_all(text.as_bytes());
+            Ok(())
+        }
+    }
+}
+
+fn core<T>(result: stamp_core::Result<T>) -> CliResult<T> {
+    result.map_err(|e| e.to_string())
+}
+
+fn load_profile(path: &Path) -> CliResult<ProfileTree> {
+    core(ProfileTree::read(&read_text(path)?)).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Read the metadata, report its warnings, and group the samples.
+fn load_groups(tree: &ProfileTree, args: &MetadataArgs) -> CliResult<Groups> {
+    let (mut metadata, warnings) = core(Metadata::read(&read_text(&args.metadata)?, tree))
+        .map_err(|e| format!("{}: {e}", args.metadata.display()))?;
+    for warning in warnings {
+        eprintln!("warning: {warning}");
+    }
+    for sample in &args.excluded_samples {
+        if !metadata.samples().contains(sample) {
+            return Err(format!(
+                "cannot exclude '{sample}': no such sample in the metadata"
+            ));
+        }
+        metadata.set_active(sample, false);
+    }
+    core(metadata.groups(&args.field)).map_err(|e| {
+        format!(
+            "{e} Fields in the metadata file: {}.",
+            metadata.fields().join(", ")
+        )
+    })
+}
+
+/// The level to analyse, and the parent level as the core expects it.
+fn levels<'a>(tree: &'a ProfileTree, args: &'a ProfileArgs) -> (Option<&'a str>, &'a str) {
+    let profile_level = args.profile_level.as_deref().unwrap_or_else(|| {
+        tree.hierarchy_headings()
+            .last()
+            .expect("profiles have a level")
+    });
+    (args.parent_level.as_deref(), profile_level)
+}
+
+fn report_correction(summary: &CorrectionSummary) {
+    if summary.method != Correction::None {
+        for (label, value) in &summary.info {
+            eprintln!("{}: {label}: {value}", summary.method.name());
+        }
+    }
+    if let Some(warning) = summary.warning {
+        eprintln!("warning: {warning}");
+    }
+}
+
+fn settings(args: &ResamplingArgs) -> StatsSettings {
+    StatsSettings {
+        pseudocount: args.pseudocount,
+        replicates: args.replicates,
+    }
+}
+
+fn check_coverage(coverage: f64) -> CliResult {
+    if coverage > 0.0 && coverage < 1.0 {
+        Ok(())
+    } else {
+        Err(format!(
+            "--coverage must be between 0 and 1, for example 0.95 (got {coverage})"
+        ))
+    }
+}
+
+/// Up to two effect-size filters.
+fn effect_size_filters<T: Copy>(
+    texts: &[String],
+    parse: impl Fn(&str) -> Result<(T, f64), String>,
+) -> CliResult<[Option<(T, f64)>; 2]> {
+    if texts.len() > 2 {
+        return Err("at most two --effect-size-filter options can be given".to_string());
+    }
+    let mut filters = [None, None];
+    for (slot, text) in filters.iter_mut().zip(texts) {
+        *slot = Some(parse(text).map_err(|e| format!("--effect-size-filter: {e}"))?);
+    }
+    Ok(filters)
+}
+
+// ---------------------------------------------------------------- commands
+
+fn info(args: InfoArgs) -> CliResult {
+    let tree = load_profile(&args.profile)?;
+    let mut out = String::new();
+    out.push_str(&format!("Profile: {}\n", args.profile.display()));
+    out.push_str(&format!(
+        "Hierarchical levels: {}\n",
+        tree.hierarchy_headings().join(", ")
+    ));
+    out.push_str(&format!(
+        "Features at the most specific level: {}\n",
+        tree.num_leaves()
+    ));
+    out.push_str(&format!("Samples ({}):\n", tree.num_samples()));
+    for sample in tree.sample_names() {
+        let total = tree.sample_total(sample).unwrap_or(0.0);
+        out.push_str(&format!("  {sample}\t{total} sequences\n"));
+    }
+
+    if let Some(path) = &args.metadata {
+        let (metadata, warnings) = core(Metadata::read(&read_text(path)?, &tree))
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        for warning in warnings {
+            eprintln!("warning: {warning}");
+        }
+        out.push_str(&format!("Metadata fields ({}):\n", metadata.fields().len()));
+        for field in metadata.fields() {
+            let groups = core(metadata.groups(field))?;
+            let sizes: Vec<String> = groups
+                .names()
+                .map(|g| format!("{g} ({})", groups.samples(g).map_or(0, <[String]>::len)))
+                .collect();
+            let shown = if sizes.len() > 12 {
+                format!("{} distinct values", sizes.len())
+            } else {
+                sizes.join(", ")
+            };
+            out.push_str(&format!("  {field}: {shown}\n"));
+        }
+    }
+    write_output(None, &out)
+}
+
+fn sample_count_filter(text: &str, option: &str) -> CliResult<SampleCountFilter> {
+    let (kind, values) = parse_count_filter(text).map_err(|e| format!("{option}: {e}"))?;
+    match kind.as_str() {
+        "maximum" => Ok(SampleCountFilter::Maximum(values[0])),
+        "minimum" => Ok(SampleCountFilter::Minimum(values[0])),
+        "independent" => Ok(SampleCountFilter::Independent(values[0], values[1])),
+        other => Err(format!(
+            "{option}: unknown filter '{other}' (use maximum, minimum or independent)"
+        )),
+    }
+}
+
+fn group_count_filter(text: &str, option: &str) -> CliResult<GroupCountFilter> {
+    let (kind, values) = parse_count_filter(text).map_err(|e| format!("{option}: {e}"))?;
+    match kind.as_str() {
+        "maximum" => Ok(GroupCountFilter::Maximum(values[0])),
+        "minimum" => Ok(GroupCountFilter::Minimum(values[0])),
+        "independent-minimum" => Ok(GroupCountFilter::IndependentMinimum(values[0], values[1])),
+        "independent-maximum" => Ok(GroupCountFilter::IndependentMaximum(values[0], values[1])),
+        other => Err(format!(
+            "{option}: unknown filter '{other}' (use maximum, minimum, independent-minimum or independent-maximum)"
+        )),
+    }
+}
+
+fn two_samples(args: TwoSamplesArgs) -> CliResult {
+    check_coverage(args.coverage)?;
+    let [effect_size1, effect_size2] =
+        effect_size_filters(&args.effect_size_filters, parse_sample_effect_size)?;
+    let filter = SampleFilter {
+        selected_features: None,
+        significance: args.significance,
+        sequences: args
+            .sequence_filter
+            .as_deref()
+            .map(|t| sample_count_filter(t, "--sequence-filter"))
+            .transpose()?,
+        parent_sequences: args
+            .parent_sequence_filter
+            .as_deref()
+            .map(|t| sample_count_filter(t, "--parent-sequence-filter"))
+            .transpose()?,
+        effect_size1,
+        effect_size2,
+        operator: args.effect_size_operator.into(),
+    };
+
+    let tree = load_profile(&args.profile.profile)?;
+    let (parent_level, profile_level) = levels(&tree, &args.profile);
+    let profile = core(tree.sample_profile(
+        &args.sample1,
+        &args.sample2,
+        parent_level,
+        profile_level,
+        args.profile.unclassified.into(),
+    ))?;
+
+    let analysis = SampleAnalysis {
+        test: args.test.into(),
+        test_type: args.test_type.into(),
+        ci_method: args.ci.into(),
+        coverage: args.coverage,
+        correction: args.correction.into(),
+    };
+    if !analysis.test.has_one_sided() && matches!(args.test_type, TestTypeArg::OneSided) {
+        return Err(format!(
+            "the {} has no one-sided p-value",
+            analysis.test.name()
+        ));
+    }
+    let settings = settings(&args.resampling);
+    let mut rng = rng_from_seed(args.resampling.seed);
+    let results = run_sample_analysis(&profile, analysis, &settings, &mut rng, &mut |_, _| true)
+        .expect("analysis is never cancelled");
+    report_correction(&results.correction);
+
+    let table = sample_table(&profile, &results, results.filter(&filter, &settings));
+    write_table(args.profile.output.as_deref(), &table)
+}
+
+fn two_groups(args: TwoGroupsArgs) -> CliResult {
+    check_coverage(args.coverage)?;
+    let [effect_size1, effect_size2] =
+        effect_size_filters(&args.effect_size_filters, parse_group_effect_size)?;
+    let filter = GroupFilter {
+        selected_features: None,
+        significance: args.significance,
+        sequences: args
+            .sequence_filter
+            .as_deref()
+            .map(|t| group_count_filter(t, "--sequence-filter"))
+            .transpose()?,
+        parent_sequences: args
+            .parent_sequence_filter
+            .as_deref()
+            .map(|t| group_count_filter(t, "--parent-sequence-filter"))
+            .transpose()?,
+        effect_size1,
+        effect_size2,
+        operator: args.effect_size_operator.into(),
+    };
+
+    let tree = load_profile(&args.profile.profile)?;
+    let groups = load_groups(&tree, &args.metadata)?;
+    let (parent_level, profile_level) = levels(&tree, &args.profile);
+    let group2 = match args.group2.as_deref() {
+        Some(name) => SecondGroup::Named(name),
+        None => SecondGroup::AllOtherSamples,
+    };
+    let profile = core(tree.group_profile(
+        &groups,
+        &args.group1,
+        group2,
+        parent_level,
+        profile_level,
+        args.profile.unclassified.into(),
+    ))
+    .map_err(|e| with_group_names(e, &groups))?;
+
+    let analysis = GroupAnalysis {
+        test: args.test.into(),
+        test_type: args.test_type.into(),
+        coverage: args.coverage,
+        correction: args.correction.into(),
+    };
+    let settings = settings(&args.resampling);
+    let mut rng = rng_from_seed(args.resampling.seed);
+    let results = run_group_analysis(&profile, analysis, &settings, &mut rng, &mut |_, _| true)
+        .expect("analysis is never cancelled");
+    report_correction(&results.correction);
+
+    let table = group_table(
+        &profile,
+        &results,
+        results.filter(&profile, &filter, &settings),
+    );
+    write_table(args.profile.output.as_deref(), &table)
+}
+
+fn with_group_names(error: String, groups: &Groups) -> String {
+    if error.starts_with("Unknown group") {
+        format!(
+            "{error} Groups of '{}': {}.",
+            groups.field,
+            groups.names().collect::<Vec<_>>().join(", ")
+        )
+    } else {
+        error
+    }
+}
+
+/// Profile of the requested groups, or of every group with samples.
+fn multi_group_profile(
+    tree: &ProfileTree,
+    profile_args: &ProfileArgs,
+    metadata_args: &MetadataArgs,
+    requested: &[String],
+) -> CliResult<MultiGroupProfile> {
+    let groups = load_groups(tree, metadata_args)?;
+    let (parent_level, profile_level) = levels(tree, profile_args);
+    let active: Vec<&str> = if requested.is_empty() {
+        groups
+            .names()
+            .filter(|g| groups.samples(g).is_some_and(|s| !s.is_empty()))
+            .collect()
+    } else {
+        requested.iter().map(String::as_str).collect()
+    };
+    if active.len() < 2 {
+        return Err("at least two groups are needed".to_string());
+    }
+    core(tree.multi_group_profile(
+        &groups,
+        Some(&active),
+        parent_level,
+        profile_level,
+        profile_args.unclassified.into(),
+    ))
+    .map_err(|e| with_group_names(e, &groups))
+}
+
+fn multi_groups(args: MultiGroupsArgs) -> CliResult {
+    let tree = load_profile(&args.profile.profile)?;
+    let profile = multi_group_profile(&tree, &args.profile, &args.metadata, &args.groups)?;
+
+    let analysis = MultiGroupAnalysis {
+        test: args.test.into(),
+        effect_size: MultiGroupEffectSize::EtaSquared,
+        correction: args.correction.into(),
+    };
+    let mut rng = rng_from_seed(args.seed);
+    let results = run_multi_group_analysis(&profile, analysis, &mut rng, &mut |_, _| true)
+        .expect("analysis is never cancelled");
+    report_correction(&results.correction);
+
+    let filter = MultiGroupFilter {
+        selected_features: None,
+        significance: args.significance,
+        min_effect_size: args.min_effect_size,
+    };
+    let table = multi_group_table(&profile, &results, results.filter(&filter));
+    write_table(args.profile.output.as_deref(), &table)
+}
+
+fn post_hoc(args: PostHocArgs) -> CliResult {
+    check_coverage(args.coverage)?;
+    let tree = load_profile(&args.profile.profile)?;
+    let profile = multi_group_profile(&tree, &args.profile, &args.metadata, &args.groups)?;
+
+    let mut combined: Option<Table> = None;
+    for feature in &args.features {
+        let result = core(run_post_hoc(
+            &profile,
+            feature,
+            args.test.into(),
+            args.coverage,
+        ))?;
+        let table = post_hoc_table(feature, &result, args.coverage);
+        match &mut combined {
+            Some(all) => all.rows.extend(table.rows),
+            None => combined = Some(table),
+        }
+    }
+    write_table(
+        args.profile.output.as_deref(),
+        &combined.expect("at least one feature is required"),
+    )
+}
+
+fn write_table(path: Option<&Path>, table: &Table) -> CliResult {
+    write_output(path, &table.to_tsv())
+}
+
+/// File name of a path, for converters that name samples after their files.
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+fn convert(format: ConvertFormat) -> CliResult {
+    let (spf, output) = match format {
+        ConvertFormat::Mgrast {
+            input,
+            headings,
+            output,
+        } => {
+            let mut profile = core(mgrast::MgRastProfile::parse(&read_text(&input)?))?;
+            if !headings.is_empty() {
+                if headings.len() != profile.headings.len() {
+                    return Err(format!(
+                        "this MG-RAST profile has {} hierarchical levels ({}), but {} --heading options were given",
+                        profile.headings.len(),
+                        profile.headings.join(", "),
+                        headings.len()
+                    ));
+                }
+                profile.headings = headings;
+            }
+            (core(profile.to_spf())?, output)
+        }
+        ConvertFormat::Comet { inputs, output } => {
+            let (names, texts) = read_named(&inputs)?;
+            (core(comet::to_spf(&named(&names, &texts)))?, output)
+        }
+        ConvertFormat::Rita {
+            inputs,
+            groups,
+            output,
+        } => {
+            let (names, texts) = read_named(&inputs)?;
+            let groups: Vec<&str> = if groups.is_empty() {
+                rita::GROUPS.to_vec()
+            } else {
+                for group in &groups {
+                    if !rita::GROUPS.contains(&group.as_str()) {
+                        return Err(format!(
+                            "unknown RITA group '{group}' (known groups: {})",
+                            rita::GROUPS.join(", ")
+                        ));
+                    }
+                }
+                groups.iter().map(String::as_str).collect()
+            };
+            (core(rita::to_spf(&named(&names, &texts), &groups))?, output)
+        }
+        ConvertFormat::Mothur {
+            taxonomy,
+            groups,
+            names,
+            output,
+        } => {
+            let names = names.as_deref().map(read_text).transpose()?;
+            let spf = mothur::to_spf(
+                &read_text(&taxonomy)?,
+                &read_text(&groups)?,
+                names.as_deref(),
+            );
+            (core(spf)?, output)
+        }
+        ConvertFormat::Biom {
+            input,
+            metadata_field,
+            output,
+        } => (
+            core(biom::to_spf(
+                &read_bytes(&input)?,
+                metadata_field.as_deref(),
+            ))?,
+            output,
+        ),
+        ConvertFormat::Cog {
+            input,
+            assign_to_each_code,
+            output,
+        } => {
+            let treatment = if assign_to_each_code {
+                cog::MultiCodeTreatment::AssignToEachCode
+            } else {
+                cog::MultiCodeTreatment::AsFeature
+            };
+            (
+                core(cog::append_categories(&read_text(&input)?, treatment))?,
+                output,
+            )
+        }
+    };
+
+    // Tell the user now if STAMP will not be able to load the result.
+    if let Err(problem) = ProfileTree::read(&spf) {
+        eprintln!("warning: the converted profile cannot be loaded by STAMP as it is: {problem}");
+    }
+    write_output(output.output.as_deref(), &spf)
+}
+
+fn read_named(paths: &[std::path::PathBuf]) -> CliResult<(Vec<String>, Vec<String>)> {
+    let names = paths.iter().map(|p| file_name(p)).collect();
+    let texts = paths
+        .iter()
+        .map(|p| read_text(p))
+        .collect::<CliResult<Vec<String>>>()?;
+    Ok((names, texts))
+}
+
+fn named<'a>(names: &'a [String], texts: &'a [String]) -> Vec<NamedText<'a>> {
+    names
+        .iter()
+        .zip(texts)
+        .map(|(name, text)| NamedText { name, text })
+        .collect()
+}

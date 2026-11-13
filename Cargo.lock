@@ -3310,6 +3310,8 @@ name = "stamp-cli"
 version = "3.0.0-alpha.0"
 dependencies = [
  "clap",
+ "serde",
+ "serde_json",
  "stamp-core",
  "stamp-plot",
 ]

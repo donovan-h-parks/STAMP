@@ -25,6 +25,39 @@ STAMP is being ported from Python to Rust, to run as a standalone application on
 
 Build and test with `cargo build --workspace` and `cargo test --workspace`.
 
+### Command line
+
+The statistics and file converters are usable now through `stamp-cli` (build it with `cargo build --release -p stamp-cli`; the binary is `target/release/stamp-cli`). Results are written as tab-separated tables with the same column headings as STAMP v2.
+
+```bash
+# What is in a profile?
+stamp-cli info --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \
+               --metadata examples/EnterotypesArumugam/Enterotypes.metadata.tsv
+
+# Two samples: Fisher's exact test with Benjamini-Hochberg correction
+stamp-cli two-samples --profile examples/IronMineEdwards/EdwardsIronMine.spf \
+    --sample1 Red --sample2 Black --profile-level Subsystem \
+    --correction benjamini-hochberg --significance 0.05 --output iron_mine.tsv
+
+# Two groups: Welch's t-test, keeping features that differ by at least 1%
+stamp-cli two-groups --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \
+    --metadata examples/EnterotypesArumugam/Enterotypes.metadata.tsv --field Enterotype \
+    --group1 "Enterotype 1" --group2 "Enterotype 3" --effect-size-filter diff-between-prop=1
+
+# Several groups: ANOVA, then a post-hoc test on one feature
+stamp-cli multi-groups --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \
+    --metadata examples/EnterotypesArumugam/Enterotypes.metadata.tsv --field Enterotype \
+    --group "Enterotype 1" --group "Enterotype 2" --group "Enterotype 3"
+stamp-cli post-hoc --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \
+    --metadata examples/EnterotypesArumugam/Enterotypes.metadata.tsv --field Enterotype \
+    --group "Enterotype 1" --group "Enterotype 2" --group "Enterotype 3" --feature Bacteroides
+
+# Convert another tool's output to a STAMP profile
+stamp-cli convert mgrast examples/CowRumen-MG-RAST/CowRumen-MG-RAST.tsv --output cow_rumen.spf
+```
+
+Run `stamp-cli <command> --help` for every option. Resampling methods take `--seed`, so a run can be repeated exactly.
+
 ## License
 
 STAMP is open source and released under the GNU General Public License v3.0. See LICENSE for further details.
