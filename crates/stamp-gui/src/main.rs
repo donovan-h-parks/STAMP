@@ -10,7 +10,8 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("STAMP")
-            .with_inner_size([1280.0, 800.0]),
+            .with_inner_size([1280.0, 800.0])
+            .with_icon(window_icon()),
         ..Default::default()
     };
     // Files named on the command line are opened at start-up: a profile,
@@ -38,6 +39,31 @@ fn main() -> eframe::Result {
             Ok(Box::new(app))
         }),
     )
+}
+
+/// The window icon, decoded from the PNG built into the program.
+#[cfg(not(target_arch = "wasm32"))]
+fn window_icon() -> eframe::egui::IconData {
+    let decoder = png::Decoder::new(std::io::Cursor::new(
+        &include_bytes!("../assets/icon.png")[..],
+    ));
+    let decode = || -> Option<eframe::egui::IconData> {
+        let mut reader = decoder.read_info().ok()?;
+        let mut rgba = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut rgba).ok()?;
+        (info.color_type == png::ColorType::Rgba && info.bit_depth == png::BitDepth::Eight).then(
+            || {
+                rgba.truncate(info.buffer_size());
+                eframe::egui::IconData {
+                    rgba,
+                    width: info.width,
+                    height: info.height,
+                }
+            },
+        )
+    };
+    // Without an icon the window still works.
+    decode().unwrap_or_default()
 }
 
 /// Id of the canvas in `index.html` that the application draws on.

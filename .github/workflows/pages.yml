@@ -1,0 +1,37 @@
+name: Publish browser version
+
+# Publishes the browser version of STAMP to GitHub Pages. It only runs when
+# started by hand from the Actions tab, and needs Pages to be enabled for the
+# repository with "GitHub Actions" as the source (Settings > Pages).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - run: trunk build --release
+        working-directory: crates/stamp-gui
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: crates/stamp-gui/dist
+      - id: deploy
+        uses: actions/deploy-pages@v4

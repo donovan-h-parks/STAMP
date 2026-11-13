@@ -23,7 +23,7 @@ STAMP is being ported from Python to Rust, to run as a standalone application on
 - `tests/golden/`: reference outputs generated from the Python implementation
 - `docs/CHANGES_FROM_PYTHON.md`: deliberate differences from STAMP v2
 
-Build and test with `cargo build --workspace` and `cargo test --workspace`.
+Build and test with `cargo build --workspace` and `cargo test --workspace`. Packaging, continuous integration and the release procedure are described in [docs/RELEASING.md](docs/RELEASING.md).
 
 ### Graphical application
 

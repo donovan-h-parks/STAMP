@@ -1,0 +1,97 @@
+name: Release
+
+# Builds the desktop applications, the command-line tool and the browser
+# version, and collects them in a draft GitHub release for review.
+#
+# Start it by pushing a tag that matches the version in Cargo.toml, for
+# example `v3.0.0`, or run it by hand from the Actions tab to try the build
+# without creating a release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  desktop:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, platform: linux, label: linux-x86_64 }
+          - { os: windows-latest, platform: windows, label: windows-x86_64 }
+          - { os: macos-13, platform: macos, label: macos-x86_64 }
+          - { os: macos-14, platform: macos, label: macos-arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system libraries for the window toolkit
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libgl1-mesa-dev
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --release
+      - run: cargo build --release -p stamp-gui -p stamp-cli
+      - name: Package
+        shell: bash
+        run: scripts/package.sh ${{ matrix.platform }} target/release ${{ matrix.label }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stamp-${{ matrix.label }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
+  web:
+    name: web
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - run: trunk build --release
+        working-directory: crates/stamp-gui
+      - name: Package
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
+          mkdir -p dist
+          cp -r crates/stamp-gui/dist "dist/stamp-$version-web"
+          rm -f "dist/stamp-$version-web/.trunk-lock"
+          (cd dist && zip -qr "stamp-$version-web.zip" "stamp-$version-web")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stamp-web
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [desktop, web]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that the tag matches the version in Cargo.toml
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match version $version in Cargo.toml" >&2
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create a draft release with the packages attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/* --draft --generate-notes --title "STAMP $GITHUB_REF_NAME"

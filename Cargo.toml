@@ -8,7 +8,7 @@ edition = "2021"
 rust-version = "1.95"
 license = "GPL-3.0-or-later"
 authors = ["Donovan Parks", "Rob Beiko"]
-repository = "https://github.com/dparks1134/STAMP"
+repository = "https://github.com/donovan-h-parks/STAMP"
 
 [workspace.dependencies]
 stamp-core = { path = "crates/stamp-core" }
@@ -44,3 +44,6 @@ svg2pdf = "0.13"
 
 [profile.release]
 lto = "thin"
+# Smaller downloads. Only debug information is removed: the browser build's
+# optimiser needs the other sections, and panics keep their location.
+strip = "debuginfo"

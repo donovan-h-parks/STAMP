@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [master, rust-port]
+  pull_request:
+
+# A newer push to the same branch replaces a run that is still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Format, lint and test (Linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system libraries for the window toolkit
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libgl1-mesa-dev
+      # The compiler version comes from rust-toolchain.toml.
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace --release
+
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --release
+
+  web:
+    name: Browser build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - run: cargo clippy -p stamp-gui --target wasm32-unknown-unknown -- -D warnings
+      - run: trunk build --release
+        working-directory: crates/stamp-gui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stamp-web
+          path: crates/stamp-gui/dist
+          retention-days: 14

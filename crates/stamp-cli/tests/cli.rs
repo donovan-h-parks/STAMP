@@ -654,7 +654,14 @@ fn svg_plot(
 ) -> String {
     let path = directory.join(format!("{name}.svg"));
     let mut args = with(command, base, extra);
-    args.extend_from_slice(&["--plot", path.to_str().unwrap(), "--output", "/dev/null"]);
+    // The table goes to a file too, so that the test also runs on Windows.
+    let table = directory.join(format!("{name}.tsv"));
+    args.extend_from_slice(&[
+        "--plot",
+        path.to_str().unwrap(),
+        "--output",
+        table.to_str().unwrap(),
+    ]);
     stdout(&args);
     fs::read_to_string(&path).unwrap()
 }

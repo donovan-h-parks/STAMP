@@ -93,7 +93,8 @@ numerical methods rather than from different formulas:
 
 ## Not yet ported
 
-* Installers for the desktop application.
+* Signed installers. The desktop applications are distributed as plain
+  archives, unsigned (see `docs/RELEASING.md`).
 * In the browser build, running analyses in a web worker so that long
   resampling tests do not hold the page while they run.
 * In the graphical application:

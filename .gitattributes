@@ -20,3 +20,11 @@
 *.PDF	 diff=astextplain
 *.rtf	 diff=astextplain
 *.RTF	 diff=astextplain
+
+# Reference data is compared byte for byte by the tests, and the example
+# files keep whatever line endings their tools wrote.
+tests/golden/** text eol=lf
+examples/** -text
+legacy/** -text
+crates/stamp-core/data/** text eol=lf
+*.sh text eol=lf

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=STAMP
+GenericName=Statistical analysis of taxonomic and functional profiles
+Comment=Compare taxonomic and functional profiles between samples and groups
+Exec=stamp %F
+Icon=stamp
+Terminal=false
+Categories=Science;Biology;
+MimeType=text/tab-separated-values;
