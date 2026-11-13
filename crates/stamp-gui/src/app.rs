@@ -607,6 +607,31 @@ pub struct Saved {
     pub pseudocount: f64,
     pub other_samples_color: stamp_plot::Color,
     pub plots: PlotSettings,
+    /// The [`DEFAULTS_VERSION`] the plot settings were saved under; zero
+    /// for settings saved before there was one.
+    pub defaults_version: u32,
+}
+
+/// Identifies the starting values of the plot settings. Remembered plot
+/// settings are only restored if they were saved under the same number;
+/// otherwise the plots start from the current defaults. **Increase it
+/// whenever a default in `PlotSettings::default()` changes**, or people who
+/// have run an earlier version will keep the old value without having
+/// chosen it.
+///
+/// 1: legends placed by "Best" (were at fixed corners, or absent).
+pub const DEFAULTS_VERSION: u32 = 1;
+
+impl Saved {
+    /// The same, with plot settings saved under other defaults replaced by
+    /// the current ones. Everything else that is remembered is kept.
+    pub fn up_to_date(mut self) -> Saved {
+        if self.defaults_version != DEFAULTS_VERSION {
+            self.plots = PlotSettings::default();
+            self.defaults_version = DEFAULTS_VERSION;
+        }
+        self
+    }
 }
 
 impl Default for Saved {
@@ -624,6 +649,9 @@ impl Default for Saved {
             pseudocount: session.stats.pseudocount,
             other_samples_color: session.other_samples_color,
             plots: PlotSettings::default(),
+            // What settings read from an older store, lacking the field,
+            // are taken to be.
+            defaults_version: 0,
         }
     }
 }
@@ -1010,6 +1038,7 @@ impl StampApp {
             pseudocount: self.session.stats.pseudocount,
             other_samples_color: self.session.other_samples_color,
             plots: self.plot_settings.clone(),
+            defaults_version: DEFAULTS_VERSION,
         }
     }
 
@@ -1033,7 +1062,7 @@ impl StampApp {
     /// Restore what the last run stored, if anything.
     pub fn restore_from(&mut self, ctx: &egui::Context, storage: Option<&dyn eframe::Storage>) {
         if let Some(saved) = storage.and_then(|s| eframe::get_value::<Saved>(s, STORAGE_KEY)) {
-            self.restore(ctx, saved);
+            self.restore(ctx, saved.up_to_date());
         }
     }
 

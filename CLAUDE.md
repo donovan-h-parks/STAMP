@@ -83,4 +83,5 @@ Inside `stamp-gui`:
 - Random numbers are seeded (ChaCha8) so resampling results are repeatable; a change in the order random numbers are drawn changes results and reference tests.
 - User-visible labels follow STAMP v2's wording where v2 has the control (see the Python `*.ui` files and `configGUI/*UI.py`).
 - Dependencies must build for `wasm32-unknown-unknown`; nothing that needs a C library.
+- Plot settings are remembered between runs. When a default in `PlotSettings::default()` changes, increase `DEFAULTS_VERSION` in `crates/stamp-gui/src/app.rs`; otherwise anyone who has run an earlier build keeps the old value.
 - rustfmt rewraps code narrowly, so re-read a file after `cargo fmt` before making exact-text edits to it.

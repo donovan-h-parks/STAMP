@@ -10,6 +10,11 @@ Idle: no task in progress.
 
 ## Last completed
 
+- **Remembered plot settings versioned** (2026-11-14): `DEFAULTS_VERSION`
+  and `Saved::up_to_date` in `stamp-gui/src/app.rs`, so that settings
+  stored before a default changed no longer override it (this was why
+  legends were not at "Best"). Rule added to `CLAUDE.md`. Check
+  `git status` for whether it is committed.
 - **Group-level rarefaction curves** (2026-11-14): "Curves for" in the
   rarefaction plot offers each sample, each group pooled by sequences, and
   each group by number of samples (`accumulation`, `chao2` and

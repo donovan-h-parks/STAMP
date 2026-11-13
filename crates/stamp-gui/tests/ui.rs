@@ -1452,3 +1452,34 @@ fn rarefaction_curves_for_whole_groups() {
     harness.settle();
     assert_eq!(lines(&harness.app), 2);
 }
+
+#[test]
+fn remembered_plot_settings_do_not_outlive_their_defaults() {
+    use stamp_gui::app::{Saved, DEFAULTS_VERSION};
+    use stamp_plot::axes::LegendPosition;
+
+    // Settings as an earlier version stored them: no version number, and
+    // the legend positions that version started with.
+    let harness = Harness::enterotypes();
+    let mut old = harness.app.saved(&harness.renderer.ctx);
+    old.plots.pca.legend = LegendPosition::UpperRight;
+    old.plots.bar.legend = LegendPosition::None;
+    old.zoom = 2.5;
+    let mut stored: serde_json::Value = serde_json::to_value(&old).unwrap();
+    stored.as_object_mut().unwrap().remove("defaults_version");
+    let read: Saved = serde_json::from_value(stored).unwrap();
+    assert_eq!(read.defaults_version, 0);
+
+    // The plots start from the current defaults; the rest is kept.
+    let current = read.up_to_date();
+    assert_eq!(current.defaults_version, DEFAULTS_VERSION);
+    assert_eq!(current.plots.pca.legend, LegendPosition::Best);
+    assert_eq!(current.plots.bar.legend, LegendPosition::Best);
+    assert_eq!(current.zoom, 2.5);
+
+    // Settings saved by this version are restored as they are.
+    let mut chosen = harness.app.saved(&harness.renderer.ctx);
+    chosen.plots.pca.legend = LegendPosition::LowerLeft;
+    assert_eq!(chosen.defaults_version, DEFAULTS_VERSION);
+    assert_eq!(chosen.clone().up_to_date(), chosen);
+}
