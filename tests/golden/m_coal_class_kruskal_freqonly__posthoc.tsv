@@ -1,0 +1,121 @@
+Feature	Post-hoc test	Groups	p-value	Effect size	Lower CI	Upper CI	Note
+c__Betaproteobacteria	Games-Howell	Core : Deep cutting	>= 0.1	2.071872833283757	-0.7687449659392489	4.912490632506763	
+c__Betaproteobacteria	Games-Howell	Core : Produced water	>= 0.1	0.8121682216262962	-3.3128877336104563	4.937224176863049	
+c__Betaproteobacteria	Games-Howell	Core : Shallow cutting	< 0.001	-44.7608886587602	-56.69460785012218	-32.82716946739822	
+c__Betaproteobacteria	Games-Howell	Deep cutting : Produced water	>= 0.1	-1.2597046116574608	-4.819879756339656	2.3004705330247344	
+c__Betaproteobacteria	Games-Howell	Deep cutting : Shallow cutting	< 0.001	-46.83276149204396	-58.68135215289623	-34.98417083119168	
+c__Betaproteobacteria	Games-Howell	Produced water : Shallow cutting	< 0.001	-45.573056880386495	-57.61449982242297	-33.53161393835002	
+c__Betaproteobacteria	Scheffè	Core : Deep cutting	0.943487292246089	2.071872833283757	-7.719571527655541	11.863317194223056	
+c__Betaproteobacteria	Scheffè	Core : Produced water	0.9952198202270602	0.8121682216262962	-8.22492570959737	9.849262152849962	
+c__Betaproteobacteria	Scheffè	Core : Shallow cutting	4.440892098500626e-15	-44.7608886587602	-54.352486599155924	-35.16929071836448	
+c__Betaproteobacteria	Scheffè	Deep cutting : Produced water	0.978840047266498	-1.2597046116574608	-9.686838155042889	7.167428931727968	
+c__Betaproteobacteria	Scheffè	Deep cutting : Shallow cutting	1.1102230246251565e-16	-46.83276149204396	-55.85197787078195	-37.81354511330596	
+c__Betaproteobacteria	Scheffè	Produced water : Shallow cutting	1.1102230246251565e-16	-45.573056880386495	-53.76713694680551	-37.37897681396748	
+c__Betaproteobacteria	Tukey-Kramer	Core : Deep cutting	>= 0.1	2.071872833283757	-6.9215632538654415	11.065308920432956	
+c__Betaproteobacteria	Tukey-Kramer	Core : Produced water	>= 0.1	0.8121682216262962	-7.48839742405616	9.112733867308751	
+c__Betaproteobacteria	Tukey-Kramer	Core : Shallow cutting	< 0.001	-44.7608886587602	-53.570765922088256	-35.95101139543215	
+c__Betaproteobacteria	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	-1.2597046116574608	-9.000021987370715	6.4806127640557945	
+c__Betaproteobacteria	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.001	-46.83276149204396	-55.116906615916996	-38.54861636817092	
+c__Betaproteobacteria	Tukey-Kramer	Produced water : Shallow cutting	< 0.001	-45.573056880386495	-53.09931476980509	-38.0467989909679	
+c__Betaproteobacteria	Welch's (uncorrected)	Core : Deep cutting	0.04806778781051824	20718.728332837574	221.60528439626432	41215.85138127888	
+c__Betaproteobacteria	Welch's (uncorrected)	Core : Produced water	0.5889390901587968	8121.682216262969	-22655.183158127158	38898.54759065309	
+c__Betaproteobacteria	Welch's (uncorrected)	Core : Shallow cutting	2.2331968884503604e-07	-447608.88658760197	-534865.9941139545	-360351.77906124946	
+c__Betaproteobacteria	Welch's (uncorrected)	Deep cutting : Produced water	0.32496017128977117	-12597.046116574606	-38943.70925905141	13749.617025902202	
+c__Betaproteobacteria	Welch's (uncorrected)	Deep cutting : Shallow cutting	2.5116988185892496e-07	-468327.61492043955	-554646.0122104597	-382009.2176304194	
+c__Betaproteobacteria	Welch's (uncorrected)	Produced water : Shallow cutting	1.0260645610440904e-07	-455730.56880386494	-544086.2660460012	-367374.87156172865	
+c__Chloroplast	Games-Howell	Core : Deep cutting	>= 0.1	6.392239828223063	-7.528117798872995	20.31259745531912	
+c__Chloroplast	Games-Howell	Core : Produced water	>= 0.1	6.49263271912034	-7.427671723364493	20.41293716160517	
+c__Chloroplast	Games-Howell	Core : Shallow cutting	>= 0.1	6.447554136758899	-7.472783083205427	20.367891356723224	
+c__Chloroplast	Games-Howell	Deep cutting : Produced water	>= 0.1	0.10039289089727646	-0.021972457405637566	0.2227582392001905	
+c__Chloroplast	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	0.05531430853583582	-0.08590649420484098	0.19653511127651263	
+c__Chloroplast	Games-Howell	Produced water : Shallow cutting	>= 0.1	-0.04507858236144064	-0.13921929297097982	0.049062128248098545	
+c__Chloroplast	Scheffè	Core : Deep cutting	0.07802120567383297	6.392239828223063	-0.49637372304724714	13.280853379493372	
+c__Chloroplast	Scheffè	Core : Produced water	0.043636517350492676	6.49263271912034	0.13473030718669854	12.85053513105398	
+c__Chloroplast	Scheffè	Core : Shallow cutting	0.06604452996867083	6.447554136758899	-0.3004606723869898	13.195568945904787	
+c__Chloroplast	Scheffè	Deep cutting : Produced water	0.9999673357828925	0.10039289089727646	-5.828381678553533	6.029167460348085	
+c__Chloroplast	Scheffè	Deep cutting : Shallow cutting	0.9999955407647685	0.05531430853583582	-6.290010638237751	6.400639255309423	
+c__Chloroplast	Scheffè	Produced water : Shallow cutting	0.9999967812875176	-0.04507858236144064	-5.80989211803403	5.719734953311148	
+c__Chloroplast	Tukey-Kramer	Core : Deep cutting	< 0.05	6.392239828223063	0.06505219188579314	12.719427464560333	
+c__Chloroplast	Tukey-Kramer	Core : Produced water	< 0.05	6.49263271912034	0.6529029629915213	12.332362475249159	
+c__Chloroplast	Tukey-Kramer	Core : Shallow cutting	< 0.05	6.447554136758899	0.2495063652482985	12.645601908269498	
+c__Chloroplast	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	0.10039289089727646	-5.345183185516883	5.545968967311436	
+c__Chloroplast	Tukey-Kramer	Deep cutting : Shallow cutting	>= 0.1	0.05531430853583582	-5.772863052983405	5.8834916700550774	
+c__Chloroplast	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	-0.04507858236144064	-5.340056542327142	5.24989937760426	
+c__Chloroplast	Welch's (uncorrected)	Core : Deep cutting	0.17231339766230636	63922.39828223063	-35518.54583456099	163363.34239902225	
+c__Chloroplast	Welch's (uncorrected)	Core : Produced water	0.16652204403717086	64926.327191203396	-34513.79986196631	164366.4542443731	
+c__Chloroplast	Welch's (uncorrected)	Core : Shallow cutting	0.16910149623798243	64475.541367588994	-34965.08898827889	163916.17172345688	
+c__Chloroplast	Welch's (uncorrected)	Deep cutting : Produced water	0.03062490523081607	1003.9289089727644	117.21453764229857	1890.6432803032303	
+c__Chloroplast	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.28197224428601486	553.1430853583581	-495.7912299859691	1602.077400702685	
+c__Chloroplast	Welch's (uncorrected)	Produced water : Shallow cutting	0.17368826662398484	-450.7858236144063	-1136.434585003735	234.86293777492247	
+c__Clostridia	Games-Howell	Core : Deep cutting	< 0.01	-29.149094431212724	-48.109976731966846	-10.188212130458602	
+c__Clostridia	Games-Howell	Core : Produced water	>= 0.1	-12.93510708726678	-29.40677178881392	3.53655761428036	
+c__Clostridia	Games-Howell	Core : Shallow cutting	>= 0.1	2.142503511673716	-2.721317084590892	7.006324107938324	
+c__Clostridia	Games-Howell	Deep cutting : Produced water	>= 0.1	16.21398734394594	-6.735818027466607	39.16379271535849	
+c__Clostridia	Games-Howell	Deep cutting : Shallow cutting	< 0.01	31.291597942886437	12.333703181892083	50.24949270388079	
+c__Clostridia	Games-Howell	Produced water : Shallow cutting	< 0.1	15.077610598940497	-1.389985598372233	31.545206796253225	
+c__Clostridia	Scheffè	Core : Deep cutting	0.004967630771676168	-29.149094431212724	-51.151998986603346	-7.146189875822106	
+c__Clostridia	Scheffè	Core : Produced water	0.3401036746036974	-12.93510708726678	-33.242868424301946	7.372654249768386	
+c__Clostridia	Scheffè	Core : Shallow cutting	0.9935635607285977	2.142503511673716	-19.41131492783207	23.696321951179502	
+c__Clostridia	Scheffè	Deep cutting : Produced water	0.11799537641482316	16.21398734394594	-2.7230977474360962	35.151072435327976	
+c__Clostridia	Scheffè	Deep cutting : Shallow cutting	0.000848274537630922	31.291597942886437	11.024010258126246	51.55918562764663	
+c__Clostridia	Scheffè	Produced water : Shallow cutting	0.14456240101102258	15.077610598940497	-3.3357669350100334	33.490988132891026	
+c__Clostridia	Tukey-Kramer	Core : Deep cutting	< 0.01	-29.149094431212724	-49.35874977480563	-8.93943908761982	
+c__Clostridia	Tukey-Kramer	Core : Produced water	>= 0.1	-12.93510708726678	-31.587774347093287	5.717560172559727	
+c__Clostridia	Tukey-Kramer	Core : Shallow cutting	>= 0.1	2.142503511673716	-17.65466648941463	21.939673512762063	
+c__Clostridia	Tukey-Kramer	Deep cutting : Produced water	< 0.1	16.21398734394594	-1.179714562348959	33.60768925024084	
+c__Clostridia	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.001	31.291597942886437	12.675830159868852	49.90736572590402	
+c__Clostridia	Tukey-Kramer	Produced water : Shallow cutting	< 0.1	15.077610598940497	-1.835066213150073	31.99028741103107	
+c__Clostridia	Welch's (uncorrected)	Core : Deep cutting	0.0008699708178175834	-291490.94431212713	-429332.03102237405	-153649.85760188033	
+c__Clostridia	Welch's (uncorrected)	Core : Produced water	0.03892866614984445	-129351.07087266778	-251218.27449274133	-7483.867252594223	
+c__Clostridia	Welch's (uncorrected)	Core : Shallow cutting	0.22644069818652013	21425.03511673716	-14638.606561331628	57488.67679480594	
+c__Clostridia	Welch's (uncorrected)	Deep cutting : Produced water	0.06228494639334414	162139.87343945936	-9101.279307605819	333381.02618652454	
+c__Clostridia	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.0005235274318582395	312915.9794288643	175096.34139084828	450735.61746688036	
+c__Clostridia	Welch's (uncorrected)	Produced water : Shallow cutting	0.01858616264314783	150776.10598940492	28936.89900668403	272615.3129721259	
+c__Cytophagia	Games-Howell	Core : Deep cutting	>= 0.1	0.03539089078556208	-0.22401019574370207	0.2947919773148262	
+c__Cytophagia	Games-Howell	Core : Produced water	>= 0.1	0.10521250653437571	-0.15221562426851049	0.3626406373372619	
+c__Cytophagia	Games-Howell	Core : Shallow cutting	>= 0.1	-0.12017885605701223	-0.40047369835892993	0.16011598624490547	
+c__Cytophagia	Games-Howell	Deep cutting : Produced water	>= 0.1	0.06982161574881363	-0.019836142444625338	0.1594793739422526	
+c__Cytophagia	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	-0.1555697468425743	-0.3386419380757977	0.02750244439064911	
+c__Cytophagia	Games-Howell	Produced water : Shallow cutting	< 0.02	-0.22539136259138795	-0.3982523598800892	-0.05253036530268668	
+c__Cytophagia	Scheffè	Core : Deep cutting	0.9611677004296755	0.03539089078556208	-0.15593768840952527	0.2267194699806494	
+c__Cytophagia	Scheffè	Core : Produced water	0.3993700185721689	0.10521250653437571	-0.07137577586563797	0.28180078893438937	
+c__Cytophagia	Scheffè	Core : Shallow cutting	0.33424975605141927	-0.12017885605701223	-0.307602359525748	0.06724464741172356	
+c__Cytophagia	Scheffè	Deep cutting : Produced water	0.6774214412464904	0.06982161574881363	-0.09484780666809753	0.23449103816572478	
+c__Cytophagia	Scheffè	Deep cutting : Shallow cutting	0.10162600722609871	-0.1555697468425743	-0.33180869500848725	0.02066920132333866	
+c__Cytophagia	Scheffè	Produced water : Shallow cutting	0.0025858016260845718	-0.22539136259138795	-0.3855068306599151	-0.06527589452286084	
+c__Cytophagia	Tukey-Kramer	Core : Deep cutting	>= 0.1	0.03539089078556208	-0.14034430059237413	0.21112608216349826	
+c__Cytophagia	Tukey-Kramer	Core : Produced water	>= 0.1	0.10521250653437571	-0.05698373060500646	0.2674087436737579	
+c__Cytophagia	Tukey-Kramer	Core : Shallow cutting	>= 0.1	-0.12017885605701223	-0.29232723759711454	0.051969525483090084	
+c__Cytophagia	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	0.06982161574881363	-0.08142715526214642	0.22107038675977367	
+c__Cytophagia	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.1	-0.1555697468425743	-0.3174451206862438	0.006305627001095215	
+c__Cytophagia	Tukey-Kramer	Produced water : Shallow cutting	< 0.01	-0.22539136259138795	-0.37245732911853047	-0.07832539606424546	
+c__Cytophagia	Welch's (uncorrected)	Core : Deep cutting	0.6795801765489635	353.90890785562084	-1524.337589624608	2232.1554053358495	
+c__Cytophagia	Welch's (uncorrected)	Core : Produced water	0.21816744478355332	1052.1250653437571	-786.8280746980582	2891.078205385573	
+c__Cytophagia	Welch's (uncorrected)	Core : Shallow cutting	0.232195678887898	-1201.7885605701224	-3268.1318087397867	864.5546875995418	
+c__Cytophagia	Welch's (uncorrected)	Deep cutting : Produced water	0.037914668697067055	698.2161574881362	48.506045768715026	1347.9262692075577	
+c__Cytophagia	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.02704562953787389	-1555.6974684257434	-2908.6861615514626	-202.70877530002363	
+c__Cytophagia	Welch's (uncorrected)	Produced water : Shallow cutting	0.002562491280841234	-2253.9136259138795	-3512.8762437805312	-994.9510080472278	
+c__Synechococcophycideae	Games-Howell	Core : Deep cutting	>= 0.1	0.3938204327791581	-0.4049666414620463	1.1926075070203626	degenerate case: two groups with zero variance; variance set to 1e-6.
+c__Synechococcophycideae	Games-Howell	Core : Produced water	>= 0.1	0.3938204327791581	-0.4049666414471278	1.192607507005444	degenerate case: two groups with zero variance; variance set to 1e-6.
+c__Synechococcophycideae	Games-Howell	Core : Shallow cutting	>= 0.1	0.3938204327791581	-0.4049666414578692	1.1926075070161855	degenerate case: two groups with zero variance; variance set to 1e-6.
+c__Synechococcophycideae	Games-Howell	Deep cutting : Produced water	>= 0.1	0.0	-0.003928329066130435	0.003928329066130435	degenerate case: two groups with zero variance; variance set to 1e-6.
+c__Synechococcophycideae	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	0.0	-0.003977625874789474	0.003977625874789474	degenerate case: two groups with zero variance; variance set to 1e-6.
+c__Synechococcophycideae	Games-Howell	Produced water : Shallow cutting	>= 0.1	0.0	-0.003909460421333334	0.003909460421333334	degenerate case: two groups with zero variance; variance set to 1e-6.
+c__Synechococcophycideae	Scheffè	Core : Deep cutting	0.051155011584346766	0.3938204327791581	-0.001419323864751132	0.7890601894230673	
+c__Synechococcophycideae	Scheffè	Core : Produced water	0.029640475412715084	0.3938204327791581	0.02903065565557711	0.7586102099027392	
+c__Synechococcophycideae	Scheffè	Core : Shallow cutting	0.0447863961017525	0.3938204327791581	0.006647642326355396	0.7809932232319609	
+c__Synechococcophycideae	Scheffè	Deep cutting : Produced water	1.0	0.0	-0.34016822116465173	0.34016822116465173	
+c__Synechococcophycideae	Scheffè	Deep cutting : Shallow cutting	1.0	0.0	-0.3640681349190854	0.3640681349190854	
+c__Synechococcophycideae	Scheffè	Produced water : Shallow cutting	1.0	0.0	-0.3307608246533992	0.3307608246533992	
+c__Synechococcophycideae	Tukey-Kramer	Core : Deep cutting	< 0.05	0.3938204327791581	0.030792940670076763	0.7568479248882395	
+c__Synechococcophycideae	Tukey-Kramer	Core : Produced water	< 0.02	0.3938204327791581	0.05876122957375829	0.728879635984558	
+c__Synechococcophycideae	Tukey-Kramer	Core : Shallow cutting	< 0.05	0.3938204327791581	0.03820244453718041	0.7494384210211358	
+c__Synechococcophycideae	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	0.0	-0.31244431803420375	0.31244431803420375	
+c__Synechococcophycideae	Tukey-Kramer	Deep cutting : Shallow cutting	>= 0.1	0.0	-0.33439637525022997	0.33439637525022997	
+c__Synechococcophycideae	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	0.0	-0.30380362967897684	0.30380362967897684	
+c__Synechococcophycideae	Welch's (uncorrected)	Core : Deep cutting	0.14670187258364664	3938.2043277915805	-1767.9516203249257	9644.360275908088	degenerate case: variance of both groups is zero
+c__Synechococcophycideae	Welch's (uncorrected)	Core : Produced water	0.14670187258364664	3938.2043277915805	-1767.9516203249257	9644.360275908088	degenerate case: variance of both groups is zero
+c__Synechococcophycideae	Welch's (uncorrected)	Core : Shallow cutting	0.14670187258364664	3938.2043277915805	-1767.9516203249257	9644.360275908088	degenerate case: variance of both groups is zero
+c__Synechococcophycideae	Welch's (uncorrected)	Deep cutting : Produced water	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+c__Synechococcophycideae	Welch's (uncorrected)	Deep cutting : Shallow cutting	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+c__Synechococcophycideae	Welch's (uncorrected)	Produced water : Shallow cutting	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero

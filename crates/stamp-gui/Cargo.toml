@@ -1,0 +1,18 @@
+[package]
+name = "stamp-gui"
+description = "STAMP graphical application for desktop and the browser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "stamp"
+path = "src/main.rs"
+
+[dependencies]
+stamp-core = { workspace = true }
+stamp-plot = { workspace = true }
+eframe = { workspace = true }

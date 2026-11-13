@@ -1,0 +1,248 @@
+Classification	Subclassification	Subsystem	p-values	q-values
+Amino Acids and Derivatives	Alanine; serine; and glycine	Alanine Biosynthesis	1.0000000000195992	0.647773279378102
+Amino Acids and Derivatives	Alanine; serine; and glycine	Glycine cleavage system	0.5056520067499777	0.4797660851938437
+Amino Acids and Derivatives	Alanine; serine; and glycine	Glycine synthesis	0.3308638070739828	0.38576486424238704
+Amino Acids and Derivatives	Alanine; serine; and glycine	Serine Biosynthesis	0.3987174161427323	0.4169593894303083
+Amino Acids and Derivatives	Arginine; urea cycle; polyamines	Arginine Biosynthesis	0.025985199276856885	0.0551895709244909
+Amino Acids and Derivatives	Arginine; urea cycle; polyamines	Arginine Putrescine and 4-aminobutyrate degradation	0.6477201252662095	0.5695076538731138
+Amino Acids and Derivatives	Arginine; urea cycle; polyamines	Polyamine Metabolism	0.783976366612493	0.6303327570753713
+Amino Acids and Derivatives	Arginine; urea cycle; polyamines	Urea decomposition	5.621551316284924e-08	7.710078311213963e-07
+Amino Acids and Derivatives	Aromatic amino acids and derivatives	Aromatic amino acid degradation	0.23842964117003218	0.30276779831115197
+Amino Acids and Derivatives	Aromatic amino acids and derivatives	Central meta-cleavage pathway of aromatic compound degradation	1.00000000003261	0.647773279378102
+Amino Acids and Derivatives	Aromatic amino acids and derivatives	Chorismate Synthesis	0.0012993532362600001	0.005470960994778948
+Amino Acids and Derivatives	Aromatic amino acids and derivatives	Phenylalanine synthesis	1.000000000010599	0.647773279378102
+Amino Acids and Derivatives	Aromatic amino acids and derivatives	Tryptophan synthesis	3.6355456431859176e-06	3.231596127276371e-05
+Amino Acids and Derivatives	Aromatic amino acids and derivatives	Tyrosine synthesis	0.21934239998851318	0.29073311081543857
+Amino Acids and Derivatives	Branched-chain amino acids	Branched-Chain Amino Acid Biosynthesis	5.088670329976176e-09	1.0177340659952353e-07
+Amino Acids and Derivatives	Branched-chain amino acids	HMG CoA Synthesis	0.14310209904483936	0.2079553031366979
+Amino Acids and Derivatives	Branched-chain amino acids	Isoleucine degradation	2.6020969393288624e-09	5.9476501470374e-08
+Amino Acids and Derivatives	Branched-chain amino acids	Leucine Biosynthesis v2	4.3655131023254077e-13	1.7462052409301632e-11
+Amino Acids and Derivatives	Branched-chain amino acids	Leucine Degradation and HMG-CoA Metabolism	2.368467063731898e-09	5.9476501470374e-08
+Amino Acids and Derivatives	Branched-chain amino acids	Valine Biosynthesis	0.4143283918958097	0.422245494925666
+Amino Acids and Derivatives	Branched-chain amino acids	Valine degradation	2.3072327150958604e-08	3.7224376764658997e-07
+Amino Acids and Derivatives	Glutamine; glutamate; aspartate; asparagine; ammonia assimilation	Asp-Glu-tRNA(Asn-Gln) transamidation	0.0004003877658538937	0.0018303440724749427
+Amino Acids and Derivatives	Glutamine; glutamate; aspartate; asparagine; ammonia assimilation	Glutamate biosynthesis	0.9999999999958551	0.647773279378102
+Amino Acids and Derivatives	Glutamine; glutamate; aspartate; asparagine; ammonia assimilation	Glutamate; aspartate and asparagine biosynthisis	0.7615797140785212	0.618541899759205
+Amino Acids and Derivatives	Histidine	Histidine Biosynthesis	0.05989795290910464	0.10417035288539939
+Amino Acids and Derivatives	Histidine	Histidine Degradation	0.21244379811717254	0.2880593872775221
+Amino Acids and Derivatives	Lysine; threonine; methionine; and cysteine	Lysine Biosynthesis DAP Pathway	0.4120112803400627	0.422245494925666
+Amino Acids and Derivatives	Lysine; threonine; methionine; and cysteine	Methionine Biosynthesis	0.09184849729419571	0.14407607418697366
+Amino Acids and Derivatives	Lysine; threonine; methionine; and cysteine	Methionine Salvage	3.886242905758555e-19	2.072662883071229e-17
+Amino Acids and Derivatives	Lysine; threonine; methionine; and cysteine	Threonine synthesis	1.0000000000214477	0.647773279378102
+Amino Acids and Derivatives	Lysine; threonine; methionine; and cysteine	cysteine biosynthesis	0.0522455767950079	0.09309280445358593
+Amino Acids and Derivatives	Proline and 4-hydroxyproline	Proline Catabolism	0.27619483273354495	0.3373372002852458
+Amino Acids and Derivatives	Proline and 4-hydroxyproline	Proline Synthesis	0.502954094124169	0.4797660851938437
+Carbohydrates	Aminosugars	N-Acetyl-D-Glucosamine Utilization	0.0033194873334029414	0.011635972946921987
+Carbohydrates	Aminosugars	UDP-N-acetylmuramate from Fructose-6-phosphate Biosynthesis	1.0000000000020721	0.647773279378102
+Carbohydrates	CO2 fixation	Calvin-Benson cycle	0.9007974891563633	0.647773279378102
+Carbohydrates	CO2 fixation	Carboxysome	0.6008297506312343	0.5458019613036371
+Carbohydrates	CO2 fixation	Cyanobacterial CO2 uptake	0.1527620137330682	0.21440282629202553
+Carbohydrates	Central carbohydrate metabolism	Acetogenesis from Pyruvate	0.45582928116945626	0.45932588337993474
+Carbohydrates	Central carbohydrate metabolism	Butyrate and Butanol Acetone fermentation	0.2344200500357761	0.3013043289686676
+Carbohydrates	Central carbohydrate metabolism	Embden-Meyerhof and Gluconeogenesis	0.23539400700677157	0.3013043289686676
+Carbohydrates	Central carbohydrate metabolism	Embden-Meyerhof and Gluconeogenesis Archaeal	0.5179169556192752	0.48745125234755315
+Carbohydrates	Central carbohydrate metabolism	Entner-Doudoroff Pathway	0.6478149562806669	0.5695076538731138
+Carbohydrates	Central carbohydrate metabolism	Glyoxylate Synthesis	0.03472642484930773	0.06753608084626268
+Carbohydrates	Central carbohydrate metabolism	Methylglyoxal Metabolism	0.05294653253297699	0.09309280445358593
+Carbohydrates	Central carbohydrate metabolism	Pentose phosphate pathway	0.09037255800507085	0.1437259285931804
+Carbohydrates	Central carbohydrate metabolism	Pyruvate Alanine Serine Interconversions	0.7815240289710629	0.6303327570753713
+Carbohydrates	Central carbohydrate metabolism	Pyruvate metabolism I: anaplerotic reactions; PEP	0.023829877234206036	0.05152405888476981
+Carbohydrates	Central carbohydrate metabolism	TCA Cycle	0.7207777315921559	0.5992291341316411
+Carbohydrates	Central carbohydrate metabolism	glyoxylate degradation	0.33513322581057375	0.38576486424238704
+Carbohydrates	Di- and oligosaccharides	Lactose degradation	0.00731659856035356	0.021678810549195734
+Carbohydrates	Di- and oligosaccharides	Sucrose Metabolism	0.10543011675889487	0.16220017962906902
+Carbohydrates	Di- and oligosaccharides	Trehalose biosynthesis	0.6127569944512359	0.5464579994495636
+Carbohydrates	Fermentation	Fermentations: Homofermentative lactate fermentation	1.000000000007394	0.647773279378102
+Carbohydrates	Fermentation	Heterofermentative lactate fermentation	0.0682783548064301	0.11499512388451384
+Carbohydrates	Fermentation	Homofermentative lactate fermentation	1.000000000007394	0.647773279378102
+Carbohydrates	Methanogenesis	Methanogenesis	0.6008297506312343	0.5458019613036371
+Carbohydrates	Methanogenesis	Methanogenesis from methylated compounds	1.000000000007394	0.647773279378102
+Carbohydrates	Monosaccharides	D-arabinose degradation	0.6738373705418564	0.5734786132271119
+Carbohydrates	Monosaccharides	D-galactarate degradation	0.020943121875689693	0.04927793382515222
+Carbohydrates	Monosaccharides	D-galacturonate degradation	0.372573578553551	0.405522262371212
+Carbohydrates	Monosaccharides	D-glucarate degradation	0.020943121875689693	0.04927793382515222
+Carbohydrates	Monosaccharides	Fucose and rhamnose degradation	0.999999999999565	0.647773279378102
+Carbohydrates	Monosaccharides	Galactose degradation	0.11579508987925535	0.1731515362680454
+Carbohydrates	Monosaccharides	Ketogluconate metabolism	0.002179145668919352	0.008645360222107622
+Carbohydrates	Monosaccharides	L-ascorbate degradation	0.01186112293829264	0.03272033914011763
+Carbohydrates	Monosaccharides	Mannose and fructose metabolism	0.4808601559567683	0.4797660851938437
+Carbohydrates	Monosaccharides	The Tartronate Semialdehyde Hub	0.020943121875689693	0.04927793382515222
+Carbohydrates	Monosaccharides	mannose and GDP-mannose metabolism	0.3719946042592133	0.405522262371212
+Carbohydrates	Organic acids	Citrate Metabolism; Transport; and Regulation	1.0000000000117517	0.647773279378102
+Carbohydrates	Organic acids	Malonate decarboxylase	1.000000000007394	0.647773279378102
+Carbohydrates	Organic acids	Methylcitrate cycle	0.9121970620096145	0.647773279378102
+Carbohydrates	Organic acids	Propanediol utilization	0.3842205878411166	0.4108257565292018
+Carbohydrates	Organic acids	Tricarballylate Utilization	1.000000000007394	0.647773279378102
+Carbohydrates	Sugar alcohols	Ethanolamine utilization	0.015515392261036189	0.039404170821679206
+Carbohydrates	Sugar alcohols	Galactitol degradation	0.0033194873334029414	0.011635972946921987
+Carbohydrates	Sugar alcohols	Hexitol degradation	0.1882917759680774	0.2597127944387274
+Carbohydrates	Sugar alcohols	Inositol catabolism	0.24428935933078294	0.3077661219915375
+Cell Division and Cell Cycle	Cell cycle in Prokaryota	Bacterial Cell Division	0.19389541663177337	0.26515612530840804
+Cell Division and Cell Cycle	Cell cycle in Prokaryota	Cyanobacterial Circadian Clock	0.22168399699677194	0.29073311081543857
+Cell Division and Cell Cycle	Structural elements	Cytoskeleton	0.0038437095004758073	0.012438892503316569
+Cell Wall and Capsule	Capsular and extracellular polysacchrides	Capsular heptose biosynthesis	1.0000000000079643	0.647773279378102
+Cell Wall and Capsule	Capsular and extracellular polysacchrides	Capsular polysaccharide biosynthesis	0.342815544580778	0.38627103614735553
+Cell Wall and Capsule	Capsular and extracellular polysacchrides	Colanic acid biosynthesis	0.07110579836231763	0.11850966393719604
+Cell Wall and Capsule	Cell wall of Mycobacteria	linker unit-arabinogalactan synthesis	0.03330848679435046	0.06594580503040727
+Cell Wall and Capsule	Glycosylation	N-linked Glycosylation in Bacteria	0.003964896985432157	0.012438892503316569
+Cell Wall and Capsule	Gram-Negative cell wall components	Lipid A biosynthesis	0.30531226999919037	0.3628123727744695
+Cell Wall and Capsule	Gram-Negative cell wall components	Lipid A modifications	0.999999999999565	0.647773279378102
+Cell Wall and Capsule	Gram-Negative cell wall components	dTDP-rhamnose synthesis	0.5425703271021516	0.5047165833508387
+Cell Wall and Capsule	Gram-Positive cell wall components	CMP-N-acetylneuraminate Biosynthesis	1.000000000039945	0.647773279378102
+Cell Wall and Capsule	Gram-Positive cell wall components	D-alanyl lipoteichoic acid Biosynthesis	0.02226076572586958	0.04946836827971018
+Cell Wall and Capsule	Gram-Positive cell wall components	Teichoic acid Biosynthesis	2.3265235477911873e-08	3.7224376764658997e-07
+Cell Wall and Capsule	Peptidoglycan biosynthesis	Peptidoglycan Biosynthesis	0.36313266470410815	0.40196088682473474
+Cell signaling	Signal transduction in Prokaryota	Rrf2 family transcriptional regulators	1.0000000000395626	0.647773279378102
+Clustering-based Subsystems	Clustering-based Subsystems	282458.1-266-4-271	0.02226076572586958	0.04946836827971018
+Clustering-based Subsystems	Clustering-based Subsystems	EC49-61	0.015515392261036189	0.039404170821679206
+Clustering-based Subsystems	Clustering-based Subsystems	EC699-706	0.1489126860029673	0.21129599890778578
+Clustering-based Subsystems	Clustering-based Subsystems	LMPTP YwlE cluster	0.502954094124169	0.4797660851938437
+Clustering-based Subsystems	Clustering-based Subsystems	NusA-TFII Cluster	0.2186682796954886	0.29073311081543857
+Clustering-based Subsystems	Clustering-based Subsystems	SA:14-24	5.5373210487092017e-05	0.000323140000723078
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Biotin	Biotin biosynthesis	0.6611839832843349	0.5718347963540195
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Coenzyme A	Coenzyme A Biosynthesis	0.042964667842203486	0.07993426575293672
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Coenzyme A	Coenzyme A Biosynthesis in Pathogens	0.006200946492638383	0.018719838468342288
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Folate and pterines	Folate Biosynthesis	0.08298910342654932	0.13412380351765546
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Folate and pterines	Molybdopterin biosynthesis	5.7825587334104716e-08	7.710078311213963e-07
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Folate and pterines	Pterin biosynthesis	0.6147652493807592	0.5464579994495636
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Iron-sulfur clusters	Fe-S cluster assembly	0.40711030823806404	0.42024289882638866
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Isoprenoids	Carotenoids	2.6595767005106454e-07	3.273325169859256e-06
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Isoprenoids	Isoprenoid Biosynthesis	0.8778457686702973	0.647773279378102
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Isoprenoids	polyisoprenoid biosynthesis	1.6142963869799207e-05	0.0001229940104365654
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Isoprenoids	polyprenyl synthesis	1.000000000007394	0.647773279378102
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Lipoate and Lipoamide	Lipoic acid metabolism	0.342815544580778	0.38627103614735553
+Cofactors; Vitamins; Prosthetic Groups; Pigments	NAD and NADP	NAD and NADP cofactor biosynthesis global	2.6071750634966084e-20	2.0857400507972868e-18
+Cofactors; Vitamins; Prosthetic Groups; Pigments	NAD and NADP	NAD and NADP cofactor biosynthesis in pathogens	0.4564550966088102	0.45932588337993474
+Cofactors; Vitamins; Prosthetic Groups; Pigments	NAD and NADP	NAD and NADP paper	0.9999999999945883	0.647773279378102
+Cofactors; Vitamins; Prosthetic Groups; Pigments	NAD and NADP	NAD and NADP tutorial 10	0.07735486938950281	0.12759566084866444
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Pigments	Cobalamin synthesis	0.7570254465572474	0.6180233045625159
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Quinone cofactors	Coenzyme PQQ synthesis	5.180763292089027e-06	4.362748035443391e-05
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Quinone cofactors	Menaquinone and Phylloquinone Biosynthesis	1.000000000010794	0.647773279378102
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Quinone cofactors	Pyrroloquinoline Quinone biosynthesis	9.971014739192617e-07	1.1395445416220134e-05
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Quinone cofactors	Ubiquinone Biosynthesis	0.014633201225656596	0.0383821671492632
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Quinone cofactors	Ubiquinone Menaquinone-cytochrome c reductase complexes	5.6549500126538656e-05	0.000323140000723078
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Riboflavin; FMN; FAD	FMN and FAD biosynthesis	0.268207980256537	0.3352599753206713
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Riboflavin; FMN; FAD	FMN and FAD biosynthesis in pathogens	1.0000000000093414	0.647773279378102
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Riboflavin; FMN; FAD	Riboflavin metabolism	0.01458823638905641	0.0383821671492632
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Siderophores	Siderophore enterobactin biosynthesis	4.455044359484757e-05	0.00027415657596829276
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Siderophores	Siderophore enterobactin biosynthesis and ferric enterbactin transport	3.019954639456343e-06	2.8423102489000877e-05
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Tetrapyrroles	Porphyrin; Heme; and Siroheme Biosynthesis	0.3375951351012689	0.3858230115443073
+Cofactors; Vitamins; Prosthetic Groups; Pigments	Thiamine and thiamine pyrophosphate	Thiamin biosynthesis	0.0015772868767579883	0.006470920520032773
+DNA metabolism	DNA Repair	DNA Repair Base Excision	0.28236856343022143	0.3422649253699654
+DNA metabolism	DNA Repair	DNA repair; bacterial	0.027763264796030498	0.05768990087486856
+DNA metabolism	DNA Replication	DNA-replication	0.7131690595583096	0.5974191074834007
+DNA metabolism	DNA uptake; competence	gram plus late competence	0.02226076572586958	0.04946836827971018
+Degradation of Xenobiotics	Anaerobic degradation of aromatic compounds	Anaerobic benzoate metabolism	0.502954094124169	0.4797660851938437
+Fatty Acids and Lipids	Fatty acids	Fatty Acid Biosynthesis FASII	0.1353774237042375	0.20055914622850002
+Fatty Acids and Lipids	Fatty acids	carnitine metabolism	0.7062849306170984	0.5966034720452545
+Fatty Acids and Lipids	Fatty acids	fatty acid metabolism	0.029938219392026406	0.06141173208620801
+Fatty Acids and Lipids	Fatty acids	fatty acid oxidation pathway	0.008693896754578387	0.025291336013318944
+Fatty Acids and Lipids	Glycerolipids	Glycerolipid and glycerphospholipid metabolism	0.03503434193899877	0.06753608084626268
+Fatty Acids and Lipids	Phospholipids	Betaine biosynthesis	0.15550745737646174	0.21635820156725113
+Fatty Acids and Lipids	Triacylglycerols	Glycerol Metabolism	0.5247767940636605	0.4910192225157057
+Fatty Acids and Lipids	Triacylglycerols	Glycerol fermenation to 1;3-propanediol	0.0033194873334029414	0.011635972946921987
+Membrane Transport	ABC transporters	ABC transporter L-proline glycine betaine (TC 3.A.1.12.1)	0.0682783548064301	0.11499512388451384
+Membrane Transport	ABC transporters	ABC transporter alkylphosphonate (TC 3.A.1.9.1)	0.09072699242444512	0.1437259285931804
+Membrane Transport	ABC transporters	ABC transporter arabinose (TC 3.A.1.2.2)	1.0000000000079643	0.647773279378102
+Membrane Transport	ABC transporters	ABC transporter branched-chain amino acid (TC 3.A.1.4.1)	0.3083905168582991	0.3628123727744695
+Membrane Transport	ABC transporters	ABC transporter dipeptide (TC 3.A.1.5.2)	0.722820143046292	0.5992291341316411
+Membrane Transport	ABC transporters	ABC transporter ferric enterobactin (TC 3.A.1.14.2)	0.026215046189133177	0.0551895709244909
+Membrane Transport	ABC transporters	ABC transporter ferrichrome (TC 3.A.1.14.3)	6.842990937804114e-05	0.0003775443276029856
+Membrane Transport	ABC transporters	ABC transporter galactose (TC 3.A.1.2.3)	1.0000000000079643	0.647773279378102
+Membrane Transport	ABC transporters	ABC transporter glutamate aspartate (TC 3.A.1.3.4)	0.6008297506312343	0.5458019613036371
+Membrane Transport	ABC transporters	ABC transporter glutamine (TC 3.A.1.3.2)	1.0000000000117517	0.647773279378102
+Membrane Transport	ABC transporters	ABC transporter glycerol (TC 3.A.1.1.3)	0.3077690855222604	0.3628123727744695
+Membrane Transport	ABC transporters	ABC transporter heme (TC3.A.1.107.1)	0.00028076948538030815	0.0013613065957833123
+Membrane Transport	ABC transporters	ABC transporter histidine lysine arginine ornithine (TC 3.A.1.3.1)	0.09506627790553435	0.14767577150374267
+Membrane Transport	ABC transporters	ABC transporter iron(III) dicitrate (TC 3.A.1.14.1)	1.0000000000079643	0.647773279378102
+Membrane Transport	ABC transporters	ABC transporter macrolide	0.9999999999945883	0.647773279378102
+Membrane Transport	ABC transporters	ABC transporter maltose	0.05294653253297699	0.09309280445358593
+Membrane Transport	ABC transporters	ABC transporter molybdenum (TC 3.A.1.8.1)	0.22168399699677194	0.29073311081543857
+Membrane Transport	ABC transporters	ABC transporter oligopeptide (TC 3.A.1.5.1)	0.07875734430226812	0.12858341926900918
+Membrane Transport	ABC transporters	ABC transporter phosphate (TC 3.A.1.7.1)	0.14426899155108416	0.2079553031366979
+Membrane Transport	ABC transporters	ABC transporter polyamine putrescine spermidine (TC 3.A.1.11.1)	0.7432264350203881	0.612970255686918
+Membrane Transport	ABC transporters	ABC transporter putrescine (TC 3.A.1.11.2)	0.502954094124169	0.4797660851938437
+Membrane Transport	ABC transporters	ABC transporter ribose (TC 3.A.1.2.1)	0.023523361588653275	0.05152405888476981
+Membrane Transport	ABC transporters	CbiQO-type ABC transporter systems	0.00392912923918344	0.012438892503316569
+Membrane Transport	ABC transporters	Choline Transport	1.0000000000395626	0.647773279378102
+Membrane Transport	ABC transporters	P-type ATPase transporter potassium (TC 3.A.3.7.1)	0.7084666230537398	0.5966034720452545
+Membrane Transport	ABC transporters	Transport of Nickel and Cobalt	0.40412589048740744	0.4198710550518519
+Membrane Transport	Uni-; Sym- and Antiporters	Sodium Hydrogen Antiporter	2.418921464139112e-05	0.00015481097370490315
+Metabolism of aromatic compounds	Metabolism of central aromatic intermediates	Catechol branch of beta-ketoadipate pathway	0.5067529274859974	0.4797660851938437
+Metabolism of aromatic compounds	Metabolism of central aromatic intermediates	Homogentisate pathway of aromatic compound degradation	7.151363693230236e-05	0.0003814060636389459
+Metabolism of aromatic compounds	Metabolism of central aromatic intermediates	N-heterocyclic aromatic compound degradation	0.9999999999945883	0.647773279378102
+Metabolism of aromatic compounds	Metabolism of central aromatic intermediates	Phenylacetate pathway of aromatic compound degradation	0.002988492827970383	0.011384734582744315
+Metabolism of aromatic compounds	Metabolism of central aromatic intermediates	Protocatechuate branch of beta-ketoadipate pathway	0.5067529274859974	0.4797660851938437
+Metabolism of aromatic compounds	Peripheral pathways for catabolism of aromatic compounds	Benzoate catabolism	0.502954094124169	0.4797660851938437
+Metabolism of aromatic compounds	Peripheral pathways for catabolism of aromatic compounds	Benzoate degradation	1.00000000003261	0.647773279378102
+Metabolism of aromatic compounds	Peripheral pathways for catabolism of aromatic compounds	Biphenyl Degradation	0.03330848679435046	0.06594580503040727
+Metabolism of aromatic compounds	Peripheral pathways for catabolism of aromatic compounds	Chloroaromatic degradation pathway	1.0000000000079643	0.647773279378102
+Metabolism of aromatic compounds	Peripheral pathways for catabolism of aromatic compounds	Quinate degradation	0.6147652493807592	0.5464579994495636
+Metabolism of aromatic compounds	Peripheral pathways for catabolism of aromatic compounds	n-Phenylalkanoic acid degradation	0.999999999999565	0.647773279378102
+Metabolism of aromatic compounds	Peripheral pathways for catabolism of aromatic compounds	p-Hydroxybenzoate degradation	1.0000000000395626	0.647773279378102
+Motility and Chemotaxis	Chemotaxis in Prokaryota	Bacterial Chemotaxis	0.03924568773126606	0.073874235729442
+Motility and Chemotaxis	Flagellar motility in Prokaryota	Flagellum	1.554632177523489e-06	1.6582743226917217e-05
+Motility and Chemotaxis	Social motility and nonflagellar swimming in bacteria	Bacterial motility:Gliding	0.6552909824039255	0.5698182455686308
+Nitrogen Metabolism	Nitrogen Metabolism	Allantoin degradation	1.000000000021154	0.647773279378102
+Nitrogen Metabolism	Nitrogen Metabolism	Ammonia assimilation	0.39311822928148404	0.41380866240156217
+Nitrogen Metabolism	Nitrogen Metabolism	Nitrate and nitrite ammonification	0.7570785480890819	0.6180233045625159
+Nitrogen Metabolism	Nitrogen Metabolism	Nitrosative stress	0.11287325417612647	0.17037472328471917
+Nucleosides and Nucleotides	Nucleosides and Nucleotides	Ribonucleotide reduction	0.0038538796585617513	0.012438892503316569
+Nucleosides and Nucleotides	Nucleosides and Nucleotides	Ribose and deoxyribose phosphate metabolism	0.36427705368491586	0.40196088682473474
+Nucleosides and Nucleotides	Purines	De Novo Purine Biosynthesis	0.0003805483031650949	0.0017908155443063288
+Nucleosides and Nucleotides	Purines	Purine conversions	0.4829757806262509	0.4797660851938437
+Nucleosides and Nucleotides	Pyrimidines	De Novo Pyrimidine Synthesis	0.9140171888796188	0.647773279378102
+Nucleosides and Nucleotides	Pyrimidines	pyrimidine conversions	0.8145684105827778	0.647773279378102
+Phage	Phage	Prophage lysogenic conversion modules	0.02226076572586958	0.04946836827971018
+Protein Metabolism	Protein Biosynthesis	Ribosome LSU bacterial	0.0006025636842717142	0.0026780608189853968
+Protein Metabolism	Protein Biosynthesis	Ribosome SSU bacterial	0.0022153735569150784	0.008645360222107622
+Protein Metabolism	Protein Biosynthesis	Ribosome SSU eukaryotic and archaeal	1.000000000007394	0.647773279378102
+Protein Metabolism	Protein Biosynthesis	Ribosome biogenesis bacterial	0.14310209904483936	0.2079553031366979
+Protein Metabolism	Protein Biosynthesis	Translation factors bacterial	1.8870605648759843e-05	0.00013638643312060433
+Protein Metabolism	Protein Biosynthesis	Universal GTPases	9.28531046575351e-05	0.0004792418304905037
+Protein Metabolism	Protein Degradation	Phenylpropionate Degradation	1.13785942363817e-05	9.10287538910536e-05
+Protein Metabolism	Protein Degradation	Protein degradation	0.001026634326107097	0.00443949978857123
+Protein Metabolism	Protein Degradation	Proteolysis in bacteria; ATP-dependent	0.010249781947059382	0.02928509127731252
+Protein Metabolism	Protein Export and Secretion	General secretory pathway (Sec-SRP) complex (TC 3.A.5.1.1)	0.04808168763812889	0.08842609220805313
+Protein Metabolism	Protein Folding	GroEL GroES	0.3638414537086587	0.40196088682473474
+Protein Metabolism	Protein Processing and Modification	Protein Acetylation and Deacetylation in Bacteria	0.6738373705418564	0.5734786132271119
+Protein Metabolism	Selenoproteins	Glycine reductase; sarcosine reductase and betaine reductase	0.6037934196921485	0.5458019613036371
+Protein Metabolism	Selenoproteins	Selenocysteine metabolism	0.37631697921906626	0.40682916672331493
+RNA metabolism	RNA metabolism	RNA polymerase bacterial	0.05095016338565618	0.09263666070119304
+RNA metabolism	RNA metabolism	Transcription factors bacterial	0.03338506379664368	0.06594580503040727
+RNA metabolism	RNA metabolism	Transcription factors cyanobacterial RpoD-like sigma factors	0.999999999999565	0.647773279378102
+RNA metabolism	RNA metabolism	tRNA aminoacylation	1.9605549761086874e-05	0.00013638643312060433
+RNA metabolism	RNA processing and modification	Polyadenylation bacterial	0.003469547222865905	0.011811224588479675
+RNA metabolism	RNA processing and modification	Queuosine-Archaeosine Biosynthesis	0.2344455018317783	0.3013043289686676
+RNA metabolism	RNA processing and modification	tRNA processing	1.00000000002856	0.647773279378102
+Respiration	ATP synthases	F0F1-type ATP synthase	0.00012669453461692972	0.0006334726730846486
+Respiration	ATP synthases	V-Type ATP synthase	1.0000000000395626	0.647773279378102
+Respiration	Electron accepting reactions	Anaerobic respiratory reductases	0.292449069835611	0.35181842987742673
+Respiration	Electron accepting reactions	Denitrification	2.0040585363431724e-06	2.0040585363431722e-05
+Respiration	Electron accepting reactions	Terminal cytochrome C oxidases	0.01395484748107609	0.03784365418596906
+Respiration	Electron accepting reactions	Terminal cytochrome oxidases	0.38617804595881106	0.4108257565292018
+Respiration	Electron donating reactions	Carbon monoxide dehydrogenases	1.000000000007394	0.647773279378102
+Respiration	Electron donating reactions	Coenzyme F420 hydrogenase	0.1492277992286237	0.21129599890778578
+Respiration	Electron donating reactions	Formate dehydrogenase	1.000000000007394	0.647773279378102
+Respiration	Electron donating reactions	Formate hydrogenase	1.0000000000140903	0.647773279378102
+Respiration	Electron donating reactions	Hydrogenases	0.0042579984664581775	0.013101533742948238
+Respiration	Electron donating reactions	Membrane-bound Ni; Fe-hydrogenase	0.016273868089529905	0.040058752220381307
+Respiration	Electron donating reactions	Na(+)-translocating NADH-quinone oxidoreductase and rnf-like group of electron transport complexes	0.016142629514750387	0.040058752220381307
+Respiration	Electron donating reactions	NiFe hydrogenase maturation	1.7424883866755792e-50	2.7879814186809265e-48
+Respiration	Electron donating reactions	Respiratory Complex I	8.295389009149927e-11	2.6545244829279767e-09
+Respiration	Electron donating reactions	Respiratory dehydrogenases 1	0.0033453422222400712	0.011635972946921987
+Respiration	Electron donating reactions	Succinate dehydrogenase	0.5493889807500054	0.5081054157225483
+Respiration	Soluble electron carries	Soluble cytochromes and functionally related electron carriers	0.6514665981508588	0.56958828253627
+Stress response	Detoxification	D-tyrosyl-tRNA(Tyr) deacylase	0.27619483273354495	0.3373372002852458
+Stress response	Oxidative stress	Glutathione Redox Metabolism	0.06750390288001806	0.11499512388451384
+Stress response	Oxidative stress	Protection from Reactive Oxygen Species	0.6720161318481475	0.5734786132271119
+Stress response	Starvation response	ppGpp biosynthesis	2.4021960098583266e-05	0.00015481097370490315
+Sulfur Metabolism	Inorganic sulfur assimilation	Inorganic Sulfur Assimilation	0.11287325417612647	0.17037472328471917
+Sulfur Metabolism	Inorganic sulfur assimilation	Sulfate assimilation	0.03819721207577499	0.0727565944300476
+Sulfur Metabolism	Inorganic sulfur assimilation	Sulfate to Sulfide	0.3350038870605692	0.38576486424238704
+Sulfur Metabolism	Organic sulfur assimilation	Alkanesulfonates Utilization	0.9999999999945883	0.647773279378102
+Virulence	Adhesion and colonization factors	Mannose-sensitive hemagglutinin type 4 pilus	0.3877168077244342	0.4108257565292018
+Virulence	Detection	MLST	0.27619483273354495	0.3373372002852458
+Virulence	Evading host defence	Streptococcal Hyaluronic Acid Capsule	1.000000000007394	0.647773279378102
+Virulence	Invasion and intracellular resistance	Listeria surface proteins: Internalin-like proteins	1.000000000007394	0.647773279378102
+Virulence	Resistance to Antibiotics	Resistance to fluoroquinolones	0.011164942941724999	0.03134019071361403

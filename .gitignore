@@ -47,3 +47,15 @@ pip-log.txt
 /STAMP_rc.pyc
 /commandLine.pyc
 /mainUI.pyc
+
+#############
+## Rust
+#############
+
+/target
+
+#############
+## Legacy Python reference environment
+#############
+
+.pixi/

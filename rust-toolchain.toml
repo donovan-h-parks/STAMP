@@ -1,0 +1,6 @@
+# Pinned so every developer and CI job builds with the same compiler.
+# eframe/egui 0.37 need Rust 1.95 or newer.
+[toolchain]
+channel = "1.99.0"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]

@@ -1,0 +1,231 @@
+Feature	Post-hoc test	Groups	p-value	Effect size	Lower CI	Upper CI	Note
+Acidobacteria_Gp1_Gp1	Games-Howell	error: ValueError					cannot convert float NaN to integer
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 1 : Enterotype 2	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 1 : Enterotype 3	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 1 : Enterotype 3 - twin	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 1 : Infant	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 1 : Unclassified	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 2 : Enterotype 3	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 2 : Enterotype 3 - twin	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 2 : Infant	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 2 : Unclassified	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 3 - twin : Infant	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 3 - twin : Unclassified	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 3 : Enterotype 3 - twin	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 3 : Infant	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Enterotype 3 : Unclassified	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Scheffè	Infant : Unclassified	nan	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 1 : Enterotype 2	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 1 : Enterotype 3	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 1 : Enterotype 3 - twin	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 1 : Infant	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 1 : Unclassified	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 2 : Enterotype 3	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 2 : Enterotype 3 - twin	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 2 : Infant	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 2 : Unclassified	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 3 - twin : Infant	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 3 - twin : Unclassified	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 3 : Enterotype 3 - twin	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 3 : Infant	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Enterotype 3 : Unclassified	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Tukey-Kramer	Infant : Unclassified	>= 0.1	0.0	nan	nan	
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 1 : Enterotype 2	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 1 : Enterotype 3	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 1 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 1 : Infant	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 1 : Unclassified	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 2 : Enterotype 3	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 2 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 2 : Infant	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 2 : Unclassified	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 3 - twin : Infant	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 3 - twin : Unclassified	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 3 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 3 : Infant	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Enterotype 3 : Unclassified	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Acidobacteria_Gp1_Gp1	Welch's (uncorrected)	Infant : Unclassified	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Actinomyces	Games-Howell	error: ValueError					cannot convert float NaN to integer
+Actinomyces	Scheffè	Enterotype 1 : Enterotype 2	nan	-0.02200541707467229	nan	nan	
+Actinomyces	Scheffè	Enterotype 1 : Enterotype 3	nan	-0.02328403469852596	nan	nan	
+Actinomyces	Scheffè	Enterotype 1 : Enterotype 3 - twin	nan	0.01339374988200761	nan	nan	
+Actinomyces	Scheffè	Enterotype 1 : Infant	nan	-0.6206177547540261	nan	nan	
+Actinomyces	Scheffè	Enterotype 1 : Unclassified	nan	-0.1114332493985315	nan	nan	
+Actinomyces	Scheffè	Enterotype 2 : Enterotype 3	nan	-0.0012786176238536728	nan	nan	
+Actinomyces	Scheffè	Enterotype 2 : Enterotype 3 - twin	nan	0.0353991669566799	nan	nan	
+Actinomyces	Scheffè	Enterotype 2 : Infant	nan	-0.5986123376793538	nan	nan	
+Actinomyces	Scheffè	Enterotype 2 : Unclassified	nan	-0.0894278323238592	nan	nan	
+Actinomyces	Scheffè	Enterotype 3 - twin : Infant	nan	-0.6340115046360337	nan	nan	
+Actinomyces	Scheffè	Enterotype 3 - twin : Unclassified	nan	-0.1248269992805391	nan	nan	
+Actinomyces	Scheffè	Enterotype 3 : Enterotype 3 - twin	nan	0.03667778458053357	nan	nan	
+Actinomyces	Scheffè	Enterotype 3 : Infant	nan	-0.5973337200555002	nan	nan	
+Actinomyces	Scheffè	Enterotype 3 : Unclassified	nan	-0.08814921470000553	nan	nan	
+Actinomyces	Scheffè	Infant : Unclassified	nan	0.5091845053554946	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 1 : Enterotype 2	>= 0.1	-0.02200541707467229	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 1 : Enterotype 3	>= 0.1	-0.02328403469852596	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 1 : Enterotype 3 - twin	>= 0.1	0.01339374988200761	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 1 : Infant	>= 0.1	-0.6206177547540261	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 1 : Unclassified	>= 0.1	-0.1114332493985315	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 2 : Enterotype 3	>= 0.1	-0.0012786176238536728	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 2 : Enterotype 3 - twin	>= 0.1	0.0353991669566799	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 2 : Infant	>= 0.1	-0.5986123376793538	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 2 : Unclassified	>= 0.1	-0.0894278323238592	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 3 - twin : Infant	>= 0.1	-0.6340115046360337	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 3 - twin : Unclassified	>= 0.1	-0.1248269992805391	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 3 : Enterotype 3 - twin	>= 0.1	0.03667778458053357	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 3 : Infant	>= 0.1	-0.5973337200555002	nan	nan	
+Actinomyces	Tukey-Kramer	Enterotype 3 : Unclassified	>= 0.1	-0.08814921470000553	nan	nan	
+Actinomyces	Tukey-Kramer	Infant : Unclassified	>= 0.1	0.5091845053554946	nan	nan	
+Actinomyces	Welch's (uncorrected)	Enterotype 1 : Enterotype 2	0.4895038005815465	-220.05417074672283	-946.4680364092089	506.35969491576327	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 1 : Enterotype 3	0.11712830920732828	-232.84034698525957	-529.3830900459355	63.70239607541643	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 1 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 1 : Infant	0.3563532483890195	-6206.177547540262	-24362.358299952288	11950.003204871766	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 1 : Unclassified	0.35838594126060624	-1114.332493985315	-9481.477894383135	7252.812906412507	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 2 : Enterotype 3	0.9673541592656212	-12.78617623853675	-738.3036201630528	712.7312676859793	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 2 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 2 : Infant	0.37137713874887024	-5986.123376793539	-24117.90190688433	12145.65515329725	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 2 : Unclassified	0.4111021757425441	-894.2783232385921	-6415.161688692102	4626.605042214917	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 3 - twin : Infant	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 3 - twin : Unclassified	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 3 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 3 : Infant	0.3721150957839103	-5973.337200555003	-24129.391984639104	12182.7175835291	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Enterotype 3 : Unclassified	0.4299578990279332	-881.4921470000554	-9225.019385974056	7462.035091973945	degenerate case: both groups must contain at least 2 samples
+Actinomyces	Welch's (uncorrected)	Infant : Unclassified	0.4393558766566277	5091.845053554947	-12904.356966114685	23088.04707322458	degenerate case: both groups must contain at least 2 samples
+Actinomycetales	Games-Howell	error: ValueError					cannot convert float NaN to integer
+Actinomycetales	Scheffè	Enterotype 1 : Enterotype 2	nan	-0.00035116666315505933	nan	nan	
+Actinomycetales	Scheffè	Enterotype 1 : Enterotype 3	nan	-0.0009583888596530268	nan	nan	
+Actinomycetales	Scheffè	Enterotype 1 : Enterotype 3 - twin	nan	-0.0005590000167706293	nan	nan	
+Actinomycetales	Scheffè	Enterotype 1 : Infant	nan	0.0	nan	nan	
+Actinomycetales	Scheffè	Enterotype 1 : Unclassified	nan	0.0	nan	nan	
+Actinomycetales	Scheffè	Enterotype 2 : Enterotype 3	nan	-0.0006072221964979676	nan	nan	
+Actinomycetales	Scheffè	Enterotype 2 : Enterotype 3 - twin	nan	-0.00020783335361556997	nan	nan	
+Actinomycetales	Scheffè	Enterotype 2 : Infant	nan	0.00035116666315505933	nan	nan	
+Actinomycetales	Scheffè	Enterotype 2 : Unclassified	nan	0.00035116666315505933	nan	nan	
+Actinomycetales	Scheffè	Enterotype 3 - twin : Infant	nan	0.0005590000167706293	nan	nan	
+Actinomycetales	Scheffè	Enterotype 3 - twin : Unclassified	nan	0.0005590000167706293	nan	nan	
+Actinomycetales	Scheffè	Enterotype 3 : Enterotype 3 - twin	nan	0.00039938884288239754	nan	nan	
+Actinomycetales	Scheffè	Enterotype 3 : Infant	nan	0.0009583888596530268	nan	nan	
+Actinomycetales	Scheffè	Enterotype 3 : Unclassified	nan	0.0009583888596530268	nan	nan	
+Actinomycetales	Scheffè	Infant : Unclassified	nan	0.0	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 1 : Enterotype 2	>= 0.1	-0.00035116666315505933	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 1 : Enterotype 3	>= 0.1	-0.0009583888596530268	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 1 : Enterotype 3 - twin	>= 0.1	-0.0005590000167706293	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 1 : Infant	>= 0.1	0.0	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 1 : Unclassified	>= 0.1	0.0	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 2 : Enterotype 3	>= 0.1	-0.0006072221964979676	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 2 : Enterotype 3 - twin	>= 0.1	-0.00020783335361556997	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 2 : Infant	>= 0.1	0.00035116666315505933	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 2 : Unclassified	>= 0.1	0.00035116666315505933	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 3 - twin : Infant	>= 0.1	0.0005590000167706293	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 3 - twin : Unclassified	>= 0.1	0.0005590000167706293	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 3 : Enterotype 3 - twin	>= 0.1	0.00039938884288239754	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 3 : Infant	>= 0.1	0.0009583888596530268	nan	nan	
+Actinomycetales	Tukey-Kramer	Enterotype 3 : Unclassified	>= 0.1	0.0009583888596530268	nan	nan	
+Actinomycetales	Tukey-Kramer	Infant : Unclassified	>= 0.1	0.0	nan	nan	
+Actinomycetales	Welch's (uncorrected)	Enterotype 1 : Enterotype 2	0.36321746764912255	-3.511666631550593	-12.538693090860614	5.5153598277594265	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 1 : Enterotype 3	0.2332774609288017	-9.583888596530267	-25.943744842319326	6.775967649258795	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 1 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 1 : Infant	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 1 : Unclassified	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 2 : Enterotype 3	0.48326703196155496	-6.072221964979674	-23.744614053220705	11.600170123261359	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 2 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 2 : Infant	0.36321746764912266	3.511666631550593	-5.5153598277594265	12.538693090860614	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 2 : Unclassified	0.36321746764912266	3.511666631550593	-5.5153598277594265	12.538693090860614	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 3 - twin : Infant	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 3 - twin : Unclassified	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 3 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 3 : Infant	0.23327746092880175	9.583888596530267	-6.775967649258795	25.943744842319326	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Enterotype 3 : Unclassified	0.23327746092880175	9.583888596530267	-6.775967649258795	25.943744842319326	degenerate case: variance of both groups is zero
+Actinomycetales	Welch's (uncorrected)	Infant : Unclassified	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+Atopobium	Games-Howell	error: ValueError					cannot convert float NaN to integer
+Atopobium	Scheffè	Enterotype 1 : Enterotype 2	nan	0.0006375416738940366	nan	nan	
+Atopobium	Scheffè	Enterotype 1 : Enterotype 3	nan	-0.0009632425587560761	nan	nan	
+Atopobium	Scheffè	Enterotype 1 : Enterotype 3 - twin	nan	0.0026618750177558295	nan	nan	
+Atopobium	Scheffè	Enterotype 1 : Infant	nan	-0.001435874988741022	nan	nan	
+Atopobium	Scheffè	Enterotype 1 : Unclassified	nan	-0.0792131283471955	nan	nan	
+Atopobium	Scheffè	Enterotype 2 : Enterotype 3	nan	-0.0016007842326501128	nan	nan	
+Atopobium	Scheffè	Enterotype 2 : Enterotype 3 - twin	nan	0.002024333343861793	nan	nan	
+Atopobium	Scheffè	Enterotype 2 : Infant	nan	-0.0020734166626350586	nan	nan	
+Atopobium	Scheffè	Enterotype 2 : Unclassified	nan	-0.07985067002108955	nan	nan	
+Atopobium	Scheffè	Enterotype 3 - twin : Infant	nan	-0.0040977500064968515	nan	nan	
+Atopobium	Scheffè	Enterotype 3 - twin : Unclassified	nan	-0.08187500336495133	nan	nan	
+Atopobium	Scheffè	Enterotype 3 : Enterotype 3 - twin	nan	0.0036251175765119057	nan	nan	
+Atopobium	Scheffè	Enterotype 3 : Infant	nan	-0.0004726324299849458	nan	nan	
+Atopobium	Scheffè	Enterotype 3 : Unclassified	nan	-0.07824988578843943	nan	nan	
+Atopobium	Scheffè	Infant : Unclassified	nan	-0.07777725335845448	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 1 : Enterotype 2	>= 0.1	0.0006375416738940366	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 1 : Enterotype 3	>= 0.1	-0.0009632425587560761	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 1 : Enterotype 3 - twin	>= 0.1	0.0026618750177558295	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 1 : Infant	>= 0.1	-0.001435874988741022	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 1 : Unclassified	>= 0.1	-0.0792131283471955	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 2 : Enterotype 3	>= 0.1	-0.0016007842326501128	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 2 : Enterotype 3 - twin	>= 0.1	0.002024333343861793	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 2 : Infant	>= 0.1	-0.0020734166626350586	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 2 : Unclassified	>= 0.1	-0.07985067002108955	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 3 - twin : Infant	>= 0.1	-0.0040977500064968515	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 3 - twin : Unclassified	>= 0.1	-0.08187500336495133	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 3 : Enterotype 3 - twin	>= 0.1	0.0036251175765119057	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 3 : Infant	>= 0.1	-0.0004726324299849458	nan	nan	
+Atopobium	Tukey-Kramer	Enterotype 3 : Unclassified	>= 0.1	-0.07824988578843943	nan	nan	
+Atopobium	Tukey-Kramer	Infant : Unclassified	>= 0.1	-0.07777725335845448	nan	nan	
+Atopobium	Welch's (uncorrected)	Enterotype 1 : Enterotype 2	0.6431204863327276	6.375416738940364	-23.466991696426483	36.21782517430721	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 1 : Enterotype 3	0.5378777686753026	-9.632425587560755	-42.12688758986032	22.862036414738807	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 1 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 1 : Infant	0.6210038866164915	-14.358749887410227	-86.08792234008125	57.370422565260796	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 1 : Unclassified	0.4179577533630798	-792.131283471955	-8536.51565574067	6952.253088796758	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 2 : Enterotype 3	0.15511171009705824	-16.00784232650112	-38.56054807332006	6.544863420317815	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 2 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 2 : Infant	0.46033017062612397	-20.734166626350593	-95.7634660524483	54.295132799747115	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 2 : Unclassified	0.4155443128373828	-798.5067002108955	-8553.042344628155	6956.028944206365	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 3 - twin : Infant	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 3 - twin : Unclassified	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 3 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 3 : Infant	0.8646216568981239	-4.7263242998494714	-77.29654383637352	67.84389523667458	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Enterotype 3 : Unclassified	0.42175681521638625	-782.4988578843944	-8532.109350443912	6967.111634675123	degenerate case: both groups must contain at least 2 samples
+Atopobium	Welch's (uncorrected)	Infant : Unclassified	0.423411907236531	-777.7725335845448	-8483.671919417407	6928.126852248317	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Games-Howell	error: ValueError					cannot convert float NaN to integer
+Bifidobacterium	Scheffè	Enterotype 1 : Enterotype 2	nan	2.66829418083592	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 1 : Enterotype 3	nan	-1.6544597865277155	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 1 : Enterotype 3 - twin	nan	-1.7698539790585923	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 1 : Infant	nan	-40.49194198331482	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 1 : Unclassified	nan	-5.2495822124058	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 2 : Enterotype 3	nan	-4.322753967363636	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 2 : Enterotype 3 - twin	nan	-4.438148159894513	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 2 : Infant	nan	-43.16023616415074	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 2 : Unclassified	nan	-7.917876393241721	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 3 - twin : Infant	nan	-38.72208800425622	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 3 - twin : Unclassified	nan	-3.479728233347208	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 3 : Enterotype 3 - twin	nan	-0.1153941925308768	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 3 : Infant	nan	-38.8374821967871	nan	nan	
+Bifidobacterium	Scheffè	Enterotype 3 : Unclassified	nan	-3.5951224258780847	nan	nan	
+Bifidobacterium	Scheffè	Infant : Unclassified	nan	35.24235977090902	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 1 : Enterotype 2	>= 0.1	2.66829418083592	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 1 : Enterotype 3	>= 0.1	-1.6544597865277155	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 1 : Enterotype 3 - twin	>= 0.1	-1.7698539790585923	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 1 : Infant	>= 0.1	-40.49194198331482	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 1 : Unclassified	>= 0.1	-5.2495822124058	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 2 : Enterotype 3	>= 0.1	-4.322753967363636	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 2 : Enterotype 3 - twin	>= 0.1	-4.438148159894513	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 2 : Infant	>= 0.1	-43.16023616415074	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 2 : Unclassified	>= 0.1	-7.917876393241721	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 3 - twin : Infant	>= 0.1	-38.72208800425622	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 3 - twin : Unclassified	>= 0.1	-3.479728233347208	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 3 : Enterotype 3 - twin	>= 0.1	-0.1153941925308768	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 3 : Infant	>= 0.1	-38.8374821967871	nan	nan	
+Bifidobacterium	Tukey-Kramer	Enterotype 3 : Unclassified	>= 0.1	-3.5951224258780847	nan	nan	
+Bifidobacterium	Tukey-Kramer	Infant : Unclassified	>= 0.1	35.24235977090902	nan	nan	
+Bifidobacterium	Welch's (uncorrected)	Enterotype 1 : Enterotype 2	0.08973046300882093	26682.941808359203	-5029.337249604856	58395.22086632326	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 1 : Enterotype 3	0.3498124393210591	-16544.59786527716	-52795.26381486055	19706.068084306226	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 1 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 1 : Infant	0.16762363934474786	-404919.41983314825	-1114764.2485446683	304925.4088783716	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 1 : Unclassified	0.6121072352984667	-52495.82212405799	-904915.3060499236	799923.6618018076	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 2 : Enterotype 3	0.0024280382407922494	-43227.53967363636	-69397.19161275966	-17057.887734513064	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 2 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 2 : Infant	0.1490031461359077	-431602.3616415075	-1142666.9239437536	279462.2006607386	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 2 : Unclassified	0.4841245317321019	-79178.76393241719	-1016838.9344800557	858481.4066152214	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 3 - twin : Infant	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 3 - twin : Unclassified	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 3 : Enterotype 3 - twin	1.0	0.0	0.0	0.0	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 3 : Infant	0.18062241252442426	-388374.8219678711	-1098568.0701915245	321818.4262557824	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Enterotype 3 : Unclassified	0.7169861861247172	-35951.22425878083	-911215.1142805387	839312.665762977	degenerate case: both groups must contain at least 2 samples
+Bifidobacterium	Welch's (uncorrected)	Infant : Unclassified	0.21751389682324684	352423.5977090902	-333748.51231834316	1038595.7077365238	degenerate case: both groups must contain at least 2 samples

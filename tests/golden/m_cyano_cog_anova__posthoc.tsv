@@ -1,0 +1,21 @@
+Feature	Post-hoc test	Groups	p-value	Effect size	Lower CI	Upper CI	Note
+[O] Posttranslational modification, protein turnover, chaperones	Games-Howell	Melainabacteria : Oxyphotobacteria	< 0.001	-1.273640981591262	-1.4204496251377172	-1.1268323380448066	
+[O] Posttranslational modification, protein turnover, chaperones	Scheffè	Melainabacteria : Oxyphotobacteria	5.650591106132197e-12	-1.273640981591262	-1.594923149278811	-0.9523588139037129	
+[O] Posttranslational modification, protein turnover, chaperones	Tukey-Kramer	Melainabacteria : Oxyphotobacteria	< 0.001	-1.273640981591262	-1.5949231498655994	-0.9523588133169245	
+[O] Posttranslational modification, protein turnover, chaperones	Welch's (uncorrected)	Melainabacteria : Oxyphotobacteria	2.68067635519705e-23	-12736.409815912628	-14204.494087334106	-11268.32554449115	
+[P] Inorganic ion transport and metabolism	Games-Howell	Melainabacteria : Oxyphotobacteria	< 0.001	-1.877737986243422	-2.115166224055755	-1.640309748431089	
+[P] Inorganic ion transport and metabolism	Scheffè	Melainabacteria : Oxyphotobacteria	2.082223282684481e-12	-1.877737986243422	-2.3393291236768694	-1.4161468488099744	
+[P] Inorganic ion transport and metabolism	Tukey-Kramer	Melainabacteria : Oxyphotobacteria	< 0.001	-1.877737986243422	-2.3393291245199177	-1.4161468479669264	
+[P] Inorganic ion transport and metabolism	Welch's (uncorrected)	Melainabacteria : Oxyphotobacteria	9.988494662124706e-18	-18777.379862434223	-21151.659645331718	-16403.10007953673	
+[Q] Secondary metabolites biosynthesis, transport and catabolism	Games-Howell	Melainabacteria : Oxyphotobacteria	< 0.001	-0.8821350519680096	-0.9904941609240601	-0.7737759430119591	
+[Q] Secondary metabolites biosynthesis, transport and catabolism	Scheffè	Melainabacteria : Oxyphotobacteria	3.510525203864745e-13	-0.8821350519680096	-1.0896003458331462	-0.6746697581028729	
+[Q] Secondary metabolites biosynthesis, transport and catabolism	Tukey-Kramer	Melainabacteria : Oxyphotobacteria	< 0.001	-0.8821350519680096	-1.08960034621206	-0.6746697577239591	
+[Q] Secondary metabolites biosynthesis, transport and catabolism	Welch's (uncorrected)	Melainabacteria : Oxyphotobacteria	1.0359787272111994e-17	-8821.350519680098	-9904.932412210801	-7737.768627149394	
+[R] General function prediction only	Games-Howell	Melainabacteria : Oxyphotobacteria	< 0.001	-3.0745952603955855	-3.5670911295492616	-2.5820993912419095	
+[R] General function prediction only	Scheffè	Melainabacteria : Oxyphotobacteria	4.576450329807358e-12	-3.0745952603955855	-3.845907352797205	-2.303283167993966	
+[R] General function prediction only	Tukey-Kramer	Melainabacteria : Oxyphotobacteria	< 0.001	-3.0745952603955855	-3.8459073542059263	-2.3032831665852447	
+[R] General function prediction only	Welch's (uncorrected)	Melainabacteria : Oxyphotobacteria	1.1284537504515305e-11	-30745.952603955844	-35670.76011006367	-25821.145097848024	
+[S] Function unknown	Games-Howell	Melainabacteria : Oxyphotobacteria	< 0.001	-2.8600249336774173	-3.1783847672302423	-2.5416651001245922	
+[S] Function unknown	Scheffè	Melainabacteria : Oxyphotobacteria	1.1421197321226373e-10	-2.8600249336774173	-3.6439057578946015	-2.076144109460233	
+[S] Function unknown	Tukey-Kramer	Melainabacteria : Oxyphotobacteria	< 0.001	-2.8600249336774173	-3.6439057593262776	-2.076144108028557	
+[S] Function unknown	Welch's (uncorrected)	Melainabacteria : Oxyphotobacteria	7.012636516759965e-30	-28600.24933677416	-31783.84643637923	-25416.652237169084	

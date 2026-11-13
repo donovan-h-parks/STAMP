@@ -1,0 +1,15 @@
+[package]
+name = "stamp-core"
+description = "STAMP data model, file parsers and statistics (no UI, no filesystem, no threads)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

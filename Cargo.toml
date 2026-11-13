@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["crates/stamp-core", "crates/stamp-plot", "crates/stamp-cli", "crates/stamp-gui"]
+
+[workspace.package]
+version = "3.0.0-alpha.0"
+edition = "2021"
+rust-version = "1.95"
+license = "GPL-3.0-or-later"
+authors = ["Donovan Parks", "Rob Beiko"]
+repository = "https://github.com/dparks1134/STAMP"
+
+[workspace.dependencies]
+stamp-core = { path = "crates/stamp-core" }
+stamp-plot = { path = "crates/stamp-plot" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+eframe = "0.37"
+
+[profile.release]
+lto = "thin"

@@ -1,0 +1,18 @@
+[package]
+name = "stamp-cli"
+description = "Command-line interface to STAMP"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "stamp-cli"
+path = "src/main.rs"
+
+[dependencies]
+stamp-core = { workspace = true }
+stamp-plot = { workspace = true }
+clap = { workspace = true }

@@ -1,0 +1,121 @@
+Feature	Post-hoc test	Groups	p-value	Effect size	Lower CI	Upper CI	Note
+o__Burkholderiales	Games-Howell	Core : Deep cutting	>= 0.1	1.2176030660756547	-1.4506976505955262	3.8859037827468357	
+o__Burkholderiales	Games-Howell	Core : Produced water	>= 0.1	1.573713083447155	-1.103119006576604	4.250545173470915	
+o__Burkholderiales	Games-Howell	Core : Shallow cutting	< 0.001	-13.073389571992703	-18.987588200017992	-7.159190943967413	
+o__Burkholderiales	Games-Howell	Deep cutting : Produced water	>= 0.1	0.3561100173715006	-0.6747027798269767	1.386922814569978	
+o__Burkholderiales	Games-Howell	Deep cutting : Shallow cutting	< 0.001	-14.290992638068358	-19.987178621212976	-8.59480665492374	
+o__Burkholderiales	Games-Howell	Produced water : Shallow cutting	< 0.001	-14.64710265543986	-20.350764343690678	-8.943440967189039	
+o__Burkholderiales	Scheffè	Core : Deep cutting	0.8953582503400268	1.2176030660756547	-3.362835560860235	5.798041693011545	
+o__Burkholderiales	Scheffè	Core : Produced water	0.7584333028614196	1.573713083447155	-2.6538403389014413	5.801266505795752	
+o__Burkholderiales	Scheffè	Core : Shallow cutting	4.516390594844211e-09	-13.073389571992703	-17.56034002390874	-8.586439120076665	
+o__Burkholderiales	Scheffè	Deep cutting : Produced water	0.9951468255432876	0.3561100173715006	-3.586103876061359	4.298323910804361	
+o__Burkholderiales	Scheffè	Deep cutting : Shallow cutting	7.996125983567026e-11	-14.290992638068358	-18.51018293962069	-10.071802336516026	
+o__Burkholderiales	Scheffè	Produced water : Shallow cutting	2.397415599375563e-12	-14.64710265543986	-18.480294109619816	-10.813911201259902	
+o__Burkholderiales	Tukey-Kramer	Core : Deep cutting	>= 0.1	1.2176030660756547	-2.989527212557273	5.424733344708582	
+o__Burkholderiales	Tukey-Kramer	Core : Produced water	>= 0.1	1.573713083447155	-2.309292335097006	5.4567185019913165	
+o__Burkholderiales	Tukey-Kramer	Core : Shallow cutting	< 0.001	-13.073389571992703	-17.19465101494094	-8.952128129044464	
+o__Burkholderiales	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	0.3561100173715006	-3.264811205844122	3.977031240587123	
+o__Burkholderiales	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.001	-14.290992638068358	-18.1663165349087	-10.415668741228018	
+o__Burkholderiales	Tukey-Kramer	Produced water : Shallow cutting	< 0.001	-14.64710265543986	-18.167886830091174	-11.126318480788544	
+o__Burkholderiales	Welch's (uncorrected)	Core : Deep cutting	0.18313247253795084	12176.030660756542	-7053.70926412683	31405.770585639915	
+o__Burkholderiales	Welch's (uncorrected)	Core : Produced water	0.09911139874627728	15737.130834471549	-3636.0919590693784	35110.353628012475	
+o__Burkholderiales	Welch's (uncorrected)	Core : Shallow cutting	1.8259039371516974e-05	-130733.895719927	-174305.4949236116	-87162.29651624241	
+o__Burkholderiales	Welch's (uncorrected)	Deep cutting : Produced water	0.3490055091192128	3561.1001737150077	-4144.560468511551	11266.760815941567	
+o__Burkholderiales	Welch's (uncorrected)	Deep cutting : Shallow cutting	1.4739523252195037e-05	-142909.92638068352	-184437.99404114124	-101381.85872022582	
+o__Burkholderiales	Welch's (uncorrected)	Produced water : Shallow cutting	1.114923910361133e-05	-146471.02655439856	-188080.8117089941	-104861.24139980302	
+o__Puniceicoccales	Games-Howell	Core : Deep cutting	>= 0.1	-1.4176167506809254	-3.3417558354782635	0.5065223341164125	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Puniceicoccales	Games-Howell	Core : Produced water	>= 0.1	-0.005346164127238706	-0.021027129604992163	0.01033480135051475	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Puniceicoccales	Games-Howell	Core : Shallow cutting	>= 0.1	0.0	-0.0040338067838235295	0.0040338067838235295	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Puniceicoccales	Games-Howell	Deep cutting : Produced water	>= 0.1	1.4122705865536866	-0.5118880461643103	3.3364292192716833	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Puniceicoccales	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	1.4176167506809254	-0.5065223341154865	3.341755835477337	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Puniceicoccales	Games-Howell	Produced water : Shallow cutting	>= 0.1	0.005346164127238706	-0.010333344552298406	0.02102567280677582	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Puniceicoccales	Scheffè	Core : Deep cutting	0.024477642296899638	-1.4176167506809254	-2.6975162916268824	-0.13771720973496837	
+o__Puniceicoccales	Scheffè	Core : Produced water	0.9999993759364237	-0.005346164127238706	-1.1866399495671918	1.1759476213127142	
+o__Puniceicoccales	Scheffè	Core : Shallow cutting	1.0	0.0	-1.2537763937896704	1.2537763937896704	
+o__Puniceicoccales	Scheffè	Deep cutting : Produced water	0.006894801591059485	1.4122705865536866	0.31070845168652883	2.5138327214208447	
+o__Puniceicoccales	Scheffè	Deep cutting : Shallow cutting	0.012481329253041129	1.4176167506809254	0.23865984939985374	2.596573651961997	
+o__Puniceicoccales	Scheffè	Produced water : Shallow cutting	0.9999991628383419	0.005346164127238706	-1.065752126266154	1.0764444545206315	
+o__Puniceicoccales	Tukey-Kramer	Core : Deep cutting	< 0.02	-1.4176167506809254	-2.593203752470806	-0.24202974889104478	
+o__Puniceicoccales	Tukey-Kramer	Core : Produced water	>= 0.1	-0.005346164127238706	-1.0903638354610317	1.0796715072065541	
+o__Puniceicoccales	Tukey-Kramer	Core : Shallow cutting	>= 0.1	0.0	-1.15159290595633	1.15159290595633	
+o__Puniceicoccales	Tukey-Kramer	Deep cutting : Produced water	< 0.01	1.4122705865536866	0.40048639100921624	2.424054782098157	
+o__Puniceicoccales	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.01	1.4176167506809254	0.33474550612047027	2.5004879952413805	
+o__Puniceicoccales	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	0.005346164127238706	-0.9784570075616894	0.9891493358161667	
+o__Puniceicoccales	Welch's (uncorrected)	Core : Deep cutting	0.046999551578256055	-14176.167506809254	-28119.101574453533	-233.23343916497663	degenerate case: variance of both groups is zero
+o__Puniceicoccales	Welch's (uncorrected)	Core : Produced water	0.33428194339465733	-53.46164127238706	-168.125457787593	61.20217524281888	degenerate case: variance of both groups is zero
+o__Puniceicoccales	Welch's (uncorrected)	Core : Shallow cutting	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+o__Puniceicoccales	Welch's (uncorrected)	Deep cutting : Produced water	0.04767383679307757	14122.705865536867	179.56707889624965	28065.844652177486	degenerate case: variance of both groups is zero
+o__Puniceicoccales	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.04699955157825619	14176.167506809254	233.23343916497663	28119.101574453533	degenerate case: variance of both groups is zero
+o__Puniceicoccales	Welch's (uncorrected)	Produced water : Shallow cutting	0.33428194339465733	53.46164127238706	-61.20217524281888	168.125457787593	degenerate case: variance of both groups is zero
+o__Streptophyta	Games-Howell	Core : Deep cutting	>= 0.1	6.782691319679979	-7.907376131804969	21.472758771164926	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Streptophyta	Games-Howell	Core : Produced water	>= 0.1	6.791942722682767	-7.898121469290044	21.482006914655578	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Streptophyta	Games-Howell	Core : Shallow cutting	>= 0.1	6.792681329669989	-7.897382877227898	21.482745536567876	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Streptophyta	Games-Howell	Deep cutting : Produced water	>= 0.1	0.009251403002787892	-0.021958914754009337	0.04046172075958512	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Streptophyta	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	0.00999000999000999	-0.02123952840759883	0.041219548387618814	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Streptophyta	Games-Howell	Produced water : Shallow cutting	>= 0.1	0.000738606987222099	-0.002745850616470115	0.0042230645909143135	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Streptophyta	Scheffè	Core : Deep cutting	0.07562975303724606	6.782691319679979	-0.485986291341689	14.051368930701647	
+o__Streptophyta	Scheffè	Core : Produced water	0.04618159714812076	6.791942722682767	0.08325706761933027	13.500628377746203	
+o__Streptophyta	Scheffè	Core : Shallow cutting	0.06664970505555112	6.792681329669989	-0.32764031372316715	13.913002973063145	
+o__Streptophyta	Scheffè	Deep cutting : Produced water	0.9999999782251695	0.009251403002787892	-6.246630227316687	6.265133033322262	
+o__Streptophyta	Scheffè	Deep cutting : Shallow cutting	0.9999999776353083	0.00999000999000999	-6.685424246012953	6.705404265992973	
+o__Streptophyta	Scheffè	Produced water : Shallow cutting	0.9999999999879465	0.000738606987222099	-6.082135801133825	6.08361301510827	
+o__Streptophyta	Tukey-Kramer	Core : Deep cutting	< 0.05	6.782691319679979	0.10641506021454905	13.458967579145408	
+o__Streptophyta	Tukey-Kramer	Core : Produced water	< 0.05	6.791942722682767	0.6300187568706592	12.953866688494873	
+o__Streptophyta	Tukey-Kramer	Core : Shallow cutting	< 0.05	6.792681329669989	0.25266994225314043	13.332692717086838	
+o__Streptophyta	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	0.009251403002787892	-5.736772323128227	5.755275129133802	
+o__Streptophyta	Tukey-Kramer	Deep cutting : Shallow cutting	>= 0.1	0.00999000999000999	-6.139744183318915	6.159724203298935	
+o__Streptophyta	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	0.000738606987222099	-5.586378083766683	5.587855297741128	
+o__Streptophyta	Welch's (uncorrected)	Core : Deep cutting	0.17026628531746324	67826.91319679978	-37112.06654746503	172765.8929410646	
+o__Streptophyta	Welch's (uncorrected)	Core : Produced water	0.1697591487705239	67919.42722682767	-37019.50250493961	172858.35695859496	
+o__Streptophyta	Welch's (uncorrected)	Core : Shallow cutting	0.16971875791021596	67926.8132966999	-37012.11616018908	172865.74275358886	
+o__Streptophyta	Welch's (uncorrected)	Deep cutting : Produced water	0.3795642828331589	92.51403002787893	-133.7191568496686	318.74721690542646	
+o__Streptophyta	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.34343639613791366	99.90009990009992	-126.08962664745171	325.88982644765156	
+o__Streptophyta	Welch's (uncorrected)	Produced water : Shallow cutting	0.3342819433946571	7.3860698722209905	-8.455474465742865	23.227614210184846	
+o__Synechococcales	Games-Howell	Core : Deep cutting	>= 0.1	0.4109467478805741	-0.432179993190078	1.2540734889512262	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Synechococcales	Games-Howell	Core : Produced water	>= 0.1	0.4109467478805741	-0.4321799931773916	1.2540734889385399	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Synechococcales	Games-Howell	Core : Shallow cutting	>= 0.1	0.4109467478805741	-0.43217999318652583	1.2540734889476741	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Synechococcales	Games-Howell	Deep cutting : Produced water	>= 0.1	0.0	-0.003928329066130435	0.003928329066130435	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Synechococcales	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	0.0	-0.003977625874789474	0.003977625874789474	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Synechococcales	Games-Howell	Produced water : Shallow cutting	>= 0.1	0.0	-0.003909460421333334	0.003909460421333334	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Synechococcales	Scheffè	Core : Deep cutting	0.05495874873985873	0.4109467478805741	-0.006232303337844636	0.8281257990989929	
+o__Synechococcales	Scheffè	Core : Produced water	0.03219983830192863	0.4109467478805741	0.025907918773858674	0.7959855769872896	
+o__Synechococcales	Scheffè	Core : Shallow cutting	0.048248756062092	0.4109467478805741	0.002282450669680247	0.819611045091468	
+o__Synechococcales	Scheffè	Deep cutting : Produced water	1.0	0.0	-0.35905055950123266	0.35905055950123266	
+o__Synechococcales	Scheffè	Deep cutting : Shallow cutting	1.0	0.0	-0.38427712939121367	0.38427712939121367	
+o__Synechococcales	Scheffè	Produced water : Shallow cutting	1.0	0.0	-0.3491209694611911	0.3491209694611911	
+o__Synechococcales	Tukey-Kramer	Core : Deep cutting	< 0.05	0.4109467478805741	0.027768026159229187	0.7941254696019191	
+o__Synechococcales	Tukey-Kramer	Core : Produced water	< 0.02	0.4109467478805741	0.05728880192357766	0.7646046938375706	
+o__Synechococcales	Tukey-Kramer	Core : Shallow cutting	< 0.05	0.4109467478805741	0.03558882288151444	0.7863046728796338	
+o__Synechococcales	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	0.0	-0.3297877350772923	0.3297877350772923	
+o__Synechococcales	Tukey-Kramer	Deep cutting : Shallow cutting	>= 0.1	0.0	-0.3529583252007072	0.3529583252007072	
+o__Synechococcales	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	0.0	-0.3206674122623097	0.3206674122623097	
+o__Synechococcales	Welch's (uncorrected)	Core : Deep cutting	0.15069225325930335	4109.467478805741	-1913.4304825556683	10132.36544016715	degenerate case: variance of both groups is zero
+o__Synechococcales	Welch's (uncorrected)	Core : Produced water	0.15069225325930335	4109.467478805741	-1913.4304825556683	10132.36544016715	degenerate case: variance of both groups is zero
+o__Synechococcales	Welch's (uncorrected)	Core : Shallow cutting	0.15069225325930335	4109.467478805741	-1913.4304825556683	10132.36544016715	degenerate case: variance of both groups is zero
+o__Synechococcales	Welch's (uncorrected)	Deep cutting : Produced water	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+o__Synechococcales	Welch's (uncorrected)	Deep cutting : Shallow cutting	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+o__Synechococcales	Welch's (uncorrected)	Produced water : Shallow cutting	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+o__Thermoanaerobacterales	Games-Howell	Core : Deep cutting	>= 0.1	0.0026282590412111018	-0.006145846959722421	0.011402365042144624	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thermoanaerobacterales	Games-Howell	Core : Produced water	>= 0.1	-1.2395663386966882	-3.0789076064542424	0.599774929060866	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thermoanaerobacterales	Games-Howell	Core : Shallow cutting	>= 0.1	0.0026282590412111018	-0.006143300842147828	0.01139981892457003	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thermoanaerobacterales	Games-Howell	Deep cutting : Produced water	>= 0.1	-1.2421945977378992	-3.081528681150167	0.5971394856743688	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thermoanaerobacterales	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	0.0	-0.003977625874789474	0.003977625874789474	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thermoanaerobacterales	Games-Howell	Produced water : Shallow cutting	>= 0.1	1.2421945977378992	-0.597139485674159	3.0815286811499574	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thermoanaerobacterales	Scheffè	Core : Deep cutting	0.999999984882662	0.0026282590412111018	-2.00450295211843	2.0097594702008523	
+o__Thermoanaerobacterales	Scheffè	Core : Produced water	0.2973310626968766	-1.2395663386966882	-3.092064562544058	0.612931885150682	
+o__Thermoanaerobacterales	Scheffè	Core : Shallow cutting	0.999999983917905	0.0026282590412111018	-1.9635367807012993	1.9687932987837213	
+o__Thermoanaerobacterales	Scheffè	Deep cutting : Produced water	0.23778578933520078	-1.2421945977378992	-2.9696580987322134	0.4852689032564148	
+o__Thermoanaerobacterales	Scheffè	Deep cutting : Shallow cutting	1.0	0.0	-1.8488335353447958	1.8488335353447958	
+o__Thermoanaerobacterales	Scheffè	Produced water : Shallow cutting	0.2158983234889198	1.2421945977378992	-0.4374956748903702	2.921884870366169	
+o__Thermoanaerobacterales	Tukey-Kramer	Core : Deep cutting	>= 0.1	0.0026282590412111018	-1.8409206190075584	1.8461771370899804	
+o__Thermoanaerobacterales	Tukey-Kramer	Core : Produced water	>= 0.1	-1.2395663386966882	-2.9410849056806607	0.4619522282872843	
+o__Thermoanaerobacterales	Tukey-Kramer	Core : Shallow cutting	>= 0.1	0.0026282590412111018	-1.8032932138164592	1.8085497318988812	
+o__Thermoanaerobacterales	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	-1.2421945977378992	-2.828868842760622	0.3444796472848237	
+o__Thermoanaerobacterales	Tukey-Kramer	Deep cutting : Shallow cutting	>= 0.1	0.0	-1.6981525526747159	1.6981525526747159	
+o__Thermoanaerobacterales	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	1.2421945977378992	-0.3005999641503543	2.7849891596261527	
+o__Thermoanaerobacterales	Welch's (uncorrected)	Core : Deep cutting	0.3506166628202074	26.282590412111016	-35.865860255737466	88.4310410799595	degenerate case: variance of both groups is zero
+o__Thermoanaerobacterales	Welch's (uncorrected)	Core : Produced water	0.07036466462117205	-12395.663386966879	-25968.369680984586	1177.0429070508299	degenerate case: variance of both groups is zero
+o__Thermoanaerobacterales	Welch's (uncorrected)	Core : Shallow cutting	0.3506166628202074	26.282590412111016	-35.865860255737466	88.4310410799595	degenerate case: variance of both groups is zero
+o__Thermoanaerobacterales	Welch's (uncorrected)	Deep cutting : Produced water	0.06983579467432689	-12421.945977378991	-25994.57913850156	1150.6871837435767	degenerate case: variance of both groups is zero
+o__Thermoanaerobacterales	Welch's (uncorrected)	Deep cutting : Shallow cutting	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+o__Thermoanaerobacterales	Welch's (uncorrected)	Produced water : Shallow cutting	0.06983579467432688	12421.945977378991	-1150.6871837435767	25994.57913850156	degenerate case: variance of both groups is zero

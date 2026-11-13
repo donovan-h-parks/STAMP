@@ -1,0 +1,121 @@
+Feature	Post-hoc test	Groups	p-value	Effect size	Lower CI	Upper CI	Note
+p__Actinobacteria	Games-Howell	Core : Deep cutting	>= 0.1	5.229543821476479	-1.0398463858889748	11.498934028841933	
+p__Actinobacteria	Games-Howell	Core : Produced water	>= 0.1	4.955882457454796	-1.3148912880574075	11.226656202967	
+p__Actinobacteria	Games-Howell	Core : Shallow cutting	< 0.1	5.406112459292838	-0.8627210175850335	11.674945936170708	
+p__Actinobacteria	Games-Howell	Deep cutting : Produced water	>= 0.1	-0.27366136402168395	-0.830037509847715	0.28271478180434706	
+p__Actinobacteria	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	0.17656863781635818	-0.14478992985529837	0.4979272054880147	
+p__Actinobacteria	Games-Howell	Produced water : Shallow cutting	< 0.1	0.4502300018380421	-0.06460807120480122	0.9650680748808855	
+p__Actinobacteria	Scheffè	Core : Deep cutting	0.0003298612056734651	5.229543821476479	2.070771268102213	8.388316374850746	
+p__Actinobacteria	Scheffè	Core : Produced water	0.00022527018937135157	4.955882457454796	2.040467405300425	7.871297509609167	
+p__Actinobacteria	Scheffè	Core : Shallow cutting	0.00014954183803173038	5.406112459292838	2.3118114348200103	8.500413483765666	
+p__Actinobacteria	Scheffè	Deep cutting : Produced water	0.9933205389502571	-0.27366136402168395	-2.9922999181718204	2.4449771901284523	
+p__Actinobacteria	Scheffè	Deep cutting : Shallow cutting	0.9985105269399147	0.17656863781635818	-2.733079019862636	3.086216295495352	
+p__Actinobacteria	Scheffè	Produced water : Shallow cutting	0.9692585021076583	0.4502300018380421	-2.1932242486105165	3.0936842522866006	
+p__Actinobacteria	Tukey-Kramer	Core : Deep cutting	< 0.001	5.229543821476479	2.3282130243633827	8.130874618589576	
+p__Actinobacteria	Tukey-Kramer	Core : Produced water	< 0.001	4.955882457454796	2.2780753870638217	7.633689527845769	
+p__Actinobacteria	Tukey-Kramer	Core : Shallow cutting	< 0.001	5.406112459292838	2.5639987248767366	8.24822619370894	
+p__Actinobacteria	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	-0.27366136402168395	-2.770729332701176	2.223406604657808	
+p__Actinobacteria	Tukey-Kramer	Deep cutting : Shallow cutting	>= 0.1	0.17656863781635818	-2.4959410840229976	2.8490783596557137	
+p__Actinobacteria	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	0.4502300018380421	-1.9777812265719183	2.8782412302480025	
+p__Actinobacteria	Welch's (uncorrected)	Core : Deep cutting	0.02803778354649311	52295.438214764785	7503.391913590195	97087.48451593937	
+p__Actinobacteria	Welch's (uncorrected)	Core : Produced water	0.034607025475707376	49558.82457454794	4741.239235399882	94376.409913696	
+p__Actinobacteria	Welch's (uncorrected)	Core : Shallow cutting	0.02452171331213071	54061.12459292837	9278.068911516437	98844.1802743403	
+p__Actinobacteria	Welch's (uncorrected)	Deep cutting : Produced water	0.1849279822694023	-2736.6136402168386	-6888.007152456478	1414.7798720228004	
+p__Actinobacteria	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.13089227536549175	1765.686378163582	-599.8742386380105	4131.246994965174	
+p__Actinobacteria	Welch's (uncorrected)	Produced water : Shallow cutting	0.023579582523122644	4502.300018380421	687.2315569150686	8317.368479845773	
+p__Chlamydiae	Games-Howell	Core : Deep cutting	>= 0.1	-0.026183315359895147	-0.06995615703593278	0.017589526316142474	degenerate case: two groups with zero variance; variance set to 1e-6.
+p__Chlamydiae	Games-Howell	Core : Produced water	>= 0.1	0.0	-0.003983359740333333	0.003983359740333333	degenerate case: two groups with zero variance; variance set to 1e-6.
+p__Chlamydiae	Games-Howell	Core : Shallow cutting	>= 0.1	0.0	-0.0040338067838235295	0.0040338067838235295	degenerate case: two groups with zero variance; variance set to 1e-6.
+p__Chlamydiae	Games-Howell	Deep cutting : Produced water	>= 0.1	0.026183315359895147	-0.017589393314513292	0.0699560240343036	degenerate case: two groups with zero variance; variance set to 1e-6.
+p__Chlamydiae	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	0.026183315359895147	-0.017589446515697313	0.06995607723548761	degenerate case: two groups with zero variance; variance set to 1e-6.
+p__Chlamydiae	Games-Howell	Produced water : Shallow cutting	>= 0.1	0.0	-0.003909460421333334	0.003909460421333334	degenerate case: two groups with zero variance; variance set to 1e-6.
+p__Chlamydiae	Scheffè	Core : Deep cutting	0.0920124492109784	-0.026183315359895147	-0.05527705450970136	0.002910423789911059	
+p__Chlamydiae	Scheffè	Core : Produced water	1.0	0.0	-0.026852305320366004	0.026852305320366004	
+p__Chlamydiae	Scheffè	Core : Shallow cutting	1.0	0.0	-0.028499926897498272	0.028499926897498272	
+p__Chlamydiae	Scheffè	Deep cutting : Produced water	0.0371826480231201	0.026183315359895147	0.0011434115363168872	0.051223219183473404	
+p__Chlamydiae	Scheffè	Deep cutting : Shallow cutting	0.05780029597942804	0.026183315359895147	-0.0006158696209701865	0.05298250034076048	
+p__Chlamydiae	Scheffè	Produced water : Shallow cutting	1.0	0.0	-0.02434742201835398	0.02434742201835398	
+p__Chlamydiae	Tukey-Kramer	Core : Deep cutting	< 0.1	-0.026183315359895147	-0.052905898253158105	0.0005392675333678112	
+p__Chlamydiae	Tukey-Kramer	Core : Produced water	>= 0.1	0.0	-0.024663827193331603	0.024663827193331603	
+p__Chlamydiae	Tukey-Kramer	Core : Shallow cutting	>= 0.1	0.0	-0.026177166676611425	0.026177166676611425	
+p__Chlamydiae	Tukey-Kramer	Deep cutting : Produced water	< 0.05	0.026183315359895147	0.0031841779125052205	0.049182452807285074	
+p__Chlamydiae	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.05	0.026183315359895147	0.001568279168239737	0.05079835155155056	
+p__Chlamydiae	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	0.0	-0.02236309330239712	0.02236309330239712	
+p__Chlamydiae	Welch's (uncorrected)	Core : Deep cutting	0.09449951180691987	-261.83315359895147	-578.8015391100688	55.135231912165935	degenerate case: variance of both groups is zero
+p__Chlamydiae	Welch's (uncorrected)	Core : Produced water	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+p__Chlamydiae	Welch's (uncorrected)	Core : Shallow cutting	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+p__Chlamydiae	Welch's (uncorrected)	Deep cutting : Produced water	0.09449951180691984	261.83315359895147	-55.135231912165935	578.8015391100688	degenerate case: variance of both groups is zero
+p__Chlamydiae	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.09449951180691984	261.83315359895147	-55.135231912165935	578.8015391100688	degenerate case: variance of both groups is zero
+p__Chlamydiae	Welch's (uncorrected)	Produced water : Shallow cutting	1.0	0.0	0.0	0.0	degenerate case: variance of both groups is zero
+p__Euryarchaeota	Games-Howell	Core : Deep cutting	>= 0.1	2.4211502779121092	-3.3791870882630803	8.221487644087299	
+p__Euryarchaeota	Games-Howell	Core : Produced water	< 0.1	-13.374175237647865	-27.795598710004075	1.047248234708345	
+p__Euryarchaeota	Games-Howell	Core : Shallow cutting	>= 0.1	2.012380442912419	-3.7939282452865237	7.818689131111362	
+p__Euryarchaeota	Games-Howell	Deep cutting : Produced water	< 0.05	-15.795325515559975	-29.669759426585387	-1.920891604534562	
+p__Euryarchaeota	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	-0.40876983499969055	-1.4074847561171513	0.5899450861177701	
+p__Euryarchaeota	Games-Howell	Produced water : Shallow cutting	< 0.05	15.386555680560285	1.4951096969991386	29.278001664121433	
+p__Euryarchaeota	Scheffè	Core : Deep cutting	0.9756661185180431	2.4211502779121092	-13.006765323405485	17.849065879229702	
+p__Euryarchaeota	Scheffè	Core : Produced water	0.07290057410571582	-13.374175237647865	-27.61349655864684	0.8651460833511102	
+p__Euryarchaeota	Scheffè	Core : Shallow cutting	0.9848555350860897	2.012380442912419	-13.100646609206915	17.125407495031755	
+p__Euryarchaeota	Scheffè	Deep cutting : Produced water	0.013706096458813266	-15.795325515559975	-29.07356111347034	-2.5170899176496118	
+p__Euryarchaeota	Scheffè	Deep cutting : Shallow cutting	0.9998401317637805	-0.40876983499969055	-14.619922342416135	13.802382672416755	
+p__Euryarchaeota	Scheffè	Produced water : Shallow cutting	0.013491804182710232	15.386555680560285	2.475531419475267	28.297579941645303	
+p__Euryarchaeota	Tukey-Kramer	Core : Deep cutting	>= 0.1	2.4211502779121092	-11.749381443831894	16.591681999656114	
+p__Euryarchaeota	Tukey-Kramer	Core : Produced water	< 0.05	-13.374175237647865	-26.452983787656343	-0.2953666876393868	
+p__Euryarchaeota	Tukey-Kramer	Core : Shallow cutting	>= 0.1	2.012380442912419	-11.868926325147836	15.893687210972672	
+p__Euryarchaeota	Tukey-Kramer	Deep cutting : Produced water	< 0.01	-15.795325515559975	-27.99137737449741	-3.5992736566225414	
+p__Euryarchaeota	Tukey-Kramer	Deep cutting : Shallow cutting	>= 0.1	-0.40876983499969055	-13.461705345723388	12.644165675724008	
+p__Euryarchaeota	Tukey-Kramer	Produced water : Shallow cutting	< 0.01	15.386555680560285	3.52778722603966	27.24532413508091	
+p__Euryarchaeota	Welch's (uncorrected)	Core : Deep cutting	0.20956394950962043	24211.502779121096	-17223.734195939047	65646.73975418124	
+p__Euryarchaeota	Welch's (uncorrected)	Core : Produced water	0.017317127832936086	-133741.75237647863	-240838.37897221575	-26645.125780741524	
+p__Euryarchaeota	Welch's (uncorrected)	Core : Shallow cutting	0.29375011675341245	20123.80442912419	-21472.88003393489	61720.48889218327	
+p__Euryarchaeota	Welch's (uncorrected)	Deep cutting : Produced water	0.005169042055969598	-157953.25515559976	-260334.28942042333	-55572.22089077619	
+p__Euryarchaeota	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.2394158311244654	-4087.6983499969056	-11363.364360557985	3187.967660564175	
+p__Euryarchaeota	Welch's (uncorrected)	Produced water : Shallow cutting	0.00615806986583034	153865.55680560283	51335.41152959458	256395.70208161112	
+p__Firmicutes	Games-Howell	Core : Deep cutting	< 0.02	-24.951147467852596	-44.6960304509366	-5.206264484768596	
+p__Firmicutes	Games-Howell	Core : Produced water	>= 0.1	-8.608150351493805	-26.411668998000366	9.195368295012756	
+p__Firmicutes	Games-Howell	Core : Shallow cutting	>= 0.1	6.149918171059847	-4.060136469093653	16.359972811213346	
+p__Firmicutes	Games-Howell	Deep cutting : Produced water	>= 0.1	16.34299711635879	-6.530014340984675	39.216008573702254	
+p__Firmicutes	Games-Howell	Deep cutting : Shallow cutting	< 0.01	31.10106563891244	12.209890221401515	49.99224105642337	
+p__Firmicutes	Games-Howell	Produced water : Shallow cutting	< 0.1	14.758068522553652	-1.7667850677339825	31.282922112841284	
+p__Firmicutes	Scheffè	Core : Deep cutting	0.024073606086139065	-24.951147467852596	-47.429416813909434	-2.472878121795759	
+p__Firmicutes	Scheffè	Core : Produced water	0.6920725120953763	-8.608150351493805	-29.35465352338887	12.13835282040126	
+p__Firmicutes	Scheffè	Core : Shallow cutting	0.8809380182856416	6.149918171059847	-15.869562716090522	28.169399058210217	
+p__Firmicutes	Scheffè	Deep cutting : Produced water	0.1256799144011751	16.34299711635879	-3.0032168456062784	35.689211078323865	
+p__Firmicutes	Scheffè	Deep cutting : Shallow cutting	0.00120052415563765	31.10106563891244	10.395604056512003	51.80652722131288	
+p__Firmicutes	Scheffè	Produced water : Shallow cutting	0.1728312722908356	14.758068522553652	-4.053123369717133	33.569260414824434	
+p__Firmicutes	Tukey-Kramer	Core : Deep cutting	< 0.02	-24.951147467852596	-45.59742510181897	-4.304869833886226	
+p__Firmicutes	Tukey-Kramer	Core : Produced water	>= 0.1	-8.608150351493805	-27.66380173757567	10.447501034588061	
+p__Firmicutes	Tukey-Kramer	Core : Shallow cutting	>= 0.1	6.149918171059847	-14.07496252384439	26.37479886596408	
+p__Firmicutes	Tukey-Kramer	Deep cutting : Produced water	< 0.1	16.34299711635879	-1.4264894253137506	34.11248365803134	
+p__Firmicutes	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.001	31.10106563891244	12.083110929483041	50.11902034834184	
+p__Firmicutes	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	14.758068522553652	-2.5200005518241806	32.03613759693148	
+p__Firmicutes	Welch's (uncorrected)	Core : Deep cutting	0.0026149296631068847	-249511.47467852602	-394862.06221187714	-104160.88714517493	
+p__Firmicutes	Welch's (uncorrected)	Core : Produced water	0.19103373194016562	-86081.50351493803	-218762.3326723059	46599.32564242986	
+p__Firmicutes	Welch's (uncorrected)	Core : Shallow cutting	0.09506567628057105	61499.18171059847	-12843.311577844019	135841.67499904096	
+p__Firmicutes	Welch's (uncorrected)	Deep cutting : Produced water	0.059618315842150826	163429.971163588	-7245.771645407694	334105.7139725837	
+p__Firmicutes	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.000511644515120091	311010.6563891245	173455.52573000256	448565.7870482464	
+p__Firmicutes	Welch's (uncorrected)	Produced water : Shallow cutting	0.021166090828957707	147580.6852255365	25216.29025046518	269945.0802006078	
+p__Proteobacteria	Games-Howell	Core : Deep cutting	>= 0.1	18.691713068614106	-11.86459481373263	49.24802095096084	
+p__Proteobacteria	Games-Howell	Core : Produced water	>= 0.1	14.715573273422635	-16.24546152418203	45.6766080710273	
+p__Proteobacteria	Games-Howell	Core : Shallow cutting	>= 0.1	-19.454136351629572	-47.05508287095505	8.146810167695904	
+p__Proteobacteria	Games-Howell	Deep cutting : Produced water	>= 0.1	-3.9761397951914716	-30.48637478695252	22.534095196569577	
+p__Proteobacteria	Games-Howell	Deep cutting : Shallow cutting	< 0.001	-38.14584942024368	-59.259506979345645	-17.032191861141715	
+p__Proteobacteria	Games-Howell	Produced water : Shallow cutting	< 0.01	-34.16970962505221	-55.71197504622597	-12.627444203878436	
+p__Proteobacteria	Scheffè	Core : Deep cutting	0.36480262662311613	18.691713068614106	-11.48563443328376	48.86906057051198	
+p__Proteobacteria	Scheffè	Core : Produced water	0.5053325511106322	14.715573273422635	-13.136857268670251	42.568003815515524	
+p__Proteobacteria	Scheffè	Core : Shallow cutting	0.3116296328723682	-19.454136351629572	-49.01555481819406	10.107282114934915	
+p__Proteobacteria	Scheffè	Deep cutting : Produced water	0.9773374702284044	-3.9761397951914716	-29.948665196872458	21.996385606489515	
+p__Proteobacteria	Scheffè	Deep cutting : Shallow cutting	0.003426017186011432	-38.14584942024368	-65.94318113381279	-10.348517706674567	
+p__Proteobacteria	Scheffè	Produced water : Shallow cutting	0.003986373105933638	-34.16970962505221	-59.42396145016083	-8.915457799943582	
+p__Proteobacteria	Tukey-Kramer	Core : Deep cutting	>= 0.1	18.691713068614106	-9.026163480905971	46.409589618134184	
+p__Proteobacteria	Tukey-Kramer	Core : Produced water	>= 0.1	14.715573273422635	-10.866868368317455	40.298014915162724	
+p__Proteobacteria	Tukey-Kramer	Core : Shallow cutting	>= 0.1	-19.454136351629572	-46.60628243184442	7.698009728585276	
+p__Proteobacteria	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	-3.9761397951914716	-27.831889632641335	19.879610042258392	
+p__Proteobacteria	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.01	-38.14584942024368	-63.677682819263	-12.614016021224359	
+p__Proteobacteria	Tukey-Kramer	Produced water : Shallow cutting	< 0.01	-34.16970962505221	-57.36572559016743	-10.97369365993698	
+p__Proteobacteria	Welch's (uncorrected)	Core : Deep cutting	0.09724166368557685	186917.130686141	-38607.34474318188	412441.60611546383	
+p__Proteobacteria	Welch's (uncorrected)	Core : Produced water	0.1934374764061062	147155.73273422633	-82405.61942805625	376717.0848965089	
+p__Proteobacteria	Welch's (uncorrected)	Core : Shallow cutting	0.05517385874282139	-194541.36351629568	-394420.3351650636	5337.608132472246	
+p__Proteobacteria	Welch's (uncorrected)	Deep cutting : Produced water	0.6815459849720016	-39761.39795191466	-237843.66255966612	158320.86665583678	
+p__Proteobacteria	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.00014621341269703184	-381458.49420243665	-536788.8019089566	-226128.1864959167	
+p__Proteobacteria	Welch's (uncorrected)	Produced water : Shallow cutting	0.0002706317050793446	-341697.096250522	-502017.6068604494	-181376.58564059454	

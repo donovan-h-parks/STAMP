@@ -1,0 +1,121 @@
+Feature	Post-hoc test	Groups	p-value	Effect size	Lower CI	Upper CI	Note
+o__Actinomycetales	Games-Howell	Core : Deep cutting	>= 0.1	5.191168091192348	-1.2317780521580168	11.614114234542713	
+o__Actinomycetales	Games-Howell	Core : Produced water	>= 0.1	5.137824554005273	-1.2859816983858678	11.561630806396414	
+o__Actinomycetales	Games-Howell	Core : Shallow cutting	< 0.1	5.42914911308976	-0.9931344650303577	11.851432691209876	
+o__Actinomycetales	Games-Howell	Deep cutting : Produced water	>= 0.1	-0.053343537187074797	-0.5571174602740261	0.45043038589987655	
+o__Actinomycetales	Games-Howell	Deep cutting : Shallow cutting	>= 0.1	0.2379810218974114	-0.08176920286937214	0.5577312466641949	
+o__Actinomycetales	Games-Howell	Produced water : Shallow cutting	>= 0.1	0.2913245590844862	-0.15339960752886472	0.7360487256978371	
+o__Actinomycetales	Scheffè	Core : Deep cutting	0.00048032100143746703	5.191168091192348	1.969822292705135	8.41251388967956	
+o__Actinomycetales	Scheffè	Core : Produced water	0.00017649167408384514	5.137824554005273	2.1646570117358546	8.11099209627469	
+o__Actinomycetales	Scheffè	Core : Shallow cutting	0.00018849260356956776	5.42914911308976	2.273551982871442	8.584746243308077	
+o__Actinomycetales	Scheffè	Deep cutting : Produced water	0.9999520936918539	-0.053343537187074797	-2.825836566057344	2.7191494916831944	
+o__Actinomycetales	Scheffè	Deep cutting : Shallow cutting	0.996587338034268	0.2379810218974114	-2.7293048775352577	3.2052669213300806	
+o__Actinomycetales	Scheffè	Produced water : Shallow cutting	0.9917702910786685	0.2913245590844862	-2.40449481356367	2.9871439317326423	
+o__Actinomycetales	Tukey-Kramer	Core : Deep cutting	< 0.001	5.191168091192348	2.2323638039643754	8.14997237842032	
+o__Actinomycetales	Tukey-Kramer	Core : Produced water	< 0.001	5.137824554005273	2.4069718542283636	7.868677253782183	
+o__Actinomycetales	Tukey-Kramer	Core : Shallow cutting	< 0.001	5.42914911308976	2.5307349403427892	8.32756328583673	
+o__Actinomycetales	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	-0.053343537187074797	-2.599876810325085	2.4931897359509354	
+o__Actinomycetales	Tukey-Kramer	Deep cutting : Shallow cutting	>= 0.1	0.2379810218974114	-2.4874693922728146	2.9634314360676375	
+o__Actinomycetales	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	0.2913245590844862	-2.184784004339351	2.7674331225083235	
+o__Actinomycetales	Welch's (uncorrected)	Core : Deep cutting	0.031746046341566414	51911.680911923475	6022.5766625527	97800.78516129425	
+o__Actinomycetales	Welch's (uncorrected)	Core : Produced water	0.033054089576769474	51378.245540052725	5473.86712596296	97282.62395414249	
+o__Actinomycetales	Welch's (uncorrected)	Core : Shallow cutting	0.02658818939267804	54291.491130897586	8413.029028006582	100169.9532337886	
+o__Actinomycetales	Welch's (uncorrected)	Deep cutting : Produced water	0.7717127884150483	-533.435371870748	-4296.9690730641	3230.098329322604	
+o__Actinomycetales	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.04664625110860543	2379.810218974114	42.19695778368262	4717.423480164545	
+o__Actinomycetales	Welch's (uncorrected)	Produced water : Shallow cutting	0.07875423192104636	2913.245590844862	-377.4462407642403	6203.937422453964	
+o__Burkholderiales	Games-Howell	Core : Deep cutting	>= 0.1	1.2176030660756547	-1.4506976505955262	3.8859037827468357	
+o__Burkholderiales	Games-Howell	Core : Produced water	>= 0.1	1.573713083447155	-1.103119006576604	4.250545173470915	
+o__Burkholderiales	Games-Howell	Core : Shallow cutting	< 0.001	-13.073389571992703	-18.987588200017992	-7.159190943967413	
+o__Burkholderiales	Games-Howell	Deep cutting : Produced water	>= 0.1	0.3561100173715006	-0.6747027798269767	1.386922814569978	
+o__Burkholderiales	Games-Howell	Deep cutting : Shallow cutting	< 0.001	-14.290992638068358	-19.987178621212976	-8.59480665492374	
+o__Burkholderiales	Games-Howell	Produced water : Shallow cutting	< 0.001	-14.64710265543986	-20.350764343690678	-8.943440967189039	
+o__Burkholderiales	Scheffè	Core : Deep cutting	0.8953582503400268	1.2176030660756547	-3.362835560860235	5.798041693011545	
+o__Burkholderiales	Scheffè	Core : Produced water	0.7584333028614196	1.573713083447155	-2.6538403389014413	5.801266505795752	
+o__Burkholderiales	Scheffè	Core : Shallow cutting	4.516390594844211e-09	-13.073389571992703	-17.56034002390874	-8.586439120076665	
+o__Burkholderiales	Scheffè	Deep cutting : Produced water	0.9951468255432876	0.3561100173715006	-3.586103876061359	4.298323910804361	
+o__Burkholderiales	Scheffè	Deep cutting : Shallow cutting	7.996125983567026e-11	-14.290992638068358	-18.51018293962069	-10.071802336516026	
+o__Burkholderiales	Scheffè	Produced water : Shallow cutting	2.397415599375563e-12	-14.64710265543986	-18.480294109619816	-10.813911201259902	
+o__Burkholderiales	Tukey-Kramer	Core : Deep cutting	>= 0.1	1.2176030660756547	-2.989527212557273	5.424733344708582	
+o__Burkholderiales	Tukey-Kramer	Core : Produced water	>= 0.1	1.573713083447155	-2.309292335097006	5.4567185019913165	
+o__Burkholderiales	Tukey-Kramer	Core : Shallow cutting	< 0.001	-13.073389571992703	-17.19465101494094	-8.952128129044464	
+o__Burkholderiales	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	0.3561100173715006	-3.264811205844122	3.977031240587123	
+o__Burkholderiales	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.001	-14.290992638068358	-18.1663165349087	-10.415668741228018	
+o__Burkholderiales	Tukey-Kramer	Produced water : Shallow cutting	< 0.001	-14.64710265543986	-18.167886830091174	-11.126318480788544	
+o__Burkholderiales	Welch's (uncorrected)	Core : Deep cutting	0.18313247253795084	12176.030660756542	-7053.70926412683	31405.770585639915	
+o__Burkholderiales	Welch's (uncorrected)	Core : Produced water	0.09911139874627728	15737.130834471549	-3636.0919590693784	35110.353628012475	
+o__Burkholderiales	Welch's (uncorrected)	Core : Shallow cutting	1.8259039371516974e-05	-130733.895719927	-174305.4949236116	-87162.29651624241	
+o__Burkholderiales	Welch's (uncorrected)	Deep cutting : Produced water	0.3490055091192128	3561.1001737150077	-4144.560468511551	11266.760815941567	
+o__Burkholderiales	Welch's (uncorrected)	Deep cutting : Shallow cutting	1.4739523252195037e-05	-142909.92638068352	-184437.99404114124	-101381.85872022582	
+o__Burkholderiales	Welch's (uncorrected)	Produced water : Shallow cutting	1.114923910361133e-05	-146471.02655439856	-188080.8117089941	-104861.24139980302	
+o__Rhodocyclales	Games-Howell	Core : Deep cutting	>= 0.1	0.47325790351008046	-0.22753482318327156	1.1740506302034324	
+o__Rhodocyclales	Games-Howell	Core : Produced water	>= 0.1	-1.319872195486489	-4.455593109631057	1.8158487186580783	
+o__Rhodocyclales	Games-Howell	Core : Shallow cutting	< 0.001	-33.325582100019545	-42.42992662106163	-24.22123757897746	
+o__Rhodocyclales	Games-Howell	Deep cutting : Produced water	>= 0.1	-1.7931300989965695	-4.899572089026096	1.313311891032957	
+o__Rhodocyclales	Games-Howell	Deep cutting : Shallow cutting	< 0.001	-33.79884000352963	-42.8958887105382	-24.701791296521055	
+o__Rhodocyclales	Games-Howell	Produced water : Shallow cutting	< 0.001	-32.005709904533056	-41.32152729270948	-22.68989251635663	
+o__Rhodocyclales	Scheffè	Core : Deep cutting	0.9984091803739931	0.47325790351008046	-7.155069066979697	8.101584873999858	
+o__Rhodocyclales	Scheffè	Core : Produced water	0.9596782771650225	-1.319872195486489	-8.360499178510036	5.720754787537059	
+o__Rhodocyclales	Scheffè	Core : Shallow cutting	1.9539925233402755e-14	-33.325582100019545	-40.798212547750126	-25.852951652288965	
+o__Rhodocyclales	Scheffè	Deep cutting : Produced water	0.8876695497650305	-1.7931300989965695	-8.358548613692522	4.772288415699383	
+o__Rhodocyclales	Scheffè	Deep cutting : Shallow cutting	1.6653345369377348e-15	-33.79884000352963	-40.82553892744712	-26.77214107961213	
+o__Rhodocyclales	Scheffè	Produced water : Shallow cutting	4.440892098500626e-16	-32.005709904533056	-38.38956091413226	-25.62185889493385	
+o__Rhodocyclales	Tukey-Kramer	Core : Deep cutting	>= 0.1	0.47325790351008046	-6.533356088462293	7.479871895482454	
+o__Rhodocyclales	Tukey-Kramer	Core : Produced water	>= 0.1	-1.319872195486489	-7.786684082594643	5.1469396916216645	
+o__Rhodocyclales	Tukey-Kramer	Core : Shallow cutting	< 0.001	-33.325582100019545	-40.18918892422287	-26.461975275816226	
+o__Rhodocyclales	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	-1.7931300989965695	-7.823463277710541	4.237203079717402	
+o__Rhodocyclales	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.001	-33.79884000352963	-40.2528589762555	-27.344821030803747	
+o__Rhodocyclales	Tukey-Kramer	Produced water : Shallow cutting	< 0.001	-32.005709904533056	-37.86927343288728	-26.14214637617883	
+o__Rhodocyclales	Welch's (uncorrected)	Core : Deep cutting	0.0627219698703283	4732.579035100805	-316.85041909222207	9782.008489293832	
+o__Rhodocyclales	Welch's (uncorrected)	Core : Produced water	0.24398188044198282	-13198.72195486489	-36391.01185358546	9993.56794385568	
+o__Rhodocyclales	Welch's (uncorrected)	Core : Shallow cutting	5.186317044678056e-07	-333255.82100019546	-399582.32534315594	-266929.316657235	
+o__Rhodocyclales	Welch's (uncorrected)	Deep cutting : Produced water	0.1156802719736859	-17931.300989965697	-40857.66978719019	4995.067807258801	
+o__Rhodocyclales	Welch's (uncorrected)	Deep cutting : Shallow cutting	4.826677788097008e-07	-337988.4000352963	-404244.01372153754	-271732.78634905495	
+o__Rhodocyclales	Welch's (uncorrected)	Produced water : Shallow cutting	2.0425674955213945e-07	-320057.09904533054	-388531.47096351295	-251582.72712714816	
+o__Thiotrichales	Games-Howell	Core : Deep cutting	< 0.05	-0.1885113195480884	-0.37479614809704564	-0.0022264909991311643	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thiotrichales	Games-Howell	Core : Produced water	>= 0.1	-0.012413106459243895	-0.040221445652127055	0.015395232733639264	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thiotrichales	Games-Howell	Core : Shallow cutting	>= 0.1	-0.0032624830758690437	-0.01341847188090293	0.0068935057291648425	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thiotrichales	Games-Howell	Deep cutting : Produced water	< 0.1	0.1760982130888445	-0.010801700674270887	0.36299812685195987	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thiotrichales	Games-Howell	Deep cutting : Shallow cutting	< 0.1	0.18524883647221935	-0.0011060750670019714	0.3716037480114407	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thiotrichales	Games-Howell	Produced water : Shallow cutting	>= 0.1	0.009150623383374851	-0.01948609193797087	0.03778733870472057	degenerate case: two groups with zero variance; variance set to 1e-6.
+o__Thiotrichales	Scheffè	Core : Deep cutting	0.001493050255638284	-0.1885113195480884	-0.316269494445092	-0.060753144651084806	
+o__Thiotrichales	Scheffè	Core : Produced water	0.9923799060827022	-0.012413106459243895	-0.13032856249061178	0.10550234957212398	
+o__Thiotrichales	Scheffè	Core : Shallow cutting	0.9998809482283566	-0.0032624830758690437	-0.12841307394265541	0.12188810779091733	
+o__Thiotrichales	Scheffè	Deep cutting : Produced water	0.0005226650038366865	0.1760982130888445	0.06614148337374462	0.2860549428039444	
+o__Thiotrichales	Scheffè	Deep cutting : Shallow cutting	0.000658509880290703	0.18524883647221935	0.06756664566638917	0.30293102727804955	
+o__Thiotrichales	Scheffè	Produced water : Shallow cutting	0.9958627664369674	0.009150623383374851	-0.09776523863406349	0.1160664854008132	
+o__Thiotrichales	Tukey-Kramer	Core : Deep cutting	< 0.001	-0.1885113195480884	-0.3058571306656637	-0.07116550843051306	
+o__Thiotrichales	Tukey-Kramer	Core : Produced water	>= 0.1	-0.012413106459243895	-0.12071838588621371	0.09589217296772591	
+o__Thiotrichales	Tukey-Kramer	Core : Shallow cutting	>= 0.1	-0.0032624830758690437	-0.1182132297419542	0.11168826359021611	
+o__Thiotrichales	Tukey-Kramer	Deep cutting : Produced water	< 0.001	0.1760982130888445	0.07510301926538439	0.2770934069123046	
+o__Thiotrichales	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.001	0.18524883647221935	0.07715781102248671	0.293339861921952	
+o__Thiotrichales	Tukey-Kramer	Produced water : Shallow cutting	>= 0.1	0.009150623383374851	-0.08905153518601247	0.10735278195276218	
+o__Thiotrichales	Welch's (uncorrected)	Core : Deep cutting	0.011564442522732577	-1885.1131954808834	-3234.940771373245	-535.2856195885224	
+o__Thiotrichales	Welch's (uncorrected)	Core : Produced water	0.21420060630029822	-124.13106459243892	-328.7394114077587	80.47728222288086	
+o__Thiotrichales	Welch's (uncorrected)	Core : Shallow cutting	0.34089313230206	-32.624830758690436	-105.31748371090934	40.06782219352848	
+o__Thiotrichales	Welch's (uncorrected)	Deep cutting : Produced water	0.016335044183488856	1760.9821308884445	404.11916337064184	3117.8450984062474	
+o__Thiotrichales	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.012634310697198448	1852.488364722193	501.86860855219584	3203.1081208921905	
+o__Thiotrichales	Welch's (uncorrected)	Produced water : Shallow cutting	0.37667618639712064	91.50623383374848	-121.07999713104812	304.0924647985451	
+o__Xanthomonadales	Games-Howell	Core : Deep cutting	>= 0.1	-0.002251705119259595	-0.48686176054511937	0.4823583503066002	
+o__Xanthomonadales	Games-Howell	Core : Produced water	>= 0.1	0.2057017959903071	-0.2487310463367066	0.6601346383173208	
+o__Xanthomonadales	Games-Howell	Core : Shallow cutting	>= 0.1	-0.3184998045122334	-0.7846186213715457	0.14761901234707886	
+o__Xanthomonadales	Games-Howell	Deep cutting : Produced water	>= 0.1	0.2079535011095667	-0.07551394301799139	0.49142094523712476	
+o__Xanthomonadales	Games-Howell	Deep cutting : Shallow cutting	< 0.1	-0.3162480993929738	-0.6394493615755782	0.00695316278963054	
+o__Xanthomonadales	Games-Howell	Produced water : Shallow cutting	< 0.001	-0.5242016005025405	-0.7392236998892371	-0.3091795011158439	
+o__Xanthomonadales	Scheffè	Core : Deep cutting	0.999998018173094	-0.002251705119259595	-0.3407361646418147	0.33623275440329553	
+o__Xanthomonadales	Scheffè	Core : Produced water	0.3111707693115653	0.2057017959903071	-0.10670521386491325	0.5181088058455274	
+o__Xanthomonadales	Scheffè	Core : Shallow cutting	0.06401128584771332	-0.3184998045122334	-0.6500756910856267	0.013076082061159844	
+o__Xanthomonadales	Scheffè	Deep cutting : Produced water	0.24364659911677922	0.2079535011095667	-0.08336753770840541	0.4992745399275388	
+o__Xanthomonadales	Scheffè	Deep cutting : Shallow cutting	0.04562265931154341	-0.3162480993929738	-0.6280370927975428	-0.004459105988404821	
+o__Xanthomonadales	Scheffè	Produced water : Shallow cutting	6.032765671282192e-05	-0.5242016005025405	-0.8074661180063004	-0.24093708299878058	
+o__Xanthomonadales	Tukey-Kramer	Core : Deep cutting	>= 0.1	-0.002251705119259595	-0.3131494890410296	0.30864607880251044	
+o__Xanthomonadales	Tukey-Kramer	Core : Produced water	>= 0.1	0.2057017959903071	-0.08124386521557311	0.4926474571961873	
+o__Xanthomonadales	Tukey-Kramer	Core : Shallow cutting	< 0.05	-0.3184998045122334	-0.6230520681020333	-0.013947540922433554	
+o__Xanthomonadales	Tukey-Kramer	Deep cutting : Produced water	>= 0.1	0.2079535011095667	-0.05962470766861275	0.4755317098877462	
+o__Xanthomonadales	Tukey-Kramer	Deep cutting : Shallow cutting	< 0.05	-0.3162480993929738	-0.6026261128397643	-0.0298700859461834	
+o__Xanthomonadales	Tukey-Kramer	Produced water : Shallow cutting	< 0.001	-0.5242016005025405	-0.7843798990271145	-0.2640233019779666	
+o__Xanthomonadales	Welch's (uncorrected)	Core : Deep cutting	0.9892780496511597	-22.517051192596682	-3584.0459688599162	3539.011866474723	
+o__Xanthomonadales	Welch's (uncorrected)	Core : Produced water	0.17944831139514017	2057.0179599030707	-1193.3606426201068	5307.396562426248	
+o__Xanthomonadales	Welch's (uncorrected)	Core : Shallow cutting	0.06366405478175101	-3184.9980451223346	-6586.508229014632	216.5121387699628	
+o__Xanthomonadales	Welch's (uncorrected)	Deep cutting : Produced water	0.04838116407244386	2079.5350110956674	18.031727809499287	4141.038294381836	
+o__Xanthomonadales	Welch's (uncorrected)	Deep cutting : Shallow cutting	0.012772230896961887	-3162.480993929738	-5562.4198587554165	-762.5421291040595	
+o__Xanthomonadales	Welch's (uncorrected)	Produced water : Shallow cutting	1.242374309387815e-05	-5242.016005025405	-6816.656762806577	-3667.375247244234	

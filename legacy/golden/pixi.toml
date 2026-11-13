@@ -1,0 +1,15 @@
+# Python 2.7 environment used only to run the legacy STAMP statistics
+# headlessly and regenerate the reference ("golden") outputs in tests/golden.
+[workspace]
+name = "stamp-legacy-golden"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "2.7.*"
+numpy = "1.16.*"
+scipy = "1.2.*"
+
+[tasks]
+golden = "python generate_golden.py"
+unittests = "python run_legacy_tests.py"

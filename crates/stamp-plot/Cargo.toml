@@ -1,0 +1,12 @@
+[package]
+name = "stamp-plot"
+description = "STAMP plots as backend-neutral figures, with SVG/PNG/PDF export"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+stamp-core = { workspace = true }
