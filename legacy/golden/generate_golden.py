@@ -388,6 +388,10 @@ def main():
                 'level 1', 'function', RETAIN, "G-test (w/ Yates') + Fisher's", 'Two-sided',
                 'DP: Asymptotic', 0.95)
 
+    # leaf level with the whole sample as parent: exercises the ' - #n' name truncation
+    sample_case('s_cowrumen_function_chi2', cow, '4441682.3', '4441680.3',
+                E, 'function', RETAIN, 'Chi-square test', 'Two-sided', 'DP: Asymptotic', 0.95)
+
     # resampling tests (stochastic)
     for test in ['Bootstrap', 'Permutation']:
         sample_case('s_ebprsmall_%s' % slug[test], ebpr_small, 'USA', 'Australia',

@@ -11,5 +11,20 @@
 //! Results are checked against the reference outputs in `tests/golden`,
 //! generated from the original Python implementation (see `legacy/golden`).
 
+pub mod error;
+pub mod import;
+pub mod metadata;
+pub mod profile;
+pub mod profile_tree;
+pub mod text;
+
+pub use error::{Result, StampError};
+pub use metadata::{Groups, Metadata};
+pub use profile::{
+    Feature, GroupProfile, MultiGroupProfile, Profile, SampleProfile, SecondGroup, Unclassified,
+    ALL_OTHER_SAMPLES,
+};
+pub use profile_tree::{ProfileTree, ENTIRE_SAMPLE};
+
 /// Version of the STAMP port.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

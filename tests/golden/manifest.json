@@ -763,6 +763,26 @@
   {
    "ci_method": "DP: Asymptotic", 
    "coverage": 0.95, 
+   "file": "s_cowrumen_function_chi2.tsv", 
+   "id": "s_cowrumen_function_chi2", 
+   "key_columns": 4, 
+   "mode": "two_samples", 
+   "parent_level": "Entire sample", 
+   "profile": "examples/CowRumen-MG-RAST/CowRumen.spf", 
+   "profile_level": "function", 
+   "pseudocount": 0.5, 
+   "replicates": 1000, 
+   "rows": 4284, 
+   "sample1": "4441682.3", 
+   "sample2": "4441680.3", 
+   "stochastic": false, 
+   "test": "Chi-square test", 
+   "test_type": "Two-sided", 
+   "unclassified": "Retain unclassified reads"
+  }, 
+  {
+   "ci_method": "DP: Asymptotic", 
+   "coverage": 0.95, 
    "file": "s_ebprsmall_bootstrap.tsv", 
    "id": "s_ebprsmall_bootstrap", 
    "key_columns": 1, 
@@ -5494,7 +5514,7 @@
    "unclassified": "Retain unclassified reads"
   }, 
   {
-   "estimated_pi0": 0.6477732793522267, 
+   "estimated_pi0": 0.638247201714694, 
    "file": "storey_s_ironmine_subsystem_fisher.tsv", 
    "id": "storey_s_ironmine_subsystem_fisher", 
    "key_columns": 3, 

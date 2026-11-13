@@ -3145,6 +3145,7 @@ dependencies = [
 name = "stamp-core"
 version = "3.0.0-alpha.0"
 dependencies = [
+ "flate2",
  "serde",
  "serde_json",
 ]
