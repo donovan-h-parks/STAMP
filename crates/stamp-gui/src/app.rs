@@ -17,11 +17,18 @@ use stamp_plot::extended_error_bar::SortBy;
 use stamp_plot::Figure;
 
 use crate::figure_painter;
-use crate::platform;
+use crate::platform::{self, Event, Platform, Request, Source};
 use crate::plots::{self, PlotKind, PlotSettings};
 use crate::session::{Mode, Session};
 
 const COVERAGES: [f64; 5] = [0.90, 0.95, 0.98, 0.99, 0.999];
+
+/// Example data built into the application: gut enterotypes from Arumugam et
+/// al. (2011).
+const EXAMPLE_PROFILE: &str =
+    include_str!("../../../examples/EnterotypesArumugam/Enterotypes.profile.spf");
+const EXAMPLE_METADATA: &str =
+    include_str!("../../../examples/EnterotypesArumugam/Enterotypes.metadata.tsv");
 
 /// A combo box over a fixed list of choices. Returns true if the choice
 /// changed.
@@ -255,6 +262,7 @@ pub struct StampApp {
     show_preferences: bool,
     /// A message for the user, shown until dismissed.
     notice: Option<String>,
+    platform: Platform,
     /// The plot item under the pointer in the last frame.
     pub hovered: Option<String>,
 }
@@ -294,6 +302,7 @@ impl StampApp {
             show_about: false,
             show_preferences: false,
             notice: None,
+            platform: Platform::default(),
             hovered: None,
         }
     }
@@ -432,6 +441,7 @@ impl StampApp {
 
     /// Draw the whole interface for one frame.
     pub fn draw(&mut self, ui: &mut egui::Ui) {
+        self.handle_file_events();
         if self.session.update(self.mode) {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_millis(50));
@@ -458,53 +468,52 @@ impl StampApp {
     }
 
     fn menu(&mut self, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
+                let loaded = self.session.tree.is_some();
                 if ui.button("Load profile...").clicked() {
-                    if let Some(file) = platform::open_file(
-                        "Load profile",
-                        &[("STAMP profile", &["spf", "tsv", "txt"])],
-                    ) {
-                        self.load_profile(&file.name, &file.text());
-                    }
+                    self.platform.request(Request::OpenProfile, &ctx);
                 }
                 if ui
-                    .add_enabled(
-                        self.session.tree.is_some(),
-                        egui::Button::new("Load metadata..."),
-                    )
+                    .add_enabled(loaded, egui::Button::new("Load metadata..."))
                     .clicked()
                 {
-                    if let Some(file) = platform::open_file(
-                        "Load metadata",
-                        &[("Metadata", &["tsv", "txt", "csv"])],
-                    ) {
-                        self.load_metadata(&file.name, &file.text());
-                    }
+                    self.platform.request(Request::OpenMetadata, &ctx);
+                }
+                if ui.button("Open example data").clicked() {
+                    self.load_example();
                 }
                 ui.menu_button("Create profile from", |ui| {
-                    for source in platform::Source::ALL {
+                    for source in Source::ALL {
                         if ui.button(source.name()).clicked() {
-                            match platform::convert(source) {
-                                Ok(Some((name, spf))) => self.load_profile(&name, &spf),
-                                Ok(None) => {}
-                                Err(message) => self.notice = Some(message),
-                            }
+                            self.platform.request(Request::Convert(source), &ctx);
                         }
                     }
                 });
                 ui.separator();
-                if ui
-                    .add_enabled(
-                        self.session.tree.is_some(),
-                        egui::Button::new("Save plot..."),
-                    )
-                    .clicked()
-                {
-                    if let Err(message) = platform::save_plot(&self.figure) {
-                        self.notice = Some(message);
-                    }
-                }
+                ui.add_enabled_ui(loaded, |ui| {
+                    ui.menu_button("Save plot as", |ui| {
+                        for (label, name) in [
+                            ("PNG image", "plot.png"),
+                            ("SVG image", "plot.svg"),
+                            ("PDF document", "plot.pdf"),
+                        ] {
+                            if ui.button(label).clicked() {
+                                match platform::encode_plot(&self.figure, name) {
+                                    Ok(bytes) => self.platform.request(
+                                        Request::Save {
+                                            name: name.to_string(),
+                                            bytes,
+                                        },
+                                        &ctx,
+                                    ),
+                                    Err(message) => self.notice = Some(message),
+                                }
+                            }
+                        }
+                    });
+                });
                 if ui
                     .add_enabled(
                         !self.table.rows.is_empty(),
@@ -512,13 +521,21 @@ impl StampApp {
                     )
                     .clicked()
                 {
-                    if let Err(message) = platform::save_text("results.tsv", &self.table.to_tsv()) {
-                        self.notice = Some(message);
-                    }
+                    let bytes = self.table.to_tsv().into_bytes();
+                    self.platform.request(
+                        Request::Save {
+                            name: "results.tsv".to_string(),
+                            bytes,
+                        },
+                        &ctx,
+                    );
                 }
-                ui.separator();
-                if ui.button("Exit").clicked() {
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                // A web page is closed with its tab.
+                if cfg!(not(target_arch = "wasm32")) {
+                    ui.separator();
+                    if ui.button("Exit").clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
                 }
             });
             ui.menu_button("View", |ui| {
@@ -535,6 +552,35 @@ impl StampApp {
                 }
             });
         });
+    }
+
+    /// Load the example that ships inside the application.
+    pub fn load_example(&mut self) {
+        self.load_profile("Enterotypes.profile.spf", EXAMPLE_PROFILE);
+        self.load_metadata("Enterotypes.metadata.tsv", EXAMPLE_METADATA);
+    }
+
+    /// Hand the application the outcome of a file request, as the file
+    /// dialogs do.
+    pub fn deliver(&self, event: Event) {
+        self.platform.push(event);
+    }
+
+    /// The message currently shown to the user, if any.
+    pub fn notice(&self) -> Option<&str> {
+        self.notice.as_deref()
+    }
+
+    /// Act on files that have been opened or converted since the last frame.
+    fn handle_file_events(&mut self) {
+        for event in self.platform.poll() {
+            match event {
+                Event::Profile(file) => self.load_profile(&file.name, &file.text()),
+                Event::Metadata(file) => self.load_metadata(&file.name, &file.text()),
+                Event::Converted { name, spf } => self.load_profile(&name, &spf),
+                Event::Failed(message) => self.notice = Some(message),
+            }
+        }
     }
 
     fn status_bar(&mut self, ui: &mut egui::Ui) {

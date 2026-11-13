@@ -17,7 +17,18 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 clap = { version = "4", features = ["derive"] }
-eframe = "0.37"
+# OpenGL / WebGL2 rendering: the most widely supported backend on older
+# desktops, remote sessions and every current browser.
+eframe = { version = "0.37", default-features = false, features = [
+    "accesskit",
+    "clipboard",
+    "default_fonts",
+    "glow",
+    "links",
+    "wayland",
+    "web_screen_reader",
+    "x11",
+] }
 egui_extras = "0.37"
 rfd = "0.17"
 png = "0.17"

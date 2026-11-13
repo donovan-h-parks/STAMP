@@ -36,7 +36,20 @@ target/release/stamp examples/EnterotypesArumugam/Enterotypes.profile.spf \
 
 ![The STAMP window with the enterotype example](docs/images/gui.png)
 
-It offers the three kinds of analysis (multiple groups, two groups, two samples), every statistical test, correction and filter, all the plots with tooltips, a results table, export of plots (PNG, SVG, PDF) and tables, and conversion from the other file formats. It is new and has so far been exercised only through automated tests, not by hand.
+It offers the three kinds of analysis (multiple groups, two groups, two samples), every statistical test, correction and filter, all the plots with tooltips, a results table, export of plots (PNG, SVG, PDF) and tables, and conversion from the other file formats. It is new: the browser version has been tried by hand, but the desktop window has so far been exercised only through automated tests.
+
+### In the browser
+
+The same application runs in a web browser, compiled to WebAssembly. Everything is computed on your own computer: no data is uploaded, and the site is just static files that any web server can host.
+
+```bash
+cargo install trunk --locked     # once
+cd crates/stamp-gui
+trunk build --release            # writes the site to crates/stamp-gui/dist
+trunk serve --release            # or: build and open it at http://127.0.0.1:8080
+```
+
+In the browser, files are opened with the browser's file picker and results are saved as downloads. File > Open example data loads a built-in dataset. Analyses run on the page's single thread, so a long resampling test (bootstrap, permutation, White's test with many features) holds the page until it finishes.
 
 ### Command line
 

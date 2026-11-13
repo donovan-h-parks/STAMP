@@ -1,4 +1,4 @@
-//! STAMP graphical application: native entry point.
+//! STAMP graphical application: entry points for the desktop and the browser.
 
 // Do not open a console window alongside the GUI on Windows release builds.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
@@ -40,6 +40,39 @@ fn main() -> eframe::Result {
     )
 }
 
-// The browser entry point is added with the web build.
+/// Id of the canvas in `index.html` that the application draws on.
 #[cfg(target_arch = "wasm32")]
-fn main() {}
+const CANVAS_ID: &str = "stamp_canvas";
+
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    use wasm_bindgen::JsCast;
+
+    wasm_bindgen_futures::spawn_local(async {
+        let document = web_sys::window()
+            .and_then(|w| w.document())
+            .expect("the page has a document");
+        let canvas = document
+            .get_element_by_id(CANVAS_ID)
+            .and_then(|e| e.dyn_into::<web_sys::HtmlCanvasElement>().ok())
+            .expect("index.html has the STAMP canvas");
+
+        let started = eframe::WebRunner::new()
+            .start(
+                canvas,
+                eframe::WebOptions::default(),
+                Box::new(|cc| Ok(Box::new(stamp_gui::StampApp::new(&cc.egui_ctx)))),
+            )
+            .await;
+
+        // Replace the loading message with the outcome.
+        if let Some(status) = document.get_element_by_id("stamp_status") {
+            match started {
+                Ok(()) => status.remove(),
+                Err(error) => status.set_text_content(Some(&format!(
+                    "STAMP could not start in this browser: {error:?}. It needs WebGL 2."
+                ))),
+            }
+        }
+    });
+}

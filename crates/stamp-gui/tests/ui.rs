@@ -210,3 +210,51 @@ fn problems_are_shown_to_the_user() {
     // The message box is drawn in the middle of the window.
     assert!(ink(&image, 300, 300, 980, 500) > 0.02);
 }
+
+#[test]
+fn built_in_example_and_opened_files_are_loaded() {
+    use stamp_gui::platform::{Event, OpenedFile};
+
+    let mut harness = Harness::new();
+    harness.app.load_example();
+    harness.settle();
+    assert_eq!(harness.app.session.profile_name, "Enterotypes.profile.spf");
+    assert_eq!(harness.app.session.feature_counts(Mode::TwoGroups).0, 17);
+
+    // Files arrive from the file dialogs as events, on the desktop and in
+    // the browser alike.
+    let file = |name: &str, text: &str| OpenedFile {
+        name: name.to_string(),
+        bytes: text.as_bytes().to_vec(),
+    };
+    harness.app.deliver(Event::Profile(file(
+        "small.spf",
+        "F\tA\tB\nx\t1\t2\ny\t3\t4\n",
+    )));
+    harness.settle();
+    assert_eq!(harness.app.session.profile_name, "small.spf");
+    assert!(harness.app.session.metadata.is_none());
+    assert_eq!(harness.app.session.feature_counts(Mode::TwoSamples).0, 2);
+
+    harness.app.deliver(Event::Converted {
+        name: "converted.spf".to_string(),
+        spf: "F\tA\tB\nx\t1\t2\n".to_string(),
+    });
+    harness.settle();
+    assert_eq!(harness.app.session.profile_name, "converted.spf");
+
+    harness
+        .app
+        .deliver(Event::Failed("The conversion failed.".to_string()));
+    harness.settle();
+    assert_eq!(harness.app.notice(), Some("The conversion failed."));
+    harness
+        .app
+        .deliver(Event::Metadata(file("bad.tsv", "Id\tG\nnobody\tx\n")));
+    harness.settle();
+    assert!(harness
+        .app
+        .notice()
+        .unwrap()
+        .contains("Could not load bad.tsv"));
+}

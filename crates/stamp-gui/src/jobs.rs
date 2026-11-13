@@ -1,7 +1,10 @@
 //! Running analyses without freezing the interface.
+//!
+//! On the desktop a job runs on its own thread. A web page has a single
+//! thread, so there a job runs when it is first polled after having been
+//! announced, which lets the interface show that work has started.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::sync::Arc;
 
 /// Shared progress of a running job.
@@ -32,36 +35,13 @@ impl Progress {
     }
 }
 
-/// A computation running in the background.
+/// A computation whose result arrives later.
 pub struct Job<T> {
-    receiver: Receiver<T>,
+    inner: imp::Inner<T>,
     progress: Arc<Progress>,
 }
 
-impl<T: Send + 'static> Job<T> {
-    /// Start `work` on another thread. It is given the job's progress handle
-    /// to report to and to learn of cancellation from.
-    pub fn spawn(work: impl FnOnce(&Progress) -> T + Send + 'static) -> Job<T> {
-        let (sender, receiver) = channel();
-        let progress = Arc::new(Progress::default());
-        let shared = Arc::clone(&progress);
-        std::thread::spawn(move || {
-            // The receiver is gone if the job was dropped; that is fine.
-            let _ = sender.send(work(&shared));
-        });
-        Job { receiver, progress }
-    }
-
-    /// The result, once the job has finished. `Err(true)` while it is still
-    /// running; `Err(false)` if it ended without a result.
-    pub fn poll(&self) -> Result<T, bool> {
-        match self.receiver.try_recv() {
-            Ok(value) => Ok(value),
-            Err(TryRecvError::Empty) => Err(true),
-            Err(TryRecvError::Disconnected) => Err(false),
-        }
-    }
-
+impl<T> Job<T> {
     pub fn fraction(&self) -> f32 {
         self.progress.fraction()
     }
@@ -79,7 +59,83 @@ impl<T> Drop for Job<T> {
     }
 }
 
-#[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
+mod imp {
+    use super::*;
+    use std::sync::mpsc::{channel, Receiver, TryRecvError};
+
+    pub struct Inner<T>(Receiver<T>);
+
+    impl<T: Send + 'static> Job<T> {
+        /// Start `work` on another thread. It is given the job's progress
+        /// handle to report to and to learn of cancellation from.
+        pub fn spawn(work: impl FnOnce(&Progress) -> T + Send + 'static) -> Job<T> {
+            let (sender, receiver) = channel();
+            let progress = Arc::new(Progress::default());
+            let shared = Arc::clone(&progress);
+            std::thread::spawn(move || {
+                // The receiver is gone if the job was dropped; that is fine.
+                let _ = sender.send(work(&shared));
+            });
+            Job {
+                inner: Inner(receiver),
+                progress,
+            }
+        }
+
+        /// The result, once the job has finished. `Err(true)` while it is
+        /// still running; `Err(false)` if it ended without a result.
+        pub fn poll(&self) -> Result<T, bool> {
+            match self.inner.0.try_recv() {
+                Ok(value) => Ok(value),
+                Err(TryRecvError::Empty) => Err(true),
+                Err(TryRecvError::Disconnected) => Err(false),
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+mod imp {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+
+    type Work<T> = Box<dyn FnOnce(&Progress) -> T>;
+
+    pub struct Inner<T> {
+        work: RefCell<Option<Work<T>>>,
+        announced: Cell<bool>,
+    }
+
+    impl<T: 'static> Job<T> {
+        /// Queue `work`. It runs on the page's only thread, the second time
+        /// the job is polled.
+        pub fn spawn(work: impl FnOnce(&Progress) -> T + 'static) -> Job<T> {
+            Job {
+                inner: Inner {
+                    work: RefCell::new(Some(Box::new(work))),
+                    announced: Cell::new(false),
+                },
+                progress: Arc::new(Progress::default()),
+            }
+        }
+
+        /// The result, once the job has finished. `Err(true)` while it is
+        /// still pending; `Err(false)` if it has already been collected.
+        pub fn poll(&self) -> Result<T, bool> {
+            // Report "running" once first, so a frame is drawn saying so.
+            if !self.inner.announced.replace(true) {
+                return Err(true);
+            }
+            match self.inner.work.borrow_mut().take() {
+                Some(work) => Ok(work(&self.progress)),
+                None => Err(false),
+            }
+        }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
     use std::time::{Duration, Instant};

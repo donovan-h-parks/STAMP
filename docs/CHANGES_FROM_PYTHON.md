@@ -60,6 +60,8 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 22 | done | The graphical application is rebuilt with egui: one window with the profile and groups on the left, the plot in the middle and statistics and filtering on the right. Analyses run in the background with a progress bar and can be cancelled. |
 | 23 | done | In the graphical application, groups with a single sample start out switched off for multiple-group analyses, because they make ANOVA undefined for every feature. They can be switched on in the group list. |
 | 24 | done | Changing only the multiple-test correction no longer re-runs the statistical tests. |
+| 25 | done | STAMP also runs in a web browser (WebAssembly), entirely on the user's computer. Files come from the browser's file picker and are saved as downloads. |
+| 26 | done | Plots are saved through File > Save plot as > PNG, SVG or PDF, rather than by choosing the format in the save dialog. A built-in example dataset can be opened from the File menu. |
 
 ## Kept as is
 
@@ -91,7 +93,9 @@ numerical methods rather than from different formulas:
 
 ## Not yet ported
 
-* The browser build, and installers for the desktop application.
+* Installers for the desktop application.
+* In the browser build, running analyses in a web worker so that long
+  resampling tests do not hold the page while they run.
 * In the graphical application:
   * per-plot configuration dialogs (the plots share a few settings: size,
     sort order, legend and zoom);
