@@ -705,6 +705,11 @@ fn rarefaction_figure(
     Ok(rarefaction::plot(
         &data,
         &rarefaction::Options {
+            curves: match plot.rarefaction_curves {
+                RarefactionCurvesArg::Samples => rarefaction::Curves::Samples,
+                RarefactionCurvesArg::Pooled => rarefaction::Curves::GroupsPooled,
+                RarefactionCurvesArg::Accumulated => rarefaction::Curves::GroupsAccumulated,
+            },
             width: plot.plot_width,
             height: plot.plot_height.unwrap_or(5.0),
             ..Default::default()

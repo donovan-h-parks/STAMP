@@ -131,6 +131,19 @@ pub struct PlotArgs {
     /// Show uncorrected p-values in the plot
     #[arg(long)]
     pub plot_uncorrected_p_values: bool,
+    /// What each curve of a rarefaction plot stands for
+    #[arg(long, value_enum, default_value_t = RarefactionCurvesArg::Samples)]
+    pub rarefaction_curves: RarefactionCurvesArg,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum RarefactionCurvesArg {
+    /// Each sample, against the number of its sequences read
+    Samples,
+    /// Each group, against the sequences read from all of its samples together
+    Pooled,
+    /// Each group, against the number of its samples
+    Accumulated,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]

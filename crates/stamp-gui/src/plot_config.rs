@@ -9,6 +9,7 @@ use stamp_plot::extended_error_bar::{self, SortBy};
 use stamp_plot::feature_plots::Field;
 use stamp_plot::heatmap::{ColorMap, Order};
 use stamp_plot::histogram::Inset;
+use stamp_plot::rarefaction;
 use stamp_plot::sample_plots::BarField;
 use stamp_plot::scatter::Spread;
 
@@ -678,16 +679,26 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
             let o = &mut settings.rarefaction;
             dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
             dialog.group("Curves", |rows| {
-                rows.count("Sampling points:", &mut o.points, 2..=1000);
+                // Two samples have no groups to pool or to count samples in.
+                if mode != Mode::TwoSamples {
+                    let kinds: Vec<(rarefaction::Curves, &str)> = rarefaction::Curves::ALL
+                        .iter()
+                        .map(|&kind| (kind, kind.name()))
+                        .collect();
+                    rows.choice("Curves for:", &mut o.curves, &kinds);
+                }
+                let by_samples =
+                    mode != Mode::TwoSamples && o.curves == rarefaction::Curves::GroupsAccumulated;
+                rows.count_if(!by_samples, "Sampling points:", &mut o.points, 2..=1000);
                 rows.check(
                     "Truncate to the smallest sample",
                     &mut o.truncate_to_smallest,
                 );
-                rows.check("Show Chao1 estimates", &mut o.show_chao1);
+                rows.check("Show Chao estimates", &mut o.show_chao1);
             });
             dialog.legend(&mut o.legend);
             dialog.group(OTHER_OPTIONS, |rows| {
-                rows.check("Label samples", &mut o.label_samples);
+                rows.check("Label curves", &mut o.label_samples);
             });
         }
         PlotKind::Pca => {

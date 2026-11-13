@@ -10,6 +10,13 @@ Idle: no task in progress.
 
 ## Last completed
 
+- **Group-level rarefaction curves** (2026-11-14): "Curves for" in the
+  rarefaction plot offers each sample, each group pooled by sequences, and
+  each group by number of samples (`accumulation`, `chao2` and
+  `absence_probability` in `stamp-core/src/stats/rarefaction.rs`; `Curves`
+  in `stamp-plot/src/rarefaction.rs`; `--rarefaction-curves` on the command
+  line). Tests, lint and web bundle done; check `git status` for whether it
+  is committed.
 - **Example data sub-menu** (2026-11-14): File > Open example data offers
   "Enterotypes" and "Coal seam gas"; the coal profile is compressed by
   `crates/stamp-gui/build.rs` and unpacked when loaded.
@@ -26,11 +33,10 @@ Idle: no task in progress.
 
 ## State of the repository
 
-- Branch `rust-port`, pushed to `origin` up to `6b834ba` (tag
-  `feature-parity`).
-- Uncommitted when this was written: the version change, `NEW_FEATURES.md`,
-  `CURRENT_TASK.md`, the additions to `CLAUDE.md`, the rarefaction plot and
-  the example data sub-menu.
+- Branch `rust-port`, pushed to `origin` up to `5113b3f` (tag
+  `feature-parity` is on `6b834ba`).
+- Everything up to the example data sub-menu is committed and pushed
+  (`5113b3f`). The group-level curves are uncommitted work in progress.
 
 ## Next
 

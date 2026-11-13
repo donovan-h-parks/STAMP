@@ -1376,3 +1376,79 @@ fn both_built_in_examples_load() {
     assert_eq!(harness.app.session.profile_name, "Enterotypes.profile.spf");
     assert_eq!(harness.app.session.tree.as_ref().unwrap().num_samples(), 39);
 }
+
+#[test]
+fn rarefaction_curves_for_whole_groups() {
+    use stamp_plot::rarefaction::Curves;
+    let mut harness = Harness::new();
+    harness
+        .app
+        .load_example_data(stamp_gui::app::Example::CoalSeamGas);
+    harness.app.set_p_value_filter(None);
+    harness.app.session.profile_level = "Genus".to_string();
+    harness.app.session.invalidate_all();
+    harness.app.show_feature_table(false);
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::Rarefaction);
+    harness.settle();
+    let groups = harness.app.session.multi.active_groups.len();
+    assert!(groups >= 3);
+    let lines = |app: &StampApp| {
+        app.figure()
+            .shapes
+            .iter()
+            .filter(|s| {
+                matches!(s, stamp_plot::Shape::Line { points, stroke }
+                    if points.len() > 2 && stroke.dash.is_none())
+            })
+            .count()
+    };
+    let per_sample = lines(&harness.app);
+    assert!(per_sample > groups);
+
+    // Pooled by sequences: one curve per group.
+    let mut settings = harness.app.plot_settings().clone();
+    settings.rarefaction.curves = Curves::GroupsPooled;
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    assert_eq!(lines(&harness.app), groups);
+    harness.screenshot("rarefaction_pooled");
+
+    // By number of samples: one curve per group, a mark per sample, and
+    // the number of samples along the bottom.
+    settings.rarefaction.curves = Curves::GroupsAccumulated;
+    settings.rarefaction.show_chao1 = true;
+    harness.app.set_plot_settings(settings);
+    harness.app.show_plot_config(true);
+    harness.settle();
+    assert_eq!(lines(&harness.app), groups);
+    let figure = harness.app.figure();
+    let marks = figure
+        .shapes
+        .iter()
+        .filter(|s| matches!(s, stamp_plot::Shape::Circle { .. }))
+        .count();
+    assert_eq!(marks, per_sample);
+    assert!(figure
+        .shapes
+        .iter()
+        .any(|s| matches!(s, stamp_plot::Shape::Text { text, .. } if text == "Number of samples")));
+    // The eight Core samples: the question the curve is for.
+    let core = figure
+        .regions
+        .iter()
+        .rfind(|r| r.item == "Core")
+        .expect("a curve for the Core group");
+    assert!(
+        core.tooltip.contains("8 of 8 samples: "),
+        "{}",
+        core.tooltip
+    );
+    harness.screenshot("rarefaction_by_samples");
+
+    // Two samples always draw the two samples.
+    harness.app.set_mode(Mode::TwoSamples);
+    harness.app.set_plot_kind(PlotKind::Rarefaction);
+    harness.settle();
+    assert_eq!(lines(&harness.app), 2);
+}

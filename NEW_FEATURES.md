@@ -70,12 +70,24 @@ Add an entry here whenever a feature is added that v2 did not have.
     categories are not counted as features, whatever the "Unclassified"
     setting, but their sequences are part of the sample and are drawn like
     any others.
-  - Options: the number of points computed, ending every curve at the depth
-    of the smallest sample, each sample's Chao1 estimate as a dashed line,
-    sample labels, and the legend position.
+  - For groups, "Curves for" offers two further kinds, one curve per group:
+    - pooled sequences: the counts of a group's samples added up and
+      rarefied as one sample, to see whether the group as a whole has been
+      sequenced deeply enough;
+    - by number of samples: the features expected in one, two, three ...
+      of the group's samples, averaged exactly over every choice of them
+      (a species accumulation curve), to see whether more samples would
+      find more features. Its estimate of the total is Chao2.
+  - Options: the number of points computed; ending every curve at the depth
+    of the smallest sample (for curves by number of samples, rarefying
+    every sample to that depth first, so that deep samples do not count
+    for more); the Chao estimate as a dashed line (Chao1 against
+    sequences, Chao2 against samples); labels at the curve ends; and the
+    legend position.
   - A profile must hold counts of sequences. One with fractional values
     (proportions, normalised counts) is refused with a message.
-  - On the command line: `--plot-type rarefaction`.
+  - On the command line: `--plot-type rarefaction`, with
+    `--rarefaction-curves samples|pooled|accumulated`.
   - The idea follows the rarefaction plot of the GenomicaMicrob fork of
     STAMP; the implementation is independent of it.
 

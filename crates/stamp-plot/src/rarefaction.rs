@@ -1,13 +1,16 @@
 //! Rarefaction curves: the number of features each sample is expected to
 //! show against the number of its sequences read.
 
-use stamp_core::stats::rarefaction::{chao1, expected_richness, whole_counts};
+use stamp_core::stats::rarefaction::{
+    absence_probability, accumulation, chao1, chao2, expected_richness, whole_counts,
+};
 use stamp_core::{Profile, ProfileTree, Unclassified};
 
 use crate::axes::{
     group_color, label_style, legend, scaled_ticks, x_axis, y_axis, y_axis_width, Frame,
     LabelRotation, LegendPosition, AXES_COLOR, FONT_SIZE, INCH,
 };
+use crate::axis::LinearScale;
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
 use crate::text;
@@ -99,6 +102,35 @@ impl Data {
         Data::from_profile(&profile, sample_groups, groups).map_err(str::to_string)
     }
 
+    /// The samples of each group taken together as one: their counts added
+    /// up feature by feature. Groups without samples are left out.
+    pub fn pooled(&self) -> Data {
+        let samples = (0..self.groups.len())
+            .filter_map(|group| {
+                let members: Vec<&Sample> =
+                    self.samples.iter().filter(|s| s.group == group).collect();
+                let first = members.first()?;
+                let mut counts = vec![0u64; first.counts.len()];
+                for member in &members {
+                    for (sum, count) in counts.iter_mut().zip(&member.counts) {
+                        *sum += count;
+                    }
+                }
+                Some(Sample {
+                    name: self.groups[group].clone(),
+                    group,
+                    counts,
+                    total: members.iter().map(|s| s.total).sum(),
+                })
+            })
+            .collect();
+        Data {
+            samples,
+            groups: self.groups.clone(),
+            group_colors: self.group_colors.clone(),
+        }
+    }
+
     pub fn group_color(&self, index: usize) -> Color {
         self.group_colors
             .get(index)
@@ -107,21 +139,55 @@ impl Data {
     }
 }
 
+/// What each curve stands for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Curves {
+    /// One curve per sample, against the number of its sequences read.
+    Samples,
+    /// One curve per group, against the number of sequences read from all
+    /// of its samples taken together: has the group been sequenced deeply
+    /// enough?
+    GroupsPooled,
+    /// One curve per group, against the number of its samples: would more
+    /// samples find more features?
+    GroupsAccumulated,
+}
+
+impl Curves {
+    pub const ALL: [Curves; 3] = [
+        Curves::Samples,
+        Curves::GroupsPooled,
+        Curves::GroupsAccumulated,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Curves::Samples => "Each sample",
+            Curves::GroupsPooled => "Each group, pooled sequences",
+            Curves::GroupsAccumulated => "Each group, by number of samples",
+        }
+    }
+}
+
 /// Appearance of the plot. Lengths are in inches.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Options {
+    pub curves: Curves,
     pub width: f64,
     pub height: f64,
     /// Number of depths at which each curve is computed.
     pub points: usize,
-    /// End every curve at the depth of the smallest sample, where they can
-    /// be compared, instead of at each sample's own depth.
+    /// End every curve at the depth of the smallest sample (or pooled
+    /// group), where they can be compared, instead of at each one's own
+    /// depth. For curves by number of samples, every sample is first
+    /// rarefied to the depth of the smallest, so that deeply sequenced
+    /// samples do not count for more.
     pub truncate_to_smallest: bool,
-    /// Draw each sample's Chao1 estimate of its total richness as a dashed
-    /// line.
+    /// Draw the Chao estimate of total richness as a dashed line: Chao1
+    /// for curves against sequences, Chao2 for curves against samples.
     pub show_chao1: bool,
-    /// Write each sample's name at the end of its curve.
+    /// Write each sample's or group's name at the end of its curve.
     pub label_samples: bool,
     pub legend: LegendPosition,
 }
@@ -129,6 +195,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
+            curves: Curves::Samples,
             width: 7.0,
             height: 5.0,
             points: 100,
@@ -167,7 +234,216 @@ fn grouped(value: u64) -> String {
     out
 }
 
+/// Names at the ends of curves. Each is `(x, y, name, colour)`, with `x`
+/// where the name starts. Where names would overlap, a name is moved up or
+/// down by whole lines to the nearest free place; one that would have to
+/// move too far from its curve to mean anything is left out, and the curve
+/// can still be told by pointing at it.
+fn label_curve_ends(figure: &mut Figure, frame: &Frame, mut ends: Vec<(f64, f64, String, Color)>) {
+    const FURTHEST: i32 = 4;
+    let line = FONT_SIZE + 1.0;
+    // Longest curves first: their ends are the least crowded.
+    ends.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.total_cmp(&b.1)));
+    // Left, right and middle height of the names placed so far.
+    let mut placed: Vec<(f64, f64, f64)> = Vec::new();
+    for (left, wanted, name, color) in ends {
+        let right = left + text::width(&name, FONT_SIZE);
+        let free = |middle: f64, placed: &[(f64, f64, f64)]| {
+            middle - line / 2.0 >= frame.top - line
+                && middle + line / 2.0 <= frame.bottom
+                && !placed
+                    .iter()
+                    .any(|&(l, r, m)| left < r && right > l && (middle - m).abs() < line)
+        };
+        let position = (0..=FURTHEST)
+            .flat_map(|step| [f64::from(step), -f64::from(step)])
+            .map(|lines| wanted + lines * line)
+            .find(|&middle| free(middle, &placed));
+        if let Some(middle) = position {
+            placed.push((left, right, middle));
+            figure.text(
+                left,
+                middle,
+                name,
+                label_style()
+                    .color(color)
+                    .align(HAlign::Left, VAlign::Middle),
+            );
+        }
+    }
+}
+
 pub fn plot(data: &Data, options: &Options) -> Figure {
+    match options.curves {
+        Curves::Samples => plot_by_sequences(data, options),
+        Curves::GroupsPooled => plot_by_sequences(&data.pooled(), options),
+        Curves::GroupsAccumulated => plot_by_samples(data, options),
+    }
+}
+
+/// Curves of expected features against the number of samples of a group.
+fn plot_by_samples(data: &Data, options: &Options) -> Figure {
+    let sampled: Vec<&Sample> = data.samples.iter().filter(|s| s.total > 0).collect();
+    let smallest = sampled.iter().map(|s| s.total).min().unwrap_or(0);
+
+    struct Curve {
+        group: usize,
+        /// Expected features in 0, 1, 2, ... of the group's samples.
+        richness: Vec<f64>,
+        observed: usize,
+        chao2: f64,
+    }
+    let curves: Vec<Curve> = (0..data.groups.len())
+        .filter_map(|group| {
+            let members: Vec<&&Sample> = sampled.iter().filter(|s| s.group == group).collect();
+            let features = members.first()?.counts.len();
+            let absent: Vec<Vec<f64>> = (0..features)
+                .map(|feature| {
+                    members
+                        .iter()
+                        .map(|sample| {
+                            let depth = if options.truncate_to_smallest {
+                                smallest
+                            } else {
+                                sample.total
+                            };
+                            absence_probability(sample.counts[feature], sample.total, depth)
+                        })
+                        .collect()
+                })
+                .collect();
+            let incidence: Vec<usize> = (0..features)
+                .map(|feature| members.iter().filter(|s| s.counts[feature] > 0).count())
+                .collect();
+            Some(Curve {
+                group,
+                richness: accumulation(&absent, members.len()),
+                observed: incidence.iter().filter(|&&n| n > 0).count(),
+                chao2: chao2(&incidence, members.len()),
+            })
+        })
+        .collect();
+    let most_samples = curves
+        .iter()
+        .map(|c| c.richness.len() - 1)
+        .max()
+        .unwrap_or(0);
+    if most_samples < 2 {
+        return Figure::message(
+            "Curves by number of samples need a group with at least two samples",
+        );
+    }
+    let mut highest = curves
+        .iter()
+        .flat_map(|c| c.richness.iter().copied())
+        .fold(1.0, f64::max);
+    if options.show_chao1 {
+        highest = curves.iter().map(|c| c.chao2).fold(highest, f64::max);
+    }
+    let y_ticks = Ticks::covering(0.0, highest);
+
+    let mut figure = Figure::with_size_inches(options.width, options.height);
+    let padding = 0.2 * INCH;
+    let label_width = if options.label_samples {
+        6.0 + data
+            .groups
+            .iter()
+            .map(|g| text::width(g, FONT_SIZE))
+            .fold(0.0, f64::max)
+    } else {
+        0.0
+    };
+    let frame = Frame {
+        left: padding + y_axis_width(&y_ticks, true),
+        top: padding,
+        right: figure.width - padding - label_width,
+        bottom: figure.height - padding - 0.4 * INCH,
+    };
+    if frame.width() < INCH || frame.height() < INCH {
+        return Figure::message("The figure is too small for the rarefaction curves");
+    }
+    // Whole numbers of samples along the bottom, about ten of them at most.
+    let x = LinearScale::new(0.0, most_samples as f64, frame.left, frame.right);
+    let y = frame.y_scale(y_ticks.min, y_ticks.max);
+    let step = most_samples.div_ceil(10).max(1);
+    let x_ticks: Vec<(f64, String)> = (0..=most_samples)
+        .step_by(step)
+        .map(|k| (x.map(k as f64), k.to_string()))
+        .collect();
+
+    let mut ends = Vec::new();
+    for curve in &curves {
+        let color = data.group_color(curve.group);
+        let name = &data.groups[curve.group];
+        let samples = curve.richness.len() - 1;
+        let points: Vec<(f64, f64)> = curve
+            .richness
+            .iter()
+            .enumerate()
+            .map(|(k, &richness)| (x.map(k as f64), y.map(richness)))
+            .collect();
+        figure.line(&points, Stroke::solid(color, 1.25));
+        if options.show_chao1 {
+            let level = y.map(curve.chao2);
+            let end = points.last().map_or(frame.right, |p| p.0);
+            figure.line(
+                &[(frame.left, level), (end, level)],
+                Stroke::dashed(color, 0.75, 4.0, 3.0),
+            );
+        }
+        // A mark at each number of samples, which is all the curve is.
+        for (k, (&richness, &(px, py))) in curve.richness.iter().zip(&points).enumerate().skip(1) {
+            figure.circle(
+                px,
+                py,
+                2.5,
+                Some(color),
+                Some(Stroke::solid(Color::BLACK, 0.5)),
+            );
+            figure.region(
+                px - 4.0,
+                py - 4.0,
+                8.0,
+                8.0,
+                name,
+                format!(
+                    "{name}\n\n{k} of {samples} samples: {richness:.1} features expected\n\
+                     Features observed in all {samples}: {}\nChao2 estimate: {:.1}",
+                    curve.observed, curve.chao2
+                ),
+            );
+        }
+        if let (true, Some(&(px, py))) = (options.label_samples, points.last()) {
+            ends.push((px + 6.0, py, name.clone(), color));
+        }
+    }
+    label_curve_ends(&mut figure, &frame, ends);
+
+    x_axis(
+        &mut figure,
+        &frame,
+        &x_ticks,
+        Some("Number of samples"),
+        LabelRotation::Horizontal,
+        AXES_COLOR,
+    );
+    y_axis(
+        &mut figure,
+        &frame,
+        &scaled_ticks(&y_ticks, &y),
+        Some("Expected number of features"),
+        AXES_COLOR,
+    );
+    let entries: Vec<(String, Color)> = curves
+        .iter()
+        .map(|c| (data.groups[c.group].clone(), data.group_color(c.group)))
+        .collect();
+    legend(&mut figure, &frame, &entries, options.legend);
+    figure
+}
+
+/// Curves of expected features against the number of sequences read.
+fn plot_by_sequences(data: &Data, options: &Options) -> Figure {
     let sampled: Vec<&Sample> = data.samples.iter().filter(|s| s.total > 0).collect();
     if sampled.is_empty() {
         return Figure::message("No sample has any sequences to rarefy");
@@ -266,9 +542,13 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             .get(curve.sample.group)
             .map(String::as_str)
             .unwrap_or("");
+        let heading = if group == curve.sample.name {
+            group.to_string()
+        } else {
+            format!("{}\n{group}", curve.sample.name)
+        };
         let about = format!(
-            "{}\n{group}\n\nSequences: {}\nFeatures observed: {}\nChao1 estimate: {:.1}",
-            curve.sample.name,
+            "{heading}\n\nSequences: {}\nFeatures observed: {}\nChao1 estimate: {:.1}",
             grouped(curve.sample.total),
             curve.observed,
             curve.chao1
@@ -291,50 +571,20 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     }
 
     if options.label_samples {
-        // A name at the end of each curve. Where names would overlap, a
-        // name is moved up or down by whole lines to the nearest free
-        // place; one that would have to move too far from its curve to
-        // mean anything is left out, and the sample can still be told by
-        // pointing at its curve.
-        const FURTHEST: i32 = 4;
-        let line = FONT_SIZE + 1.0;
-        let mut ends: Vec<(f64, f64, &Curve<'_>)> = curves
+        let ends = curves
             .iter()
             .filter_map(|curve| {
                 let depth = *curve.depths.last()?;
                 let richness = *curve.richness.last()?;
-                Some((x.map(depth as f64) + 4.0, y.map(richness), curve))
+                Some((
+                    x.map(depth as f64) + 4.0,
+                    y.map(richness),
+                    curve.sample.name.clone(),
+                    data.group_color(curve.sample.group),
+                ))
             })
             .collect();
-        // Longest curves first: their ends are the least crowded.
-        ends.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.total_cmp(&b.1)));
-        // Left, right and middle height of the names placed so far.
-        let mut placed: Vec<(f64, f64, f64)> = Vec::new();
-        for (left, wanted, curve) in ends {
-            let right = left + text::width(&curve.sample.name, FONT_SIZE);
-            let free = |middle: f64, placed: &[(f64, f64, f64)]| {
-                middle - line / 2.0 >= frame.top - line
-                    && middle + line / 2.0 <= frame.bottom
-                    && !placed
-                        .iter()
-                        .any(|&(l, r, m)| left < r && right > l && (middle - m).abs() < line)
-            };
-            let position = (0..=FURTHEST)
-                .flat_map(|step| [f64::from(step), -f64::from(step)])
-                .map(|lines| wanted + lines * line)
-                .find(|&middle| free(middle, &placed));
-            if let Some(middle) = position {
-                placed.push((left, right, middle));
-                figure.text(
-                    left,
-                    middle,
-                    curve.sample.name.clone(),
-                    label_style()
-                        .color(data.group_color(curve.sample.group))
-                        .align(HAlign::Left, VAlign::Middle),
-                );
-            }
-        }
+        label_curve_ends(&mut figure, &frame, ends);
     }
 
     x_axis(
@@ -549,5 +799,101 @@ mod tests {
             group_colors: Vec::new(),
         };
         assert!(texts(&plot(&empty, &Options::default()))[0].contains("No sample"));
+    }
+
+    #[test]
+    fn groups_pooled_by_sequences() {
+        let pooled = data().pooled();
+        assert_eq!(pooled.samples.len(), 2);
+        let a = &pooled.samples[0];
+        assert_eq!((a.name.as_str(), a.group), ("A", 0));
+        // A1 and A2 added up; the unclassified sequences only in the total.
+        assert_eq!(a.counts, [55, 35, 20, 4, 1]);
+        assert_eq!(a.total, 140 + 15);
+        assert_eq!(pooled.samples[1].total, 30);
+
+        let figure = plot(
+            &data(),
+            &Options {
+                curves: Curves::GroupsPooled,
+                ..Options::default()
+            },
+        );
+        assert_eq!(curves(&figure).len(), 2);
+        let last = figure.regions.iter().rfind(|r| r.item == "A").unwrap();
+        assert!(
+            last.tooltip.starts_with("A\n\nSequences: 155"),
+            "{}",
+            last.tooltip
+        );
+        assert!(last.tooltip.contains("Features observed: 5"));
+    }
+
+    #[test]
+    fn groups_accumulated_by_samples() {
+        let options = Options {
+            curves: Curves::GroupsAccumulated,
+            show_chao1: true,
+            ..Options::default()
+        };
+        let figure = plot(&data(), &options);
+        // Group A has two samples: genera a, b and c are in both, d and e
+        // in one. One sample shows (5 + 3) / 2 of them on average, two all.
+        let tooltip = |k: usize| {
+            figure
+                .regions
+                .iter()
+                .filter(|r| r.item == "A")
+                .nth(k - 1)
+                .unwrap()
+                .tooltip
+                .clone()
+        };
+        assert!(
+            tooltip(1).contains("1 of 2 samples: 4.0 features expected"),
+            "{}",
+            tooltip(1)
+        );
+        assert!(tooltip(2).contains("2 of 2 samples: 5.0 features expected"));
+        assert!(tooltip(2).contains("Features observed in all 2: 5"));
+        // Chao2: 5 + (1 / 2) * 2 * 2 / (2 * 3).
+        assert!(tooltip(2).contains("Chao2 estimate: 5.3"), "{}", tooltip(2));
+        // A mark for every number of samples of every group: 2 for A, 1 for B.
+        let marks = figure
+            .shapes
+            .iter()
+            .filter(|s| matches!(s, Shape::Circle { .. }))
+            .count();
+        assert_eq!(marks, 3);
+        let texts = texts(&figure);
+        assert!(texts.contains(&"Number of samples".to_string()));
+        assert!(texts.contains(&"A".to_string()) && texts.contains(&"B".to_string()));
+
+        // Rarefied to the smallest sample first (15 sequences in A2), the
+        // deep sample A1 is no longer sure to show its rare genera.
+        let even = plot(
+            &data(),
+            &Options {
+                truncate_to_smallest: true,
+                ..options.clone()
+            },
+        );
+        let expected = |figure: &Figure| -> f64 {
+            let region = figure
+                .regions
+                .iter()
+                .filter(|r| r.item == "A")
+                .nth(1)
+                .unwrap();
+            let text = &region.tooltip;
+            let start = text.find("samples: ").unwrap() + "samples: ".len();
+            text[start..].split(' ').next().unwrap().parse().unwrap()
+        };
+        assert!(expected(&even) < expected(&figure));
+
+        // No group with two samples: nothing to accumulate.
+        let mut single = data();
+        single.samples.remove(1);
+        assert!(self::texts(&plot(&single, &options))[0].contains("at least two samples"));
     }
 }

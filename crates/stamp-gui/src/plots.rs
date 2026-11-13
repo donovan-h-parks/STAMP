@@ -412,13 +412,16 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     // Each sample is its own "group"; their colours are the
                     // two sample colours.
                     let names = profile.profile.sample_names.clone();
+                    // With two samples there are only the samples to draw.
+                    let mut settings = settings.clone();
+                    settings.rarefaction.curves = rarefaction::Curves::Samples;
                     rarefaction_curves(
                         session,
                         &names,
                         vec![0, 1],
                         names.clone(),
                         vec![SAMPLE1_COLOR, SAMPLE2_COLOR],
-                        settings,
+                        &settings,
                     )
                 }
                 _ => Figure::message("This plot is not available for two samples"),

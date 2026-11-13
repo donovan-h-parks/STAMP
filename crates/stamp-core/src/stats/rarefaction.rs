@@ -74,6 +74,76 @@ pub fn expected_richness(counts: &[u64], total: u64, depths: &[u64]) -> Vec<f64>
         .collect()
 }
 
+/// Probability that a feature with `count` of a sample's `total` sequences
+/// is not seen when the sample is rarefied to `depth` sequences. At the
+/// sample's full depth, or beyond it, this is simply whether the feature
+/// is absent.
+pub fn absence_probability(count: u64, total: u64, depth: u64) -> f64 {
+    let total = total.max(count);
+    if count == 0 {
+        1.0
+    } else if depth >= total {
+        0.0
+    } else {
+        miss_probability(total, count, depth)
+    }
+}
+
+/// Expected number of features found in `k` samples chosen at random from
+/// a set, for every `k` from zero to the number of samples: the
+/// sample-based rarefaction (species accumulation) curve.
+///
+/// `absent[feature][sample]` is the probability that the feature is not
+/// seen in the sample: one or zero for observed absence and presence, or
+/// something between when the samples are rarefied to a common depth
+/// first. The result is exact, the average over every choice of `k`
+/// samples, not an average of random orderings.
+pub fn accumulation(absent: &[Vec<f64>], samples: usize) -> Vec<f64> {
+    let mut expected = vec![0.0; samples + 1];
+    // missed[k]: the probability that a random k of the samples seen so
+    // far all lack the feature. Adding a sample, a random k of the larger
+    // set either leaves it out or contains it.
+    let mut missed = vec![0.0; samples + 1];
+    for feature in absent {
+        if feature.len() != samples {
+            continue;
+        }
+        missed.fill(0.0);
+        missed[0] = 1.0;
+        for (seen, &absence) in feature.iter().enumerate() {
+            let now = (seen + 1) as f64;
+            for k in (1..=seen + 1).rev() {
+                let without = if k <= seen { missed[k] } else { 0.0 };
+                missed[k] =
+                    without * (now - k as f64) / now + absence * missed[k - 1] * k as f64 / now;
+            }
+        }
+        for (total, missed) in expected.iter_mut().zip(&missed) {
+            *total += 1.0 - missed;
+        }
+    }
+    expected
+}
+
+/// The Chao2 estimate of the number of features in the community a set of
+/// samples was drawn from, from the features found in exactly one and
+/// exactly two of them. `incidence` is the number of samples each feature
+/// was found in.
+pub fn chao2(incidence: &[usize], samples: usize) -> f64 {
+    let observed = incidence.iter().filter(|&&n| n > 0).count() as f64;
+    if samples == 0 {
+        return observed;
+    }
+    let uniques = incidence.iter().filter(|&&n| n == 1).count() as f64;
+    let duplicates = incidence.iter().filter(|&&n| n == 2).count() as f64;
+    let scale = (samples as f64 - 1.0) / samples as f64;
+    if duplicates > 0.0 {
+        observed + scale * uniques * uniques / (2.0 * duplicates)
+    } else {
+        observed + scale * uniques * (uniques - 1.0).max(0.0) / 2.0
+    }
+}
+
 /// The Chao1 estimate of the number of features in the community a sample
 /// was drawn from, from the features seen once and twice. The
 /// bias-corrected form is used when no feature was seen exactly twice.
@@ -160,5 +230,70 @@ mod tests {
         // Nothing rare: nothing to add.
         close(chao1(&[5, 6]), 2.0);
         close(chao1(&[]), 0.0);
+    }
+
+    #[test]
+    fn accumulation_averages_over_every_choice_of_samples() {
+        // Three samples; features found in all, in two, and in one of them.
+        let present = [[1, 1, 1], [1, 1, 0], [0, 0, 1], [0, 1, 0]];
+        let absent: Vec<Vec<f64>> = present
+            .iter()
+            .map(|row| row.iter().map(|&p| 1.0 - f64::from(p)).collect())
+            .collect();
+        let curve = accumulation(&absent, 3);
+        close(curve[0], 0.0);
+        // One sample: the mean richness of the three, (2 + 3 + 2) / 3.
+        close(curve[1], 7.0 / 3.0);
+        // Two samples: pairs see 3, 3 and 4 of the features... the pairs
+        // are {1,2}: 3, {1,3}: 3, {2,3}: 4.
+        close(curve[2], 10.0 / 3.0);
+        close(curve[3], 4.0);
+        // The same as the hypergeometric formula on the incidences.
+        let by_formula = |k: u64| -> f64 {
+            [3u64, 2, 1, 1]
+                .iter()
+                .map(|&n| 1.0 - miss_probability(3, n, k))
+                .sum()
+        };
+        for k in 1..=3 {
+            close(curve[k as usize], by_formula(k));
+        }
+
+        // Uncertain presence: a feature seen in each of two samples with
+        // probability one half is found in a random one of them half the
+        // time, and in both together three times in four.
+        let uncertain = accumulation(&[vec![0.5, 0.5]], 2);
+        close(uncertain[1], 0.5);
+        close(uncertain[2], 0.75);
+
+        // Many samples stay finite and rise steadily.
+        let many: Vec<Vec<f64>> = (0..40)
+            .map(|f| {
+                (0..600)
+                    .map(|s| f64::from(u8::from((s * 7 + f) % (f + 2) != 0)))
+                    .collect()
+            })
+            .collect();
+        let curve = accumulation(&many, 600);
+        assert!(curve.iter().all(|v| v.is_finite()));
+        assert!(curve.windows(2).all(|p| p[0] <= p[1] + 1e-9));
+        // Five of the forty features occur in no sample.
+        close(curve[600], 35.0);
+    }
+
+    #[test]
+    fn absence_and_chao2() {
+        assert_eq!(absence_probability(0, 100, 10), 1.0);
+        assert_eq!(absence_probability(5, 100, 100), 0.0);
+        assert_eq!(absence_probability(5, 100, 500), 0.0);
+        // One sequence of ten, five drawn: missed half the time.
+        close(absence_probability(1, 10, 5), 0.5);
+
+        // 4 observed, 2 in one sample only, 1 in two; 5 samples:
+        // 4 + (4 / 5) * 4 / 2.
+        close(chao2(&[1, 1, 2, 5, 0], 5), 5.6);
+        // No duplicates: 3 + (2 / 3) * 2 * 1 / 2.
+        close(chao2(&[1, 1, 3], 3), 3.0 + 2.0 / 3.0);
+        close(chao2(&[2, 3], 0), 2.0);
     }
 }

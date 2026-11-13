@@ -796,6 +796,32 @@ fn every_plot_type_can_be_drawn() {
         has(&rarefaction, "Expected number of features")
             && has(&rarefaction, "Number of sequences")
     );
+    let pooled = svg_plot(
+        "multi-groups",
+        &coal,
+        &[
+            "--plot-type",
+            "rarefaction",
+            "--rarefaction-curves",
+            "pooled",
+        ],
+        &directory,
+        "rarefaction-pooled",
+    );
+    assert!(has(&pooled, "Number of sequences") && pooled.len() < rarefaction.len());
+    let accumulated = svg_plot(
+        "multi-groups",
+        &coal,
+        &[
+            "--plot-type",
+            "rarefaction",
+            "--rarefaction-curves",
+            "accumulated",
+        ],
+        &directory,
+        "rarefaction-accumulated",
+    );
+    assert!(has(&accumulated, "Number of samples"));
     let unwritten = directory.join("rarefaction-fractions.svg");
     assert!(failure(&with(
         "multi-groups",
