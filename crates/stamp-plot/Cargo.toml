@@ -8,5 +8,15 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[features]
+default = ["png", "pdf"]
+# Raster export through resvg.
+png = ["dep:resvg"]
+# PDF export through svg2pdf.
+pdf = ["dep:svg2pdf"]
+
 [dependencies]
 stamp-core = { workspace = true }
+ttf-parser = { workspace = true }
+resvg = { workspace = true, optional = true }
+svg2pdf = { workspace = true, optional = true }

@@ -56,6 +56,16 @@ stamp-cli post-hoc --profile examples/EnterotypesArumugam/Enterotypes.profile.sp
 stamp-cli convert mgrast examples/CowRumen-MG-RAST/CowRumen-MG-RAST.tsv --output cow_rumen.spf
 ```
 
+The two-sample and two-group commands can also draw the filtered results as an extended error bar plot, as PNG, SVG or PDF:
+
+```bash
+stamp-cli two-samples --profile examples/IronMineEdwards/EdwardsIronMine.spf \
+    --sample1 Black --sample2 Red --profile-level Classification \
+    --correction bonferroni --significance 0.05 --plot iron_mine.png
+```
+
+![Extended error bar plot of the iron mine example](docs/images/extended_error_bar.png)
+
 Run `stamp-cli <command> --help` for every option. Resampling methods take `--seed`, so a run can be repeated exactly.
 
 ## License

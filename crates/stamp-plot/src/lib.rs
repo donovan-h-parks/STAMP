@@ -1,6 +1,6 @@
 //! STAMP plots.
 //!
-//! Each plot builds a backend-neutral *figure*: positioned shapes and text,
+//! Each plot builds a backend-neutral [`Figure`]: positioned shapes and text,
 //! plus the data item each mark belongs to. A figure has two renderers:
 //!
 //! * the GUI draws it with egui's painter (in `stamp-gui`), which keeps plots
@@ -9,7 +9,17 @@
 //! * this crate exports it as SVG, and as PNG and PDF derived from that SVG,
 //!   so exported files always agree with each other.
 //!
-//! Both renderers share one bundled font and one text-measurement routine so
-//! that on-screen layout and exported layout match on every platform.
+//! Both renderers share one bundled font (DejaVu Sans, the font of STAMP v2's
+//! plots) and one text-measurement routine, so that on-screen layout and
+//! exported layout match on every platform.
 //!
 //! This crate must stay free of egui and of filesystem access.
+
+pub mod axis;
+pub mod export;
+pub mod extended_error_bar;
+pub mod figure;
+pub mod svg;
+pub mod text;
+
+pub use figure::{Color, Figure, HAlign, Region, Shape, Stroke, TextStyle, VAlign};

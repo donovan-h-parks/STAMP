@@ -37,7 +37,7 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | # | Status | Change |
 |---|---|---|
 | 1 | done | User-supplied plugins are not supported. Tests, corrections, effect sizes and plots are built in. |
-| 2 | planned | PS and EPS export are dropped. Plots export as PNG, SVG and PDF. |
+| 2 | done | PS and EPS export are dropped. Plots export as PNG, SVG and PDF. |
 | 3 | done | Holm-Bonferroni becomes a built-in correction returning standard adjusted p-values. The Python version (in `additional/`, never loaded by the GUI) only marked non-significant features with infinity. |
 | 4 | done | Barnard's exact test (in `additional/`, never loaded by the GUI) is not ported. |
 | 5 | done | Results-table row order is fully defined (p-value, then feature name). In Python, the order of tied p-values depended on dictionary ordering. |
@@ -52,6 +52,8 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 14 | done | A command-line interface (`stamp-cli`) is new; STAMP v2 was graphical only. |
 | 15 | done | Asking for a one-sided p-value from a test that has none (chi-square and G-tests) is an error. STAMP v2 reported an infinite p-value. |
 | 16 | done | In saved tables, whole numbers such as counts are written without a decimal point (`5`, not `5.0`), and other numbers in their shortest exact form. Column headings are unchanged. |
+| 17 | done | Plots are drawn by STAMP itself rather than by matplotlib, following the same layout, font (DejaVu Sans, bundled) and colours. Small details differ, such as the exact choice of axis ticks. |
+| 18 | done | In the extended error bar plot, sorting by effect size treats ratios symmetrically (0.5 and 2 are the same size of effect), and a confidence interval that runs past fixed axis limits is clipped at the axis without an end cap. |
 
 ## Kept as is
 
@@ -80,6 +82,13 @@ numerical methods rather than from different formulas:
   implementations and need not agree.
 * Tests that compute `1 - cdf` (chi-square, G-test, difference between
   proportions) cannot report p-values below about 1e-16, as in Python.
+
+## Not yet ported
+
+* Plots other than the extended error bar plot: bar, box, scatter, profile
+  bar, sequence histogram, p-value histogram, multiple-comparison plots,
+  heatmap, PCA and post-hoc plots.
+* The graphical application.
 
 ## Open questions
 

@@ -18,6 +18,9 @@ use stamp_core::stats::table::{
 use stamp_core::stats::{rng_from_seed, StatsSettings};
 use stamp_core::{Groups, Metadata, MultiGroupProfile, ProfileTree, SecondGroup};
 
+use stamp_plot::export::{export, Format};
+use stamp_plot::extended_error_bar::{self, Legend, SortBy};
+
 use crate::args::*;
 
 type CliResult<T = ()> = Result<T, String>;
@@ -260,7 +263,13 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
         .expect("analysis is never cancelled");
     report_correction(&results.correction);
 
-    let table = sample_table(&profile, &results, results.filter(&filter, &settings));
+    let rows = results.filter(&filter, &settings);
+    if let Some(path) = &args.plot.plot {
+        let data =
+            extended_error_bar::Data::from_sample_results(&profile, &results, rows.iter().copied());
+        save_plot(path, &data, &args.plot)?;
+    }
+    let table = sample_table(&profile, &results, rows);
     write_table(args.profile.output.as_deref(), &table)
 }
 
@@ -315,11 +324,13 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
         .expect("analysis is never cancelled");
     report_correction(&results.correction);
 
-    let table = group_table(
-        &profile,
-        &results,
-        results.filter(&profile, &filter, &settings),
-    );
+    let rows = results.filter(&profile, &filter, &settings);
+    if let Some(path) = &args.plot.plot {
+        let data =
+            extended_error_bar::Data::from_group_results(&profile, &results, rows.iter().copied());
+        save_plot(path, &data, &args.plot)?;
+    }
+    let table = group_table(&profile, &results, rows);
     write_table(args.profile.output.as_deref(), &table)
 }
 
@@ -411,6 +422,42 @@ fn post_hoc(args: PostHocArgs) -> CliResult {
         args.profile.output.as_deref(),
         &combined.expect("at least one feature is required"),
     )
+}
+
+/// Draw an extended error bar plot and save it in the format of its extension.
+fn save_plot(path: &Path, data: &extended_error_bar::Data, args: &PlotArgs) -> CliResult {
+    let format = Format::from_file_name(&path.to_string_lossy()).ok_or_else(|| {
+        format!(
+            "cannot tell the image format of {}: use a .png, .svg or .pdf extension",
+            path.display()
+        )
+    })?;
+    if data.rows.is_empty() {
+        eprintln!("warning: no features pass the filters, so the plot is empty");
+    }
+    let options = extended_error_bar::Options {
+        width: args.plot_width,
+        row_height: args.plot_row_height,
+        sort_by: match args.plot_sort_by {
+            PlotSortArg::PValues => SortBy::PValues,
+            PlotSortArg::EffectSizes => SortBy::EffectSizes,
+            PlotSortArg::FeatureLabels => SortBy::FeatureLabels,
+        },
+        legend: match args.plot_legend {
+            PlotLegendArg::None => Legend::None,
+            PlotLegendArg::UpperLeft => Legend::UpperLeft,
+            PlotLegendArg::UpperCenter => Legend::UpperCenter,
+            PlotLegendArg::UpperRight => Legend::UpperRight,
+            PlotLegendArg::LowerLeft => Legend::LowerLeft,
+            PlotLegendArg::LowerCenter => Legend::LowerCenter,
+            PlotLegendArg::LowerRight => Legend::LowerRight,
+        },
+        show_corrected_p_values: !args.plot_uncorrected_p_values,
+        ..Default::default()
+    };
+    let figure = extended_error_bar::plot(data, &options);
+    let bytes = export(&figure, format, args.plot_dpi).map_err(|e| e.to_string())?;
+    fs::write(path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))
 }
 
 fn write_table(path: Option<&Path>, table: &Table) -> CliResult {

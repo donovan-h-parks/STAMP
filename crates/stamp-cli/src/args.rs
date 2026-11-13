@@ -96,6 +96,51 @@ pub struct ResamplingArgs {
     pub pseudocount: f64,
 }
 
+/// Options for drawing the results as an extended error bar plot.
+#[derive(Args)]
+pub struct PlotArgs {
+    /// Also draw the (filtered) results as an extended error bar plot, saved
+    /// to this file; the extension chooses the format: .png, .svg or .pdf
+    #[arg(long, value_name = "FILE")]
+    pub plot: Option<PathBuf>,
+    /// Resolution of a PNG plot, in dots per inch
+    #[arg(long, default_value_t = 300.0, value_name = "DPI")]
+    pub plot_dpi: f64,
+    /// Width of the plot, in inches
+    #[arg(long, default_value_t = 7.0, value_name = "INCHES")]
+    pub plot_width: f64,
+    /// Height of each feature's row in the plot, in inches
+    #[arg(long, default_value_t = 0.2, value_name = "INCHES")]
+    pub plot_row_height: f64,
+    /// Order of the features in the plot, top to bottom
+    #[arg(long, value_enum, default_value_t = PlotSortArg::PValues)]
+    pub plot_sort_by: PlotSortArg,
+    /// Where to put a legend naming the two samples or groups
+    #[arg(long, value_enum, default_value_t = PlotLegendArg::None)]
+    pub plot_legend: PlotLegendArg,
+    /// Show uncorrected p-values in the plot
+    #[arg(long)]
+    pub plot_uncorrected_p_values: bool,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+pub enum PlotSortArg {
+    PValues,
+    EffectSizes,
+    FeatureLabels,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+pub enum PlotLegendArg {
+    None,
+    UpperLeft,
+    UpperCenter,
+    UpperRight,
+    LowerLeft,
+    LowerCenter,
+    LowerRight,
+}
+
 #[derive(Args)]
 pub struct TwoSamplesArgs {
     #[command(flatten)]
@@ -140,6 +185,8 @@ pub struct TwoSamplesArgs {
     pub effect_size_operator: OperatorArg,
     #[command(flatten)]
     pub resampling: ResamplingArgs,
+    #[command(flatten)]
+    pub plot: PlotArgs,
 }
 
 #[derive(Args)]
@@ -186,6 +233,8 @@ pub struct TwoGroupsArgs {
     pub effect_size_operator: OperatorArg,
     #[command(flatten)]
     pub resampling: ResamplingArgs,
+    #[command(flatten)]
+    pub plot: PlotArgs,
 }
 
 #[derive(Args)]

@@ -560,3 +560,86 @@ fn problems_are_reported_clearly() {
     ))
     .contains("supports confidence levels"));
 }
+
+#[test]
+fn plots_are_written_in_each_format() {
+    let directory = std::env::temp_dir().join(format!("stamp-cli-plots-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let iron = [
+        "--profile",
+        "examples/IronMineEdwards/EdwardsIronMine.spf",
+        "--sample1",
+        "Black",
+        "--sample2",
+        "Red",
+        "--profile-level",
+        "Classification",
+        "--correction",
+        "bonferroni",
+        "--significance",
+        "0.05",
+    ];
+
+    let svg_path = directory.join("iron.svg");
+    let table = Table::parse(&stdout(&with(
+        "two-samples",
+        &iron,
+        &["--plot", svg_path.to_str().unwrap()],
+    )));
+    let svg = fs::read_to_string(&svg_path).unwrap();
+    // One label per row of the filtered table, plus the titles.
+    assert_eq!(table.rows.len(), 8);
+    for row in &table.rows {
+        assert!(
+            svg.contains(&format!(">{}</text>", row[0])),
+            "{} is not in the plot",
+            row[0]
+        );
+    }
+    assert!(svg.contains(">95% confidence intervals</text>"));
+    assert!(svg.contains(">p-value (corrected)</text>"));
+    assert!(svg.contains(">Difference between proportions (%)</text>"));
+    // 7 inches wide; 8 rows of 0.2 inches plus margins.
+    assert!(svg.contains("width=\"504pt\" height=\"162pt\""));
+
+    let png_path = directory.join("iron.png");
+    stdout(&with(
+        "two-samples",
+        &iron,
+        &["--plot", png_path.to_str().unwrap(), "--plot-dpi", "100"],
+    ));
+    let png = fs::read(&png_path).unwrap();
+    assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+    let dimension = |at: usize| u32::from_be_bytes(png[at..at + 4].try_into().unwrap());
+    assert_eq!((dimension(16), dimension(20)), (700, 225));
+
+    let pdf_path = directory.join("groups.pdf");
+    stdout(&with(
+        "two-groups",
+        &ENTEROTYPES,
+        &[
+            "--group1",
+            "Enterotype 1",
+            "--group2",
+            "Enterotype 3",
+            "--profile-level",
+            "Phyla",
+            "--plot",
+            pdf_path.to_str().unwrap(),
+            "--plot-legend",
+            "lower-center",
+            "--plot-sort-by",
+            "effect-sizes",
+        ],
+    ));
+    assert!(fs::read(&pdf_path).unwrap().starts_with(b"%PDF-"));
+
+    let bad = directory.join("plot.eps");
+    assert!(failure(&with(
+        "two-samples",
+        &iron,
+        &["--plot", bad.to_str().unwrap()]
+    ))
+    .contains("use a .png, .svg or .pdf extension"));
+    fs::remove_dir_all(&directory).unwrap();
+}
