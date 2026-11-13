@@ -8,6 +8,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lib]
+name = "stamp_gui"
+path = "src/lib.rs"
+
 [[bin]]
 name = "stamp"
 path = "src/main.rs"
@@ -16,3 +20,8 @@ path = "src/main.rs"
 stamp-core = { workspace = true }
 stamp-plot = { workspace = true }
 eframe = { workspace = true }
+egui_extras = { workspace = true }
+png = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rfd = { workspace = true }

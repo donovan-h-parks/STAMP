@@ -1,25 +1,42 @@
-//! STAMP graphical application.
-//!
-//! The same code is built as a native window on Windows, Linux and macOS and,
-//! later, as WebAssembly for the browser.
+//! STAMP graphical application: native entry point.
 
 // Do not open a console window alongside the GUI on Windows release builds.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-mod app;
-
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
+    use eframe::egui;
+
     let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
+        viewport: egui::ViewportBuilder::default()
             .with_title("STAMP")
-            .with_inner_size([1200.0, 800.0]),
+            .with_inner_size([1280.0, 800.0]),
         ..Default::default()
     };
+    // Files named on the command line are opened at start-up: a profile,
+    // then optionally its metadata.
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
     eframe::run_native(
         "STAMP",
         options,
-        Box::new(|_cc| Ok(Box::new(app::StampApp::default()))),
+        Box::new(move |cc| {
+            let mut app = stamp_gui::StampApp::new(&cc.egui_ctx);
+            let read = |path: &String| {
+                let bytes = std::fs::read(path).ok()?;
+                let name = std::path::Path::new(path)
+                    .file_name()?
+                    .to_string_lossy()
+                    .into_owned();
+                Some((name, stamp_core::text::decode(&bytes).into_owned()))
+            };
+            if let Some((name, text)) = arguments.first().and_then(read) {
+                app.load_profile(&name, &text);
+            }
+            if let Some((name, text)) = arguments.get(1).and_then(read) {
+                app.load_metadata(&name, &text);
+            }
+            Ok(Box::new(app))
+        }),
     )
 }
 

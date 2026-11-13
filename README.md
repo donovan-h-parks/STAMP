@@ -25,6 +25,19 @@ STAMP is being ported from Python to Rust, to run as a standalone application on
 
 Build and test with `cargo build --workspace` and `cargo test --workspace`.
 
+### Graphical application
+
+The desktop application is built with `cargo build --release -p stamp-gui`; the binary is `target/release/stamp`. A profile and its metadata can be opened from the File menu or named on the command line:
+
+```bash
+target/release/stamp examples/EnterotypesArumugam/Enterotypes.profile.spf \
+                     examples/EnterotypesArumugam/Enterotypes.metadata.tsv
+```
+
+![The STAMP window with the enterotype example](docs/images/gui.png)
+
+It offers the three kinds of analysis (multiple groups, two groups, two samples), every statistical test, correction and filter, all the plots with tooltips, a results table, export of plots (PNG, SVG, PDF) and tables, and conversion from the other file formats. It is new and has so far been exercised only through automated tests, not by hand.
+
 ### Command line
 
 The statistics and file converters are usable now through `stamp-cli` (build it with `cargo build --release -p stamp-cli`; the binary is `target/release/stamp-cli`). Results are written as tab-separated tables with the same column headings as STAMP v2.

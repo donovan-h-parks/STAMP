@@ -57,6 +57,9 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 19 | done | The heatmap clusters features and samples on the Euclidean distances between their abundance vectors. STAMP v2 passed the distance matrix to SciPy in a form that made it cluster the rows of the distance matrix itself, which gives a different tree. |
 | 20 | done | The PCA plot uses a standard principal component analysis (matching NumPy's SVD). The sign of each component, which is arbitrary, is chosen so that the sample furthest from the origin is positive. |
 | 21 | done | Every plot type can be drawn from the command line with `--plot` and `--plot-type`. |
+| 22 | done | The graphical application is rebuilt with egui: one window with the profile and groups on the left, the plot in the middle and statistics and filtering on the right. Analyses run in the background with a progress bar and can be cancelled. |
+| 23 | done | In the graphical application, groups with a single sample start out switched off for multiple-group analyses, because they make ANOVA undefined for every feature. They can be switched on in the group list. |
+| 24 | done | Changing only the multiple-test correction no longer re-runs the statistical tests. |
 
 ## Kept as is
 
@@ -88,13 +91,24 @@ numerical methods rather than from different formulas:
 
 ## Not yet ported
 
-* The graphical application.
+* The browser build, and installers for the desktop application.
+* In the graphical application:
+  * per-plot configuration dialogs (the plots share a few settings: size,
+    sort order, legend and zoom);
+  * customising group, sample and axis colours, and the preference for
+    truncating feature names;
+  * switching individual samples off in a metadata table;
+  * the "select features" dialog, the parent sequence-count filter, and
+    highlighting of features in plots;
+  * choices in the file converters (BIOM metadata field, MG-RAST level
+    headings, treatment of multi-category COGs), which the command line has;
+  * sending a plot to its own window.
 * Plot options that are not carried over yet: the heatmap's colouring of
   clusters below a distance threshold and eight of its fourteen colour maps
   (Blues, Reds, Grayscale, Orange to red, Yellow to orange to red and Blue to
   white to red are available); the PCA plot's "fixed pixels per unit
   distance"; and choosing sequence counts instead of proportions in the
-  group bar, box and heatmap plots from the command line.
+  group bar, box and heatmap plots.
 
 ## Open questions
 
