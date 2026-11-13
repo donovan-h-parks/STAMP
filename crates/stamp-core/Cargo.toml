@@ -11,6 +11,11 @@ repository.workspace = true
 [dependencies]
 serde_json = { workspace = true }
 flate2 = { workspace = true }
+statrs = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+rand_distr = { workspace = true }
+libm = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }

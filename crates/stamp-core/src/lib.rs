@@ -11,11 +11,15 @@
 //! Results are checked against the reference outputs in `tests/golden`,
 //! generated from the original Python implementation (see `legacy/golden`).
 
+// Reference values in tests are copied verbatim from their sources.
+#![cfg_attr(test, allow(clippy::excessive_precision))]
+
 pub mod error;
 pub mod import;
 pub mod metadata;
 pub mod profile;
 pub mod profile_tree;
+pub mod stats;
 pub mod text;
 
 pub use error::{Result, StampError};
