@@ -24,6 +24,18 @@ pub struct Sample {
 pub struct Data {
     pub samples: Vec<Sample>,
     pub groups: Vec<String>,
+    /// Colour of each group; groups beyond the list use the default palette.
+    pub group_colors: Vec<Color>,
+}
+
+impl Data {
+    /// Colour of the group at `index`.
+    pub fn group_color(&self, index: usize) -> Color {
+        self.group_colors
+            .get(index)
+            .copied()
+            .unwrap_or_else(|| group_color(index))
+    }
 }
 
 fn proportions(profile: &Profile, column: usize) -> Vec<f64> {
@@ -58,6 +70,7 @@ impl Data {
         Data {
             samples,
             groups: vec![profile.group_name1.clone(), profile.group_name2.clone()],
+            group_colors: Vec::new(),
         }
     }
 
@@ -77,6 +90,7 @@ impl Data {
         Data {
             samples,
             groups: profile.group_names.clone(),
+            group_colors: Vec::new(),
         }
     }
 }
@@ -199,7 +213,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                 px,
                 py,
                 options.marker_size,
-                group_color(sample.group),
+                data.group_color(sample.group),
             );
             let r = options.marker_size.max(0.0).sqrt() / 2.0 + 1.0;
             let group = data
@@ -289,7 +303,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         .groups
         .iter()
         .enumerate()
-        .map(|(i, g)| (g.clone(), group_color(i)))
+        .map(|(i, g)| (g.clone(), data.group_color(i)))
         .collect();
     legend(&mut figure, &main, &entries, options.legend);
     figure
@@ -320,6 +334,7 @@ mod tests {
                 sample("b2", 1, 5.0),
             ],
             groups: vec!["A".to_string(), "B".to_string()],
+            group_colors: Vec::new(),
         }
     }
 

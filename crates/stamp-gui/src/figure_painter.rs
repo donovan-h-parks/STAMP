@@ -33,14 +33,22 @@ pub struct FigureResponse {
     pub hovered: Option<String>,
     /// The item that was clicked.
     pub clicked: Option<String>,
+    /// Where the figure was drawn, and the whole area it was centred in.
+    pub placement: Option<(Rect, Rect)>,
 }
 
 /// Show a figure at `scale` screen points per figure point, with tooltips for
-/// its regions.
-pub fn show(ui: &mut egui::Ui, figure: &Figure, scale: f32) -> FigureResponse {
+/// its regions. The figure is centred in `space`, the room it has been given;
+/// where it is larger than that room it takes the size it needs.
+pub fn show(ui: &mut egui::Ui, figure: &Figure, scale: f32, space: Vec2) -> FigureResponse {
     let size = Vec2::new(figure.width as f32 * scale, figure.height as f32 * scale);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    let mut outcome = FigureResponse::default();
+    let (area, response) = ui.allocate_exact_size(space.max(size), Sense::click());
+    // Whole pixels keep the plot's lines crisp.
+    let rect = Rect::from_min_size((area.min + (area.size() - size) / 2.0).round(), size);
+    let mut outcome = FigureResponse {
+        placement: Some((rect, area)),
+        ..Default::default()
+    };
     if !ui.is_rect_visible(rect) {
         return outcome;
     }

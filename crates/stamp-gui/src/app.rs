@@ -12,7 +12,6 @@ use stamp_core::stats::two_group::GroupTest;
 use stamp_core::stats::two_sample::SampleTest;
 use stamp_core::stats::TestType;
 use stamp_core::Unclassified;
-use stamp_plot::axes::group_color;
 use stamp_plot::extended_error_bar::SortBy;
 use stamp_plot::Figure;
 
@@ -22,6 +21,10 @@ use crate::plots::{self, PlotKind, PlotSettings};
 use crate::session::{Mode, Session};
 
 const COVERAGES: [f64; 5] = [0.90, 0.95, 0.98, 0.99, 0.999];
+
+/// Zoom of the plot when the application starts, and after a reset. A plot
+/// of the default width fits beside the panels in a 1280-pixel window.
+const DEFAULT_ZOOM: f32 = 1.15;
 
 /// Example data built into the application: gut enterotypes from Arumugam et
 /// al. (2011).
@@ -265,6 +268,9 @@ pub struct StampApp {
     platform: Platform,
     /// The plot item under the pointer in the last frame.
     pub hovered: Option<String>,
+    /// Where the plot was drawn in the last frame, and the area it was
+    /// centred in.
+    pub plot_placement: Option<(egui::Rect, egui::Rect)>,
 }
 
 fn mode_slot(mode: Mode) -> usize {
@@ -284,7 +290,7 @@ impl StampApp {
                 PlotKind::available(Mode::TwoSamples)[0],
             ],
             plot_settings: PlotSettings::default(),
-            zoom: 1.25,
+            zoom: DEFAULT_ZOOM,
             filters: [
                 FilterUi::default(),
                 FilterUi::default(),
@@ -304,6 +310,7 @@ impl StampApp {
             notice: None,
             platform: Platform::default(),
             hovered: None,
+            plot_placement: None,
         }
     }
 
@@ -521,14 +528,7 @@ impl StampApp {
                     )
                     .clicked()
                 {
-                    let bytes = self.table.to_tsv().into_bytes();
-                    self.platform.request(
-                        Request::Save {
-                            name: "results.tsv".to_string(),
-                            bytes,
-                        },
-                        &ctx,
-                    );
+                    self.download_table(&ctx);
                 }
                 // A web page is closed with its tab.
                 if cfg!(not(target_arch = "wasm32")) {
@@ -542,6 +542,11 @@ impl StampApp {
                 ui.checkbox(&mut self.show_table, "Results table");
             });
             ui.menu_button("Settings", |ui| {
+                let mut dark = ctx.theme() == egui::Theme::Dark;
+                if ui.checkbox(&mut dark, "Dark mode").changed() {
+                    set_dark_mode(&ctx, dark);
+                }
+                ui.separator();
                 if ui.button("Preferences...").clicked() {
                     self.show_preferences = true;
                 }
@@ -552,6 +557,38 @@ impl StampApp {
                 }
             });
         });
+    }
+
+    /// Save the results table as it is shown, through the platform's save
+    /// dialog or as a browser download.
+    pub fn download_table(&self, ctx: &egui::Context) {
+        let bytes = self.table.to_tsv().into_bytes();
+        self.platform.request(
+            Request::Save {
+                name: "results.tsv".to_string(),
+                bytes,
+            },
+            ctx,
+        );
+    }
+
+    /// The zoom of the plot; 1 shows one figure point per screen point.
+    pub fn zoom(&self) -> f32 {
+        self.zoom
+    }
+
+    /// Return the plot to the zoom it starts with.
+    pub fn reset_zoom(&mut self) {
+        self.zoom = DEFAULT_ZOOM;
+    }
+
+    /// The results table as shown: the rows that pass the filters.
+    pub fn results_table(&self) -> &Table {
+        &self.table
+    }
+
+    pub fn set_zoom(&mut self, zoom: f32) {
+        self.zoom = zoom.clamp(0.5, 4.0);
     }
 
     /// Load the example that ships inside the application.
@@ -710,14 +747,16 @@ impl StampApp {
                     .iter()
                     .position(|g| g == name);
                 ui.horizontal(|ui| {
-                    // Colours follow the order of the active groups, as in the plots.
-                    let color = position.map_or(Color32::GRAY, |i| {
-                        let c = group_color(i);
-                        Color32::from_rgb(c.r, c.g, c.b)
-                    });
-                    let (rect, _) =
-                        ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rect, 2.0, color);
+                    // The swatch opens a colour picker for the group.
+                    let color = self.session.group_color(name);
+                    let mut rgb = [color.r, color.g, color.b];
+                    let picker = ui
+                        .color_edit_button_srgb(&mut rgb)
+                        .on_hover_text("Change the colour of this group");
+                    if picker.changed() {
+                        self.session
+                            .set_group_color(name, stamp_plot::Color::rgb(rgb[0], rgb[1], rgb[2]));
+                    }
                     let mut active = position.is_some();
                     if ui
                         .add_enabled(
@@ -1006,6 +1045,10 @@ impl StampApp {
             ui.separator();
             ui.label("Zoom:");
             ui.add(egui::Slider::new(&mut self.zoom, 0.5..=4.0).show_value(false));
+            let reset = ui.add_enabled(self.zoom != DEFAULT_ZOOM, egui::Button::new("Reset"));
+            if reset.on_hover_text("Return to the default zoom").clicked() {
+                self.reset_zoom();
+            }
         });
         if self.plot_kind().uses_selected_feature(self.mode) {
             ui.horizontal(|ui| {
@@ -1028,11 +1071,14 @@ impl StampApp {
         if self.view_dirty {
             self.refresh_view();
         }
+        // The plot is centred in the room left for it.
+        let space = ui.available_size();
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                let response = figure_painter::show(ui, &self.figure, self.zoom);
+                let response = figure_painter::show(ui, &self.figure, self.zoom, space);
                 self.hovered = response.hovered;
+                self.plot_placement = response.placement;
                 if let Some(item) = response.clicked {
                     // Clicking a feature selects it for the single-feature plots.
                     if self.table_features.contains(&item) {
@@ -1045,6 +1091,7 @@ impl StampApp {
 
     fn windows(&mut self, ctx: &egui::Context) {
         let mut select = None;
+        let mut download = false;
         egui::Window::new("Results table")
             .open(&mut self.show_table)
             .default_size([760.0, 320.0])
@@ -1053,6 +1100,14 @@ impl StampApp {
                     ui.label("No features pass the filters.");
                     return;
                 }
+                ui.horizontal(|ui| {
+                    download = ui
+                        .button("Download")
+                        .on_hover_text("Save this table as a tab-separated file")
+                        .clicked();
+                    ui.label(format!("{} features", self.table.rows.len()));
+                });
+                ui.separator();
                 use egui_extras::{Column, TableBuilder};
                 let selected = self.session.selected_feature.as_deref();
                 egui::ScrollArea::horizontal().show(ui, |ui| {
@@ -1091,6 +1146,9 @@ impl StampApp {
         if let Some(feature) = select {
             self.session.selected_feature = Some(feature);
             self.view_dirty = true;
+        }
+        if download {
+            self.download_table(ctx);
         }
 
         let mut changed = false;
@@ -1153,6 +1211,15 @@ impl StampApp {
             self.notice = None;
         }
     }
+}
+
+/// Switch the whole interface between its dark and light appearance.
+pub fn set_dark_mode(ctx: &egui::Context, dark: bool) {
+    ctx.set_theme(if dark {
+        egui::Theme::Dark
+    } else {
+        egui::Theme::Light
+    });
 }
 
 /// Numbers in the table are shown with six significant digits; the saved

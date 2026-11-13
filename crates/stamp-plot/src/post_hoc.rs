@@ -7,7 +7,7 @@ use stamp_core::MultiGroupProfile;
 
 use crate::axes::group_color;
 use crate::extended_error_bar::{self, Data, Options, Row};
-use crate::figure::Figure;
+use crate::figure::{Color, Figure};
 
 /// Build the post-hoc plot for a feature. `result` must come from a post-hoc
 /// test on the same profile and feature.
@@ -22,6 +22,34 @@ pub fn plot(
     only_significant: bool,
     options: &Options,
 ) -> Figure {
+    plot_with_colors(
+        profile,
+        feature,
+        result,
+        coverage,
+        only_significant,
+        &[],
+        options,
+    )
+}
+
+/// As [`plot`], with a colour for each group of the profile, in order. Groups
+/// beyond the list use the default palette.
+pub fn plot_with_colors(
+    profile: &MultiGroupProfile,
+    feature: &str,
+    result: &PostHocResult,
+    coverage: f64,
+    only_significant: bool,
+    colors: &[Color],
+    options: &Options,
+) -> Figure {
+    let color = |index: usize| {
+        colors
+            .get(index)
+            .copied()
+            .unwrap_or_else(|| group_color(index))
+    };
     let Some(f) = profile.profile.feature(feature) else {
         return Figure::message("No feature is selected");
     };
@@ -72,7 +100,7 @@ pub fn plot(
                 p_value: p_numeric,
                 p_value_corrected: p_numeric,
                 p_text: Some(p_text),
-                colors: Some((group_color(i), group_color(j))),
+                colors: Some((color(i), color(j))),
             });
         }
     }

@@ -116,6 +116,18 @@ pub struct Data {
     pub groups: Vec<String>,
     /// Label of the colour scale.
     pub value_label: String,
+    /// Colour of each group; groups beyond the list use the default palette.
+    pub group_colors: Vec<Color>,
+}
+
+impl Data {
+    /// Colour of the group at `index`.
+    pub fn group_color(&self, index: usize) -> Color {
+        self.group_colors
+            .get(index)
+            .copied()
+            .unwrap_or_else(|| group_color(index))
+    }
 }
 
 impl Data {
@@ -136,6 +148,7 @@ impl Data {
             sample_groups,
             groups,
             value_label: "Proportion of sequences (%)".to_string(),
+            group_colors: Vec::new(),
         }
     }
 
@@ -426,7 +439,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             top - strip - 2.0,
             cell_w + 0.3,
             strip,
-            Some(group_color(group)),
+            Some(data.group_color(group)),
             None,
         );
     }
@@ -496,7 +509,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                 bar_top,
                 10.0,
                 bar_h,
-                Some(group_color(g)),
+                Some(data.group_color(g)),
                 Some(Stroke::solid(Color::BLACK, 0.5)),
             );
             figure.text(
@@ -528,6 +541,7 @@ mod tests {
             sample_groups: vec![0, 1, 0, 1],
             groups: vec!["Lean".into(), "Obese".into()],
             value_label: "Proportion of sequences (%)".to_string(),
+            group_colors: Vec::new(),
         }
     }
 
@@ -637,6 +651,7 @@ mod tests {
             sample_groups: vec![0, 1],
             groups: vec!["A".into(), "B".into()],
             value_label: String::new(),
+            group_colors: Vec::new(),
         };
         assert!(texts(&plot(&big, &Options::default()))[0].contains("limited to 1000"));
         assert!(texts(&plot(

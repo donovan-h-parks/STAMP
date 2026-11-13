@@ -181,8 +181,16 @@ fn hovering_a_feature_shows_its_tooltip() {
     let mut harness = Harness::enterotypes();
     harness.settle();
     let plain = harness.screenshot("before_hover");
-    // Point at the first row of the plot, then let the tooltip appear.
-    harness.renderer.move_pointer(egui::pos2(520.0, 160.0));
+    // Point at the first row of the plot, wherever the plot has been placed.
+    let (plot, _) = harness.app.plot_placement.expect("the plot was drawn");
+    let row = &harness.app.figure().regions[0];
+    let zoom = harness.app.zoom();
+    let pointer = plot.min
+        + egui::vec2(
+            (row.x + row.width * 0.75) as f32,
+            (row.y + row.height / 2.0) as f32,
+        ) * zoom;
+    harness.renderer.move_pointer(pointer);
     for _ in 0..90 {
         let app = &mut harness.app;
         harness.renderer.run(1, |ui| app.draw(ui));
@@ -257,4 +265,119 @@ fn built_in_example_and_opened_files_are_loaded() {
         .notice()
         .unwrap()
         .contains("Could not load bad.tsv"));
+}
+
+#[test]
+fn plot_is_centred_in_its_space() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let (plot, space) = harness.app.plot_placement.expect("the plot was drawn");
+    // Smaller than its space: equal margins on both sides, in both directions.
+    assert!(plot.width() < space.width() && plot.height() < space.height());
+    assert!(
+        (plot.center().x - space.center().x).abs() <= 1.0,
+        "{plot:?} in {space:?}"
+    );
+    assert!(
+        (plot.center().y - space.center().y).abs() <= 1.0,
+        "{plot:?} in {space:?}"
+    );
+    let image = harness.screenshot("centred");
+    // The page is white; the margin left of it is not.
+    let y = plot.center().y as usize;
+    assert_eq!(
+        image.pixel(plot.left() as usize + 3, y),
+        egui::Color32::WHITE
+    );
+    assert_ne!(
+        image.pixel(plot.left() as usize - 6, y),
+        egui::Color32::WHITE
+    );
+
+    // Larger than its space: it starts at the top-left and scrolls.
+    harness.app.set_zoom(4.0);
+    harness.settle();
+    let (plot, space) = harness.app.plot_placement.unwrap();
+    assert!(
+        (plot.min - space.min).length() <= 1.0 && (plot.max - space.max).length() <= 1.0,
+        "{plot:?} in {space:?}"
+    );
+
+    // The reset returns to the starting zoom, and the centred layout.
+    let start = Harness::enterotypes().app.zoom();
+    harness.app.reset_zoom();
+    harness.settle();
+    assert_eq!(harness.app.zoom(), start);
+    let (plot, space) = harness.app.plot_placement.unwrap();
+    assert!((plot.center().x - space.center().x).abs() <= 1.0);
+    harness.screenshot("after_reset");
+}
+
+#[test]
+fn light_and_dark_modes() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let brightness = |image: &Image| {
+        // A patch of the left panel, away from any text.
+        let pixel = image.pixel(140, 600);
+        u32::from(pixel.r()) + u32::from(pixel.g()) + u32::from(pixel.b())
+    };
+
+    stamp_gui::app::set_dark_mode(&harness.renderer.ctx, true);
+    harness.settle();
+    let dark = harness.screenshot("dark_mode");
+    stamp_gui::app::set_dark_mode(&harness.renderer.ctx, false);
+    harness.settle();
+    let light = harness.screenshot("light_mode");
+    assert!(brightness(&dark) < 200, "dark mode panel is bright");
+    assert!(brightness(&light) > 600, "light mode panel is dark");
+    // The plot's page stays white in both.
+    let (plot, _) = harness.app.plot_placement.unwrap();
+    let corner = (plot.left() as usize + 3, plot.top() as usize + 3);
+    assert_eq!(dark.pixel(corner.0, corner.1), egui::Color32::WHITE);
+    assert_eq!(light.pixel(corner.0, corner.1), egui::Color32::WHITE);
+}
+
+#[test]
+fn group_colours_can_be_changed() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let pink = stamp_plot::Color::rgb(255, 0, 200);
+    let uses_pink = |app: &StampApp| {
+        app.figure()
+            .shapes
+            .iter()
+            .any(|s| matches!(s, stamp_plot::Shape::Rect { fill: Some(c), .. } if *c == pink))
+    };
+    assert!(!uses_pink(&harness.app));
+    harness.app.session.set_group_color("Enterotype 1", pink);
+    harness.settle();
+    assert!(
+        uses_pink(&harness.app),
+        "the plot did not pick up the new colour"
+    );
+
+    // The swatch beside the group in the left panel shows it too.
+    let image = harness.screenshot("group_colour");
+    let pink_pixels = (0..260)
+        .flat_map(|x| (180..420).map(move |y| (x, y)))
+        .filter(|&(x, y)| image.pixel(x, y) == egui::Color32::from_rgb(255, 0, 200))
+        .count();
+    assert!(
+        pink_pixels > 30,
+        "no pink swatch in the group list ({pink_pixels} pixels)"
+    );
+}
+
+#[test]
+fn results_table_holds_what_would_be_downloaded() {
+    let mut harness = Harness::enterotypes();
+    harness.app.show_results_table(true);
+    harness.settle();
+    let table = harness.app.results_table();
+    assert_eq!(table.rows.len(), 17);
+    let tsv = table.to_tsv();
+    assert!(tsv.starts_with("Phyla\tEnterotype 1: mean rel. freq. (%)"));
+    assert_eq!(tsv.lines().count(), 18);
+    harness.screenshot("table_download");
 }

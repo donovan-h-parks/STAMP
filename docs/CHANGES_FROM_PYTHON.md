@@ -62,6 +62,8 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 24 | done | Changing only the multiple-test correction no longer re-runs the statistical tests. |
 | 25 | done | STAMP also runs in a web browser (WebAssembly), entirely on the user's computer. Files come from the browser's file picker and are saved as downloads. |
 | 26 | done | Plots are saved through File > Save plot as > PNG, SVG or PDF, rather than by choosing the format in the save dialog. A built-in example dataset can be opened from the File menu. |
+| 27 | done | In the graphical application: the plot is centred in its area; Settings has a light/dark mode switch; a Reset button returns the zoom to its default; each group's colour can be changed with a colour picker in the group list; and the results table window has a Download button. |
+| 28 | done | A group keeps one colour in every plot, taken from its position among all groups of the metadata field (or chosen by the user). The second group of a two-group comparison is no longer always orange. |
 
 ## Kept as is
 
@@ -100,8 +102,8 @@ numerical methods rather than from different formulas:
 * In the graphical application:
   * per-plot configuration dialogs (the plots share a few settings: size,
     sort order, legend and zoom);
-  * customising group, sample and axis colours, and the preference for
-    truncating feature names;
+  * customising sample and axis colours, and the preference for truncating
+    feature names (group colours can be changed);
   * switching individual samples off in a metadata table;
   * the "select features" dialog, the parent sequence-count filter, and
     highlighting of features in plots;

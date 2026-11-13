@@ -105,6 +105,8 @@ pub struct Session {
     pub multi: MultiState,
     /// Feature shown by the single-feature plots.
     pub selected_feature: Option<String>,
+    /// Colours the user has chosen for groups, by group name.
+    group_colors: std::collections::HashMap<String, stamp_plot::Color>,
 
     /// Which analyses are out of date.
     dirty: [bool; 3],
@@ -174,6 +176,7 @@ impl Default for Session {
                 output: None,
             },
             selected_feature: None,
+            group_colors: std::collections::HashMap::new(),
             dirty: [false; 3],
             jobs: [None, None, None],
             generation: 0,
@@ -221,9 +224,32 @@ impl Session {
         Ok(())
     }
 
+    /// Colour of a group: the one the user chose, or else one from the
+    /// palette by the group's position among all groups of the field.
+    pub fn group_color(&self, group: &str) -> stamp_plot::Color {
+        if let Some(color) = self.group_colors.get(group) {
+            return *color;
+        }
+        if group == stamp_core::ALL_OTHER_SAMPLES {
+            return stamp_plot::Color::rgb(127, 127, 127);
+        }
+        let position = self
+            .grouping()
+            .and_then(|groups| groups.names().position(|name| name == group));
+        position.map_or(stamp_plot::Color::BLACK, stamp_plot::axes::group_color)
+    }
+
+    /// Choose the colour of a group.
+    pub fn set_group_color(&mut self, group: &str, color: stamp_plot::Color) {
+        self.group_colors.insert(group.to_string(), color);
+        self.generation += 1;
+    }
+
     /// Group the samples by another metadata field.
     pub fn set_group_field(&mut self, field: &str) {
         self.group_field = Some(field.to_string());
+        // Colours belong to the groups of one field.
+        self.group_colors.clear();
         let names: Vec<String> = match self.grouping() {
             Some(groups) => groups
                 .names()

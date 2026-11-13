@@ -4,7 +4,7 @@ use stamp_core::stats::results::format_p_value;
 use stamp_plot::axes::LegendPosition;
 use stamp_plot::extended_error_bar::{self, SortBy};
 use stamp_plot::{
-    feature_plots, heatmap, histogram, pca_plot, post_hoc, sample_plots, scatter, Figure,
+    feature_plots, heatmap, histogram, pca_plot, post_hoc, sample_plots, scatter, Color, Figure,
 };
 
 use crate::session::{Mode, Session};
@@ -211,6 +211,8 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                 return Figure::message("Running the two-group analysis...");
             };
             let rows = session.group_rows();
+            let color1 = session.group_color(&profile.group_name1);
+            let color2 = session.group_color(&profile.group_name2);
             let feature_data = || {
                 let name = feature?;
                 let mut data = feature_plots::FeatureData::from_group_profile(
@@ -218,6 +220,8 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     name,
                     feature_plots::Field::Proportion,
                 )?;
+                data.groups[0].color = color1;
+                data.groups[1].color = color2;
                 data.p_value = results
                     .rows
                     .iter()
@@ -227,7 +231,9 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
             };
             match kind {
                 PlotKind::ExtendedErrorBar => {
-                    let data = extended_error_bar::Data::from_group_results(profile, results, rows);
+                    let mut data =
+                        extended_error_bar::Data::from_group_results(profile, results, rows);
+                    (data.color1, data.color2) = (color1, color2);
                     extended_error_bar::plot(&data, &error_bar)
                 }
                 PlotKind::Bar => match feature_data() {
@@ -253,7 +259,14 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     None => Figure::message(NO_FEATURE),
                 },
                 PlotKind::Scatter => scatter::plot(
-                    &scatter::Data::from_group_profile(profile, scatter::Spread::Percentiles2And98),
+                    &scatter::Data {
+                        x_color: color1,
+                        y_color: color2,
+                        ..scatter::Data::from_group_profile(
+                            profile,
+                            scatter::Spread::Percentiles2And98,
+                        )
+                    },
                     &scatter::Options {
                         width,
                         height,
@@ -261,7 +274,10 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     },
                 ),
                 PlotKind::Pca => pca_plot::plot(
-                    &pca_plot::Data::from_group_profile(profile),
+                    &pca_plot::Data {
+                        group_colors: vec![color1, color2],
+                        ..pca_plot::Data::from_group_profile(profile)
+                    },
                     &pca_plot::Options {
                         width,
                         height,
@@ -272,7 +288,10 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                 PlotKind::Heatmap => {
                     let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
                     heatmap::plot(
-                        &heatmap::Data::from_group_profile(profile, Some(&names)),
+                        &heatmap::Data {
+                            group_colors: vec![color1, color2],
+                            ..heatmap::Data::from_group_profile(profile, Some(&names))
+                        },
                         &heatmap::Options {
                             width,
                             height,
@@ -297,6 +316,11 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                 );
             };
             let rows = session.multi_rows();
+            let colors: Vec<Color> = profile
+                .group_names
+                .iter()
+                .map(|g| session.group_color(g))
+                .collect();
             let feature_data = || {
                 let name = feature?;
                 let mut data = feature_plots::FeatureData::from_multi_group_profile(
@@ -304,6 +328,9 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     name,
                     feature_plots::Field::Proportion,
                 )?;
+                for (group, color) in data.groups.iter_mut().zip(&colors) {
+                    group.color = *color;
+                }
                 data.p_value = results
                     .rows
                     .iter()
@@ -313,7 +340,10 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
             };
             match kind {
                 PlotKind::Pca => pca_plot::plot(
-                    &pca_plot::Data::from_multi_group_profile(profile),
+                    &pca_plot::Data {
+                        group_colors: colors.clone(),
+                        ..pca_plot::Data::from_multi_group_profile(profile)
+                    },
                     &pca_plot::Options {
                         width,
                         height,
@@ -324,7 +354,10 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                 PlotKind::Heatmap => {
                     let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
                     heatmap::plot(
-                        &heatmap::Data::from_multi_group_profile(profile, Some(&names)),
+                        &heatmap::Data {
+                            group_colors: colors.clone(),
+                            ..heatmap::Data::from_multi_group_profile(profile, Some(&names))
+                        },
                         &heatmap::Options {
                             width,
                             height,
@@ -356,12 +389,13 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
                     None => Figure::message(NO_FEATURE),
                 },
                 PlotKind::PostHoc => match (feature, session.post_hoc()) {
-                    (Some(name), Some(Ok(result))) => post_hoc::plot(
+                    (Some(name), Some(Ok(result))) => post_hoc::plot_with_colors(
                         profile,
                         name,
                         &result,
                         session.multi.post_hoc_coverage,
                         false,
+                        &colors,
                         &extended_error_bar::Options {
                             legend: extended_error_bar::Legend::None,
                             ..error_bar
@@ -456,5 +490,42 @@ mod tests {
         );
         assert!(PlotKind::Bar.uses_selected_feature(Mode::TwoGroups));
         assert!(!PlotKind::Bar.uses_selected_feature(Mode::TwoSamples));
+    }
+
+    #[test]
+    fn group_colours_chosen_by_the_user_reach_the_plots() {
+        let mut session = session();
+        let pink = Color::rgb(255, 0, 200);
+        session.set_group_color("B", pink);
+        let uses_pink = |figure: &Figure| {
+            figure.shapes.iter().any(|shape| match shape {
+                stamp_plot::Shape::Rect { fill, .. }
+                | stamp_plot::Shape::Circle { fill, .. }
+                | stamp_plot::Shape::Polygon { fill, .. } => *fill == Some(pink),
+                _ => false,
+            })
+        };
+        for (mode, kind) in [
+            (Mode::TwoGroups, PlotKind::ExtendedErrorBar),
+            (Mode::TwoGroups, PlotKind::Bar),
+            (Mode::TwoGroups, PlotKind::Box),
+            (Mode::TwoGroups, PlotKind::Scatter),
+            (Mode::TwoGroups, PlotKind::Pca),
+            (Mode::TwoGroups, PlotKind::Heatmap),
+            (Mode::MultipleGroups, PlotKind::Pca),
+            (Mode::MultipleGroups, PlotKind::Heatmap),
+            (Mode::MultipleGroups, PlotKind::Bar),
+            (Mode::MultipleGroups, PlotKind::Box),
+            (Mode::MultipleGroups, PlotKind::PostHoc),
+        ] {
+            let figure = build(&session, mode, kind, &PlotSettings::default());
+            assert!(
+                uses_pink(&figure),
+                "{mode:?} {kind:?} ignores the chosen colour"
+            );
+        }
+        // Groups without a chosen colour keep theirs from the palette.
+        assert_eq!(session.group_color("A"), stamp_plot::axes::group_color(0));
+        assert_eq!(session.group_color("C"), stamp_plot::axes::group_color(2));
     }
 }
