@@ -172,6 +172,10 @@ pub enum PlotTypeArg {
     PostHoc,
     /// Expected number of features against sequences read, per sample
     Rarefaction,
+    /// Effect size against significance for every feature
+    Volcano,
+    /// Stacked bars of the most abundant features of each sample
+    Composition,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -539,6 +543,8 @@ impl From<CorrectionArg> for Correction {
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum GroupTestArg {
+    /// Mann-Whitney U test (Wilcoxon rank-sum test)
+    MannWhitney,
     /// t-test assuming equal variances
     TTest,
     /// Welch's t-test
@@ -550,6 +556,7 @@ pub enum GroupTestArg {
 impl From<GroupTestArg> for GroupTest {
     fn from(value: GroupTestArg) -> Self {
         match value {
+            GroupTestArg::MannWhitney => GroupTest::MannWhitney,
             GroupTestArg::TTest => GroupTest::TTest,
             GroupTestArg::Welch => GroupTest::Welch,
             GroupTestArg::White => GroupTest::White,
@@ -574,6 +581,8 @@ impl From<MultiGroupTestArg> for MultiGroupTest {
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum PostHocTestArg {
+    /// Dunn's test with the Bonferroni adjustment
+    Dunn,
     GamesHowell,
     Scheffe,
     TukeyKramer,
@@ -584,6 +593,7 @@ pub enum PostHocTestArg {
 impl From<PostHocTestArg> for PostHocTest {
     fn from(value: PostHocTestArg) -> Self {
         match value {
+            PostHocTestArg::Dunn => PostHocTest::Dunn,
             PostHocTestArg::GamesHowell => PostHocTest::GamesHowell,
             PostHocTestArg::Scheffe => PostHocTest::Scheffe,
             PostHocTestArg::TukeyKramer => PostHocTest::TukeyKramer,

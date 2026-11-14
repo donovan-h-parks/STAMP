@@ -1,6 +1,6 @@
 //! Post-hoc tests: pairwise comparisons of groups after a multiple-group test.
 
-use super::dist::{f_cdf, f_ppf, studentized_range_cdf, studentized_range_ppf};
+use super::dist::{f_cdf, f_ppf, normal_cdf, studentized_range_cdf, studentized_range_ppf};
 use super::two_group::welch;
 use super::{mean, sample_variance};
 use crate::error::{Result, StampError};
@@ -8,6 +8,7 @@ use crate::error::{Result, StampError};
 /// Post-hoc tests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PostHocTest {
+    Dunn,
     GamesHowell,
     Scheffe,
     TukeyKramer,
@@ -57,7 +58,8 @@ const SINGLE_SAMPLE_GROUP: &str =
     "degenerate case: a group with fewer than 2 samples cannot be compared";
 
 impl PostHocTest {
-    pub const ALL: [PostHocTest; 4] = [
+    pub const ALL: [PostHocTest; 5] = [
+        PostHocTest::Dunn,
         PostHocTest::GamesHowell,
         PostHocTest::Scheffe,
         PostHocTest::TukeyKramer,
@@ -66,6 +68,7 @@ impl PostHocTest {
 
     pub fn name(self) -> &'static str {
         match self {
+            PostHocTest::Dunn => "Dunn's test (Bonferroni)",
             PostHocTest::GamesHowell => "Games-Howell",
             PostHocTest::Scheffe => "Scheffè",
             PostHocTest::TukeyKramer => "Tukey-Kramer",
@@ -92,6 +95,7 @@ impl PostHocTest {
             return Err(StampError::new("One name is required for each group."));
         }
         let (stats, note) = match self {
+            PostHocTest::Dunn => dunn(groups, coverage)?,
             PostHocTest::GamesHowell => games_howell(groups, coverage)?,
             PostHocTest::Scheffe => scheffe(groups, coverage),
             PostHocTest::TukeyKramer => tukey_kramer(groups, coverage)?,
@@ -259,6 +263,84 @@ fn scheffe(groups: &[&[f64]], coverage: f64) -> (PairStats, &'static str) {
         }
     }
     (stats, note)
+}
+
+/// Dunn's test: the rank-based post-hoc test that goes with the
+/// Kruskal-Wallis test. All values are ranked together, and each pair of
+/// groups is compared by the difference between their mean ranks, with a
+/// correction for ties. p-values are multiplied by the number of pairs
+/// (the Bonferroni adjustment), which is how the test is usually reported.
+///
+/// The test says nothing about the size of a difference, so the effect
+/// size is the difference between the mean proportions, as for the other
+/// post-hoc tests, and its interval is Welch's at the confidence level
+/// that the same adjustment gives each pair.
+fn dunn(groups: &[&[f64]], coverage: f64) -> Result<(PairStats, &'static str)> {
+    check_coverage(coverage)?;
+    let k = groups.len();
+    let pairs = (k * k.saturating_sub(1) / 2).max(1) as f64;
+    let n: usize = groups.iter().map(|g| g.len()).sum();
+
+    // Rank every value, ties sharing the average of their ranks.
+    let mut values: Vec<(f64, usize)> = groups
+        .iter()
+        .enumerate()
+        .flat_map(|(group, values)| values.iter().map(move |&v| (v, group)))
+        .collect();
+    values.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut rank_sums = vec![0.0; k];
+    let mut ties = 0.0;
+    let mut start = 0;
+    while start < values.len() {
+        let mut end = start + 1;
+        while end < values.len() && values[end].0 == values[start].0 {
+            end += 1;
+        }
+        let rank = (start + 1 + end) as f64 / 2.0;
+        let tied = (end - start) as f64;
+        ties += tied * tied * tied - tied;
+        for &(_, group) in &values[start..end] {
+            rank_sums[group] += rank;
+        }
+        start = end;
+    }
+    let n = n as f64;
+    let spread = n * (n + 1.0) / 12.0 - ties / (12.0 * (n - 1.0));
+
+    let pair_coverage = 1.0 - (1.0 - coverage) / pairs;
+    let as_proportions = |g: &[f64]| g.iter().map(|x| x / 100.0).collect::<Vec<f64>>();
+    let mut note = "";
+    let mut stats = Vec::new();
+    for i in 0..k {
+        for j in i + 1..k {
+            let (ni, nj) = (groups[i].len() as f64, groups[j].len() as f64);
+            let es = mean(groups[i]) - mean(groups[j]);
+            let standard_error = (spread * (1.0 / ni + 1.0 / nj)).sqrt();
+            let p = if groups[i].is_empty() || groups[j].is_empty() {
+                f64::NAN
+            } else if standard_error > 0.0 {
+                let z = (rank_sums[i] / ni - rank_sums[j] / nj) / standard_error;
+                (2.0 * (1.0 - normal_cdf(z.abs())) * pairs).min(1.0)
+            } else {
+                // Every value is the same.
+                1.0
+            };
+            let interval = welch(
+                &as_proportions(groups[i]),
+                &as_proportions(groups[j]),
+                pair_coverage,
+            );
+            let (lower, upper) = if groups[i].len() < 2 || groups[j].len() < 2 {
+                // Welch's interval needs a variance for both groups.
+                note = SINGLE_SAMPLE_GROUP;
+                (f64::NAN, f64::NAN)
+            } else {
+                (interval.lower_ci, interval.upper_ci)
+            };
+            stats.push((PostHocP::Value(p), es, lower, upper));
+        }
+    }
+    Ok((stats, note))
 }
 
 fn welch_uncorrected(groups: &[&[f64]], coverage: f64) -> (PairStats, &'static str) {
@@ -513,5 +595,43 @@ mod tests {
                 assert!(c.lower_ci < c.effect_size && c.effect_size < c.upper_ci);
             }
         }
+    }
+
+    /// Reference values computed from the definition with NumPy and SciPy
+    /// 1.17 (mean ranks 5.5, 15.5 and 7.214; z = -3.1015, -0.5498, 2.7969).
+    #[test]
+    fn dunn_values() {
+        let r = run(PostHocTest::Dunn);
+        let expected = [0.005777200115417524, 1.0, 0.015476513491731398];
+        for (c, e) in r.comparisons.iter().zip(expected) {
+            let PostHocP::Value(p) = c.p_value;
+            assert!((p - e).abs() < 1e-12, "{}: expected {e}, got {p}", c.label);
+            // The interval is Welch's at the adjusted level, around the
+            // difference between the means.
+            assert!(c.lower_ci < c.effect_size && c.effect_size < c.upper_ci);
+        }
+        assert_eq!(r.comparisons[0].effect_size, -32.0);
+        // Wider than an unadjusted Welch interval for the same pair.
+        let welch = run(PostHocTest::WelchUncorrected);
+        let width = |c: &Comparison| c.upper_ci - c.lower_ci;
+        assert!(width(&r.comparisons[0]) > width(&welch.comparisons[0]));
+
+        // Ties are corrected for, and identical groups do not differ.
+        let tied: [f64; 4] = [2.0, 2.0, 3.0, 3.0];
+        let same = PostHocTest::Dunn
+            .run(&[&tied, &tied, &tied], 0.95, &["a", "b", "c"])
+            .unwrap();
+        for c in &same.comparisons {
+            assert_eq!(c.p_value, PostHocP::Value(1.0));
+        }
+        // A group of one sample can be ranked, but has no interval.
+        let single: [f64; 1] = [3.0];
+        let r = PostHocTest::Dunn
+            .run(&[&A, &single, &B], 0.95, &["a", "b", "c"])
+            .unwrap();
+        let PostHocP::Value(p) = r.comparisons[0].p_value;
+        assert!((0.0..=1.0).contains(&p));
+        assert!(r.comparisons[0].lower_ci.is_nan());
+        assert_eq!(r.note, SINGLE_SAMPLE_GROUP);
     }
 }

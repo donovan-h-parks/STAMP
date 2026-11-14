@@ -1483,3 +1483,130 @@ fn remembered_plot_settings_do_not_outlive_their_defaults() {
     assert_eq!(chosen.defaults_version, DEFAULTS_VERSION);
     assert_eq!(chosen.clone().up_to_date(), chosen);
 }
+
+#[test]
+fn volcano_and_composition_plots() {
+    let mut harness = Harness::enterotypes();
+    harness.app.show_feature_table(false);
+    harness.app.set_plot_kind(PlotKind::Volcano);
+    harness.settle();
+    // A point for each of the 17 phyla; the one significant phylum is
+    // coloured, the rest muted.
+    let figure = harness.app.figure().clone();
+    assert_eq!(figure.regions.len(), 17);
+    let coloured = |figure: &stamp_plot::Figure, color: stamp_plot::Color| {
+        figure
+            .shapes
+            .iter()
+            .filter(|s| matches!(s, stamp_plot::Shape::Circle { fill: Some(c), .. } if *c == color))
+            .count()
+    };
+    let second_group = harness.app.session.group_color("Enterotype 2");
+    assert_eq!(coloured(&figure, second_group), 1);
+    let image = harness.screenshot("volcano");
+    assert!(ink(&image, 300, 120, 950, 700) > 0.01);
+    // Clicking a point's feature and highlighting work as for other plots.
+    harness.app.set_highlight(Some("Phyla"), "Firmicutes");
+    harness.settle();
+    assert!(harness.app.figure().shapes.iter().any(|s| matches!(
+        s,
+        stamp_plot::Shape::Circle { stroke: Some(stroke), .. }
+            if stroke.color == stamp_plot::Color::RED
+    )));
+    harness.app.set_highlight(None, "");
+
+    // Composition: a bar per sample of the two groups, then one per group.
+    harness.app.set_plot_kind(PlotKind::Composition);
+    harness.settle();
+    let bars = |app: &StampApp| {
+        let mut names: Vec<String> = app
+            .figure()
+            .regions
+            .iter()
+            .filter_map(|r| r.tooltip.lines().nth(1).map(str::to_string))
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    };
+    assert_eq!(bars(&harness.app).len(), 8 + 6);
+    assert!(harness
+        .app
+        .figure()
+        .regions
+        .iter()
+        .any(|r| r.item == stamp_plot::composition::OTHER));
+    harness.screenshot("composition_samples");
+    let mut settings = harness.app.plot_settings().clone();
+    settings.composition.bars = stamp_plot::composition::Bars::Groups;
+    settings.composition.features_to_show = 5;
+    harness.app.set_plot_settings(settings);
+    harness.app.show_plot_config(true);
+    harness.settle();
+    assert_eq!(bars(&harness.app), ["Enterotype 1", "Enterotype 2"]);
+    harness.screenshot("composition_groups");
+
+    // Multiple groups and two samples draw them too.
+    for mode in [Mode::MultipleGroups, Mode::TwoSamples] {
+        harness.app.set_mode(mode);
+        for kind in [PlotKind::Volcano, PlotKind::Composition] {
+            harness.app.set_plot_kind(kind);
+            harness.settle();
+            // At least two bars of five features and "Other", or a point
+            // for each phylum.
+            assert!(
+                harness.app.figure().regions.len() >= 12,
+                "{mode:?} {kind:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn mann_whitney_and_dunn_can_be_chosen() {
+    use stamp_core::stats::post_hoc::{PostHocP, PostHocTest};
+    use stamp_core::stats::two_group::GroupTest;
+
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let welch: Vec<(String, f64)> = harness
+        .app
+        .session
+        .groups
+        .output
+        .as_ref()
+        .unwrap()
+        .1
+        .rows
+        .iter()
+        .map(|r| (r.feature.clone(), r.p_value))
+        .collect();
+    harness.app.session.groups.analysis.test = GroupTest::MannWhitney;
+    harness.app.session.invalidate(Mode::TwoGroups);
+    harness.settle();
+    let (_, results) = harness.app.session.groups.output.as_ref().unwrap();
+    assert_eq!(results.analysis.test, GroupTest::MannWhitney);
+    assert_eq!(results.rows.len(), 17);
+    // A different test: different p-values, the same differences in means.
+    let p_of = |feature: &str| results.rows.iter().find(|r| r.feature == feature).unwrap();
+    assert!(welch
+        .iter()
+        .any(|(f, p)| (p_of(f).p_value - p).abs() > 1e-6));
+    for row in &results.rows {
+        assert!((0.0..=1.0).contains(&row.p_value), "{row:?}");
+        assert!(row.lower_ci <= row.effect_size + 1e-9 && row.effect_size <= row.upper_ci + 1e-9);
+    }
+
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.session.multi.post_hoc_test = PostHocTest::Dunn;
+    harness.app.set_plot_kind(PlotKind::PostHoc);
+    harness.app.select_feature("Euryarchaeota");
+    harness.settle();
+    let result = harness.app.session.post_hoc().unwrap().unwrap();
+    assert_eq!(result.comparisons.len(), 10);
+    for comparison in &result.comparisons {
+        let PostHocP::Value(p) = comparison.p_value;
+        assert!((0.0..=1.0).contains(&p));
+    }
+    harness.screenshot("post_hoc_dunn");
+}

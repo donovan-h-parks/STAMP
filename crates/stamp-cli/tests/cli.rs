@@ -775,6 +775,24 @@ fn every_plot_type_can_be_drawn() {
     // p-values are computed; STAMP v2 showed bounds such as "< 0.001".
     assert!(has(&post_hoc, "Enterotype 1 : Enterotype 2") && !has(&post_hoc, "&lt; 0.001"));
 
+    // The volcano and composition plots, for groups and for samples.
+    let volcano = svg_plot(
+        "multi-groups",
+        &multi,
+        &["--plot-type", "volcano"],
+        &directory,
+        "m-volcano",
+    );
+    assert!(has(&volcano, "Eta-squared") && has(&volcano, "\u{2212}log10(corrected p-value)"));
+    let composition = svg_plot(
+        "multi-groups",
+        &multi,
+        &["--plot-type", "composition"],
+        &directory,
+        "m-composition",
+    );
+    assert!(has(&composition, "Proportion of sequences (%)") && has(&composition, "Other"));
+
     // Rarefaction curves need counts of sequences; the coal-seam profile
     // has them and the enterotype profile does not.
     let coal = [

@@ -265,7 +265,7 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
 
     let rows = results.filter(&filter, &settings);
     if let Some(path) = &args.plot.plot {
-        use stamp_plot::{histogram, sample_plots, scatter};
+        use stamp_plot::{composition, histogram, sample_plots, scatter, volcano};
         let plot = &args.plot;
         let kind = plot.plot_type.unwrap_or(PlotTypeArg::ExtendedErrorBar);
         let size = |default: f64| plot.plot_height.unwrap_or(default);
@@ -342,6 +342,27 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
                     plot,
                 )?
             }
+            PlotTypeArg::Volcano => volcano::plot(
+                &volcano::Data::from_sample_results(&profile, &results),
+                &volcano::Options {
+                    width: plot.plot_width,
+                    height: size(6.0),
+                    corrected: !plot.plot_uncorrected_p_values,
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::Composition => composition::plot(
+                &composition::Data::from_profile(
+                    &profile.profile,
+                    vec![0, 1],
+                    profile.profile.sample_names.clone(),
+                ),
+                &composition::Options {
+                    width: plot.plot_width,
+                    height: size(5.0),
+                    ..Default::default()
+                },
+            ),
             other => return Err(unavailable(other, "two samples")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;
@@ -403,7 +424,7 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
 
     let rows = results.filter(&profile, &filter, &settings);
     if let Some(path) = &args.plot.plot {
-        use stamp_plot::{feature_plots, heatmap, pca_plot, scatter};
+        use stamp_plot::{composition, feature_plots, heatmap, pca_plot, scatter, volcano};
         let plot = &args.plot;
         let kind = plot.plot_type.unwrap_or(PlotTypeArg::ExtendedErrorBar);
         let size = |default: f64| plot.plot_height.unwrap_or(default);
@@ -492,6 +513,31 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     plot,
                 )?
             }
+            PlotTypeArg::Volcano => volcano::plot(
+                &volcano::Data::from_group_results(&profile, &results),
+                &volcano::Options {
+                    width: plot.plot_width,
+                    height: size(6.0),
+                    corrected: !plot.plot_uncorrected_p_values,
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::Composition => {
+                let first = profile.samples_in_group1().len();
+                let samples = profile.profile.sample_names.len();
+                composition::plot(
+                    &composition::Data::from_profile(
+                        &profile.profile,
+                        (0..samples).map(|i| usize::from(i >= first)).collect(),
+                        vec![profile.group_name1.clone(), profile.group_name2.clone()],
+                    ),
+                    &composition::Options {
+                        width: plot.plot_width,
+                        height: size(5.0),
+                        ..Default::default()
+                    },
+                )
+            }
             other => return Err(unavailable(other, "two groups")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;
@@ -563,7 +609,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
     };
     let rows = results.filter(&filter);
     if let Some(path) = &args.plot.plot {
-        use stamp_plot::{feature_plots, heatmap, pca_plot};
+        use stamp_plot::{composition, feature_plots, heatmap, pca_plot, volcano};
         let plot = &args.plot;
         let size = |default: f64| plot.plot_height.unwrap_or(default);
         let feature_data = || -> CliResult<feature_plots::FeatureData> {
@@ -633,6 +679,32 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                 profile.group_names.clone(),
                 plot,
             )?,
+            PlotTypeArg::Volcano => volcano::plot(
+                &volcano::Data::from_multi_group_results(&results),
+                &volcano::Options {
+                    width: plot.plot_width,
+                    height: plot.plot_height.unwrap_or(6.0),
+                    corrected: !plot.plot_uncorrected_p_values,
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::Composition => composition::plot(
+                &composition::Data::from_profile(
+                    &profile.profile,
+                    profile
+                        .samples_in_groups()
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                        .collect(),
+                    profile.group_names.clone(),
+                ),
+                &composition::Options {
+                    width: plot.plot_width,
+                    height: plot.plot_height.unwrap_or(5.0),
+                    ..Default::default()
+                },
+            ),
             other => return Err(unavailable(other, "several groups")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;

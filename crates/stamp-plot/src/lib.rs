@@ -17,6 +17,7 @@
 
 pub mod axes;
 pub mod axis;
+pub mod composition;
 pub mod export;
 pub mod extended_error_bar;
 pub mod feature_plots;
@@ -30,5 +31,6 @@ pub mod sample_plots;
 pub mod scatter;
 pub mod svg;
 pub mod text;
+pub mod volcano;
 
 pub use figure::{Color, Figure, HAlign, Region, Shape, Stroke, TextStyle, VAlign};

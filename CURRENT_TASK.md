@@ -6,10 +6,19 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle: no task in progress.
+Idle, **waiting on the user**: roadmap tier 1 is done, and they asked to be
+prompted for tiers 2, 3 and 4 in order (`docs/ROADMAP.md`). Tier 2 (alpha
+diversity, distances, PCoA, PERMANOVA/PERMDISP/ANOSIM, distance box plot,
+normalisation) is next and has not been started.
 
 ## Last completed
 
+- **Roadmap tier 1** (2026-11-14): Mann-Whitney U test
+  (`GroupTest::MannWhitney`), Dunn's post-hoc test (`PostHocTest::Dunn`),
+  volcano plot (`stamp-plot/src/volcano.rs`) and composition bar plot
+  (`stamp-plot/src/composition.rs`), each in the GUI and on the command
+  line, with tests. Recorded in `NEW_FEATURES.md` and ticked in
+  `docs/ROADMAP.md`. Check `git status` for whether it is committed.
 - **Remembered plot settings versioned** (2026-11-14): `DEFAULTS_VERSION`
   and `Saved::up_to_date` in `stamp-gui/src/app.rs`, so that settings
   stored before a default changed no longer override it (this was why

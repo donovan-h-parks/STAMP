@@ -36,6 +36,18 @@ Add an entry here whenever a feature is added that v2 did not have.
 
 ## Statistics
 
+- **Mann-Whitney U test** (Wilcoxon rank-sum test) for two groups: a
+  rank-based test that does not assume the proportions are normally
+  distributed. The p-value is exact when there are no ties and either
+  group has eight samples or fewer, and otherwise from the normal
+  approximation with corrections for ties and continuity; it agrees with
+  SciPy. The confidence interval for the difference in mean proportions is
+  a bootstrap interval, as for White's test.
+- **Dunn's test** as a post-hoc test, the rank-based companion of the
+  Kruskal-Wallis test: every pair of groups compared by their mean ranks,
+  with the Bonferroni adjustment. Its confidence intervals are Welch
+  intervals at the adjusted level, since the test itself gives none.
+
 - **Computed post-hoc p-values.** Tukey-Kramer and Games-Howell report a
   p-value rather than a bound such as `< 0.05`, and confidence intervals at
   any coverage rather than five tabulated ones [47].
@@ -56,6 +68,19 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Menu icons** (Phosphor Icons) [49].
 
 ## Plots
+
+- **Volcano plot**, in all three analysis types: the effect size of every
+  feature against -log10 of its p-value. Features past the chosen
+  significance level (and, optionally, a minimum effect size) are coloured
+  by the sample or group they are more abundant in; the rest are grey.
+  Dashed lines mark the thresholds. Corrected or uncorrected p-values can
+  be plotted, features can be highlighted, and clicking a point selects
+  the feature. On the command line: `--plot-type volcano`.
+- **Composition bar plot**, in all three analysis types: a stacked bar for
+  each sample, or the mean of each group, showing the most abundant
+  features in their own colours and the rest as "Other". A strip beneath
+  each bar shows its group. The number of features shown is an option. On
+  the command line: `--plot-type composition`.
 
 - **Rarefaction curves.** A new plot in all three analysis types: for each
   sample, the number of features expected against the number of its

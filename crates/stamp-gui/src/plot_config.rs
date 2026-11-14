@@ -5,6 +5,7 @@
 use eframe::egui;
 use stamp_core::stats::cluster::Linkage;
 use stamp_plot::axes::LegendPosition;
+use stamp_plot::composition;
 use stamp_plot::extended_error_bar::{self, SortBy};
 use stamp_plot::feature_plots::Field;
 use stamp_plot::heatmap::{ColorMap, Order};
@@ -673,6 +674,61 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
             });
             dialog.group("Significant features plot", |rows| {
                 rows.number("x-axis limit:", &mut o.significant_limit, 0.01, 0.01..=1.0);
+            });
+        }
+        PlotKind::Volcano => {
+            let o = &mut settings.volcano;
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Significant features", |rows| {
+                rows.choice(
+                    "Field to plot:",
+                    &mut o.corrected,
+                    &[(false, "p-values"), (true, "p-values (corrected)")],
+                );
+                rows.optional(
+                    "Significance level:",
+                    &mut o.significance,
+                    0.05,
+                    0.001,
+                    0.0..=1.0,
+                );
+                rows.optional(
+                    "Minimum effect size:",
+                    &mut o.min_effect,
+                    1.0,
+                    0.05,
+                    0.0..=f64::MAX,
+                );
+            });
+            // Several groups have no two sides to name.
+            if mode != Mode::MultipleGroups {
+                dialog.legend(&mut o.legend);
+            }
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
+            });
+        }
+        PlotKind::Composition => {
+            let o = &mut settings.composition;
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Bars", |rows| {
+                // Two samples have no groups to average over.
+                if mode != Mode::TwoSamples {
+                    rows.choice(
+                        "Bars for:",
+                        &mut o.bars,
+                        &[
+                            (composition::Bars::Samples, "Each sample"),
+                            (composition::Bars::Groups, "Each group (mean)"),
+                        ],
+                    );
+                }
+                rows.count("Features to show:", &mut o.features_to_show, 1..=50);
+                rows.check("Label bars", &mut o.label_bars);
+            });
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.check("Show legend", &mut o.show_legend);
+                rows.truncate(&mut o.truncate_labels);
             });
         }
         PlotKind::Rarefaction => {

@@ -5,8 +5,8 @@ use stamp_plot::axes::LegendPosition;
 use stamp_plot::axes::AXES_COLOR;
 use stamp_plot::extended_error_bar::{self, SAMPLE1_COLOR, SAMPLE2_COLOR};
 use stamp_plot::{
-    feature_plots, heatmap, histogram, pca_plot, post_hoc, rarefaction, sample_plots, scatter,
-    Color, Figure,
+    composition, feature_plots, heatmap, histogram, pca_plot, post_hoc, rarefaction, sample_plots,
+    scatter, volcano, Color, Figure,
 };
 
 use crate::session::{Mode, Session};
@@ -26,6 +26,8 @@ pub enum PlotKind {
     Heatmap,
     PostHoc,
     Rarefaction,
+    Volcano,
+    Composition,
 }
 
 impl PlotKind {
@@ -43,6 +45,8 @@ impl PlotKind {
             PlotKind::Heatmap => "Heatmap plot",
             PlotKind::PostHoc => "Post-hoc plot",
             PlotKind::Rarefaction => "Rarefaction curves",
+            PlotKind::Volcano => "Volcano plot",
+            PlotKind::Composition => "Composition bar plot",
         }
     }
 
@@ -58,6 +62,8 @@ impl PlotKind {
                 PlotKind::PValueHistogram,
                 PlotKind::MultipleComparison,
                 PlotKind::Rarefaction,
+                PlotKind::Volcano,
+                PlotKind::Composition,
             ],
             Mode::TwoGroups => &[
                 PlotKind::ExtendedErrorBar,
@@ -67,6 +73,8 @@ impl PlotKind {
                 PlotKind::Pca,
                 PlotKind::Heatmap,
                 PlotKind::Rarefaction,
+                PlotKind::Volcano,
+                PlotKind::Composition,
             ],
             Mode::MultipleGroups => &[
                 PlotKind::Pca,
@@ -75,6 +83,8 @@ impl PlotKind {
                 PlotKind::Box,
                 PlotKind::PostHoc,
                 PlotKind::Rarefaction,
+                PlotKind::Volcano,
+                PlotKind::Composition,
             ],
         }
     }
@@ -82,7 +92,10 @@ impl PlotKind {
     /// True if the plot can draw chosen features in red.
     pub fn supports_highlight(self, mode: Mode) -> bool {
         match self {
-            PlotKind::ExtendedErrorBar | PlotKind::Scatter | PlotKind::ProfileBar => true,
+            PlotKind::ExtendedErrorBar
+            | PlotKind::Scatter
+            | PlotKind::ProfileBar
+            | PlotKind::Volcano => true,
             PlotKind::Bar => mode == Mode::TwoSamples,
             _ => false,
         }
@@ -132,6 +145,8 @@ pub struct PlotSettings {
     pub pca: pca_plot::Options,
     pub heatmap: heatmap::Options,
     pub rarefaction: rarefaction::Options,
+    pub volcano: volcano::Options,
+    pub composition: composition::Options,
     /// Draw only the features that pass the filters in the heatmap.
     pub heatmap_only_active: bool,
     /// Show sequence counts instead of proportions in the heatmap.
@@ -204,6 +219,8 @@ impl Default for PlotSettings {
                 ..Default::default()
             },
             rarefaction: rarefaction::Options::default(),
+            volcano: volcano::Options::default(),
+            composition: composition::Options::default(),
             heatmap_only_active: false,
             heatmap_sequence_counts: false,
             highlighted: Vec::new(),
@@ -252,6 +269,8 @@ impl PlotSettings {
             PlotKind::MultipleComparison => self.multiple_comparison = defaults.multiple_comparison,
             PlotKind::Pca => self.pca = defaults.pca,
             PlotKind::Rarefaction => self.rarefaction = defaults.rarefaction,
+            PlotKind::Volcano => self.volcano = defaults.volcano,
+            PlotKind::Composition => self.composition = defaults.composition,
             PlotKind::Heatmap => {
                 self.heatmap = defaults.heatmap;
                 self.heatmap_only_active = defaults.heatmap_only_active;
@@ -326,6 +345,11 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
         ..settings.scatter.clone()
     };
     let p_text = |p: f64| format_p_value(p, settings.min_p_exponent);
+    let volcano_options = volcano::Options {
+        highlighted: highlighted(),
+        min_p_value_exponent: settings.min_p_exponent,
+        ..settings.volcano.clone()
+    };
     let field = settings.feature_field;
     let feature = session.selected_feature.as_deref();
 
@@ -424,6 +448,26 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         &settings,
                     )
                 }
+                PlotKind::Volcano => volcano::plot(
+                    &volcano::Data::from_sample_results(profile, results),
+                    &volcano_options,
+                ),
+                PlotKind::Composition => {
+                    let mut data = composition::Data::from_profile(
+                        &profile.profile,
+                        vec![0, 1],
+                        profile.profile.sample_names.clone(),
+                    );
+                    data.group_colors = vec![SAMPLE1_COLOR, SAMPLE2_COLOR];
+                    // With two samples there are only the samples to draw.
+                    composition::plot(
+                        &data,
+                        &composition::Options {
+                            bars: composition::Bars::Samples,
+                            ..settings.composition.clone()
+                        },
+                    )
+                }
                 _ => Figure::message("This plot is not available for two samples"),
             }
         }
@@ -511,6 +555,25 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         vec![color1, color2],
                         settings,
                     )
+                }
+                PlotKind::Volcano => {
+                    let mut data = volcano::Data::from_group_results(profile, results);
+                    data.sides = Some([
+                        (profile.group_name1.clone(), color1),
+                        (profile.group_name2.clone(), color2),
+                    ]);
+                    volcano::plot(&data, &volcano_options)
+                }
+                PlotKind::Composition => {
+                    let first = profile.samples_in_group1().len();
+                    let samples = profile.profile.sample_names.len();
+                    let mut data = composition::Data::from_profile(
+                        &profile.profile,
+                        (0..samples).map(|i| usize::from(i >= first)).collect(),
+                        vec![profile.group_name1.clone(), profile.group_name2.clone()],
+                    );
+                    data.group_colors = vec![color1, color2];
+                    composition::plot(&data, &settings.composition)
                 }
                 _ => Figure::message("This plot is not available for two groups"),
             }
@@ -603,6 +666,24 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     colors.clone(),
                     settings,
                 ),
+                PlotKind::Volcano => volcano::plot(
+                    &volcano::Data::from_multi_group_results(results),
+                    &volcano_options,
+                ),
+                PlotKind::Composition => {
+                    let mut data = composition::Data::from_profile(
+                        &profile.profile,
+                        profile
+                            .samples_in_groups()
+                            .iter()
+                            .enumerate()
+                            .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                            .collect(),
+                        profile.group_names.clone(),
+                    );
+                    data.group_colors = colors.clone();
+                    composition::plot(&data, &settings.composition)
+                }
                 _ => Figure::message("This plot is not available for multiple groups"),
             }
         }

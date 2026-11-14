@@ -2,7 +2,7 @@
 //! samples.
 
 use super::ci::SampleCi;
-use super::dist::{t_cdf, t_isf};
+use super::dist::{normal_cdf, t_cdf, t_isf};
 use super::two_sample::{random_index, SampleTest};
 use super::{sample_variance, StampRng, StatsSettings};
 
@@ -22,6 +22,7 @@ pub struct GroupOutcome {
 /// Statistical tests for two groups.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GroupTest {
+    MannWhitney,
     TTest,
     Welch,
     White,
@@ -35,10 +36,16 @@ const WHITE_ZERO_VARIANCE: &str =
 const WHITE_FISHER: &str = "heuristic: statistics calculated with Fisher's test";
 
 impl GroupTest {
-    pub const ALL: [GroupTest; 3] = [GroupTest::TTest, GroupTest::Welch, GroupTest::White];
+    pub const ALL: [GroupTest; 4] = [
+        GroupTest::MannWhitney,
+        GroupTest::TTest,
+        GroupTest::Welch,
+        GroupTest::White,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
+            GroupTest::MannWhitney => "Mann-Whitney U test",
             GroupTest::TTest => "t-test (equal variance)",
             GroupTest::Welch => "Welch's t-test",
             GroupTest::White => "White's non-parametric t-test",
@@ -52,6 +59,7 @@ impl GroupTest {
     /// Name of the confidence-interval method that goes with the test.
     pub fn ci_method(self) -> &'static str {
         match self {
+            GroupTest::MannWhitney => "DP: bootstrap",
             GroupTest::TTest => "DP: t-test inverted",
             GroupTest::Welch => "DP: Welch's inverted",
             GroupTest::White => "DP: bootstrap",
@@ -60,7 +68,9 @@ impl GroupTest {
 
     /// True if the result depends on the random seed.
     pub fn is_stochastic(self) -> bool {
-        self == GroupTest::White
+        // The Mann-Whitney p-values are not random; its bootstrap
+        // confidence intervals are.
+        matches!(self, GroupTest::White | GroupTest::MannWhitney)
     }
 
     /// Run the test on every feature. For each feature, `seq1` and `parent1`
@@ -91,6 +101,23 @@ impl GroupTest {
                     } else {
                         welch(&prop1, &prop2, coverage)
                     };
+                    if (zero1 || zero2) && outcome.note.is_empty() {
+                        outcome.note = ZERO_PARENT;
+                    }
+                    out.push(outcome);
+                }
+                Some(out)
+            }
+            GroupTest::MannWhitney => {
+                let mut out = Vec::with_capacity(features.len());
+                for (i, f) in features.iter().enumerate() {
+                    if !progress(i, features.len()) {
+                        return None;
+                    }
+                    let (prop1, zero1) = proportions(f.seq1, f.parent1);
+                    let (prop2, zero2) = proportions(f.seq2, f.parent2);
+                    let mut outcome =
+                        mann_whitney(&prop1, &prop2, coverage, settings.replicates, rng);
                     if (zero1 || zero2) && outcome.note.is_empty() {
                         outcome.note = ZERO_PARENT;
                     }
@@ -204,6 +231,119 @@ pub fn welch(prop1: &[f64], prop2: &[f64], coverage: f64) -> GroupOutcome {
     let p_lower = t_cdf(dp / std_err, dof);
     let t_critical = t_isf(0.5 * (1.0 - coverage), dof);
     outcome(p_lower, dp, t_critical * std_err, "")
+}
+
+/// Ranks of the values of two groups taken together, ties sharing the
+/// average of the ranks they span. Returns the sum of the ranks of the
+/// first group and the sum of `t^3 - t` over the sizes `t` of the sets of
+/// tied values.
+fn rank_sum(first: &[f64], second: &[f64]) -> (f64, f64) {
+    let mut values: Vec<(f64, bool)> = first
+        .iter()
+        .map(|&v| (v, true))
+        .chain(second.iter().map(|&v| (v, false)))
+        .collect();
+    values.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let (mut sum, mut ties) = (0.0, 0.0);
+    let mut start = 0;
+    while start < values.len() {
+        let mut end = start + 1;
+        while end < values.len() && values[end].0 == values[start].0 {
+            end += 1;
+        }
+        // Ranks start + 1 ..= end share their average.
+        let rank = (start + 1 + end) as f64 / 2.0;
+        let tied = (end - start) as f64;
+        ties += tied * tied * tied - tied;
+        sum += rank * values[start..end].iter().filter(|v| v.1).count() as f64;
+        start = end;
+    }
+    (sum, ties)
+}
+
+/// Exact lower and upper tail probabilities of the Mann-Whitney statistic
+/// `u` for groups of `n1` and `n2` values without ties: `P(U <= u)` and
+/// `P(U >= u)`.
+fn mann_whitney_exact(u: f64, n1: usize, n2: usize) -> (f64, f64) {
+    // ways[i][j][k]: the number of arrangements of i values of the first
+    // group and j of the second with statistic k. The largest value is
+    // either from the first group, which then exceeds all j of the second,
+    // or from the second, which adds nothing.
+    let most = n1 * n2;
+    let mut ways = vec![vec![vec![0.0f64; most + 1]; n2 + 1]; n1 + 1];
+    for (i, by_second) in ways.iter_mut().enumerate() {
+        for (j, counts) in by_second.iter_mut().enumerate() {
+            if i == 0 || j == 0 {
+                counts[0] = 1.0;
+            }
+        }
+    }
+    for i in 1..=n1 {
+        for j in 1..=n2 {
+            for k in 0..=i * j {
+                let with_first = if k >= j { ways[i - 1][j][k - j] } else { 0.0 };
+                ways[i][j][k] = with_first + ways[i][j - 1][k];
+            }
+        }
+    }
+    let counts = &ways[n1][n2];
+    let total: f64 = counts.iter().sum();
+    let at = (u.round() as usize).min(most);
+    (
+        counts[..=at].iter().sum::<f64>() / total,
+        counts[at..].iter().sum::<f64>() / total,
+    )
+}
+
+/// The Mann-Whitney U test (Wilcoxon rank-sum test), on proportions: do
+/// the values of one group tend to be larger than those of the other?
+///
+/// The p-value is exact when there are no ties and either group has eight
+/// values or fewer, and otherwise from the normal approximation with
+/// corrections for ties and for continuity, as in SciPy. The test itself
+/// gives no interval for the difference between the mean proportions, so
+/// that comes from the bootstrap, as for White's test.
+pub fn mann_whitney(
+    prop1: &[f64],
+    prop2: &[f64],
+    coverage: f64,
+    replicates: usize,
+    rng: &mut StampRng,
+) -> GroupOutcome {
+    if prop1.is_empty() || prop2.is_empty() {
+        return too_few_samples();
+    }
+    let (n1, n2) = (prop1.len() as f64, prop2.len() as f64);
+    let (rank_sum1, ties) = rank_sum(prop1, prop2);
+    let u = rank_sum1 - n1 * (n1 + 1.0) / 2.0;
+    let centre = n1 * n2 / 2.0;
+
+    // Probabilities of a statistic at most, and at least, the one observed.
+    let (lower, upper) = if ties == 0.0 && (prop1.len() <= 8 || prop2.len() <= 8) {
+        mann_whitney_exact(u, prop1.len(), prop2.len())
+    } else {
+        let n = n1 + n2;
+        let variance = n1 * n2 / 12.0 * ((n + 1.0) - ties / (n * (n - 1.0)));
+        if variance <= 0.0 {
+            // Every value is the same.
+            (1.0, 1.0)
+        } else {
+            let sd = variance.sqrt();
+            (
+                normal_cdf((u - centre + 0.5) / sd),
+                1.0 - normal_cdf((u - centre - 0.5) / sd),
+            )
+        }
+    };
+    let (low, high) = bootstrap_ci(prop1, prop2, coverage, replicates.max(1), rng);
+    GroupOutcome {
+        one_sided: upper.min(1.0),
+        two_sided: (2.0 * lower.min(upper)).min(1.0),
+        lower_ci: low * 100.0,
+        upper_ci: high * 100.0,
+        effect_size: (mean(prop1) - mean(prop2)) * 100.0,
+        note: "",
+    }
 }
 
 /// t statistic with unpooled variance for one feature.
@@ -558,5 +698,71 @@ mod tests {
             &mut |done, _| done < 10,
         );
         assert!(cancelled.is_none());
+    }
+
+    /// Reference values from SciPy 1.17 (`scipy.stats.mannwhitneyu`).
+    #[test]
+    fn mann_whitney_matches_scipy() {
+        let run = |a: &[f64], b: &[f64]| {
+            mann_whitney(a, b, 0.95, 200, &mut crate::stats::rng_from_seed(1))
+        };
+        let check = |a: &[f64], b: &[f64], two_sided: f64, greater: f64| {
+            let outcome = run(a, b);
+            assert!(
+                (outcome.two_sided - two_sided).abs() < 1e-12,
+                "two-sided {} against {two_sided}",
+                outcome.two_sided
+            );
+            assert!(
+                (outcome.one_sided - greater).abs() < 1e-12,
+                "one-sided {} against {greater}",
+                outcome.one_sided
+            );
+        };
+        // No ties and a small group: exact.
+        check(
+            &[1.1, 2.2, 3.3, 4.4, 9.9],
+            &[5.5, 6.6, 7.7, 8.8, 10.1, 12.0],
+            0.05194805194805195,
+            0.9848484848484849,
+        );
+        check(
+            &[1.0, 2.0, 3.0],
+            &[4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            0.00909090909090909,
+            1.0,
+        );
+        // Ties: the normal approximation, corrected for them.
+        check(
+            &[1.0, 2.0, 2.0, 3.0, 5.0, 5.0, 7.0],
+            &[2.0, 4.0, 5.0, 6.0, 8.0, 8.0, 9.0, 10.0],
+            0.054224898519599225,
+            0.9794095727612359,
+        );
+        // Both groups larger than eight: the normal approximation.
+        check(
+            &[
+                0.12, 0.5, 0.33, 0.9, 0.41, 0.77, 0.05, 0.62, 0.38, 0.29, 0.81,
+            ],
+            &[
+                0.55, 0.95, 0.61, 1.2, 0.72, 0.99, 0.48, 1.5, 0.67, 0.84, 1.1, 0.58,
+            ],
+            0.010644786560634337,
+            0.9955476863951409,
+        );
+        // Nothing to tell apart.
+        check(&[3.0, 3.0, 3.0, 3.0], &[3.0, 3.0, 3.0], 1.0, 1.0);
+
+        // The effect is the difference in mean proportion, in percent, and
+        // its bootstrap interval contains it.
+        let outcome = run(&[0.10, 0.12, 0.14, 0.11], &[0.30, 0.33, 0.29, 0.31]);
+        assert!((outcome.effect_size - (11.75 - 30.75)).abs() < 1e-9);
+        assert!(outcome.lower_ci < outcome.effect_size && outcome.effect_size < outcome.upper_ci);
+        assert!(outcome.upper_ci < 0.0);
+        assert_eq!(
+            GroupTest::from_name("Mann-Whitney U test"),
+            Some(GroupTest::MannWhitney)
+        );
+        assert!(GroupTest::MannWhitney.is_stochastic());
     }
 }
