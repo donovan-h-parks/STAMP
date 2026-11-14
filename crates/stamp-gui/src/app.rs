@@ -929,6 +929,11 @@ impl StampApp {
         self.show_plot_config = show;
     }
 
+    /// Open or close the Preferences window, as Settings > Preferences does.
+    pub fn show_preferences(&mut self, show: bool) {
+        self.show_preferences = show;
+    }
+
     /// Limit the current analysis to features chosen by hand, as "Select
     /// specific features" does; `None` returns to every feature.
     pub fn set_selected_features(&mut self, features: Option<&[&str]>) {
@@ -3108,7 +3113,21 @@ impl StampApp {
                         redraw |= row(ui, "Colour of axes:", |ui| {
                             color(ui, &mut self.plot_settings.axes_color)
                         });
+                        let font = |ui: &mut egui::Ui, size: &mut f64| {
+                            let drag = egui::DragValue::new(size)
+                                .speed(0.25)
+                                .range(4.0..=36.0)
+                                .suffix(" pt");
+                            ui.add(drag).changed()
+                        };
+                        let fonts = &mut self.plot_settings.fonts;
+                        redraw |= row(ui, "Axis label font size:", |ui| {
+                            font(ui, &mut fonts.axis_label)
+                        });
+                        redraw |= row(ui, "Tick font size:", |ui| font(ui, &mut fonts.tick));
+                        redraw |= row(ui, "Legend font size:", |ui| font(ui, &mut fonts.legend));
                     });
+                ui.label("Font sizes particular to a plot are set in its Configure plot window.");
                 if ui.button("Restore defaults").clicked() {
                     restore_defaults = true;
                 }
@@ -3122,6 +3141,7 @@ impl StampApp {
             self.plot_settings.min_p_exponent = defaults.plots.min_p_exponent;
             self.plot_settings.sample_colors = defaults.plots.sample_colors;
             self.plot_settings.axes_color = defaults.plots.axes_color;
+            self.plot_settings.fonts = defaults.plots.fonts;
             changed = true;
         }
         self.view_dirty |= redraw || restore_defaults;

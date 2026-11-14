@@ -139,6 +139,13 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Live plot settings.** Changes in "Configure plot" show at once, and each
   plot's settings can be returned to their defaults [32].
 - **Menu icons** (Phosphor Icons) [49].
+- **Font sizes of plots.** Settings > Preferences sets the size of the
+  tick labels, axis labels and legend text of every plot (8, 9 and 9
+  points to start with). Text particular to a kind of plot (titles,
+  notes, feature names, curve labels, Venn counts) is sized in a "Font
+  sizes" frame of that plot's Configure plot window. v2's text was a fixed
+  8 points [57]. On the command line: `--tick-font-size`,
+  `--axis-label-font-size` and `--legend-font-size`.
 - **A "Correlation" tab** beside the three kinds of analysis of v2, with
   its own statistics, filters, feature table, results table and plots.
 

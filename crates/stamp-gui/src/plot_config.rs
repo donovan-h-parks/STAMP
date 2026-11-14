@@ -59,6 +59,17 @@ impl Rows<'_> {
         self.ui.end_row();
     }
 
+    /// A font size in points.
+    fn font(&mut self, label: &str, value: &mut f64) {
+        self.text(label);
+        let drag = egui::DragValue::new(value)
+            .speed(0.25)
+            .range(4.0..=36.0)
+            .suffix(" pt");
+        self.changed |= self.put(drag);
+        self.ui.end_row();
+    }
+
     fn size(&mut self, width: &mut f64, height: &mut f64) {
         self.inches("Width:", width, 2.0..=40.0);
         self.inches("Height:", height, 2.0..=40.0);
@@ -119,6 +130,10 @@ impl Rows<'_> {
         range: std::ops::RangeInclusive<usize>,
     ) {
         self.when(enabled, |rows| rows.count(label, value, range));
+    }
+
+    fn font_if(&mut self, enabled: bool, label: &str, value: &mut f64) {
+        self.when(enabled, |rows| rows.font(label, value));
     }
 
     fn check_if(&mut self, enabled: bool, label: &str, value: &mut bool) {
@@ -345,6 +360,7 @@ impl Dialog<'_> {
         &mut self,
         o: &mut pca_plot::Options,
         axis: &str,
+        notes: bool,
         extra: impl FnOnce(&mut Dialog),
     ) {
         self.group("Figure size", |rows| {
@@ -364,6 +380,11 @@ impl Dialog<'_> {
         });
         extra(self);
         self.legend(&mut o.legend);
+        if notes {
+            self.group(FONT_SIZES, |rows| {
+                rows.font("Notes above the plot:", &mut o.note_font_size);
+            });
+        }
         self.group(OTHER_OPTIONS, |rows| {
             rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
             rows.check("Assign unique shapes", &mut o.unique_shapes);
@@ -464,6 +485,15 @@ impl Dialog<'_> {
                 );
             });
         }
+        self.group(FONT_SIZES, |rows| {
+            let names = if post_hoc {
+                "Group labels and p-values:"
+            } else {
+                "Feature names and p-values:"
+            };
+            rows.font(names, &mut options.label_font_size);
+            rows.font("Titles:", &mut options.title_font_size);
+        });
         self.group(OTHER_OPTIONS, |rows| {
             rows.truncate(&mut options.truncate_labels);
         });
@@ -473,6 +503,9 @@ impl Dialog<'_> {
 /// Title of the frame, placed last, for the options that belong to no
 /// other group.
 const OTHER_OPTIONS: &str = "Other options";
+/// Title of the frame of the font sizes particular to a plot. Those of tick
+/// labels, axis labels and legends are in the preferences.
+const FONT_SIZES: &str = "Font sizes";
 
 /// Width of the frames around groups of options, so that they line up.
 const GROUP_WIDTH: f32 = 350.0;
@@ -526,6 +559,9 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.inches("Column width:", &mut o.column_width, 0.05..=2.0);
             });
             dialog.legend(&mut o.legend);
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Title and p-value:", &mut o.title_font_size);
+            });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.field(field);
                 rows.check("Show average of each group", &mut o.show_averages);
@@ -539,6 +575,9 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
             dialog.group("Figure size", |rows| {
                 rows.inches("Height:", &mut o.height, 2.0..=40.0);
                 rows.inches("Width:", &mut o.width, 2.0..=40.0);
+            });
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Title and p-value:", &mut o.title_font_size);
             });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.field(field);
@@ -612,6 +651,9 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                     &mut o.histogram_size,
                     0.1..=5.0,
                 );
+            });
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("R\u{b2} value:", &mut o.note_font_size);
             });
             dialog.group(OTHER_OPTIONS, |rows| {
                 if mode == Mode::TwoSamples {
@@ -773,6 +815,10 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.check("Show correlation and p-value", &mut o.show_statistics);
             });
             dialog.legend(&mut o.legend);
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Title:", &mut o.title_font_size);
+                rows.font("Correlation and p-value:", &mut o.note_font_size);
+            });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
                 rows.check("Assign unique shapes", &mut o.unique_shapes);
@@ -823,12 +869,15 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.check("Show Chao estimates", &mut o.show_chao1);
             });
             dialog.legend(&mut o.legend);
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Names at the curve ends:", &mut o.label_font_size);
+            });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.check("Label curves", &mut o.label_samples);
             });
         }
         PlotKind::Pca => {
-            dialog.ordination(&mut settings.pca, "PC", |_| {});
+            dialog.ordination(&mut settings.pca, "PC", false, |_| {});
         }
         PlotKind::Pcoa => {
             let (distance, normalisation, permutations, show_tests) = (
@@ -837,7 +886,7 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 &mut settings.community_permutations,
                 &mut settings.pcoa_show_tests,
             );
-            dialog.ordination(&mut settings.pcoa, "PCo", |dialog| {
+            dialog.ordination(&mut settings.pcoa, "PCo", true, |dialog| {
                 dialog.group("Distances between samples", |rows| {
                     rows.community(distance, normalisation);
                     rows.check("Show community tests", show_tests);
@@ -863,6 +912,9 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.community(distance, normalisation);
             });
             dialog.legend(&mut o.legend);
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Notes above the plot:", &mut o.note_font_size);
+            });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
                 rows.check("Assign unique shapes", &mut o.unique_shapes);
@@ -879,6 +931,10 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
             dialog.group("Distances between samples", |rows| {
                 rows.community(distance, normalisation);
                 rows.count("Permutations:", permutations, 99..=99_999);
+            });
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Title:", &mut o.title_font_size);
+                rows.font("Mantel test:", &mut o.note_font_size);
             });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.check("Show fitted line (least squares)", &mut o.show_line);
@@ -897,6 +953,9 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.number("Significance level:", alpha, 0.001, 0.0001..=0.5);
             });
             dialog.legend(&mut o.legend);
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Summary:", &mut o.note_font_size);
+            });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
             });
@@ -927,6 +986,15 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                     &mut o.max_intersections,
                     1..=200,
                 );
+            });
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Group names and counts:", &mut o.label_font_size);
+                rows.font_if(
+                    o.style == shared_features::Style::Venn,
+                    "Counts in the Venn diagram:",
+                    &mut o.count_font_size,
+                );
+                rows.font("Note above the plot:", &mut o.note_font_size);
             });
         }
         PlotKind::RankAbundance => {
@@ -963,6 +1031,9 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.choice("Measure:", metric, &metrics);
                 rows.normalisation(normalisation);
             });
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Title and p-value:", &mut o.title_font_size);
+            });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.check("Show average of each group", &mut o.show_averages);
                 rows.check("Show p-value", &mut o.show_p_value);
@@ -977,6 +1048,9 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
             dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
             dialog.group("Distances between samples", |rows| {
                 rows.community(distance, normalisation);
+            });
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Title:", &mut o.title_font_size);
             });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.check("Show average of each group", &mut o.show_averages);
@@ -1019,6 +1093,9 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 );
             });
             dialog.legend(&mut o.legend);
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Feature and sample names:", &mut o.label_font_size);
+            });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.choice(
                     "Field to plot:",

@@ -4,9 +4,80 @@ use crate::axis::{LinearScale, Ticks};
 use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::text;
 
-/// Font size of all plot text, in points.
-pub const FONT_SIZE: f64 = 8.0;
 pub const INCH: f64 = 72.0;
+
+/// Default size, in points, of the titles particular to a kind of plot (a
+/// feature's name above its bar plot, say).
+pub const TITLE_SIZE: f64 = 9.0;
+/// Default size, in points, of other text particular to a kind of plot:
+/// notes, statistics written on the plot, and labels inside it.
+pub const NOTE_SIZE: f64 = 8.0;
+
+/// Font sizes, in points, of the text that every plot shares. The sizes in
+/// force while a figure is built are set with [`with_fonts`]; text that is
+/// particular to one kind of plot is sized by that plot's options instead.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct Fonts {
+    /// Numbers and names at the ticks of an axis.
+    pub tick: f64,
+    /// The name of an axis.
+    pub axis_label: f64,
+    /// The text of a legend.
+    pub legend: f64,
+}
+
+impl Default for Fonts {
+    fn default() -> Self {
+        Fonts {
+            tick: 8.0,
+            axis_label: 9.0,
+            legend: 9.0,
+        }
+    }
+}
+
+thread_local! {
+    static FONTS: std::cell::Cell<Fonts> = std::cell::Cell::new(Fonts::default());
+}
+
+/// The shared font sizes in force.
+pub fn fonts() -> Fonts {
+    FONTS.with(std::cell::Cell::get)
+}
+
+/// Build something, a figure, with the shared font sizes `fonts`; the sizes
+/// in force before are restored afterwards, even if building panics.
+pub fn with_fonts<R>(fonts: Fonts, build: impl FnOnce() -> R) -> R {
+    struct Restore(Fonts);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            FONTS.with(|f| f.set(self.0));
+        }
+    }
+    let _restore = Restore(FONTS.with(|f| f.replace(fonts)));
+    build()
+}
+
+/// Text at the ticks of an axis.
+pub fn tick_style() -> TextStyle {
+    TextStyle::new(fonts().tick)
+}
+
+/// The name of an axis.
+pub fn axis_label_style() -> TextStyle {
+    TextStyle::new(fonts().axis_label)
+}
+
+/// The text of a legend.
+pub fn legend_style() -> TextStyle {
+    TextStyle::new(fonts().legend)
+}
+
+/// Height of a line of text of a size.
+pub fn line_height(size: f64) -> f64 {
+    text::ascent(size) + text::descent(size)
+}
 /// Default colour of axis lines and ticks.
 pub const AXES_COLOR: Color = Color::rgb(0x7f, 0x7f, 0x7f);
 pub const TICK_LENGTH: f64 = 4.0;
@@ -29,10 +100,6 @@ pub const GROUP_COLORS: [Color; 10] = [
 /// Colour of the group at `index`.
 pub fn group_color(index: usize) -> Color {
     GROUP_COLORS.get(index).copied().unwrap_or(Color::BLACK)
-}
-
-pub fn label_style() -> TextStyle {
-    TextStyle::new(FONT_SIZE)
 }
 
 /// The rectangle a plot's data is drawn in, in points.
@@ -88,15 +155,16 @@ pub fn x_axis(
         &[(frame.left, frame.bottom), (frame.right, frame.bottom)],
         stroke,
     );
-    let style = label_style();
+    let sizes = fonts();
+    let style = tick_style();
     let mut below = frame.bottom + TICK_PAD;
-    let line_height = text::ascent(FONT_SIZE) + text::descent(FONT_SIZE);
+    let line_height = line_height(sizes.tick);
     let mut deepest: f64 = 0.0;
     for (x, tick_label) in ticks {
         if tick_label.is_empty() {
             continue;
         }
-        let width = text::width(tick_label, FONT_SIZE);
+        let width = text::width(tick_label, sizes.tick);
         match rotation {
             LabelRotation::Horizontal => {
                 figure.line(
@@ -142,9 +210,9 @@ pub fn x_axis(
             (frame.left + frame.right) / 2.0,
             below,
             label,
-            style.align(HAlign::Center, VAlign::Top),
+            axis_label_style().align(HAlign::Center, VAlign::Top),
         );
-        below += line_height;
+        below += self::line_height(sizes.axis_label);
     }
     below
 }
@@ -164,7 +232,7 @@ pub fn y_axis(
         &[(frame.left, frame.top), (frame.left, frame.bottom)],
         stroke,
     );
-    let style = label_style();
+    let sizes = fonts();
     let mut widest: f64 = 0.0;
     for (y, tick_label) in ticks {
         figure.line(&[(frame.left, *y), (frame.left + TICK_LENGTH, *y)], stroke);
@@ -172,9 +240,9 @@ pub fn y_axis(
             frame.left - TICK_PAD,
             *y,
             tick_label.clone(),
-            style.align(HAlign::Right, VAlign::Middle),
+            tick_style().align(HAlign::Right, VAlign::Middle),
         );
-        widest = widest.max(text::width(tick_label, FONT_SIZE));
+        widest = widest.max(text::width(tick_label, sizes.tick));
     }
     let mut left = frame.left - TICK_PAD - widest;
     if let Some(label) = label {
@@ -183,9 +251,11 @@ pub fn y_axis(
             left,
             (frame.top + frame.bottom) / 2.0,
             label,
-            style.align(HAlign::Center, VAlign::Bottom).rotated(90.0),
+            axis_label_style()
+                .align(HAlign::Center, VAlign::Bottom)
+                .rotated(90.0),
         );
-        left -= text::ascent(FONT_SIZE) + text::descent(FONT_SIZE);
+        left -= line_height(sizes.axis_label);
     }
     left
 }
@@ -202,36 +272,55 @@ pub fn scaled_ticks(ticks: &Ticks, scale: &LinearScale) -> Vec<(f64, String)> {
 
 /// Width needed left of a frame for y tick labels and an axis label.
 pub fn y_axis_width(ticks: &Ticks, has_label: bool) -> f64 {
+    let sizes = fonts();
     let widest = ticks
         .labels()
         .iter()
-        .map(|l| text::width(l, FONT_SIZE))
+        .map(|l| text::width(l, sizes.tick))
         .fold(0.0, f64::max);
     let label = if has_label {
-        4.0 + text::ascent(FONT_SIZE) + text::descent(FONT_SIZE)
+        4.0 + line_height(sizes.axis_label)
     } else {
         0.0
     };
     TICK_PAD + widest + label
 }
 
-/// Title centred above a frame.
-pub fn title(figure: &mut Figure, frame: &Frame, text: &str) {
+/// Height needed below a frame for horizontal x tick labels and an axis
+/// label.
+pub fn x_axis_height(has_label: bool) -> f64 {
+    let sizes = fonts();
+    let label = if has_label {
+        3.0 + line_height(sizes.axis_label)
+    } else {
+        0.0
+    };
+    TICK_PAD + line_height(sizes.tick) + label
+}
+
+/// Room to leave below a frame for an x axis with horizontal tick labels
+/// and an axis label: at least 0.4 inch, more for large fonts.
+pub fn x_axis_room() -> f64 {
+    (x_axis_height(true) + 2.0).max(0.4 * INCH)
+}
+
+/// Title centred above a frame, `size` points high.
+pub fn title(figure: &mut Figure, frame: &Frame, text: &str, size: f64) {
     figure.text(
         (frame.left + frame.right) / 2.0,
         frame.top - 5.0,
         text,
-        label_style().align(HAlign::Center, VAlign::Baseline),
+        TextStyle::new(size).align(HAlign::Center, VAlign::Baseline),
     );
 }
 
 /// A note in the top-right corner of a frame, such as a p-value.
-pub fn corner_note(figure: &mut Figure, frame: &Frame, text: &str) {
+pub fn corner_note(figure: &mut Figure, frame: &Frame, text: &str, size: f64) {
     figure.text(
         frame.right,
         frame.top - 5.0,
         text,
-        label_style().align(HAlign::Right, VAlign::Baseline),
+        TextStyle::new(size).align(HAlign::Right, VAlign::Baseline),
     );
 }
 
@@ -459,10 +548,11 @@ pub fn legend(
     if position == LegendPosition::None || entries.is_empty() {
         return;
     }
-    let (swatch_w, swatch_h, pad, line) = (14.0, 6.0, 5.0, FONT_SIZE + 4.0);
+    let size = fonts().legend;
+    let (swatch_w, swatch_h, pad, line) = (14.0, 6.0, 5.0, size + 4.0);
     let widest = entries
         .iter()
-        .map(|(name, _)| text::width(name, FONT_SIZE))
+        .map(|(name, _)| text::width(name, size))
         .fold(0.0, f64::max);
     let (width, height) = (swatch_w + pad + widest, line * entries.len() as f64);
     let place = match position {
@@ -491,7 +581,7 @@ pub fn legend(
             x + swatch_w + pad,
             centre,
             name.clone(),
-            label_style().align(HAlign::Left, VAlign::Middle),
+            legend_style().align(HAlign::Left, VAlign::Middle),
         );
     }
 }
@@ -661,5 +751,84 @@ mod tests {
         legend(&mut figure, &frame, &entries, LegendPosition::Best);
         let (x, y) = swatch(&figure, 2);
         assert!(x > 100.0 && (30.0..70.0).contains(&y), "({x}, {y})");
+    }
+
+    /// The size of each piece of text drawn with that content.
+    fn size_of(figure: &Figure, wanted: &str) -> f64 {
+        figure
+            .shapes
+            .iter()
+            .find_map(|s| match s {
+                crate::figure::Shape::Text { text, style, .. } if text == wanted => {
+                    Some(style.size)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no text {wanted}"))
+    }
+
+    fn axes_and_legend(figure: &mut Figure) {
+        let frame = Frame {
+            left: 60.0,
+            top: 10.0,
+            right: 300.0,
+            bottom: 200.0,
+        };
+        let ticks = [(100.0, "1.5".to_string())];
+        x_axis(
+            figure,
+            &frame,
+            &ticks,
+            Some("x label"),
+            LabelRotation::Horizontal,
+            AXES_COLOR,
+        );
+        y_axis(
+            figure,
+            &frame,
+            &[(50.0, "7".to_string())],
+            Some("y label"),
+            AXES_COLOR,
+        );
+        legend(
+            figure,
+            &frame,
+            &[("entry".to_string(), Color::BLACK)],
+            LegendPosition::UpperRight,
+        );
+    }
+
+    #[test]
+    fn shared_text_is_sized_by_the_fonts_in_force() {
+        // The defaults: ticks 8, axis labels and legends 9.
+        let mut figure = Figure::new(320.0, 240.0);
+        axes_and_legend(&mut figure);
+        assert_eq!(size_of(&figure, "1.5"), 8.0);
+        assert_eq!(size_of(&figure, "7"), 8.0);
+        assert_eq!(size_of(&figure, "x label"), 9.0);
+        assert_eq!(size_of(&figure, "y label"), 9.0);
+        assert_eq!(size_of(&figure, "entry"), 9.0);
+
+        let chosen = Fonts {
+            tick: 11.0,
+            axis_label: 14.0,
+            legend: 6.5,
+        };
+        let (mut figure, mut plain) = (Figure::new(320.0, 240.0), Figure::new(320.0, 240.0));
+        let width = with_fonts(chosen, || {
+            axes_and_legend(&mut figure);
+            y_axis_width(&Ticks::covering(0.0, 100.0), true)
+        });
+        assert_eq!(size_of(&figure, "1.5"), 11.0);
+        assert_eq!(size_of(&figure, "x label"), 14.0);
+        assert_eq!(size_of(&figure, "y label"), 14.0);
+        assert_eq!(size_of(&figure, "entry"), 6.5);
+        // Larger text takes more room, and the sizes are restored after.
+        assert!(width > y_axis_width(&Ticks::covering(0.0, 100.0), true));
+        assert_eq!(fonts(), Fonts::default());
+        axes_and_legend(&mut plain);
+        assert_eq!(size_of(&plain, "1.5"), 8.0);
+        assert!(x_axis_room() >= 0.4 * INCH);
+        assert!(with_fonts(chosen, x_axis_room) > x_axis_room());
     }
 }

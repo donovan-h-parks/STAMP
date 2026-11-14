@@ -6,8 +6,8 @@ use stamp_core::stats::wilson::wilson_interval;
 use stamp_core::SampleProfile;
 
 use crate::axes::{
-    self, group_color, label_style, legend, scaled_ticks, x_axis, y_axis, y_axis_width, Frame,
-    LabelRotation, LegendPosition, AXES_COLOR, FONT_SIZE, INCH,
+    self, fonts, group_color, legend, scaled_ticks, tick_style, x_axis, y_axis, y_axis_width,
+    Frame, LabelRotation, LegendPosition, AXES_COLOR, INCH,
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
@@ -119,7 +119,7 @@ pub fn profile_bar<'a>(
         .collect();
     let longest = labels
         .iter()
-        .map(|l| text::width(l, FONT_SIZE))
+        .map(|l| text::width(l, fonts().tick))
         .fold(0.0, f64::max);
     let padding = 0.25 * INCH;
     let column = options.column_width * INCH;
@@ -179,7 +179,7 @@ pub fn profile_bar<'a>(
                 centre,
                 y.map(tallest) - 2.0,
                 "*",
-                label_style().align(HAlign::Center, VAlign::Baseline),
+                tick_style().align(HAlign::Center, VAlign::Baseline),
             );
         }
         x_ticks.push((centre, labels[i].clone()));
@@ -216,7 +216,7 @@ pub fn profile_bar<'a>(
                 x_ticks[i].0,
                 frame.bottom + axes::TICK_PAD,
                 labels[i].clone(),
-                label_style()
+                tick_style()
                     .align(HAlign::Right, VAlign::Middle)
                     .rotated(90.0)
                     .color(Color::RED),
@@ -359,19 +359,19 @@ pub fn stat_bar<'a>(
         .collect();
     let label_width = labels
         .iter()
-        .map(|l| text::width(l, FONT_SIZE))
+        .map(|l| text::width(l, fonts().tick))
         .fold(0.0, f64::max);
     let padding = 0.2 * INCH;
     let n = rows.len() as f64;
     let mut figure = Figure::new(
         options.width * INCH,
-        n * options.row_height * INCH + padding + 0.4 * INCH,
+        n * options.row_height * INCH + padding + crate::axes::x_axis_room(),
     );
     let frame = Frame {
         left: label_width + 0.1 * INCH,
         top: padding,
         right: figure.width - padding,
-        bottom: figure.height - 0.4 * INCH,
+        bottom: figure.height - crate::axes::x_axis_room(),
     };
     if frame.width() < INCH {
         return Figure::message("The plot is too narrow for its labels; increase the figure width");
@@ -414,7 +414,7 @@ pub fn stat_bar<'a>(
             frame.left - axes::TICK_PAD,
             centre,
             labels[i].clone(),
-            label_style()
+            tick_style()
                 .align(HAlign::Right, VAlign::Middle)
                 .color(color),
         );

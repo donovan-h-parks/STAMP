@@ -3,8 +3,11 @@
 use stamp_core::stats::cluster::{cluster, Dendrogram, Linkage};
 use stamp_core::{GroupProfile, MultiGroupProfile, Profile};
 
-use crate::axes::{group_color, label_style, legend, Frame, LegendPosition, FONT_SIZE, INCH};
-use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
+use crate::axes::{
+    axis_label_style, fonts, group_color, legend, tick_style, Frame, LegendPosition, INCH,
+    NOTE_SIZE,
+};
+use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::text;
 
 /// Colour scales for the cells, from low to high values: the fourteen of
@@ -365,6 +368,8 @@ pub struct Options {
     /// dendrogram form one cluster.
     pub row_cluster_threshold: f64,
     pub truncate_labels: Option<usize>,
+    /// Size of the names of the features and samples, in points.
+    pub label_font_size: f64,
 }
 
 impl Default for Options {
@@ -384,6 +389,7 @@ impl Default for Options {
             show_row_clusters: true,
             row_cluster_threshold: 0.75,
             truncate_labels: Some(50),
+            label_font_size: NOTE_SIZE,
         }
     }
 }
@@ -545,7 +551,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     let widest = |labels: &[String]| {
         labels
             .iter()
-            .map(|l| text::width(l, FONT_SIZE))
+            .map(|l| text::width(l, options.label_font_size))
             .fold(0.0, f64::max)
     };
     let (row_label_width, column_label_height) = (widest(&row_labels), widest(&column_labels));
@@ -639,8 +645,8 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     }
 
     // Labels, when the cells are large enough to read them.
-    let style = label_style();
-    if cell_h >= FONT_SIZE * 0.8 {
+    let style = TextStyle::new(options.label_font_size);
+    if cell_h >= options.label_font_size * 0.8 {
         for (r, label) in row_labels.iter().enumerate() {
             figure.text(
                 right + 4.0,
@@ -650,7 +656,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             );
         }
     }
-    if cell_w >= FONT_SIZE * 0.8 {
+    if cell_w >= options.label_font_size * 0.8 {
         for (c, label) in column_labels.iter().enumerate() {
             figure.text(
                 left + cell_w * (c as f64 + 0.5),
@@ -712,7 +718,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         + 5.0
         + entries
             .iter()
-            .map(|(name, _)| text::width(name, FONT_SIZE))
+            .map(|(name, _)| text::width(name, fonts().legend))
             .fold(0.0, f64::max);
 
     if options.show_color_scale {
@@ -748,19 +754,19 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             bar_left,
             bar_top + bar_h + 3.0,
             format!("{low:.2}"),
-            style.align(HAlign::Left, VAlign::Top),
+            tick_style().align(HAlign::Left, VAlign::Top),
         );
         figure.text(
             bar_left + bar_w,
             bar_top + bar_h + 3.0,
             format!("{high:.2}"),
-            style.align(HAlign::Right, VAlign::Top),
+            tick_style().align(HAlign::Right, VAlign::Top),
         );
         figure.text(
             bar_left + bar_w / 2.0,
             bar_top - 3.0,
             data.value_label.clone(),
-            style.align(HAlign::Center, VAlign::Bottom),
+            axis_label_style().align(HAlign::Center, VAlign::Bottom),
         );
     }
 

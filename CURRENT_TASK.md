@@ -10,6 +10,14 @@ Idle. Roadmap tiers 1 to 4 are all done, committed and pushed. Nothing further i
 
 ## Last completed
 
+- **Plot font sizes** (2026-11-15): ticks 8 pt, axis labels and legends 9
+  pt by default, set in Settings > Preferences (`PlotSettings::fonts`,
+  `stamp_plot::axes::Fonts`, applied with `axes::with_fonts` while a figure
+  is built); text particular to a plot sized by fields of its options
+  (`title_font_size`, `note_font_size`, `label_font_size`,
+  `count_font_size`) in a "Font sizes" frame of Configure plot; command
+  line `--tick-font-size`, `--axis-label-font-size`, `--legend-font-size`.
+  Committed and pushed.
 - **Review of the statistics against trusted references** (2026-11-15):
   every test, post-hoc test, effect size, interval and correction in
   `stamp-core/src/stats` now has unit tests whose values come from R 4.4.3

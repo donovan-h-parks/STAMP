@@ -7,12 +7,12 @@ use stamp_core::stats::rarefaction::{
 use stamp_core::{Profile, ProfileTree, Unclassified};
 
 use crate::axes::{
-    group_color, label_style, legend, scaled_ticks, x_axis, y_axis, y_axis_width, Frame,
-    LabelRotation, LegendPosition, AXES_COLOR, FONT_SIZE, INCH,
+    group_color, legend, scaled_ticks, x_axis, y_axis, y_axis_width, Frame, LabelRotation,
+    LegendPosition, AXES_COLOR, INCH, NOTE_SIZE,
 };
 use crate::axis::LinearScale;
 use crate::axis::Ticks;
-use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
+use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::text;
 
 /// One sample: the sequences assigned to each feature that counts towards
@@ -189,6 +189,8 @@ pub struct Options {
     pub show_chao1: bool,
     /// Write each sample's or group's name at the end of its curve.
     pub label_samples: bool,
+    /// Size of the names at the ends of the curves, in points.
+    pub label_font_size: f64,
     pub legend: LegendPosition,
 }
 
@@ -202,6 +204,7 @@ impl Default for Options {
             truncate_to_smallest: false,
             show_chao1: false,
             label_samples: true,
+            label_font_size: NOTE_SIZE,
             legend: LegendPosition::Best,
         }
     }
@@ -239,15 +242,20 @@ fn grouped(value: u64) -> String {
 /// down by whole lines to the nearest free place; one that would have to
 /// move too far from its curve to mean anything is left out, and the curve
 /// can still be told by pointing at it.
-fn label_curve_ends(figure: &mut Figure, frame: &Frame, mut ends: Vec<(f64, f64, String, Color)>) {
+fn label_curve_ends(
+    figure: &mut Figure,
+    frame: &Frame,
+    mut ends: Vec<(f64, f64, String, Color)>,
+    size: f64,
+) {
     const FURTHEST: i32 = 4;
-    let line = FONT_SIZE + 1.0;
+    let line = size + 1.0;
     // Longest curves first: their ends are the least crowded.
     ends.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.total_cmp(&b.1)));
     // Left, right and middle height of the names placed so far.
     let mut placed: Vec<(f64, f64, f64)> = Vec::new();
     for (left, wanted, name, color) in ends {
-        let right = left + text::width(&name, FONT_SIZE);
+        let right = left + text::width(&name, size);
         let free = |middle: f64, placed: &[(f64, f64, f64)]| {
             middle - line / 2.0 >= frame.top - line
                 && middle + line / 2.0 <= frame.bottom
@@ -265,7 +273,7 @@ fn label_curve_ends(figure: &mut Figure, frame: &Frame, mut ends: Vec<(f64, f64,
                 left,
                 middle,
                 name,
-                label_style()
+                TextStyle::new(size)
                     .color(color)
                     .align(HAlign::Left, VAlign::Middle),
             );
@@ -348,7 +356,7 @@ fn plot_by_samples(data: &Data, options: &Options) -> Figure {
         6.0 + data
             .groups
             .iter()
-            .map(|g| text::width(g, FONT_SIZE))
+            .map(|g| text::width(g, options.label_font_size))
             .fold(0.0, f64::max)
     } else {
         0.0
@@ -357,7 +365,7 @@ fn plot_by_samples(data: &Data, options: &Options) -> Figure {
         left: padding + y_axis_width(&y_ticks, true),
         top: padding,
         right: figure.width - padding - label_width,
-        bottom: figure.height - padding - 0.4 * INCH,
+        bottom: figure.height - padding - crate::axes::x_axis_room(),
     };
     if frame.width() < INCH || frame.height() < INCH {
         return Figure::message("The figure is too small for the rarefaction curves");
@@ -417,7 +425,7 @@ fn plot_by_samples(data: &Data, options: &Options) -> Figure {
             ends.push((px + 6.0, py, name.clone(), color));
         }
     }
-    label_curve_ends(&mut figure, &frame, ends);
+    label_curve_ends(&mut figure, &frame, ends, options.label_font_size);
 
     x_axis(
         &mut figure,
@@ -500,7 +508,7 @@ fn plot_by_sequences(data: &Data, options: &Options) -> Figure {
     let label_width = if options.label_samples {
         6.0 + curves
             .iter()
-            .map(|c| text::width(&c.sample.name, FONT_SIZE))
+            .map(|c| text::width(&c.sample.name, options.label_font_size))
             .fold(0.0, f64::max)
     } else {
         0.0
@@ -509,7 +517,7 @@ fn plot_by_sequences(data: &Data, options: &Options) -> Figure {
         left: padding + y_axis_width(&y_ticks, true),
         top: padding,
         right: figure.width - padding - label_width,
-        bottom: figure.height - padding - 0.4 * INCH,
+        bottom: figure.height - padding - crate::axes::x_axis_room(),
     };
     if frame.width() < INCH || frame.height() < INCH {
         return Figure::message("The figure is too small for the rarefaction curves");
@@ -584,7 +592,7 @@ fn plot_by_sequences(data: &Data, options: &Options) -> Figure {
                 ))
             })
             .collect();
-        label_curve_ends(&mut figure, &frame, ends);
+        label_curve_ends(&mut figure, &frame, ends, options.label_font_size);
     }
 
     x_axis(
@@ -786,7 +794,7 @@ mod tests {
             .collect();
         heights.sort_by(f64::total_cmp);
         assert_eq!(heights.len(), 3);
-        assert!(heights.windows(2).all(|p| p[1] - p[0] >= FONT_SIZE));
+        assert!(heights.windows(2).all(|p| p[1] - p[0] >= NOTE_SIZE));
 
         let empty = Data {
             samples: vec![Sample {

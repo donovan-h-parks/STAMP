@@ -9,7 +9,7 @@ use crate::axes::{
     LegendPosition, Marker, AXES_COLOR, INCH,
 };
 use crate::axis::Ticks;
-use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
+use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 
 /// One sample.
 #[derive(Debug, Clone, PartialEq)]
@@ -92,6 +92,10 @@ pub struct Options {
     /// Give each group its own marker shape as well as its colour.
     pub unique_shapes: bool,
     pub legend: LegendPosition,
+    /// Size of the title (the feature's name), in points.
+    pub title_font_size: f64,
+    /// Size of the correlation and p-value written above the plot.
+    pub note_font_size: f64,
 }
 
 impl Default for Options {
@@ -104,14 +108,14 @@ impl Default for Options {
             show_statistics: true,
             unique_shapes: true,
             legend: LegendPosition::Best,
+            title_font_size: crate::axes::TITLE_SIZE,
+            note_font_size: crate::axes::NOTE_SIZE,
         }
     }
 }
 
 /// Colour of the points when the samples are not grouped.
 const UNGROUPED: Color = Color::rgb(128, 177, 211);
-/// Height of a line of text above the plot.
-const TEXT_LINE: f64 = crate::axes::FONT_SIZE + 4.0;
 /// Colour of the fitted line.
 const LINE: Color = Color::rgb(60, 60, 60);
 
@@ -141,14 +145,19 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     let y_ticks = Ticks::covering(0.0, if y_high > 0.0 { y_high * 1.05 } else { 1.0 });
 
     let statistics_shown = options.show_statistics && data.statistics.is_some();
+    let statistics_line = if statistics_shown {
+        options.note_font_size + 4.0
+    } else {
+        0.0
+    };
     let mut figure = Figure::with_size_inches(options.width, options.height);
     let padding = 0.2 * INCH;
     let frame = Frame {
         left: padding + y_axis_width(&y_ticks, true),
         // A line for the title, and one for the correlation beneath it.
-        top: padding + 0.25 * INCH + if statistics_shown { TEXT_LINE } else { 0.0 },
+        top: padding + options.title_font_size + 9.0 + statistics_line,
         right: figure.width - padding,
-        bottom: figure.height - padding - 0.4 * INCH,
+        bottom: figure.height - padding - crate::axes::x_axis_room(),
     };
     if frame.width() < INCH || frame.height() < INCH {
         return Figure::message("The figure is too small for a scatter plot");
@@ -240,16 +249,16 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     // overlap.
     figure.text(
         (frame.left + frame.right) / 2.0,
-        frame.top - 5.0 - if statistics_shown { TEXT_LINE } else { 0.0 },
+        frame.top - 5.0 - statistics_line,
         data.feature.clone(),
-        crate::axes::label_style().align(HAlign::Center, VAlign::Baseline),
+        TextStyle::new(options.title_font_size).align(HAlign::Center, VAlign::Baseline),
     );
     if let (true, Some(statistics)) = (options.show_statistics, &data.statistics) {
         figure.text(
             frame.left,
             frame.top - 5.0,
             statistics.clone(),
-            crate::axes::label_style().align(HAlign::Left, VAlign::Baseline),
+            TextStyle::new(options.note_font_size).align(HAlign::Left, VAlign::Baseline),
         );
     }
     let used: Vec<usize> = {

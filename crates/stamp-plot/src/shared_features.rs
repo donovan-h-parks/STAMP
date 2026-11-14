@@ -3,11 +3,11 @@
 //! groups, a Venn diagram.
 
 use crate::axes::{
-    group_color, label_style, scaled_ticks, y_axis, y_axis_width, Frame, AXES_COLOR, INCH,
+    group_color, scaled_ticks, y_axis, y_axis_width, Frame, AXES_COLOR, INCH, NOTE_SIZE,
 };
 use crate::axis::Ticks;
 use crate::composition;
-use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
+use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::text;
 
 /// The features present in each group.
@@ -150,6 +150,12 @@ pub struct Options {
     pub min_prevalence: f64,
     /// Most combinations of groups shown in an UpSet plot, largest first.
     pub max_intersections: usize,
+    /// Size of the group names and of the counts above the bars, in points.
+    pub label_font_size: f64,
+    /// Size of the counts inside a Venn diagram.
+    pub count_font_size: f64,
+    /// Size of the note on prevalence above the plot.
+    pub note_font_size: f64,
 }
 
 impl Default for Options {
@@ -160,6 +166,9 @@ impl Default for Options {
             style: Style::UpSet,
             min_prevalence: 50.0,
             max_intersections: 20,
+            label_font_size: NOTE_SIZE,
+            count_font_size: 11.0,
+            note_font_size: NOTE_SIZE,
         }
     }
 }
@@ -194,7 +203,7 @@ fn upset(data: &Data, options: &Options) -> Figure {
 
     let mut figure = Figure::with_size_inches(options.width, options.height);
     let padding = 0.2 * INCH;
-    let row = 14.0;
+    let row = (options.label_font_size + 6.0).max(14.0);
     let labels: Vec<String> = (0..data.groups.len())
         .map(|g| {
             let size = data.presence.iter().filter(|p| p[g]).count();
@@ -203,13 +212,13 @@ fn upset(data: &Data, options: &Options) -> Figure {
         .collect();
     let label_width = labels
         .iter()
-        .map(|l| text::width(l, crate::axes::FONT_SIZE))
+        .map(|l| text::width(l, options.label_font_size))
         .fold(0.0, f64::max);
     let left = padding + label_width.max(y_axis_width(&y_ticks, true)) + 8.0;
     let matrix_height = row * data.groups.len() as f64;
     let frame = Frame {
         left,
-        top: padding + 0.3 * INCH,
+        top: padding + options.note_font_size + options.label_font_size + 8.0,
         right: figure.width - padding,
         bottom: figure.height - padding - matrix_height - 8.0,
     };
@@ -219,7 +228,7 @@ fn upset(data: &Data, options: &Options) -> Figure {
     let y = frame.y_scale(y_ticks.min, y_ticks.max);
     let column = frame.width() / shown.len() as f64;
     let bar = (column * 0.6).min(28.0);
-    let style = label_style();
+    let style = TextStyle::new(options.label_font_size);
     for (k, (set, names)) in shown.iter().enumerate() {
         let centre = frame.left + column * (k as f64 + 0.5);
         let only = (count(set) == 1).then(|| set.iter().position(|b| *b).unwrap_or(0));
@@ -295,7 +304,7 @@ fn upset(data: &Data, options: &Options) -> Figure {
         frame.left,
         padding,
         note,
-        style.align(HAlign::Left, VAlign::Top),
+        TextStyle::new(options.note_font_size).align(HAlign::Left, VAlign::Top),
     );
     figure
 }
@@ -367,10 +376,12 @@ fn venn(data: &Data, options: &Options) -> Figure {
             label_x,
             label_y,
             format!("{} ({size})", data.groups[g]),
-            label_style().align(HAlign::Center, v).color(data.color(g)),
+            TextStyle::new(options.label_font_size)
+                .align(HAlign::Center, v)
+                .color(data.color(g)),
         );
     }
-    let big = crate::figure::TextStyle::new(11.0).align(HAlign::Center, VAlign::Middle);
+    let big = TextStyle::new(options.count_font_size).align(HAlign::Center, VAlign::Middle);
     for (k, (set, names)) in data.intersections().iter().enumerate() {
         let (x, y) = place(set);
         figure.text(x, y, names.len().to_string(), big);
@@ -390,7 +401,7 @@ fn venn(data: &Data, options: &Options) -> Figure {
             "Features present in at least {}% of a group's samples",
             options.min_prevalence
         ),
-        label_style().align(HAlign::Left, VAlign::Top),
+        TextStyle::new(options.note_font_size).align(HAlign::Left, VAlign::Top),
     );
     figure
 }

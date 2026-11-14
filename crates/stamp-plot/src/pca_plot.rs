@@ -117,6 +117,9 @@ pub struct Options {
     /// Give each group its own marker shape as well as its own colour.
     pub unique_shapes: bool,
     pub legend: LegendPosition,
+    /// Size of the notes above the plot (the distance and the community
+    /// tests, for PCoA and NMDS), in points.
+    pub note_font_size: f64,
 }
 
 impl Default for Options {
@@ -131,6 +134,7 @@ impl Default for Options {
             fixed_scale: true,
             unique_shapes: true,
             legend: LegendPosition::None,
+            note_font_size: crate::axes::NOTE_SIZE,
         }
     }
 }
@@ -199,10 +203,10 @@ pub fn plot_ordination(
     let width = options.width * INCH;
     let padding = 0.25 * INCH;
     // Room above the plot for the notes.
-    let note_line = crate::axes::FONT_SIZE + 3.0;
+    let note_line = options.note_font_size + 3.0;
     let top = padding + note_line * notes.len() as f64;
     let left = padding + y_axis_width(&ticks[1], true);
-    let bottom_labels = 0.4 * INCH;
+    let bottom_labels = crate::axes::x_axis_room();
     let gap = 0.35 * INCH;
     let inner_width = width - left - padding;
     // Width and height of the main panel, and the sizes of the others.
@@ -258,7 +262,7 @@ pub fn plot_ordination(
             main.left,
             padding + note_line * (line as f64 + 0.5) - 4.0,
             note.clone(),
-            crate::axes::label_style()
+            crate::figure::TextStyle::new(options.note_font_size)
                 .align(crate::figure::HAlign::Left, crate::figure::VAlign::Middle),
         );
     }

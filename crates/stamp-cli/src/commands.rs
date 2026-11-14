@@ -29,16 +29,36 @@ use crate::args::*;
 type CliResult<T = ()> = Result<T, String>;
 
 pub fn run(cli: Cli) -> CliResult {
+    use stamp_plot::axes::with_fonts;
+    // Plots are drawn with the font sizes the command asks for.
     match cli.command {
         Command::Info(args) => info(args),
-        Command::TwoSamples(args) => two_samples(args),
-        Command::TwoGroups(args) => two_groups(args),
-        Command::MultiGroups(args) => multi_groups(args),
-        Command::PostHoc(args) => post_hoc(args),
-        Command::Correlation(args) => correlation(args),
-        Command::Ancom(args) => ancom(args),
+        Command::TwoSamples(args) => with_fonts(fonts_of(&args.plot)?, || two_samples(args)),
+        Command::TwoGroups(args) => with_fonts(fonts_of(&args.plot)?, || two_groups(args)),
+        Command::MultiGroups(args) => with_fonts(fonts_of(&args.plot)?, || multi_groups(args)),
+        Command::PostHoc(args) => with_fonts(fonts_of(&args.plot)?, || post_hoc(args)),
+        Command::Correlation(args) => with_fonts(fonts_of(&args.plot)?, || correlation(args)),
+        Command::Ancom(args) => with_fonts(fonts_of(&args.plot)?, || ancom(args)),
         Command::Convert(args) => convert(args.format),
     }
+}
+
+/// The font sizes of the tick labels, axis labels and legends of a plot.
+fn fonts_of(plot: &PlotArgs) -> CliResult<stamp_plot::axes::Fonts> {
+    for size in [
+        plot.tick_font_size,
+        plot.axis_label_font_size,
+        plot.legend_font_size,
+    ] {
+        if !(1.0..=72.0).contains(&size) {
+            return Err("font sizes must lie between 1 and 72 points".to_string());
+        }
+    }
+    Ok(stamp_plot::axes::Fonts {
+        tick: plot.tick_font_size,
+        axis_label: plot.axis_label_font_size,
+        legend: plot.legend_font_size,
+    })
 }
 
 // ------------------------------------------------------------------- files

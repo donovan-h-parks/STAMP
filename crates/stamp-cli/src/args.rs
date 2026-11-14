@@ -136,6 +136,15 @@ pub struct PlotArgs {
     /// Show uncorrected p-values in the plot
     #[arg(long)]
     pub plot_uncorrected_p_values: bool,
+    /// Font size of the plot's tick labels, in points
+    #[arg(long, default_value_t = 8.0, value_name = "POINTS")]
+    pub tick_font_size: f64,
+    /// Font size of the plot's axis labels, in points
+    #[arg(long, default_value_t = 9.0, value_name = "POINTS")]
+    pub axis_label_font_size: f64,
+    /// Font size of the plot's legend, in points
+    #[arg(long, default_value_t = 9.0, value_name = "POINTS")]
+    pub legend_font_size: f64,
     /// Measure of the alpha diversity plot
     #[arg(long, value_enum, default_value_t = AlphaMetricArg::Shannon)]
     pub alpha_metric: AlphaMetricArg,

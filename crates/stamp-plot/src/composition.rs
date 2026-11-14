@@ -4,8 +4,8 @@
 use stamp_core::Profile;
 
 use crate::axes::{
-    group_color, label_style, scaled_ticks, y_axis, y_axis_width, Frame, AXES_COLOR, FONT_SIZE,
-    INCH,
+    fonts, group_color, legend_style, scaled_ticks, tick_style, y_axis, y_axis_width, Frame,
+    AXES_COLOR, INCH,
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
@@ -221,13 +221,17 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     let mut figure = Figure::with_size_inches(options.width, options.height);
     let padding = 0.2 * INCH;
     let strip = 6.0; // group colour beneath each bar
-    let line = FONT_SIZE + 3.0;
+                     // The names beneath the bars are sized as tick labels, the list of
+                     // features beside the plot as a legend.
+    let sizes = fonts();
+    let line = sizes.tick + 3.0;
+    let legend_line = sizes.legend + 3.0;
     let legend_width = if options.show_legend {
         12.0 + 14.0
             + 5.0
             + entries
                 .iter()
-                .map(|(name, _)| text::width(name, FONT_SIZE))
+                .map(|(name, _)| text::width(name, sizes.legend))
                 .fold(0.0, f64::max)
     } else {
         0.0
@@ -240,10 +244,10 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     let widest_name = data
         .samples
         .iter()
-        .map(|name| text::width(name, FONT_SIZE))
+        .map(|name| text::width(name, sizes.tick))
         .fold(0.0, f64::max);
     let across = widest_name + 4.0 <= cell;
-    let labelled = options.label_bars && (across || cell >= FONT_SIZE * 0.9);
+    let labelled = options.label_bars && (across || cell >= sizes.tick * 0.9);
     let label_height = match (labelled, across) {
         (false, _) => 0.0,
         (true, true) => line,
@@ -313,14 +317,14 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                     centre,
                     below,
                     data.samples[bar].clone(),
-                    label_style().align(HAlign::Center, VAlign::Top),
+                    tick_style().align(HAlign::Center, VAlign::Top),
                 );
             } else {
                 figure.text(
                     centre,
                     below,
                     data.samples[bar].clone(),
-                    label_style()
+                    tick_style()
                         .align(HAlign::Right, VAlign::Middle)
                         .rotated(90.0),
                 );
@@ -345,8 +349,8 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         // Listed from the top of the stack down, as the eye meets them.
         let x = frame.right + 12.0;
         for (i, (name, color)) in entries.iter().rev().enumerate() {
-            let centre = frame.top + line * (i as f64 + 0.5);
-            if centre + line / 2.0 > figure.height - padding {
+            let centre = frame.top + legend_line * (i as f64 + 0.5);
+            if centre + legend_line / 2.0 > figure.height - padding {
                 break;
             }
             figure.rect(
@@ -361,7 +365,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                 x + 19.0,
                 centre,
                 name.clone(),
-                label_style().align(HAlign::Left, VAlign::Middle),
+                legend_style().align(HAlign::Left, VAlign::Middle),
             );
         }
     }

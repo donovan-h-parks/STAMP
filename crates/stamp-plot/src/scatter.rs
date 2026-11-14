@@ -5,10 +5,11 @@ use stamp_core::stats::wilson::wilson_interval;
 use stamp_core::{GroupProfile, SampleProfile};
 
 use crate::axes::{
-    group_color, label_style, scaled_ticks, x_axis, y_axis, y_axis_width, Frame, LabelRotation,
-    AXES_COLOR, FONT_SIZE, INCH,
+    group_color, scaled_ticks, tick_style, x_axis, y_axis, y_axis_width, Frame, LabelRotation,
+    AXES_COLOR, INCH, NOTE_SIZE,
 };
 use crate::axis::{LinearScale, Ticks};
+use crate::figure::TextStyle;
 use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
 
 /// One feature.
@@ -219,6 +220,8 @@ pub struct Options {
     pub marker_size: f64,
     /// Show the squared correlation coefficient.
     pub show_r2: bool,
+    /// Size of the R-squared note, in points.
+    pub note_font_size: f64,
     /// Features outlined in red.
     pub highlighted: Vec<String>,
 }
@@ -234,6 +237,7 @@ impl Default for Options {
             histogram_size: 0.5,
             marker_size: 20.0,
             show_r2: true,
+            note_font_size: NOTE_SIZE,
             highlighted: Vec::new(),
         }
     }
@@ -392,14 +396,15 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                 frame.left + 8.0,
                 frame.top + 8.0,
                 format!("R\u{00b2} = {r2:.3}"),
-                label_style().align(HAlign::Left, VAlign::Top),
+                TextStyle::new(options.note_font_size).align(HAlign::Left, VAlign::Top),
             );
         }
     }
 
     if options.show_histograms && options.bins > 0 {
         let outline = Stroke::solid(Color::BLACK, 0.5);
-        let style = label_style();
+        // The histograms' counts are labelled like ticks.
+        let style = tick_style();
         // Top: distribution of the x values.
         let counts = bin_counts(data.points.iter().map(|p| p.x), limit, options.bins);
         let most = counts.iter().copied().max().unwrap_or(0).max(1) as f64;
@@ -476,7 +481,6 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             style.align(HAlign::Center, VAlign::Top),
         );
     }
-    let _ = FONT_SIZE;
     figure
 }
 

@@ -20,6 +20,8 @@ pub struct Options {
     /// Area of the markers, in square points.
     pub marker_size: f64,
     pub legend: LegendPosition,
+    /// Size of the summary written above the plot, in points.
+    pub note_font_size: f64,
     /// Features outlined in red.
     pub highlighted: Vec<String>,
 }
@@ -31,6 +33,7 @@ impl Default for Options {
             height: 6.0,
             marker_size: 20.0,
             legend: LegendPosition::Best,
+            note_font_size: crate::axes::NOTE_SIZE,
             highlighted: Vec::new(),
         }
     }
@@ -79,7 +82,7 @@ pub fn plot(
         left: padding + y_axis_width(&y_ticks, true),
         top: padding + 0.25 * INCH,
         right: figure.width - padding,
-        bottom: figure.height - padding - 0.4 * INCH,
+        bottom: figure.height - padding - crate::axes::x_axis_room(),
     };
     if frame.width() < INCH || frame.height() < INCH {
         return Figure::message("The figure is too small for an ANCOM plot");
@@ -158,7 +161,7 @@ pub fn plot(
         frame.left,
         frame.top - 5.0,
         summary,
-        crate::axes::label_style().align(HAlign::Left, VAlign::Baseline),
+        crate::figure::TextStyle::new(options.note_font_size).align(HAlign::Left, VAlign::Baseline),
     );
     let mut entries = vec![("Different".to_string(), DIFFERENT)];
     entries.push(("Not different".to_string(), SAME));

@@ -234,7 +234,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         left: padding + y_axis_width(&y_ticks, true),
         top: padding,
         right: figure.width - padding,
-        bottom: figure.height - padding - 0.4 * INCH,
+        bottom: figure.height - padding - crate::axes::x_axis_room(),
     };
     if frame.width() < INCH || frame.height() < INCH {
         return Figure::message("The figure is too small for a volcano plot");

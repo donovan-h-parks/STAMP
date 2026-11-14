@@ -206,7 +206,7 @@ pub fn p_value_histogram(p_values: &[f64], options: &PValueOptions) -> Figure {
         left: 0.5 * INCH,
         top: 0.2 * INCH,
         right: figure.width - 0.2 * INCH,
-        bottom: figure.height - 0.4 * INCH,
+        bottom: figure.height - crate::axes::x_axis_room(),
     };
     if frame.width() < INCH || frame.height() < INCH {
         return Figure::message("The figure is too small for a histogram");
@@ -329,7 +329,7 @@ pub fn sequence_histogram(profile: &SampleProfile, options: &SequenceOptions) ->
         left: 0.5 * INCH,
         top: 0.2 * INCH,
         right: figure.width - 0.2 * INCH,
-        bottom: figure.height - 0.4 * INCH,
+        bottom: figure.height - crate::axes::x_axis_room(),
     };
     if frame.width() < INCH || frame.height() < INCH {
         return Figure::message("The figure is too small for a histogram");

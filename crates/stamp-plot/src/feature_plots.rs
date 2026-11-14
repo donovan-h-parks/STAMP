@@ -4,11 +4,11 @@
 use stamp_core::{GroupProfile, MultiGroupProfile};
 
 use crate::axes::{
-    self, corner_note, group_color, label_style, legend, scaled_ticks, x_axis, y_axis,
-    y_axis_width, Frame, LabelRotation, LegendPosition, AXES_COLOR, FONT_SIZE, INCH,
+    self, corner_note, fonts, group_color, legend, scaled_ticks, x_axis, y_axis, y_axis_width,
+    Frame, LabelRotation, LegendPosition, AXES_COLOR, INCH, TITLE_SIZE,
 };
 use crate::axis::Ticks;
-use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
+use crate::figure::{Color, Figure, Stroke};
 use crate::text;
 
 /// What is plotted for each sample.
@@ -155,6 +155,8 @@ pub struct BarOptions {
     pub show_p_value: bool,
     pub legend: LegendPosition,
     pub truncate_labels: Option<usize>,
+    /// Size of the title (the feature's name) and the p-value, in points.
+    pub title_font_size: f64,
 }
 
 impl Default for BarOptions {
@@ -166,6 +168,7 @@ impl Default for BarOptions {
             show_p_value: true,
             legend: LegendPosition::None,
             truncate_labels: Some(50),
+            title_font_size: TITLE_SIZE,
         }
     }
 }
@@ -199,13 +202,13 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
     let padding = 0.25 * INCH;
     let longest_label = sample_labels
         .iter()
-        .map(|l| text::width(l, FONT_SIZE))
+        .map(|l| text::width(l, fonts().tick))
         .fold(0.0, f64::max);
     let column = options.column_width * INCH;
     let left = padding + y_axis_width(&ticks, true);
     let frame = Frame {
         left,
-        top: padding + FONT_SIZE,
+        top: padding + options.title_font_size,
         right: left + column * num_samples,
         bottom: options.height * INCH - padding - longest_label - axes::TICK_PAD,
     };
@@ -277,9 +280,15 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         &mut figure,
         &frame,
         &shorten(&data.feature, options.truncate_labels),
+        options.title_font_size,
     );
     if let (true, Some(p)) = (options.show_p_value, &data.p_value) {
-        corner_note(&mut figure, &frame, &format!("p = {p}"));
+        corner_note(
+            &mut figure,
+            &frame,
+            &format!("p = {p}"),
+            options.title_font_size,
+        );
     }
     let entries: Vec<(String, Color)> = data
         .groups
@@ -300,6 +309,8 @@ pub struct BoxOptions {
     pub show_averages: bool,
     pub show_p_value: bool,
     pub truncate_labels: Option<usize>,
+    /// Size of the title (the feature's name) and the p-value, in points.
+    pub title_font_size: f64,
 }
 
 impl Default for BoxOptions {
@@ -310,6 +321,7 @@ impl Default for BoxOptions {
             show_averages: true,
             show_p_value: true,
             truncate_labels: Some(50),
+            title_font_size: TITLE_SIZE,
         }
     }
 }
@@ -499,13 +511,14 @@ pub fn box_plot(data: &FeatureData, options: &BoxOptions) -> Figure {
         &mut figure,
         &frame,
         &shorten(&data.feature, options.truncate_labels),
+        options.title_font_size,
     );
     if let (true, Some(p)) = (options.show_p_value, &data.p_value) {
-        figure.text(
-            frame.right,
-            frame.top - 5.0,
-            format!("p = {p}"),
-            label_style().align(HAlign::Right, VAlign::Baseline),
+        corner_note(
+            &mut figure,
+            &frame,
+            &format!("p = {p}"),
+            options.title_font_size,
         );
     }
     figure
@@ -654,5 +667,35 @@ mod tests {
             },
         );
         assert!(texts(&tiny)[0].contains("too small"));
+    }
+
+    #[test]
+    fn titles_follow_their_option_and_axes_the_shared_fonts() {
+        let size = |figure: &Figure, wanted: &str| {
+            figure
+                .shapes
+                .iter()
+                .find_map(|s| match s {
+                    Shape::Text { text, style, .. } if text == wanted => Some(style.size),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let options = BoxOptions {
+            title_font_size: 13.0,
+            ..BoxOptions::default()
+        };
+        let figure = box_plot(&data(), &options);
+        assert_eq!(size(&figure, "Bacteroides"), 13.0);
+        assert_eq!(size(&figure, "p = 0.012"), 13.0);
+        let shared = crate::axes::Fonts {
+            tick: 10.0,
+            axis_label: 12.0,
+            legend: 9.0,
+        };
+        let figure = crate::axes::with_fonts(shared, || box_plot(&data(), &BoxOptions::default()));
+        assert_eq!(size(&figure, "Bacteroides"), crate::axes::TITLE_SIZE);
+        assert_eq!(size(&figure, data().axis_label()), 12.0);
+        assert_eq!(size(&figure, &data().groups[0].name), 10.0);
     }
 }

@@ -1401,3 +1401,35 @@ fn ancom_matches_scikit_bio_and_new_plots_are_drawn() {
     .contains("not available"));
     fs::remove_dir_all(&directory).ok();
 }
+
+#[test]
+fn plot_font_sizes_can_be_chosen() {
+    let directory = std::env::temp_dir().join(format!("stamp-cli-fonts-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let font = |svg: &str, label: &str| -> String {
+        let end = svg.find(&format!(">{label}</text>")).unwrap();
+        let start = svg[..end].rfind("font-size=\"").unwrap() + 11;
+        svg[start..start + svg[start..].find('"').unwrap()].to_string()
+    };
+    let base = &ENTEROTYPES;
+    let extra = [
+        "--plot-type",
+        "box",
+        "--group",
+        "Enterotype 1",
+        "--group",
+        "Enterotype 2",
+    ];
+    let plain = svg_plot("multi-groups", base, &extra, &directory, "plain");
+    assert_eq!(font(&plain, "Enterotype 1"), "8");
+    assert_eq!(font(&plain, "Proportion of sequences (%)"), "9");
+    let mut sized = extra.to_vec();
+    sized.extend_from_slice(&["--tick-font-size", "12", "--axis-label-font-size", "14"]);
+    let svg = svg_plot("multi-groups", base, &sized, &directory, "sized");
+    assert_eq!(font(&svg, "Enterotype 1"), "12");
+    assert_eq!(font(&svg, "Proportion of sequences (%)"), "14");
+    let mut bad = with("multi-groups", base, &extra);
+    bad.extend_from_slice(&["--plot", "x.svg", "--legend-font-size", "0"]);
+    assert!(failure(&bad).contains("font sizes"));
+    fs::remove_dir_all(&directory).ok();
+}

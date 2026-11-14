@@ -2070,3 +2070,56 @@ fn tier_four_plots() {
     assert!(shown.contains(&"Difference in Depth".to_string()));
     harness.screenshot("mantel");
 }
+
+#[test]
+fn font_sizes_are_set_in_the_preferences_and_per_plot() {
+    let mut harness = Harness::enterotypes();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::Box);
+    harness.settle();
+    let size_of = |app: &StampApp, wanted: &str| {
+        app.figure()
+            .shapes
+            .iter()
+            .find_map(|s| match s {
+                stamp_plot::Shape::Text { text, style, .. } if text == wanted => Some(style.size),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no text {wanted}"))
+    };
+    let feature = harness.app.session.selected_feature.clone().unwrap();
+    // Ticks 8 points, axis labels 9, the title 9 to start with.
+    assert_eq!(size_of(&harness.app, "Enterotype 1"), 8.0);
+    assert_eq!(size_of(&harness.app, "Proportion of sequences (%)"), 9.0);
+    assert_eq!(size_of(&harness.app, &feature), 9.0);
+
+    // The preferences change the text every plot shares...
+    let mut settings = harness.app.plot_settings().clone();
+    settings.fonts.tick = 12.0;
+    settings.fonts.axis_label = 14.0;
+    settings.fonts.legend = 11.0;
+    // ... and the plot's own window its particular text.
+    settings.box_plot.title_font_size = 16.0;
+    harness.app.set_plot_settings(settings);
+    harness.app.show_preferences(true);
+    harness.settle();
+    assert_eq!(size_of(&harness.app, "Enterotype 1"), 12.0);
+    assert_eq!(size_of(&harness.app, "Proportion of sequences (%)"), 14.0);
+    assert_eq!(size_of(&harness.app, &feature), 16.0);
+    harness.screenshot("preferences_fonts");
+    harness.app.show_preferences(false);
+
+    // Legends follow the preference.
+    harness.app.set_plot_kind(PlotKind::Pca);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.pca.legend = stamp_plot::axes::LegendPosition::UpperRight;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert_eq!(size_of(&harness.app, "Enterotype 1"), 11.0);
+
+    // Configure plot has a frame of the plot's own font sizes.
+    harness.app.set_plot_kind(PlotKind::Heatmap);
+    harness.app.show_plot_config(true);
+    harness.settle();
+    harness.screenshot("configure_plot_fonts");
+}

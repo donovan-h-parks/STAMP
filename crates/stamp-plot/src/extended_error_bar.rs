@@ -11,8 +11,6 @@ use crate::axis::{LinearScale, Ticks};
 use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::text;
 
-/// Font size of all text, in points.
-const FONT_SIZE: f64 = 8.0;
 const INCH: f64 = 72.0;
 
 /// One feature (one row of the plot).
@@ -126,6 +124,10 @@ pub struct Options {
     pub axes_color: Color,
     /// p-values below ten to this power are shown as a bound.
     pub min_p_value_exponent: i32,
+    /// Size of the feature names and their p-values, in points.
+    pub label_font_size: f64,
+    /// Size of the titles above the intervals and the p-values.
+    pub title_font_size: f64,
 }
 
 impl Default for Options {
@@ -146,6 +148,8 @@ impl Default for Options {
             highlighted: Vec::new(),
             axes_color: Color::rgb(0x7f, 0x7f, 0x7f),
             min_p_value_exponent: -15,
+            label_font_size: crate::axes::NOTE_SIZE,
+            title_font_size: crate::axes::TITLE_SIZE,
         }
     }
 }
@@ -317,13 +321,15 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         .collect();
     let n = drawn.len() as f64;
 
-    // Page layout, in points.
+    // Page layout, in points, with room for the text at its sizes.
+    let sizes = crate::axes::fonts();
+    let axis_room = crate::axes::x_axis_room();
     let bottom_margin = if options.legend.is_bottom() {
-        0.56
+        axis_room + (sizes.legend + 2.5).max(0.16 * INCH)
     } else {
-        0.4
-    } * INCH;
-    let top_margin = 0.25 * INCH;
+        axis_room
+    };
+    let top_margin = (options.title_font_size + 9.0).max(0.25 * INCH);
     let plot_height = options.row_height * INCH * n;
     let width = options.width * INCH;
     let height = plot_height + bottom_margin + top_margin;
@@ -331,7 +337,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
 
     let label_width = drawn
         .iter()
-        .map(|d| text::width(&d.label, FONT_SIZE))
+        .map(|d| text::width(&d.label, options.label_font_size))
         .fold(0.0, f64::max);
     let plots_left = label_width + 0.1 * INCH;
     let p_value_width = if options.show_p_values { 0.75 } else { 0.1 } * INCH;
@@ -356,7 +362,8 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     let axes = Stroke::solid(options.axes_color, 1.0);
     let outline = Stroke::solid(Color::BLACK, 1.0);
     let stripe = Color::grey(0.9);
-    let label_style = TextStyle::new(FONT_SIZE);
+    let label_style = TextStyle::new(options.label_font_size);
+    let title_style = TextStyle::new(options.title_font_size);
     let tick_length = 4.0;
     let tick_pad = 4.0;
 
@@ -385,16 +392,15 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                     *x,
                     bottom + tick_pad,
                     tick_label.clone(),
-                    label_style.align(HAlign::Center, VAlign::Top),
+                    crate::axes::tick_style().align(HAlign::Center, VAlign::Top),
                 );
             }
-            let label_top =
-                bottom + tick_pad + text::ascent(FONT_SIZE) + text::descent(FONT_SIZE) + 3.0;
+            let label_top = bottom + tick_pad + crate::axes::line_height(sizes.tick) + 3.0;
             figure.text(
                 (left + right) / 2.0,
                 label_top,
                 label,
-                label_style.align(HAlign::Center, VAlign::Top),
+                crate::axes::axis_label_style().align(HAlign::Center, VAlign::Top),
             );
         };
 
@@ -571,7 +577,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         (left + right) / 2.0,
         top - 5.0,
         title,
-        label_style.align(HAlign::Center, VAlign::Baseline),
+        title_style.align(HAlign::Center, VAlign::Baseline),
     );
 
     // p-values.
@@ -587,7 +593,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         // Centre the title on the rows, but keep it on the page when there
         // are only a few of them.
         let title = p_value_title(data, options);
-        let half = text::width(&title, FONT_SIZE) / 2.0 + 2.0;
+        let half = text::width(&title, options.title_font_size) / 2.0 + 2.0;
         let centre = ((top + bottom) / 2.0)
             .max(half)
             .min((height - half).max(half));
@@ -595,7 +601,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             width - 1.5,
             centre,
             title,
-            label_style
+            title_style
                 .align(HAlign::Center, VAlign::Bottom)
                 .rotated(90.0),
         );
@@ -606,7 +612,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             2.0,
             3.0,
             heading.clone(),
-            label_style.align(HAlign::Left, VAlign::Top),
+            title_style.align(HAlign::Left, VAlign::Top),
         );
     }
     draw_legend(&mut figure, data, options);
@@ -649,9 +655,10 @@ fn draw_legend(figure: &mut Figure, data: &Data, options: &Options) {
     if options.legend == Legend::None {
         return;
     }
-    let style = TextStyle::new(FONT_SIZE).align(HAlign::Left, VAlign::Middle);
-    let (swatch, pad, spacing) = (FONT_SIZE, 4.0, 14.0);
-    let entry = |name: &str| swatch + pad + text::width(name, FONT_SIZE);
+    let size = crate::axes::fonts().legend;
+    let style = crate::axes::legend_style().align(HAlign::Left, VAlign::Middle);
+    let (swatch, pad, spacing) = (size, 4.0, 14.0);
+    let entry = |name: &str| swatch + pad + text::width(name, size);
     let total = entry(&data.name1) + spacing + entry(&data.name2);
 
     let margin = 6.0;

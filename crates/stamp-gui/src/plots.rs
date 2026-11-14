@@ -230,6 +230,9 @@ pub struct PlotSettings {
     pub min_p_exponent: i32,
     pub axes_color: Color,
     pub sample_colors: [Color; 2],
+    /// Font sizes of the tick labels, axis labels and legends of every
+    /// plot, set in the preferences.
+    pub fonts: stamp_plot::axes::Fonts,
 }
 
 impl Default for PlotSettings {
@@ -331,6 +334,7 @@ impl Default for PlotSettings {
             min_p_exponent: -15,
             axes_color: AXES_COLOR,
             sample_colors: [SAMPLE1_COLOR, SAMPLE2_COLOR],
+            fonts: stamp_plot::axes::Fonts::default(),
         }
     }
 }
@@ -421,7 +425,9 @@ const NO_FEATURE: &str = "Select a feature in the feature table";
 
 /// Build the figure for the current results of `mode`.
 pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSettings) -> Figure {
-    let mut figure = build_plain(session, mode, kind, settings);
+    let mut figure = stamp_plot::axes::with_fonts(settings.fonts, || {
+        build_plain(session, mode, kind, settings)
+    });
     // The colours chosen in the preferences replace the built-in ones: the
     // grey of axes wherever it draws lines or text, and, for two samples,
     // the colours the plots give the first and second sample.
