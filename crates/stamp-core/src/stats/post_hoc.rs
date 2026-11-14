@@ -1,6 +1,6 @@
 //! Post-hoc tests: pairwise comparisons of groups after a multiple-group test.
 
-use super::dist::{f_cdf, f_ppf, normal_cdf, studentized_range_cdf, studentized_range_ppf};
+use super::dist::{f_ppf, f_sf, normal_cdf, studentized_range_cdf, studentized_range_ppf};
 use super::two_group::welch;
 use super::{mean, sample_variance};
 use crate::error::{Result, StampError};
@@ -257,7 +257,7 @@ fn scheffe(groups: &[&[f64]], coverage: f64) -> (PairStats, &'static str) {
             let es = mean(groups[i]) - mean(groups[j]);
             let inverse_sizes = 1.0 / groups[i].len() as f64 + 1.0 / groups[j].len() as f64;
             let f = es * es / (within_var * inverse_sizes);
-            let p = 1.0 - f_cdf(f / df_between, df_between, df_within);
+            let p = f_sf(f / df_between, df_between, df_within);
             let half_width = (critical * inverse_sizes).sqrt() * within_sd;
             stats.push((PostHocP::Value(p), es, es - half_width, es + half_width));
         }
@@ -320,7 +320,7 @@ fn dunn(groups: &[&[f64]], coverage: f64) -> Result<(PairStats, &'static str)> {
                 f64::NAN
             } else if standard_error > 0.0 {
                 let z = (rank_sums[i] / ni - rank_sums[j] / nj) / standard_error;
-                (2.0 * (1.0 - normal_cdf(z.abs())) * pairs).min(1.0)
+                (2.0 * normal_cdf(-z.abs()) * pairs).min(1.0)
             } else {
                 // Every value is the same.
                 1.0
@@ -382,7 +382,7 @@ mod tests {
     }
 
     fn check(c: &Comparison, label: &str, effect: f64, lower: f64, upper: f64) {
-        check_within(c, label, effect, lower, upper, 5e-8);
+        check_within(c, label, effect, lower, upper, 1e-9);
     }
 
     /// As `check`, allowing the confidence limits to differ by `tolerance`.
@@ -401,15 +401,42 @@ mod tests {
             (c.upper_ci, upper),
         ] {
             assert!(
-                (actual - expected).abs() < tolerance,
+                (actual - expected).abs() <= tolerance * expected.abs().max(1.0),
                 "{label}: expected {expected}, got {actual}"
             );
         }
     }
 
-    // Expected values from the original STAMP unit tests (ground truth from
-    // SPSS and MATLAB; the Games-Howell limits are STAMP's own, which differ
-    // slightly from SPSS because critical values are interpolated).
+    fn p_values(r: &PostHocResult) -> Vec<f64> {
+        r.comparisons
+            .iter()
+            .map(|c| {
+                let PostHocP::Value(p) = c.p_value;
+                p
+            })
+            .collect()
+    }
+
+    fn close_all(actual: &[f64], expected: &[f64], tolerance: f64) {
+        for (a, e) in actual.iter().zip(expected) {
+            assert!(
+                (a - e).abs() <= tolerance * e.abs().max(1e-3),
+                "expected {e}, got {a}"
+            );
+        }
+    }
+
+    // The groups A, B and C above, as `y <- c(A, B, C)` and
+    // `g <- factor(rep(1:3, c(5, 6, 7)))` in R 4.4.3. R reports group j
+    // minus group i, so its signs are the reverse of ours.
+
+    /// `PMCMRplus::gamesHowellTest(y, g)` (1.9.12) for the p-values. Its
+    /// intervals are not reported, so they are computed in R from the
+    /// definition: the difference of the means plus or minus q times
+    /// `sqrt((v1 / n1 + v2 / n2) / 2)`, with Welch's degrees of freedom and
+    /// q solving `ptukey(q, 3, df) = 0.95` (`uniroot`, as `qtukey` is only
+    /// accurate to about four decimals). The studentized range here agrees
+    /// with R's to about 2e-7, hence the tolerance.
     #[test]
     fn games_howell_values() {
         let r = run(PostHocTest::GamesHowell);
@@ -417,40 +444,38 @@ mod tests {
             &r.comparisons[0],
             "1 : 2",
             -32.0,
-            -56.836534205367272,
-            -7.163465794632728,
-            0.5,
+            -56.809019695967692,
+            -7.1909803040323119,
+            1e-6,
         );
         check_within(
             &r.comparisons[1],
             "1 : 3",
             -1.0,
-            -3.9627938823820417,
-            1.9627938823820417,
-            0.5,
+            -3.9625910350677422,
+            1.9625910350677422,
+            1e-6,
         );
         check_within(
             &r.comparisons[2],
             "2 : 3",
             31.0,
-            6.1693311597445302,
-            55.83066884025547,
-            0.5,
+            6.2047365669622856,
+            55.795263433037718,
+            1e-6,
         );
-        // STAMP v2 reported "< 0.02", ">= 0.1" and "< 0.05".
-        let p: Vec<f64> = r
-            .comparisons
-            .iter()
-            .map(|c| {
-                let PostHocP::Value(p) = c.p_value;
-                p
-            })
-            .collect();
-        assert!(p[0] > 0.01 && p[0] < 0.02, "{p:?}");
-        assert!(p[1] > 0.1, "{p:?}");
-        assert!(p[2] > 0.02 && p[2] < 0.05, "{p:?}");
+        close_all(
+            &p_values(&r),
+            &[
+                0.019165263527079923,
+                0.63722232278324431,
+                0.021640721055594891,
+            ],
+            1e-5,
+        );
     }
 
+    /// `TukeyHSD(aov(y ~ g))`.
     #[test]
     fn tukey_kramer_values() {
         let r = run(PostHocTest::TukeyKramer);
@@ -458,40 +483,38 @@ mod tests {
             &r.comparisons[0],
             "1 : 2",
             -32.0,
-            -49.172140035619407,
-            -14.827859964380597,
-            2e-5,
+            -49.172140035499972,
+            -14.827859964500043,
+            1e-7,
         );
         check_within(
             &r.comparisons[1],
             "1 : 3",
             -1.0,
-            -17.605245738594071,
-            15.605245738594071,
-            2e-5,
+            -17.605245738478576,
+            15.605245738478576,
+            1e-7,
         );
         check_within(
             &r.comparisons[2],
             "2 : 3",
             31.0,
-            15.222589067602378,
-            46.777410932397622,
-            2e-5,
+            15.22258906771212,
+            46.777410932287893,
+            1e-7,
         );
-        // STAMP v2 reported "< 0.001", ">= 0.1" and "< 0.001".
-        let p: Vec<f64> = r
-            .comparisons
-            .iter()
-            .map(|c| {
-                let PostHocP::Value(p) = c.p_value;
-                p
-            })
-            .collect();
-        assert!(p[0] > 0.0 && p[0] < 0.001, "{p:?}");
-        assert!(p[1] > 0.9, "{p:?}");
-        assert!(p[2] > 0.0 && p[2] < 0.001, "{p:?}");
+        close_all(
+            &p_values(&r),
+            &[
+                0.00059605831888509542,
+                0.98661302841403109,
+                0.000359362522298734,
+            ],
+            1e-5,
+        );
     }
 
+    /// `DescTools::ScheffeTest(aov(y ~ g))` (DescTools 0.99.59).
     #[test]
     fn scheffe_values() {
         let r = run(PostHocTest::Scheffe);
@@ -500,31 +523,68 @@ mod tests {
             "1 : 2",
             -32.0,
             -49.941123031784372,
-            -14.058876968215628,
+            -14.058876968215639,
         );
         check(
             &r.comparisons[1],
             "1 : 3",
             -1.0,
-            -18.348842727299797,
-            16.348842727299797,
+            -18.348842727299793,
+            16.348842727299793,
         );
         check(
             &r.comparisons[2],
             "2 : 3",
             31.0,
-            14.51606322368572,
-            47.48393677631428,
+            14.516063223685727,
+            47.483936776314287,
         );
-        let expected = [
-            8.624781311637033E-4,
-            0.9878500418301395,
-            5.261333896968458E-4,
-        ];
-        for (c, e) in r.comparisons.iter().zip(expected) {
-            let PostHocP::Value(p) = c.p_value;
-            assert!((p - e).abs() < 5e-8, "expected {e}, got {p}");
-        }
+        close_all(
+            &p_values(&r),
+            &[
+                0.00086247813116370063,
+                0.98785004183013969,
+                0.00052613338969684361,
+            ],
+            1e-9,
+        );
+    }
+
+    /// `t.test(x1 / 100, x2 / 100)` for each pair, with the interval in
+    /// percent.
+    #[test]
+    fn welch_uncorrected_values() {
+        let r = run(PostHocTest::WelchUncorrected);
+        check(
+            &r.comparisons[0],
+            "1 : 2",
+            -32.0,
+            -51.617685407569802,
+            -12.382314592430184,
+        );
+        check(
+            &r.comparisons[1],
+            "1 : 3",
+            -1.0,
+            -3.4077750760636958,
+            1.4077750760636962,
+        );
+        check(
+            &r.comparisons[2],
+            "2 : 3",
+            31.0,
+            11.387071067812595,
+            50.612928932187394,
+        );
+        close_all(
+            &p_values(&r),
+            &[
+                0.0084087318194191202,
+                0.37641401606175107,
+                0.0095108938981320907,
+            ],
+            1e-9,
+        );
     }
 
     #[test]
@@ -597,12 +657,13 @@ mod tests {
         }
     }
 
-    /// Reference values computed from the definition with NumPy and SciPy
-    /// 1.17 (mean ranks 5.5, 15.5 and 7.214; z = -3.1015, -0.5498, 2.7969).
+    /// `dunn.test(y, g, method = "bonferroni", altp = TRUE)` from the R
+    /// package dunn.test 1.4.1 (z = -3.1015, -0.5498 and 2.7969), which
+    /// agrees with a computation from the definition in SciPy 1.17.
     #[test]
     fn dunn_values() {
         let r = run(PostHocTest::Dunn);
-        let expected = [0.005777200115417524, 1.0, 0.015476513491731398];
+        let expected = [0.0057772001154175268, 1.0, 0.015476513491731396];
         for (c, e) in r.comparisons.iter().zip(expected) {
             let PostHocP::Value(p) = c.p_value;
             assert!((p - e).abs() < 1e-12, "{}: expected {e}, got {p}", c.label);

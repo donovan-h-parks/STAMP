@@ -228,11 +228,25 @@ fn too_few_samples() -> GroupOutcome {
     }
 }
 
-/// Outcome from the lower-tail probability of the t statistic.
+/// Outcome from the lower-tail probability of the statistic.
 fn outcome(p_lower: f64, dp: f64, half_width: f64, note: &'static str) -> GroupOutcome {
     GroupOutcome {
         one_sided: 1.0 - p_lower,
         two_sided: 2.0 * p_lower.min(1.0 - p_lower),
+        lower_ci: (dp - half_width) * 100.0,
+        upper_ci: (dp + half_width) * 100.0,
+        effect_size: dp * 100.0,
+        note,
+    }
+}
+
+/// Outcome of a t statistic with `df` degrees of freedom. The tails are
+/// computed directly rather than as one minus the CDF, so that p-values far
+/// below 1e-16 keep their value.
+fn t_outcome(t: f64, df: f64, dp: f64, half_width: f64, note: &'static str) -> GroupOutcome {
+    GroupOutcome {
+        one_sided: t_cdf(-t, df),
+        two_sided: (2.0 * t_cdf(-t.abs(), df)).min(1.0),
         lower_ci: (dp - half_width) * 100.0,
         upper_ci: (dp + half_width) * 100.0,
         effect_size: dp * 100.0,
@@ -261,9 +275,9 @@ pub fn t_test(prop1: &[f64], prop2: &[f64], coverage: f64) -> GroupOutcome {
         return zero_variance(mean1, mean2);
     }
     let dp = mean1 - mean2;
-    let p_lower = t_cdf(dp / denom, dof);
+    let t = dp / denom;
     let t_critical = t_isf(0.5 * (1.0 - coverage), dof);
-    outcome(p_lower, dp, t_critical * denom, "")
+    t_outcome(t, dof, dp, t_critical * denom, "")
 }
 
 /// Welch's t-test (unequal variances), on proportions.
@@ -283,9 +297,9 @@ pub fn welch(prop1: &[f64], prop2: &[f64], coverage: f64) -> GroupOutcome {
     let dp = mean1 - mean2;
     let dof = unpooled_var * unpooled_var
         / (norm_var1 * norm_var1 / (n1 - 1.0) + norm_var2 * norm_var2 / (n2 - 1.0));
-    let p_lower = t_cdf(dp / std_err, dof);
+    let t = dp / std_err;
     let t_critical = t_isf(0.5 * (1.0 - coverage), dof);
-    outcome(p_lower, dp, t_critical * std_err, "")
+    t_outcome(t, dof, dp, t_critical * std_err, "")
 }
 
 /// Ranks of the values of two groups taken together, ties sharing the
@@ -370,7 +384,7 @@ fn mann_whitney_tails(prop1: &[f64], prop2: &[f64]) -> (f64, f64) {
             let sd = variance.sqrt();
             (
                 normal_cdf((u - centre + 0.5) / sd),
-                1.0 - normal_cdf((u - centre - 0.5) / sd),
+                normal_cdf(-(u - centre - 0.5) / sd),
             )
         }
     }
@@ -430,9 +444,9 @@ pub fn paired_t(prop1: &[f64], prop2: &[f64], coverage: f64) -> GroupOutcome {
         return zero_variance(dp, 0.0);
     }
     let dof = n - 1.0;
-    let p_lower = t_cdf(dp / std_err, dof);
+    let t = dp / std_err;
     let t_critical = t_isf(0.5 * (1.0 - coverage), dof);
-    outcome(p_lower, dp, t_critical * std_err, "")
+    t_outcome(t, dof, dp, t_critical * std_err, "")
 }
 
 /// Most pairs for which the distribution of the signed-rank statistic is
@@ -506,7 +520,7 @@ fn signed_rank_tails(prop1: &[f64], prop2: &[f64]) -> (f64, f64) {
         let centre = n * (n + 1.0) / 4.0;
         let variance = n * (n + 1.0) * (2.0 * n + 1.0) / 24.0 - ties / 48.0;
         let z = (observed as f64 / 2.0 - centre) / variance.sqrt();
-        (normal_cdf(z), 1.0 - normal_cdf(z))
+        (normal_cdf(z), normal_cdf(-z))
     }
 }
 
@@ -750,7 +764,7 @@ mod tests {
 
     fn close(actual: f64, expected: f64) {
         assert!(
-            (actual - expected).abs() < 5e-8,
+            (actual - expected).abs() <= 1e-9 * expected.abs() + 1e-12,
             "expected {expected}, got {actual}"
         );
     }
@@ -774,7 +788,10 @@ mod tests {
         .remove(0)
     }
 
-    // Expected values from the original STAMP unit tests.
+    // Reference values from R 4.4.3: `t.test(a, b, var.equal = TRUE)` and
+    // `var.equal = FALSE` (Welch), with `alternative = "greater"` for the
+    // one-sided p-value. The parent count is one, so the proportions are
+    // the values themselves; effect sizes and intervals are in percent.
     #[test]
     fn equal_variance_t_test() {
         let r = run(
@@ -783,10 +800,10 @@ mod tests {
             &[5.0, 2.0, 2.0, 5.0, 6.0, 7.0],
             1.0,
         );
-        close(r.one_sided, 0.537141726);
-        close(r.two_sided, 0.925716547365);
-        close(r.lower_ci, -245.935268272);
-        close(r.upper_ci, 225.935268272);
+        close(r.one_sided, 0.53714172631726331);
+        close(r.two_sided, 0.92571654736547337);
+        close(r.lower_ci, -245.93526827844681);
+        close(r.upper_ci, 225.93526827844683);
         close(r.effect_size, -10.0);
     }
 
@@ -798,10 +815,10 @@ mod tests {
             &[5.0, 2.0, 2.0, 5.0, 6.0, 7.0],
             1.0,
         );
-        close(r.one_sided, 0.5390501783);
-        close(r.two_sided, 0.9218996432);
-        close(r.lower_ci, -238.023177152);
-        close(r.upper_ci, 218.023177152);
+        close(r.one_sided, 0.5390501783737266);
+        close(r.two_sided, 0.92189964325254681);
+        close(r.lower_ci, -238.02317716945791);
+        close(r.upper_ci, 218.02317716945794);
         close(r.effect_size, -10.0);
 
         let r = run(
@@ -810,19 +827,18 @@ mod tests {
             &[3.5, 6.4, 5.2, 1.3, 6.4, 6.2],
             1.0,
         );
-        close(r.one_sided, 0.5);
-        close(r.two_sided, 1.0);
-        close(r.lower_ci, -262.6606201199);
-        close(r.upper_ci, 262.6606201199);
-        close(r.effect_size, 0.0);
+        close(r.two_sided, 0.99999999999999933);
+        close(r.lower_ci, -262.66062012243707);
+        close(r.upper_ci, 262.66062012243685);
+        assert!(r.effect_size.abs() < 1e-12);
 
         let a: Vec<f64> = (1..=10).map(f64::from).collect();
         let b: Vec<f64> = (1..=10).map(|i| f64::from(i) * 10.0).collect();
         let r = run(GroupTest::Welch, &a, &b, 1.0);
-        close(r.one_sided, 0.9997146330);
-        close(r.two_sided, 0.0005707338);
-        close(r.lower_ci, -7120.16500998);
-        close(r.upper_ci, -2779.83499002);
+        close(r.one_sided, 0.99971463308159636);
+        close(r.two_sided, 0.00057073383680729482);
+        close(r.lower_ci, -7120.165010028073);
+        close(r.upper_ci, -2779.8349899719277);
         close(r.effect_size, -4950.0);
     }
 
@@ -867,6 +883,13 @@ mod tests {
         assert_eq!(r[0].note, ZERO_PARENT);
     }
 
+    // White's non-parametric t-test (White, Nagarajan and Pop 2009) has no
+    // independent implementation to compare with: the original is an R
+    // script inside Metastats, and its permutation p-values are random.
+    // The tests below check its parts instead: the statistic is Welch's t
+    // (so its p-values come close to Welch's), it is repeatable for a seed,
+    // and sparse features fall back to Fisher's exact test, whose values
+    // are checked against R in stats/two_sample.rs.
     #[test]
     fn white_test_constant_groups() {
         let r = run(GroupTest::White, &[5.0; 5], &[6.0; 8], 10.0);
@@ -916,7 +939,8 @@ mod tests {
         assert!(cancelled.is_none());
     }
 
-    /// Reference values from SciPy 1.17 (`scipy.stats.mannwhitneyu`).
+    /// Reference values from SciPy 1.17 (`scipy.stats.mannwhitneyu`, with
+    /// its default method choice and continuity correction).
     #[test]
     fn mann_whitney_matches_scipy() {
         let run = |a: &[f64], b: &[f64]| {

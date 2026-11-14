@@ -235,8 +235,9 @@ mod tests {
             .all(|r| (0.0..=1.0).contains(&r.clr_effect)));
         assert!(result.rows[0].clr_effect > 0.8);
 
-        // With four samples a group, Kruskal-Wallis p-values cannot survive
-        // the Holm adjustment over eight features.
+        // With four samples a group, the Kruskal-Wallis p-values do not
+        // survive the Holm adjustment over eight features, so no W is above
+        // zero.
         let ranks = ancom(&table(), &groups(), MultiGroupTest::KruskalWallis, 0.05).unwrap();
         assert_eq!(ws(&ranks), [0; 8]);
         assert_eq!(ranks.cutoff, None);

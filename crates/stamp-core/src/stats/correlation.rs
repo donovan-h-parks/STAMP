@@ -105,7 +105,7 @@ pub fn correlation_p_value(coefficient: f64, n: usize) -> f64 {
         return 0.0;
     }
     let t = coefficient.abs() * (dof / remainder).sqrt();
-    (2.0 * (1.0 - t_cdf(t, dof))).clamp(0.0, 1.0)
+    (2.0 * t_cdf(-t, dof)).clamp(0.0, 1.0)
 }
 
 /// The straight line through points that leaves the smallest squared

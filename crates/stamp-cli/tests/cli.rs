@@ -256,7 +256,17 @@ fn analyses_reproduce_the_python_reference_tables() {
             "Effect size"
         };
         let mut columns = vec![actual.column("p-values"), actual.column(effect_size)];
-        if case.mode != "multiple_groups" {
+        // v2's "DP: Asymptotic-CC" limits had a bug, fixed here; the core's
+        // golden_stats.rs checks the corrected limits against v2's. White's
+        // test uses that interval for sparse features too.
+        // v2's Newcombe-Wilson limits were approximate (found by scanning);
+        // they are exact now, and golden_stats.rs compares them with v2's
+        // at a tolerance suited to the approximation.
+        let fixed_cc = matches!(
+            case.ci_method.as_deref(),
+            Some("DP: Asymptotic-CC" | "DP: Newcombe-Wilson")
+        );
+        if case.mode != "multiple_groups" && !fixed_cc {
             columns.push(actual.column_ending("% lower CI"));
             columns.push(actual.column_ending("% upper CI"));
         }
@@ -268,7 +278,26 @@ fn analyses_reproduce_the_python_reference_tables() {
             if reference[note] == "float division by zero" {
                 continue; // a documented fix; see docs/CHANGES_FROM_PYTHON.md
             }
-            assert_eq!(row[note], reference[note], "{}", case.id);
+            // v2 refused Kruskal-Wallis tests with groups of fewer than
+            // five samples (p = 1); the port computes them as R does. The
+            // core's golden_stats.rs checks those p-values.
+            let small_kruskal = reference[note]
+                == "degenerate case: at least one group contains less than 5 samples";
+            if small_kruskal {
+                // Computed now; a feature with the same value everywhere
+                // still has no test (R gives NaN).
+                assert!(
+                    ["", "Invalid input data for Kruskal-Wallis H-test."]
+                        .contains(&row[note].as_str()),
+                    "{}: {}",
+                    case.id,
+                    row[note]
+                );
+            } else {
+                assert_eq!(row[note], reference[note], "{}", case.id);
+            }
+            let white_fisher =
+                reference[note] == "heuristic: statistics calculated with Fisher's test";
             for &column in &columns {
                 let context = format!(
                     "{} {:?} {}",
@@ -276,7 +305,20 @@ fn analyses_reproduce_the_python_reference_tables() {
                     &row[..case.key_columns],
                     actual.headings[column]
                 );
-                close(&context, &reference[column], &row[column]);
+                if small_kruskal && column == columns[0] {
+                    continue;
+                }
+                if white_fisher && actual.headings[column].contains("% ") {
+                    continue; // the fixed "DP: Asymptotic-CC" interval, as above
+                }
+                let mut reference = reference[column].clone();
+                if case.test.as_deref() == Some("Hypergeometric") && column == columns[0] {
+                    // v2 doubled the one-sided p-value without capping it at
+                    // one; the port caps it (see docs/CHANGES_FROM_PYTHON.md).
+                    let p: f64 = reference.parse().unwrap();
+                    reference = p.min(1.0).to_string();
+                }
+                close(&context, &reference, &row[column]);
             }
         }
         checked += 1;

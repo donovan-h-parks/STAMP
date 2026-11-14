@@ -188,6 +188,28 @@ fn p_tolerance(test: SampleTest) -> (f64, f64) {
 /// about nine significant digits.
 const CI_REL: f64 = 5e-8;
 const CI_ABS: f64 = 1e-9;
+/// The note STAMP v2 gave instead of a Kruskal-Wallis test when a group had
+/// fewer than five samples.
+const V2_SMALL_KRUSKAL: &str = "degenerate case: at least one group contains less than 5 samples";
+
+/// STAMP v2's "DP: Asymptotic-CC" interval with its bug fixed (see
+/// docs/CHANGES_FROM_PYTHON.md): v2 multiplied the continuity correction
+/// (1/n1 + 1/n2) / 2 by z along with the standard error, so each limit moves
+/// inwards by (z - 1) times the correction. `totals` are the sequence counts
+/// the interval was computed from, a total of zero having been replaced by
+/// the pseudocount.
+fn without_v2_cc_bug(
+    python: (f64, f64),
+    totals: (f64, f64),
+    coverage: f64,
+    pseudocount: f64,
+) -> (f64, f64) {
+    let fix = |t: f64| if t == 0.0 { pseudocount } else { t };
+    let correction = 100.0 * (1.0 / fix(totals.0) + 1.0 / fix(totals.1)) / 2.0;
+    let shift = (stamp_core::stats::dist::z_score(coverage) - 1.0) * correction;
+    (python.0 + shift, python.1 - shift)
+}
+
 /// Compare confidence limits, allowing an error proportional to the width of
 /// the interval: a limit close to zero is the difference of two larger numbers.
 #[track_caller]
@@ -424,10 +446,16 @@ fn two_sample_statistics_match_python() {
                 );
             } else {
                 let (relative, absolute) = p_tolerance(test);
+                let mut python_p = number(&expected[c_p]);
+                if test == SampleTest::Hypergeometric {
+                    // v2 doubled the one-sided p-value without capping it
+                    // at one (see docs/CHANGES_FROM_PYTHON.md).
+                    python_p = python_p.min(1.0);
+                }
                 check(
                     &context,
                     "p-value",
-                    number(&expected[c_p]),
+                    python_p,
                     row.p_value,
                     relative,
                     absolute,
@@ -444,8 +472,30 @@ fn two_sample_statistics_match_python() {
                 CI_REL,
                 CI_ABS,
             );
-            let python_ci = (number(&expected[c_lower]), number(&expected[c_upper]));
-            check_ci(&context, python_ci, (row.lower_ci, row.upper_ci), 1.0);
+            let mut python_ci = (number(&expected[c_lower]), number(&expected[c_upper]));
+            match ci_method {
+                SampleCi::DiffBetweenPropAsymptoticCc => {
+                    python_ci = without_v2_cc_bug(
+                        python_ci,
+                        (row.parent_seq1, row.parent_seq2),
+                        coverage,
+                        settings.pseudocount,
+                    );
+                    check_ci(&context, python_ci, (row.lower_ci, row.upper_ci), 1.0);
+                }
+                SampleCi::NewcombeWilson => {
+                    // v2 found the Wilson limits by scanning in steps of
+                    // 1 / max(n, 1000), so each of its limits can be off by
+                    // up to a step of each proportion; they are now computed
+                    // exactly (and agree with R; see the unit tests in
+                    // stats/ci.rs).
+                    let step = |n: f64| 1.0 / n.max(1000.0);
+                    let slack = 100.0 * (step(row.parent_seq1) + step(row.parent_seq2));
+                    check(&context, "lower CI", python_ci.0, row.lower_ci, 0.0, slack);
+                    check(&context, "upper CI", python_ci.1, row.upper_ci, 0.0, slack);
+                }
+                _ => check_ci(&context, python_ci, (row.lower_ci, row.upper_ci), 1.0),
+            }
 
             for measure in SampleEffectSize::ALL {
                 let value = measure.run(
@@ -456,10 +506,31 @@ fn two_sample_statistics_match_python() {
                     settings.pseudocount,
                 );
                 let column = table.column(&format!("es:{}", measure.name()));
+                let mut python = number(&expected[column]);
+                if measure == SampleEffectSize::RatioProportions
+                    && (row.seq1 == 0.0 || row.seq2 == 0.0)
+                {
+                    // v2's filter added the pseudocount to each total once,
+                    // its interval twice; both now add it twice.
+                    let pc = settings.pseudocount;
+                    let (s1, s2, t1, t2) = (row.seq1, row.seq2, row.parent_seq1, row.parent_seq2);
+                    let ratio = |total_pc: f64| {
+                        ((s1 + pc) / (t1 + total_pc)) / ((s2 + pc) / (t2 + total_pc))
+                    };
+                    check(
+                        &context,
+                        "v2 ratio",
+                        python,
+                        ratio(pc),
+                        EXACT_REL,
+                        EXACT_ABS,
+                    );
+                    python = ratio(2.0 * pc);
+                }
                 check(
                     &context,
                     measure.name(),
-                    number(&expected[column]),
+                    python,
                     value,
                     EXACT_REL,
                     EXACT_ABS,
@@ -612,7 +683,15 @@ fn two_group_statistics_match_python() {
                     1e-9,
                     1e-12,
                 );
-                let python_ci = (number(&expected[c_lower]), number(&expected[c_upper]));
+                let mut python_ci = (number(&expected[c_lower]), number(&expected[c_upper]));
+                if python_note == "heuristic: statistics calculated with Fisher's test" {
+                    // White's test gives sparse features the "DP:
+                    // Asymptotic-CC" interval of their pooled counts.
+                    let (parent1, parent2) = profile.parent_counts(feature);
+                    let totals = (parent1.iter().sum(), parent2.iter().sum());
+                    python_ci =
+                        without_v2_cc_bug(python_ci, totals, coverage, settings.pseudocount);
+                }
                 check_ci(&context, python_ci, (row.lower_ci, row.upper_ci), 1.0);
                 if !case.stochastic {
                     correction_rows.push((expected, row.p_value));
@@ -673,20 +752,35 @@ fn multi_group_statistics_match_python() {
             table.column("Note"),
         );
 
+        let mut small_kruskal = false;
         let mut correction_rows = Vec::new();
         for row in &results.rows {
             let feature = profile.profile.feature(&row.feature).unwrap();
             let expected = table.row(&feature.hierarchy);
             let context = format!("{} {:?}", case.id, feature.hierarchy);
 
-            check(
-                &context,
-                "p-value",
-                number(&expected[c_p]),
-                row.p_value,
-                P_REL,
-                P_ABS,
-            );
+            if expected[c_note] == V2_SMALL_KRUSKAL {
+                // v2 refused groups of fewer than five samples and reported
+                // p = 1; the port computes the test as R does (see
+                // docs/CHANGES_FROM_PYTHON.md, and the unit tests against
+                // R in stats/multi_group.rs).
+                let percentages = profile.percentages(feature);
+                let groups: Vec<&[f64]> = percentages.iter().map(Vec::as_slice).collect();
+                let (p, note) = MultiGroupTest::KruskalWallis.run(&groups);
+                assert_eq!((row.p_value, row.note.as_str()), (p, note), "{context}");
+                assert!((0.0..=1.0).contains(&row.p_value), "{context}");
+                small_kruskal = true;
+            } else {
+                check(
+                    &context,
+                    "p-value",
+                    number(&expected[c_p]),
+                    row.p_value,
+                    P_REL,
+                    P_ABS,
+                );
+                assert_eq!(row.note, expected[c_note], "{context}");
+            }
             check(
                 &context,
                 "eta-squared",
@@ -695,7 +789,6 @@ fn multi_group_statistics_match_python() {
                 1e-8,
                 1e-11,
             );
-            assert_eq!(row.note, expected[c_note], "{context}");
             for g in 0..profile.group_names.len() {
                 let (mean, sd) = (
                     number(&expected[k + 4 + 2 * g]),
@@ -713,7 +806,10 @@ fn multi_group_statistics_match_python() {
             }
             correction_rows.push((expected, row.p_value));
         }
-        check_corrections(&table, &correction_rows, 0.05, (1e-7, P_ABS));
+        // v2's corrected values were computed from its p = 1.
+        if !small_kruskal {
+            check_corrections(&table, &correction_rows, 0.05, (1e-7, P_ABS));
+        }
         checked += 1;
     }
     assert!(checked >= 18, "only {checked} multiple-group cases checked");

@@ -1,6 +1,7 @@
 //! Confidence intervals for the effect size between two samples.
 
 use super::dist::z_score;
+use super::wilson::wilson_interval;
 
 /// A confidence interval with its point estimate.
 #[derive(Debug, Clone, PartialEq)]
@@ -78,11 +79,14 @@ impl SampleCi {
                 let (total1, total2, note) = replace_zero_totals(total1, total2, pseudocount);
                 let (r1, r2) = (seq1 / total1, seq2 / total2);
                 let diff = r1 - r2;
-                let mut std_err = (r1 * (1.0 - r1) / total1 + r2 * (1.0 - r2) / total2).sqrt();
+                let std_err = (r1 * (1.0 - r1) / total1 + r2 * (1.0 - r2) / total2).sqrt();
+                let mut offset = z * std_err;
                 if self == SampleCi::DiffBetweenPropAsymptoticCc {
-                    std_err += (1.0 / total1 + 1.0 / total2) / 2.0;
+                    // The continuity correction widens the interval by
+                    // (1/n1 + 1/n2) / 2 on each side (Fleiss); STAMP v2
+                    // multiplied it by z as well.
+                    offset += (1.0 / total1 + 1.0 / total2) / 2.0;
                 }
-                let offset = z * std_err;
                 CiOutcome {
                     lower: (diff - offset) * 100.0,
                     upper: (diff + offset) * 100.0,
@@ -92,8 +96,11 @@ impl SampleCi {
             }
             SampleCi::NewcombeWilson => {
                 let (total1, total2, note) = replace_zero_totals(total1, total2, pseudocount);
-                let roots1 = newcombe_wilson_roots(seq1, total1, z);
-                let roots2 = newcombe_wilson_roots(seq2, total2, z);
+                // Newcombe's hybrid score interval (his method 10) from the
+                // Wilson score limits of each proportion.
+                let (low1, high1, _) = wilson_interval(seq1, total1, z);
+                let (low2, high2, _) = wilson_interval(seq2, total2, z);
+                let (roots1, roots2) = ([low1, high1], [low2, high2]);
                 let diff = seq1 / total1 - seq2 / total2;
                 let lower = z
                     * (roots1[0] * (1.0 - roots1[0]) / total1
@@ -168,56 +175,29 @@ fn log_interval(effect_size: f64, log_offset: f64, note: &'static str) -> CiOutc
     }
 }
 
-/// Lower and upper limits of the Wilson score interval for one proportion,
-/// found by scanning for sign changes as the Python implementation does.
-fn newcombe_wilson_roots(seq: f64, total: f64, z: f64) -> [f64; 2] {
-    let estimate = seq / total;
-    let f = |value: f64| z * (value * (1.0 - value) / total).sqrt() - (value - estimate).abs();
-
-    let step = 1.0 / total.max(1000.0);
-    let steps = (1.0 / step) as i64;
-    let mut value: f64 = 0.0;
-    let mut previous_p = f(value);
-    let mut previous_value = value;
-    let mut roots = Vec::with_capacity(2);
-    for _ in 0..steps {
-        let p = f(value);
-        if p * previous_p < 0.0 || (p == 0.0 && value == 0.0) || (p == 0.0 && value == 1.0) {
-            let root = if p.abs() + previous_p.abs() != 0.0 {
-                previous_value + step * (1.0 - p.abs() / (p.abs() + previous_p.abs()))
-            } else {
-                previous_value
-            };
-            roots.push(root);
-            if roots.len() == 2 {
-                break;
-            }
-        }
-        previous_p = p;
-        previous_value = value;
-        value += step;
-    }
-    match roots.len() {
-        0 => [estimate, estimate],
-        1 => [roots[0], roots[0]],
-        _ => [roots[0], roots[1]],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Expected values from the original STAMP unit tests.
+    // Tables as (feature in sample 1, feature in sample 2, total of sample
+    // 1, total of sample 2). Reference values are from R 4.4.3 with
+    // DescTools 0.99.59, at 95% coverage:
+    // - `BinomDiffCI(s1, t1, s2, t2, method = "wald")`, `"waldcc"` and
+    //   `"score"` (Newcombe's hybrid score interval, his method 10), in
+    //   percent;
+    // - `OddsRatio(matrix(c(s1, t1 - s1, s2, t2 - s2), 2), method = "wald")`
+    //   (Woolf's logit interval);
+    // - `BinomRatioCI(s1, t1, s2, t2, method = "katz.log")`.
     const TABLE1: [f64; 4] = [10.0, 8.0, 30.0, 40.0];
     const TABLE2: [f64; 4] = [4000.0, 5000.0, 500000.0, 1000000.0];
+    const TABLE3: [f64; 4] = [3.0, 1.0, 4.0, 4.0];
 
-    fn check(ci: SampleCi, t: [f64; 4], lower: f64, upper: f64, effect: f64) {
+    fn check(ci: SampleCi, t: [f64; 4], effect: f64, lower: f64, upper: f64) {
         let r = ci.run(t[0], t[1], t[2], t[3], 0.95, 0.5);
         for (actual, expected) in [(r.lower, lower), (r.upper, upper), (r.effect_size, effect)] {
             assert!(
-                (actual - expected).abs() < 5e-8,
-                "{ci:?}: expected {expected}, got {actual}"
+                (actual - expected).abs() <= 1e-9 * expected.abs() + 1e-12,
+                "{ci:?} {t:?}: expected {expected}, got {actual}"
             );
         }
         assert_eq!(r.note, "");
@@ -226,73 +206,138 @@ mod tests {
     #[test]
     fn difference_between_proportions_intervals() {
         use SampleCi::*;
-        check(
-            DiffBetweenPropAsymptotic,
-            TABLE1,
-            -7.60015319099813,
-            34.2668198576648,
-            13.333333333,
-        );
-        check(
-            DiffBetweenPropAsymptotic,
-            TABLE2,
-            0.271701079166334,
-            0.328298920833666,
-            0.3,
-        );
-        check(
-            DiffBetweenPropAsymptoticCc,
-            TABLE1,
-            -13.3167148125733,
-            39.98338147924,
-            13.333333333,
-        );
-        check(
-            DiffBetweenPropAsymptoticCc,
-            TABLE2,
-            0.271407084568653,
-            0.328592915431347,
-            0.3,
-        );
-        check(
-            NewcombeWilson,
-            TABLE1,
-            -7.07911677674112,
-            33.5862638376494,
-            13.333333333,
-        );
-        check(
-            NewcombeWilson,
-            TABLE2,
-            0.271932757939523,
-            0.328541077116921,
-            0.3,
-        );
+        let percent = 100.0;
+        for (ci, t, effect, lower, upper) in [
+            (
+                DiffBetweenPropAsymptotic,
+                TABLE1,
+                0.1333333333333333,
+                -0.076001531909981268,
+                0.34266819857664788,
+            ),
+            (
+                DiffBetweenPropAsymptotic,
+                TABLE2,
+                0.003,
+                0.0027170107916633388,
+                0.0032829892083366613,
+            ),
+            (
+                DiffBetweenPropAsymptoticCc,
+                TABLE1,
+                0.1333333333333333,
+                -0.10516819857664794,
+                0.37183486524331455,
+            ),
+            (
+                DiffBetweenPropAsymptoticCc,
+                TABLE2,
+                0.003,
+                0.0027155107916633386,
+                0.0032844892083366615,
+            ),
+            (
+                NewcombeWilson,
+                TABLE1,
+                0.1333333333333333,
+                -0.070791151400971947,
+                0.33586263792069881,
+            ),
+            (
+                NewcombeWilson,
+                TABLE2,
+                0.003,
+                0.002719327579401225,
+                0.0032854107711739601,
+            ),
+            (
+                NewcombeWilson,
+                TABLE3,
+                0.5,
+                -0.13548840058295131,
+                0.78908326808475571,
+            ),
+        ] {
+            check(ci, t, effect * percent, lower * percent, upper * percent);
+        }
+        // The Wald intervals are not clipped to [-1, 1], unlike R's.
+        let r = DiffBetweenPropAsymptotic.run(3.0, 1.0, 4.0, 4.0, 0.95, 0.5);
+        assert!((r.lower - -10.011395954441349).abs() < 1e-9);
+        assert!(r.upper > 100.0);
     }
 
     #[test]
     fn ratio_intervals() {
         use SampleCi::*;
-        check(OddsRatio, TABLE1, 0.676046021596, 5.91675695474, 2.0);
+        check(
+            OddsRatio,
+            TABLE1,
+            2.0,
+            0.67604602159559535,
+            5.916756954739931,
+        );
         check(
             OddsRatio,
             TABLE2,
-            1.53926774059,
-            1.6732029238,
-            1.60483870968,
+            1.6048387096774201,
+            1.5392677405941568,
+            1.6732029238038484,
+        );
+        check(
+            OddsRatio,
+            TABLE3,
+            9.0,
+            0.36663693192554586,
+            220.92700692915727,
         );
         check(
             RatioProportions,
             TABLE1,
-            0.748767825898,
-            3.70979852726,
-            1.66666666666666,
+            1.6666666666666665,
+            0.74876782589755575,
+            3.7097985272644776,
         );
-        check(RatioProportions, TABLE2, 1.53505365781, 1.6676941467, 1.6);
+        check(
+            RatioProportions,
+            TABLE2,
+            1.6,
+            1.535053657807854,
+            1.6676941467022264,
+        );
+        check(
+            RatioProportions,
+            TABLE3,
+            3.0,
+            0.50128430938694102,
+            17.953883318244671,
+        );
     }
 
+    /// With a zero cell, 0.5 is added to every cell (the Haldane-Anscombe
+    /// correction), and the usual intervals are taken of the result: Woolf's
+    /// for the odds ratio and Katz's for the ratio of proportions. Checked
+    /// against the same R functions on the corrected tables:
+    /// `OddsRatio(matrix(c(0.5, 10.5, 5.5, 5.5), 2), method = "wald")` and
+    /// `BinomRatioCI(0.5, 11, 5.5, 11, method = "katz.log")`, computed here
+    /// from their closed forms.
     #[test]
     fn zero_counts_use_the_pseudocount() {
+        let r = SampleCi::OddsRatio.run(0.0, 5.0, 10.0, 10.0, 0.95, 0.5);
+        assert_eq!(r.note, PSEUDOCOUNT_USED);
+        let (a, b, c, d) = (0.5f64, 5.5f64, 10.5f64, 5.5f64);
+        let or = a * d / (b * c);
+        let se = (1.0 / a + 1.0 / b + 1.0 / c + 1.0 / d).sqrt();
+        let z = 1.959963984540054;
+        assert!((r.effect_size - or).abs() < 1e-12);
+        assert!((r.lower - (or.ln() - z * se).exp()).abs() < 1e-12);
+        assert!((r.upper - (or.ln() + z * se).exp()).abs() < 1e-12);
+
+        let r = SampleCi::RatioProportions.run(0.0, 5.0, 10.0, 10.0, 0.95, 0.5);
+        let rr = (0.5 / 11.0) / (5.5 / 11.0);
+        let se = (1.0 / 0.5 - 1.0 / 11.0 + 1.0 / 5.5 - 1.0 / 11.0f64).sqrt();
+        assert!((r.effect_size - rr).abs() < 1e-12);
+        assert!((r.lower - (rr.ln() - z * se).exp()).abs() < 1e-12);
+
         for ci in SampleCi::ALL {
             let r = ci.run(0.0, 5.0, 0.0, 10.0, 0.95, 0.5);
             assert_eq!(r.note, PSEUDOCOUNT_USED, "{ci:?}");

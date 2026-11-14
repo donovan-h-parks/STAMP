@@ -291,4 +291,59 @@ mod tests {
         close(chao2(&[1, 1, 3], 3), 3.0 + 2.0 / 3.0);
         close(chao2(&[2, 3], 0), 2.0);
     }
+
+    /// Reference values from R 4.4.3 with vegan 2.7.5:
+    /// - `rarefy(x, sample)`, the expected number of features in a random
+    ///   subsample (Hurlbert 1971);
+    /// - `estimateR(x)["S.chao1"]`, the bias-corrected Chao1;
+    /// - `specaccum(m, method = "exact")$richness`, the exact
+    ///   sample-based accumulation curve (Kindt's exact method);
+    /// - `specpool(m)$chao`, Chao2. vegan uses the bias-corrected form only
+    ///   when no feature is in exactly two samples, so it is compared there.
+    ///   Otherwise this crate keeps the bias-corrected form,
+    ///   S + ((m - 1) / m) Q1 (Q1 - 1) / (2 (Q2 + 1)) (Chao 1987; the
+    ///   EstimateS user's guide), checked by hand in `absence_and_chao2`.
+    #[test]
+    fn richness_estimates_match_vegan() {
+        let counts = [500, 300, 120, 50, 20, 5, 3, 1, 1];
+        let total = counts.iter().sum();
+        let curve = expected_richness(&counts, total, &[10, 100, 500]);
+        for (got, expected) in
+            curve
+                .iter()
+                .zip([3.3797848471086782, 5.7579321396274663, 7.8444369318917513])
+        {
+            close(*got, expected);
+        }
+        close(
+            expected_richness(&[3, 2, 1], 6, &[2])[0],
+            1.7333333333333329,
+        );
+        close(
+            expected_richness(&[3, 2, 1], 6, &[4])[0],
+            2.5999999999999996,
+        );
+
+        close(chao1(&[1, 1, 2, 5, 9]), 5.5);
+        close(chao1(&[1, 1, 1, 3]), 7.0);
+
+        // vegan's matrix(c(1,1,1, 1,1,0, 0,1,0, 1,0,0), nrow = 3): samples
+        // by rows, four features by columns.
+        let present = [[1, 1, 1], [1, 1, 0], [0, 1, 0], [1, 0, 0]];
+        let absent: Vec<Vec<f64>> = present
+            .iter()
+            .map(|row| row.iter().map(|&p| 1.0 - f64::from(p)).collect())
+            .collect();
+        let curve = accumulation(&absent, 3);
+        for (got, expected) in curve[1..]
+            .iter()
+            .zip([2.3333333333333335, 3.3333333333333335, 4.0])
+        {
+            close(*got, expected);
+        }
+
+        // rbind(c(1,1,0,0), c(1,0,1,0), c(1,0,0,1)): one feature in all
+        // three samples and three in one each.
+        close(chao2(&[3, 1, 1, 1], 3), 6.0);
+    }
 }

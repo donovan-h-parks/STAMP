@@ -46,6 +46,12 @@ GUI screenshots: the GUI tests render the real interface with a software rasteri
 STAMP_SCREENSHOTS=/some/dir cargo test -p stamp-gui --release --test ui
 ```
 
+Reference values for the statistics unit tests come from R, SciPy and scikit-bio; each test names its source. The R values are produced by `tests/reference/reference_values.R`:
+
+```bash
+cd tests/reference && pixi run Rscript reference_values.R
+```
+
 Reference outputs from the Python version (only needed when adding reference cases):
 
 ```bash

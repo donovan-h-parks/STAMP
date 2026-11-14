@@ -10,6 +10,18 @@ Idle. Roadmap tiers 1 to 4 are all done, committed and pushed. Nothing further i
 
 ## Last completed
 
+- **Review of the statistics against trusted references** (2026-11-15):
+  every test, post-hoc test, effect size, interval and correction in
+  `stamp-core/src/stats` now has unit tests whose values come from R 4.4.3
+  (stats, DescTools, PMCMRplus, dunn.test, vegan, qvalue), SciPy,
+  statsmodels or scikit-bio, each naming its source; the R values are
+  reproduced by `tests/reference/reference_values.R`. Fixed: the
+  Asymptotic-CC interval, exact Newcombe-Wilson limits, the hypergeometric
+  p-value cap, p-values below 1e-16, Storey's caps, the ratio-of-proportions
+  pseudocount (CHANGES_FROM_PYTHON bugs 22-27, behaviour 55). Golden tests
+  assert the intended relationship to v2's values. Then, at the user's
+  request, Kruskal-Wallis follows R for groups of any size (behaviour
+  change 56). Committed and pushed.
 - **Roadmap tier 4** (2026-11-14): ANCOM (`stats/ancom.rs`, matches
   scikit-bio 0.7.4), the Mantel test (`community::mantel`), NMDS
   (`diversity::nmds`), and the plots `PlotKind::{Ancom, Nmds,

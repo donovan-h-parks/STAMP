@@ -79,7 +79,19 @@ impl Correction {
             }
             Correction::Sidak => {
                 extra = Some(("Corrected error rate", 1.0 - (1.0 - alpha).powf(1.0 / n)));
-                p_values.iter().map(|p| 1.0 - (1.0 - p).powf(n)).collect()
+                // 1 - (1 - p)^n, without losing the digits of a small p.
+                p_values
+                    .iter()
+                    .map(|&p| {
+                        if p.is_finite() {
+                            -(n * (-p.clamp(0.0, 1.0)).ln_1p()).exp_m1()
+                        } else {
+                            // The infinite "p-value" of a test with no
+                            // one-sided form goes through as in v2.
+                            1.0 - (1.0 - p).powf(n)
+                        }
+                    })
+                    .collect()
             }
             Correction::HolmBonferroni => {
                 // Step-down: the i-th smallest p-value is multiplied by
@@ -178,18 +190,27 @@ fn storey(p_values: &[f64], rng: &mut StampRng) -> (Vec<f64>, f64) {
             best_lambda = lambda;
         }
     }
-    let pi0 = pi0_at(p_values, best_lambda);
+    // A proportion cannot exceed one; R's qvalue caps it the same way.
+    let pi0 = pi0_at(p_values, best_lambda).min(1.0);
+    (q_values(p_values, pi0), pi0)
+}
 
-    // q-values, from the largest p-value down.
+/// Storey's q-values for a given proportion of true null hypotheses:
+/// `pi0 * m * p / rank`, made non-decreasing in p from the largest down and
+/// capped at one, as R's qvalue computes them.
+fn q_values(p_values: &[f64], pi0: f64) -> Vec<f64> {
+    let count = p_values.len();
+    let n = count as f64;
     let mut order = ascending_order(p_values);
     order.reverse();
     let mut q_values = vec![0.0; count];
-    q_values[order[0]] = pi0 * p_values[order[0]];
-    for i in 1..count {
-        let candidate = pi0 * n * p_values[order[i]] / (n - i as f64);
-        q_values[order[i]] = candidate.min(q_values[order[i - 1]]);
+    let mut running: f64 = 1.0;
+    for (i, &index) in order.iter().enumerate() {
+        let candidate = pi0 * n * p_values[index] / (n - i as f64);
+        running = running.min(candidate);
+        q_values[index] = running;
     }
-    (q_values, pi0)
+    q_values
 }
 
 #[cfg(test)]
@@ -213,6 +234,63 @@ mod tests {
         }
     }
 
+    /// statsmodels 0.15.0:
+    /// `multipletests([0.01, 0.04, 0.03, 0.04, 0.9, 0.02], method = "sidak")`.
+    #[test]
+    fn sidak_matches_statsmodels() {
+        close(
+            &correct(Correction::Sidak, &[0.01, 0.04, 0.03, 0.04, 0.9, 0.02]),
+            &[
+                0.058519850599,
+                0.217242210304,
+                0.16702799507100002,
+                0.217242210304,
+                0.999999,
+                0.114157619136,
+            ],
+        );
+    }
+
+    /// R 4.4.3 with qvalue 2.38.0 (Bioconductor):
+    /// `qvalue(p, pi0 = 0.6)$qvalues` and `qvalue(p, pi0 = 1)$qvalues`, the
+    /// q-values for a given proportion of true null hypotheses, capped at
+    /// one; and `pi0est(p, lambda = 0.5)$pi0`, the estimate at one lambda,
+    /// which R caps at one.
+    #[test]
+    fn storey_q_values_match_qvalue() {
+        let p = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 0.3, 0.5, 0.7, 0.95];
+        close(
+            &q_values(&p, 0.6),
+            &[
+                5.9999999999999993e-06,
+                3.0000000000000001e-05,
+                0.00019999999999999998,
+                0.0015,
+                0.012,
+                0.099999999999999992,
+                0.25714285714285712,
+                0.375,
+                0.46666666666666667,
+                0.56999999999999995,
+            ],
+        );
+        close(
+            &q_values(&[0.2, 0.9, 0.99], 1.0),
+            &[
+                0.60000000000000009,
+                0.98999999999999988,
+                0.98999999999999988,
+            ],
+        );
+        // Uniform p-values estimate pi_0 at one, not above it: by itself,
+        // #(p > 0.5) / (m (1 - 0.5)) is 1.0 here, and over one for other
+        // lambdas; the estimate is capped as R caps it.
+        let uniform: Vec<f64> = (1..=200).map(|i| i as f64 / 200.0).collect();
+        let r = Correction::Storey.correct(&uniform, 0.05, &mut rng_from_seed(3));
+        assert!(r.info[1].1 <= 1.0);
+        assert!(r.values.iter().all(|q| *q <= 1.0));
+    }
+
     #[test]
     fn simple_corrections() {
         close(&correct(Correction::None, &P), &P);
@@ -221,7 +299,9 @@ mod tests {
             &[6e-6, 6e-5, 6e-4, 6e-3, 6e-2, 6e-1],
         );
         let sidak: Vec<f64> = P.iter().map(|p| 1.0 - (1.0 - p).powi(6)).collect();
-        close(&correct(Correction::Sidak, &P), &sidak);
+        for (a, e) in correct(Correction::Sidak, &P).iter().zip(&sidak) {
+            assert!((a - e).abs() < 1e-10 * e, "{a} against {e}");
+        }
         // Bonferroni never reports a corrected p-value above one.
         close(&correct(Correction::Bonferroni, &[0.5, 0.01]), &[1.0, 0.02]);
     }

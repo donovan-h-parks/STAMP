@@ -1,0 +1,17 @@
+[workspace]
+name = "stamp-reference-values"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+r-base = "4.4.*"
+r-desctools = "*"
+"r-dunn.test" = "*"
+r-pmcmrplus = "*"
+r-vegan = "*"
+r-binom = "*"
+bioconductor-qvalue = "*"
+statsmodels = "*"
+scikit-posthocs = "*"
+scipy = "*"
+python = "3.11.*"

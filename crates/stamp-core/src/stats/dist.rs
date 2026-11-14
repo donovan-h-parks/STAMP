@@ -467,19 +467,21 @@ mod tests {
         );
     }
 
-    // Reference values from the original STAMP unit tests.
+    // Reference values from R 4.4.3: `pnorm(c(-2, -1, 0, 1, 2))` and
+    // `qnorm(c(0.95, 0.975, 0.90))`, the two-sided critical values for 90%,
+    // 95% and 80% coverage.
     #[test]
     fn normal_distribution() {
-        close(normal_cdf(-2.0), 0.022750131948179209, 1e-14);
+        close(normal_cdf(-2.0), 0.022750131948179212, 1e-14);
         close(normal_cdf(-1.0), 0.15865525393145705, 1e-14);
         close(normal_cdf(0.0), 0.5, 1e-15);
         close(normal_cdf(1.0), 0.84134474606854293, 1e-14);
         close(normal_cdf(2.0), 0.97724986805182079, 1e-14);
         close(normal_cdf(-1e-6), 1.0 - normal_cdf(1e-6), 1e-15);
 
-        close(z_score(0.90), 1.6448536269514722, 0.0);
-        close(z_score(0.95), 1.959963984540054, 0.0);
-        close(z_score(0.80), 1.2815515655446004, 1e-13);
+        close(z_score(0.90), 1.6448536269514715, 1e-15);
+        close(z_score(0.95), 1.9599639845400536, 1e-15);
+        close(z_score(0.80), 1.2815515655446008, 1e-13);
         // The tabulated values agree with the general formula.
         close(erf_inv(0.95) * SQRT_2, z_score(0.95), 1e-13);
         close(erf_inv(0.99) * SQRT_2, z_score(0.99), 1e-13);
@@ -584,6 +586,41 @@ mod tests {
         }
         assert_eq!(studentized_range_cdf(0.0, 3.0, 10.0), 0.0);
         assert!(studentized_range_cdf(1.0, 1.0, 10.0).is_nan());
+    }
+
+    /// Reference values from R 4.4.3: `ptukey(q, k, df)`, and the upper 5%
+    /// points found by solving `ptukey(q, k, df) = 0.95` with
+    /// `uniroot(..., tol = 1e-14)`. (R's own `qtukey` is documented as
+    /// accurate to about four decimal places, so it is not used here.) The
+    /// distribution is computed here from a tabulated normal range for
+    /// speed, which keeps it within 2e-7 of R.
+    #[test]
+    fn studentized_range_matches_r() {
+        for (q, k, df, p) in [
+            (3.5, 3.0, 10.0, 0.9228966891613396),
+            (2.0, 5.0, 20.0, 0.37392248758856811),
+            (4.2, 4.0, 7.0, 0.92211325466151806),
+            (5.0, 10.0, 60.0, 0.9747157801917441),
+            (3.0, 3.0, 5.3, 0.82494964917493219),
+        ] {
+            close(studentized_range_cdf(q, k, df), p, 2e-7);
+        }
+        for (k, df, q) in [
+            (3.0, 5.3, 4.5100339446984119),
+            (3.0, 10.0, 3.8767767500178225),
+            (3.0, 60.0, 3.3986612409062702),
+            (4.0, 7.0, 4.6812756715249924),
+            (4.0, 20.0, 3.9582935609640937),
+            (5.0, 10.0, 4.6542929979212522),
+            (10.0, 5.3, 6.8198920941559864),
+            (10.0, 60.0, 4.6463239637879559),
+        ] {
+            let got = studentized_range_ppf(0.95, k, df);
+            assert!(
+                (got - q).abs() < 1e-6 * q,
+                "q(0.95, {k}, {df}) = {got}, not {q}"
+            );
+        }
         assert!(studentized_range_ppf(1.0, 3.0, 10.0).is_nan());
     }
 

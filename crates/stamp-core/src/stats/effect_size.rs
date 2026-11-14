@@ -52,11 +52,14 @@ impl SampleEffectSize {
             }
             SampleEffectSize::RatioProportions => {
                 let (mut seq1, mut seq2, mut total1, mut total2) = (seq1, seq2, total1, total2);
+                // As the confidence interval does: the pseudocount is added
+                // to both cells of each sample (feature and the rest), so
+                // each total grows by twice the pseudocount.
                 if seq1 == 0.0 || seq2 == 0.0 {
                     seq1 += pseudocount;
                     seq2 += pseudocount;
-                    total1 += pseudocount;
-                    total2 += pseudocount;
+                    total1 += 2.0 * pseudocount;
+                    total2 += 2.0 * pseudocount;
                 }
                 (seq1 / total1) / (seq2 / total2)
             }
@@ -177,43 +180,44 @@ mod tests {
 
     fn close(actual: f64, expected: f64) {
         assert!(
-            (actual - expected).abs() < 5e-8,
+            (actual - expected).abs() <= 1e-12 * expected.abs().max(1.0),
             "expected {expected}, got {actual}"
         );
     }
 
-    // Expected values from the original STAMP unit tests.
+    /// Reference values from R 4.4.3 with DescTools 0.99.59 for the tables
+    /// (feature in sample 1, feature in sample 2, total 1, total 2):
+    /// `BinomDiffCI(...)[1]` for the difference between proportions (in
+    /// percent), `OddsRatio(matrix(c(s1, t1 - s1, s2, t2 - s2), 2))` and
+    /// `BinomRatioCI(s1, t1, s2, t2)[1]` for the ratio of proportions.
     #[test]
     fn sample_effect_sizes() {
         use SampleEffectSize::*;
-        close(
-            DiffBetweenProp.run(10.0, 8.0, 30.0, 40.0, 0.5),
-            13.333333333,
-        );
-        close(
-            DiffBetweenProp.run(4000.0, 5000.0, 500000.0, 1000000.0, 0.5),
-            0.3,
-        );
-        close(OddsRatio.run(10.0, 8.0, 30.0, 40.0, 0.5), 2.0);
-        close(
-            OddsRatio.run(4000.0, 5000.0, 500000.0, 1000000.0, 0.5),
-            1.60483870968,
-        );
-        close(
-            RatioProportions.run(10.0, 8.0, 30.0, 40.0, 0.5),
-            1.66666666666666,
-        );
-        close(
-            RatioProportions.run(4000.0, 5000.0, 500000.0, 1000000.0, 0.5),
-            1.6,
-        );
+        let table1 = (10.0, 8.0, 30.0, 40.0);
+        let table2 = (4000.0, 5000.0, 500000.0, 1000000.0);
+        let run = |e: SampleEffectSize, t: (f64, f64, f64, f64)| e.run(t.0, t.1, t.2, t.3, 0.5);
+        close(run(DiffBetweenProp, table1), 13.333333333333330);
+        close(run(DiffBetweenProp, table2), 0.30000000000000001);
+        close(run(OddsRatio, table1), 2.0);
+        close(run(OddsRatio, table2), 1.6048387096774201);
+        close(run(RatioProportions, table1), 1.6666666666666665);
+        close(run(RatioProportions, table2), 1.6);
+        // The magnitude is the same whichever sample is first.
         close(
             RatioProportions.magnitude(8.0, 10.0, 40.0, 30.0, 0.5),
-            1.66666666666666,
+            1.6666666666666665,
         );
         close(
             DiffBetweenProp.magnitude(8.0, 10.0, 40.0, 30.0, 0.5),
-            13.333333333,
+            13.333333333333330,
+        );
+        // A zero cell: 0.5 is added to every cell, as for the confidence
+        // intervals (the Haldane-Anscombe correction), so the totals grow
+        // by one: (0.5 / 11) / (5.5 / 11).
+        close(RatioProportions.run(0.0, 5.0, 10.0, 10.0, 0.5), 0.5 / 5.5);
+        close(
+            OddsRatio.run(0.0, 5.0, 10.0, 10.0, 0.5),
+            0.5 * 5.5 / (5.5 * 10.5),
         );
     }
 
@@ -246,6 +250,8 @@ mod tests {
             .is_finite());
     }
 
+    /// Reference values from R 4.4.3 with DescTools 0.99.59:
+    /// `EtaSq(aov(y ~ g))`, the between-group sum of squares over the total.
     #[test]
     fn eta_squared_values() {
         let g = |v: &'static [f64]| v;
@@ -255,7 +261,7 @@ mod tests {
                 g(&[2.0, 3.0, 4.0]),
                 g(&[1.0, 2.0, 3.0, 4.0]),
             ]),
-            0.545454545 / 12.545454545,
+            0.04347826086956532,
         );
         close(
             eta_squared(&[
@@ -264,7 +270,15 @@ mod tests {
                 g(&[4.0, 5.0, 4.0]),
                 g(&[5.0, 5.0, 5.0]),
             ]),
-            2348.27083333 / 3358.9375,
+            0.69911120207903055,
+        );
+        close(
+            eta_squared(&[
+                g(&[5.0, 4.0, 6.0, 4.0, 3.0]),
+                g(&[5.0, 2.0, 2.0, 5.0, 6.0, 7.0]),
+                g(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]),
+            ]),
+            0.016383616383616389,
         );
         assert_eq!(eta_squared(&[g(&[1.0, 1.0]), g(&[1.0])]), -1.0);
         assert_eq!(eta_squared(&[g(&[1.0, 2.0]), g(&[])]), -1.0);

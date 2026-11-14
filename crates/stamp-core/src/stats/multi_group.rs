@@ -92,12 +92,16 @@ fn anova(groups: &[&[f64]]) -> (f64, &'static str) {
     }
 }
 
-/// Kruskal-Wallis H-test, with correction for ties.
+/// Kruskal-Wallis H-test, with correction for ties, as R's `kruskal.test`
+/// computes it: for groups of any size, the p-value from the chi-square
+/// approximation. Groups without samples are left out. (STAMP v2 refused
+/// groups of fewer than five samples and reported p = 1.)
 fn kruskal_wallis(groups: &[&[f64]]) -> (f64, &'static str) {
-    if groups.iter().any(|g| g.len() < 5) {
+    let groups: Vec<&[f64]> = groups.iter().copied().filter(|g| !g.is_empty()).collect();
+    if groups.len() < 2 {
         return (
             1.0,
-            "degenerate case: at least one group contains less than 5 samples",
+            "degenerate case: fewer than two groups contain samples",
         );
     }
     let all: Vec<f64> = groups.iter().flat_map(|g| g.iter().copied()).collect();
@@ -130,7 +134,7 @@ fn kruskal_wallis(groups: &[&[f64]]) -> (f64, &'static str) {
 
     let mut rank_term = 0.0;
     let mut offset = 0;
-    for group in groups {
+    for group in &groups {
         let rank_sum: f64 = ranks[offset..offset + group.len()].iter().sum();
         rank_term += rank_sum * rank_sum / group.len() as f64;
         offset += group.len();
@@ -149,12 +153,13 @@ mod tests {
 
     fn close(actual: f64, expected: f64) {
         assert!(
-            (actual - expected).abs() < 5e-8,
+            (actual - expected).abs() <= 1e-9 * expected.abs() + 1e-14,
             "expected {expected}, got {actual}"
         );
     }
 
-    // Expected values from the original STAMP unit tests.
+    // Reference values from R 4.4.3: `oneway.test(y ~ g, var.equal = TRUE)`
+    // for ANOVA and `kruskal.test(y, g)` for the Kruskal-Wallis test.
     #[test]
     fn anova_values() {
         use MultiGroupTest::Anova;
@@ -167,7 +172,7 @@ mod tests {
                     &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
                 ],
             ),
-            0.88347274205,
+            0.88347274205030968,
         );
         close(
             p(
@@ -179,7 +184,7 @@ mod tests {
                     &[5.0, 5.0, 5.0],
                 ],
             ),
-            0.0018740823031,
+            0.001874082303100263,
         );
         close(
             p(
@@ -190,7 +195,7 @@ mod tests {
                     &[700.0, 800.0, 700.0],
                 ],
             ),
-            0.0,
+            3.0661478703352848e-13,
         );
         let same: &[f64] = &[1.0, 2.0, 3.0, 4.0, 5.0];
         close(p(Anova, &[same, same, same]), 1.0);
@@ -208,14 +213,47 @@ mod tests {
                     &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
                 ],
             ),
-            0.88173680194259985,
+            0.88173680194259973,
         );
         let a: Vec<f64> = (1..=7).map(f64::from).collect();
         let b: Vec<f64> = (8..=15).map(f64::from).collect();
         let c: Vec<f64> = (16..=22).map(f64::from).collect();
-        close(p(KruskalWallis, &[&a, &b, &c]), 8.8020161301173428e-05);
+        close(p(KruskalWallis, &[&a, &b, &c]), 8.8020161301173387e-05);
         let same: &[f64] = &[1.0, 2.0, 3.0, 4.0, 5.0];
         close(p(KruskalWallis, &[same, same, same]), 1.0);
+    }
+
+    /// Small groups, which STAMP v2 refused (reporting p = 1). Reference
+    /// values from R 4.4.3: `kruskal.test(y, g)$p.value`.
+    #[test]
+    fn kruskal_wallis_small_groups_match_r() {
+        use MultiGroupTest::KruskalWallis;
+        close(
+            p(
+                KruskalWallis,
+                &[&[1.0, 2.0, 3.0, 4.0], &[1.0, 2.0, 3.0, 4.0, 5.0]],
+            ),
+            0.61829172084641981,
+        );
+        close(
+            p(KruskalWallis, &[&[1.5, 2.5], &[3.0, 4.0, 5.0], &[0.5]]),
+            0.11731916609425083,
+        );
+        close(
+            p(
+                KruskalWallis,
+                &[&[1.0, 1.0, 2.0], &[2.0, 3.0, 3.0], &[3.0, 4.0, 4.0, 4.0]],
+            ),
+            0.024445959738605923,
+        );
+        close(p(KruskalWallis, &[&[1.0], &[2.0]]), 0.31731050786291415);
+        // An empty group is left out, as R drops unused factor levels.
+        close(
+            p(KruskalWallis, &[&[1.5, 2.5], &[], &[3.0, 4.0, 5.0], &[0.5]]),
+            0.11731916609425083,
+        );
+        let (_, note) = KruskalWallis.run(&[&[1.5, 2.5], &[3.0, 4.0, 5.0], &[0.5]]);
+        assert_eq!(note, "");
     }
 
     #[test]
@@ -230,10 +268,11 @@ mod tests {
             (1.0, "degenerate case: failed to calculate p-value")
         );
 
-        let (p, note) =
-            MultiGroupTest::KruskalWallis.run(&[&[1.0, 2.0, 3.0, 4.0], &[1.0, 2.0, 3.0, 4.0, 5.0]]);
+        // Fewer than two groups with samples.
+        let (p, note) = MultiGroupTest::KruskalWallis.run(&[&[1.0, 2.0, 3.0], &[]]);
         assert_eq!(p, 1.0);
-        assert!(note.contains("less than 5 samples"));
+        assert!(note.contains("fewer than two groups"), "{note}");
+
         let constant: &[f64] = &[2.0; 5];
         let (p, note) = MultiGroupTest::KruskalWallis.run(&[constant, constant]);
         assert_eq!(
