@@ -110,7 +110,9 @@ fn choose_plot(ui: &mut egui::Ui, mode: Mode, current: &mut PlotKind) -> bool {
                 if index > 0 {
                     ui.add_space(5.0);
                 }
-                ui.label(egui::RichText::new(group.name()).strong().small());
+                // One point larger than egui's small text.
+                let heading = egui::TextStyle::Small.resolve(ui.style()).size + 1.0;
+                ui.label(egui::RichText::new(group.name()).strong().size(heading));
                 let mut divided = false;
                 for kind in kinds {
                     if kind.checks_the_tests() && !divided {
