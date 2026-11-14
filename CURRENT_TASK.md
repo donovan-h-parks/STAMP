@@ -6,13 +6,23 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle, **waiting on the user**: roadmap tier 1 is done, and they asked to be
-prompted for tiers 2, 3 and 4 in order (`docs/ROADMAP.md`). Tier 2 (alpha
-diversity, distances, PCoA, PERMANOVA/PERMDISP/ANOSIM, distance box plot,
-normalisation) is next and has not been started.
+Idle, **waiting on the user for the go-ahead on roadmap tier 3** (numeric
+metadata, paired tests, CLR; see `docs/ROADMAP.md`). The instruction was to
+prompt for tiers 2 to 4 in order, so do not start tier 3 or 4 unasked.
 
 ## Last completed
 
+- **Roadmap tier 2** (2026-11-14): alpha diversity, distances
+  (Bray-Curtis, Jaccard, Aitchison) and PCoA in
+  `stamp-core/src/stats/diversity.rs`; PERMANOVA, PERMDISP and ANOSIM in
+  `stats/community.rs`; the plots in `stamp-plot/src/community_plots.rs`
+  (`PlotKind::AlphaDiversity`, `Pcoa`, `DistanceBox`, in the two group
+  modes) with their Configure plot groups and `--plot-type
+  alpha-diversity|pcoa|distance-box` (`--alpha-metric`, `--distance`,
+  `--rarefy`). Values checked against scikit-bio 0.7.4. Chao1 and Chao2
+  switched to the bias-corrected form. Unclassified categories are not
+  features in these analyses. Tests, lint and web bundle done; check
+  `git status` for whether it is committed.
 - **Roadmap tier 1** (2026-11-14): Mann-Whitney U test
   (`GroupTest::MannWhitney`), Dunn's post-hoc test (`PostHocTest::Dunn`),
   volcano plot (`stamp-plot/src/volcano.rs`) and composition bar plot
@@ -47,10 +57,11 @@ normalisation) is next and has not been started.
 
 ## State of the repository
 
-- Branch `rust-port`, pushed to `origin` up to `5113b3f` (tag
+- Branch `rust-port`, pushed to `origin` up to `b5f1820` (tag
   `feature-parity` is on `6b834ba`).
-- Everything up to the example data sub-menu is committed and pushed
-  (`5113b3f`). The group-level curves are uncommitted work in progress.
+- Tier 1 is committed locally as `466fc38` and **not pushed** (the user
+  asked for a commit only). Tier 2 is uncommitted unless `git log` shows
+  otherwise.
 
 ## Next
 

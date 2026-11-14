@@ -17,6 +17,7 @@
 
 pub mod axes;
 pub mod axis;
+pub mod community_plots;
 pub mod composition;
 pub mod export;
 pub mod extended_error_bar;

@@ -856,8 +856,8 @@ mod tests {
         );
         assert!(tooltip(2).contains("2 of 2 samples: 5.0 features expected"));
         assert!(tooltip(2).contains("Features observed in all 2: 5"));
-        // Chao2: 5 + (1 / 2) * 2 * 2 / (2 * 3).
-        assert!(tooltip(2).contains("Chao2 estimate: 5.3"), "{}", tooltip(2));
+        // Chao2: 5 + (1 / 2) * 2 * 1 / (2 * 4).
+        assert!(tooltip(2).contains("Chao2 estimate: 5.1"), "{}", tooltip(2));
         // A mark for every number of samples of every group: 2 for A, 1 for B.
         let marks = figure
             .shapes

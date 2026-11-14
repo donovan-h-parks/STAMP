@@ -48,6 +48,29 @@ Add an entry here whenever a feature is added that v2 did not have.
   with the Bonferroni adjustment. Its confidence intervals are Welch
   intervals at the adjusted level, since the test itself gives none.
 
+- **Tests on the community as a whole**, for two or more groups, on the
+  distances between samples: **PERMANOVA** (do the groups differ?),
+  **PERMDISP** (do the groups differ in how spread out their samples are,
+  which can by itself make PERMANOVA significant?) and **ANOSIM** (the
+  older rank-based alternative). Each p-value comes from permuting the
+  group labels (999 times unless changed), with the random numbers seeded
+  so that a result can be repeated. The statistics agree with scikit-bio.
+  They are written above the PCoA plot, and printed by the command line
+  when it draws one.
+- **Distances between samples**: Bray-Curtis (on proportions), Jaccard (on
+  which features are present) and Aitchison (Euclidean distance after the
+  centred log-ratio transform, with zeros replaced multiplicatively).
+- **Alpha diversity** of each sample: observed features, the Shannon index
+  (natural logarithm), the Simpson index (1 - sum of squared proportions)
+  and the Chao1 estimate, compared between groups with the Kruskal-Wallis
+  H-test.
+- **A stated normalisation** for these analyses: the proportions of each
+  sample as they are, or every sample rarefied (randomly subsampled,
+  seeded) to the depth of the smallest sample, which the plot then states.
+  Rarefying needs counts of sequences, as does Chao1; a profile of
+  fractional values is refused with a message. As for rarefaction curves,
+  unclassified categories are not counted as features.
+
 - **Computed post-hoc p-values.** Tukey-Kramer and Games-Howell report a
   p-value rather than a bound such as `< 0.05`, and confidence intervals at
   any coverage rather than five tabulated ones [47].
@@ -76,6 +99,20 @@ Add an entry here whenever a feature is added that v2 did not have.
   Dashed lines mark the thresholds. Corrected or uncorrected p-values can
   be plotted, features can be highlighted, and clicking a point selects
   the feature. On the command line: `--plot-type volcano`.
+- **Alpha diversity box plot**, for two groups and multiple groups: a box
+  for each group of the chosen diversity measure of its samples, with the
+  Kruskal-Wallis p-value. On the command line:
+  `--plot-type alpha-diversity`, with
+  `--alpha-metric observed|shannon|simpson|chao1` and `--rarefy`.
+- **PCoA plot**, for two groups and multiple groups: the samples laid out
+  by principal coordinates analysis of a chosen distance, beside the
+  existing PCA plot and with the same options, with the outcome of
+  PERMANOVA, ANOSIM and PERMDISP above it. On the command line:
+  `--plot-type pcoa`, with `--distance bray-curtis|jaccard|aitchison`.
+- **Distance box plot**, for two groups and multiple groups: the distances
+  between samples of the same group, group by group, beside the distances
+  between samples of different groups. On the command line:
+  `--plot-type distance-box`.
 - **Composition bar plot**, in all three analysis types: a stacked bar for
   each sample, or the mean of each group, showing the most abundant
   features in their own colours and the rest as "Other". A strip beneath
@@ -107,7 +144,8 @@ Add an entry here whenever a feature is added that v2 did not have.
     of the smallest sample (for curves by number of samples, rarefying
     every sample to that depth first, so that deep samples do not count
     for more); the Chao estimate as a dashed line (Chao1 against
-    sequences, Chao2 against samples); labels at the curve ends; and the
+    sequences, Chao2 against samples; both in the bias-corrected form,
+    which is defined when no feature is seen exactly twice); labels at the curve ends; and the
     legend position.
   - A profile must hold counts of sequences. One with fractional values
     (proportions, normalised counts) is refused with a message.

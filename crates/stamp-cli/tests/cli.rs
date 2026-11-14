@@ -840,6 +840,47 @@ fn every_plot_type_can_be_drawn() {
         "rarefaction-accumulated",
     );
     assert!(has(&accumulated, "Number of samples"));
+    // The community plots: diversity, ordination by distance, distances.
+    let alpha = svg_plot(
+        "multi-groups",
+        &coal,
+        &[
+            "--plot-type",
+            "alpha-diversity",
+            "--alpha-metric",
+            "observed",
+            "--rarefy",
+        ],
+        &directory,
+        "alpha",
+    );
+    assert!(has(&alpha, "Observed features"));
+    let pcoa = svg_plot(
+        "multi-groups",
+        &coal,
+        &["--plot-type", "pcoa", "--distance", "jaccard"],
+        &directory,
+        "pcoa",
+    );
+    assert!(has(&pcoa, "Jaccard distance") && pcoa.contains("PERMANOVA: pseudo-F = "));
+    let boxes = svg_plot(
+        "two-groups",
+        &[
+            "--profile",
+            "examples/CoalSeamGas/coal.spf",
+            "--metadata",
+            "examples/CoalSeamGas/coal.metadata.tsv",
+            "--field",
+            "Core vs. Water",
+            "--group1",
+            "Core",
+        ],
+        &["--plot-type", "distance-box"],
+        &directory,
+        "distance-box",
+    );
+    assert!(has(&boxes, "Core") && has(&boxes, "Between groups"));
+
     let unwritten = directory.join("rarefaction-fractions.svg");
     assert!(failure(&with(
         "multi-groups",

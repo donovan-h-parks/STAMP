@@ -1,8 +1,11 @@
 //! Choosing a plot and building its figure from the session's results.
 
+use stamp_core::stats::diversity::{AlphaMetric, Distance, Normalisation};
 use stamp_core::stats::results::format_p_value;
+use stamp_core::stats::rng_from_seed;
 use stamp_plot::axes::LegendPosition;
 use stamp_plot::axes::AXES_COLOR;
+use stamp_plot::community_plots::{self, Community};
 use stamp_plot::extended_error_bar::{self, SAMPLE1_COLOR, SAMPLE2_COLOR};
 use stamp_plot::{
     composition, feature_plots, heatmap, histogram, pca_plot, post_hoc, rarefaction, sample_plots,
@@ -28,6 +31,9 @@ pub enum PlotKind {
     Rarefaction,
     Volcano,
     Composition,
+    AlphaDiversity,
+    Pcoa,
+    DistanceBox,
 }
 
 impl PlotKind {
@@ -47,6 +53,9 @@ impl PlotKind {
             PlotKind::Rarefaction => "Rarefaction curves",
             PlotKind::Volcano => "Volcano plot",
             PlotKind::Composition => "Composition bar plot",
+            PlotKind::AlphaDiversity => "Alpha diversity box plot",
+            PlotKind::Pcoa => "PCoA plot",
+            PlotKind::DistanceBox => "Distance box plot",
         }
     }
 
@@ -75,6 +84,9 @@ impl PlotKind {
                 PlotKind::Rarefaction,
                 PlotKind::Volcano,
                 PlotKind::Composition,
+                PlotKind::AlphaDiversity,
+                PlotKind::Pcoa,
+                PlotKind::DistanceBox,
             ],
             Mode::MultipleGroups => &[
                 PlotKind::Pca,
@@ -85,6 +97,9 @@ impl PlotKind {
                 PlotKind::Rarefaction,
                 PlotKind::Volcano,
                 PlotKind::Composition,
+                PlotKind::AlphaDiversity,
+                PlotKind::Pcoa,
+                PlotKind::DistanceBox,
             ],
         }
     }
@@ -147,6 +162,19 @@ pub struct PlotSettings {
     pub rarefaction: rarefaction::Options,
     pub volcano: volcano::Options,
     pub composition: composition::Options,
+    /// How samples are made comparable for the diversity plots, the
+    /// distance between samples they use, and the number of permutations
+    /// of the community tests.
+    pub community_normalisation: Normalisation,
+    pub community_distance: Distance,
+    pub community_permutations: usize,
+    pub alpha_metric: AlphaMetric,
+    pub alpha_box: feature_plots::BoxOptions,
+    pub pcoa: pca_plot::Options,
+    /// Write the outcome of PERMANOVA, ANOSIM and PERMDISP above the PCoA
+    /// plot.
+    pub pcoa_show_tests: bool,
+    pub distance_box: feature_plots::BoxOptions,
     /// Draw only the features that pass the filters in the heatmap.
     pub heatmap_only_active: bool,
     /// Show sequence counts instead of proportions in the heatmap.
@@ -221,6 +249,23 @@ impl Default for PlotSettings {
             rarefaction: rarefaction::Options::default(),
             volcano: volcano::Options::default(),
             composition: composition::Options::default(),
+            community_normalisation: Normalisation::Proportions,
+            community_distance: Distance::BrayCurtis,
+            community_permutations: 999,
+            alpha_metric: AlphaMetric::Shannon,
+            alpha_box: feature_plots::BoxOptions {
+                height: 6.0,
+                ..Default::default()
+            },
+            pcoa: pca_plot::Options {
+                legend,
+                ..Default::default()
+            },
+            pcoa_show_tests: true,
+            distance_box: feature_plots::BoxOptions {
+                height: 6.0,
+                ..Default::default()
+            },
             heatmap_only_active: false,
             heatmap_sequence_counts: false,
             highlighted: Vec::new(),
@@ -271,6 +316,23 @@ impl PlotSettings {
             PlotKind::Rarefaction => self.rarefaction = defaults.rarefaction,
             PlotKind::Volcano => self.volcano = defaults.volcano,
             PlotKind::Composition => self.composition = defaults.composition,
+            PlotKind::AlphaDiversity | PlotKind::Pcoa | PlotKind::DistanceBox => {
+                match kind {
+                    PlotKind::AlphaDiversity => {
+                        self.alpha_metric = defaults.alpha_metric;
+                        self.alpha_box = defaults.alpha_box;
+                    }
+                    PlotKind::Pcoa => {
+                        self.pcoa = defaults.pcoa;
+                        self.pcoa_show_tests = defaults.pcoa_show_tests;
+                    }
+                    _ => self.distance_box = defaults.distance_box,
+                }
+                // The three plots share these.
+                self.community_normalisation = defaults.community_normalisation;
+                self.community_distance = defaults.community_distance;
+                self.community_permutations = defaults.community_permutations;
+            }
             PlotKind::Heatmap => {
                 self.heatmap = defaults.heatmap;
                 self.heatmap_only_active = defaults.heatmap_only_active;
@@ -306,6 +368,53 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
         });
     }
     figure
+}
+
+/// One of the plots of whole communities, for some samples and their groups.
+fn community_plot(
+    session: &Session,
+    kind: PlotKind,
+    samples: &[String],
+    sample_groups: Vec<usize>,
+    groups: Vec<String>,
+    colors: Vec<Color>,
+    settings: &PlotSettings,
+) -> Figure {
+    let Some(tree) = &session.tree else {
+        return Figure::message(NO_RESULTS);
+    };
+    // The same seed as the tests, so that the same samples are drawn and
+    // the same permutations made every time.
+    let mut rng = rng_from_seed(session.seed);
+    let community = Community::from_tree(
+        tree,
+        samples,
+        &session.profile_level,
+        sample_groups,
+        groups,
+        settings.community_normalisation,
+        &mut rng,
+    );
+    let mut community = match community {
+        Ok(community) => community,
+        Err(message) => return Figure::message(&message),
+    };
+    community.group_colors = colors;
+    let distance = settings.community_distance;
+    match kind {
+        PlotKind::AlphaDiversity => {
+            community_plots::alpha_plot(&community, settings.alpha_metric, &settings.alpha_box)
+        }
+        PlotKind::Pcoa => community_plots::pcoa_plot(
+            &community,
+            distance,
+            settings
+                .pcoa_show_tests
+                .then_some((settings.community_permutations, &mut rng)),
+            &settings.pcoa,
+        ),
+        _ => community_plots::distance_box_plot(&community, distance, &settings.distance_box),
+    }
 }
 
 /// The rarefaction curves of some samples, coloured by group.
@@ -575,6 +684,21 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     data.group_colors = vec![color1, color2];
                     composition::plot(&data, &settings.composition)
                 }
+                PlotKind::AlphaDiversity | PlotKind::Pcoa | PlotKind::DistanceBox => {
+                    let first = profile.samples_in_group1().len();
+                    let samples = &profile.profile.sample_names;
+                    community_plot(
+                        session,
+                        kind,
+                        samples,
+                        (0..samples.len())
+                            .map(|i| usize::from(i >= first))
+                            .collect(),
+                        vec![profile.group_name1.clone(), profile.group_name2.clone()],
+                        vec![color1, color2],
+                        settings,
+                    )
+                }
                 _ => Figure::message("This plot is not available for two groups"),
             }
         }
@@ -683,6 +807,22 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     );
                     data.group_colors = colors.clone();
                     composition::plot(&data, &settings.composition)
+                }
+                PlotKind::AlphaDiversity | PlotKind::Pcoa | PlotKind::DistanceBox => {
+                    community_plot(
+                        session,
+                        kind,
+                        &profile.profile.sample_names,
+                        profile
+                            .samples_in_groups()
+                            .iter()
+                            .enumerate()
+                            .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                            .collect(),
+                        profile.group_names.clone(),
+                        colors.clone(),
+                        settings,
+                    )
                 }
                 _ => Figure::message("This plot is not available for multiple groups"),
             }

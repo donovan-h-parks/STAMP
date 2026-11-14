@@ -131,9 +131,35 @@ pub struct PlotArgs {
     /// Show uncorrected p-values in the plot
     #[arg(long)]
     pub plot_uncorrected_p_values: bool,
+    /// Measure of the alpha diversity plot
+    #[arg(long, value_enum, default_value_t = AlphaMetricArg::Shannon)]
+    pub alpha_metric: AlphaMetricArg,
+    /// Distance between samples for the PCoA and distance box plots
+    #[arg(long, value_enum, default_value_t = DistanceArg::BrayCurtis)]
+    pub distance: DistanceArg,
+    /// Rarefy every sample to the depth of the smallest before measuring
+    /// diversity or distances (needs counts of sequences)
+    #[arg(long)]
+    pub rarefy: bool,
     /// What each curve of a rarefaction plot stands for
     #[arg(long, value_enum, default_value_t = RarefactionCurvesArg::Samples)]
     pub rarefaction_curves: RarefactionCurvesArg,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum AlphaMetricArg {
+    /// Number of features present
+    Observed,
+    Shannon,
+    Simpson,
+    Chao1,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum DistanceArg {
+    BrayCurtis,
+    Jaccard,
+    Aitchison,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
@@ -176,6 +202,12 @@ pub enum PlotTypeArg {
     Volcano,
     /// Stacked bars of the most abundant features of each sample
     Composition,
+    /// Diversity within the samples of each group
+    AlphaDiversity,
+    /// Samples placed by the distances between them, with community tests
+    Pcoa,
+    /// Distances between samples within and between groups
+    DistanceBox,
 }
 
 #[derive(Clone, Copy, ValueEnum)]

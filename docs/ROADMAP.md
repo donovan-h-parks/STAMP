@@ -22,14 +22,14 @@ ordination on them, and tests on them), which is where most studies begin.
 
 ## Tier 2: the community as a whole
 
-- [ ] **Alpha diversity**: observed richness, Shannon, Simpson and Chao1 for
+- [x] **Alpha diversity**: observed richness, Shannon, Simpson and Chao1 for
   each sample; a box plot by group; a test between groups.
-- [ ] **Distances between samples**: Bray-Curtis, Jaccard and Aitchison.
-- [ ] **PCoA** on a chosen distance, beside the existing PCA.
-- [ ] **PERMANOVA**, with **PERMDISP** to tell a difference in location from
+- [x] **Distances between samples**: Bray-Curtis, Jaccard and Aitchison.
+- [x] **PCoA** on a chosen distance, beside the existing PCA.
+- [x] **PERMANOVA**, with **PERMDISP** to tell a difference in location from
   a difference in spread; **ANOSIM** as the older alternative.
-- [ ] **Box plot of distances** within and between groups.
-- [ ] A stated **normalisation** for these analyses (rarefy to a depth, or
+- [x] **Box plot of distances** within and between groups.
+- [x] A stated **normalisation** for these analyses (rarefy to a depth, or
   proportions), since diversity and most distances assume comparable depth.
 
 ## Tier 3: numeric metadata, paired designs, compositional data

@@ -1610,3 +1610,115 @@ fn mann_whitney_and_dunn_can_be_chosen() {
     }
     harness.screenshot("post_hoc_dunn");
 }
+
+#[test]
+fn community_plots_for_groups() {
+    use stamp_core::stats::diversity::{AlphaMetric, Distance, Normalisation};
+    let mut harness = Harness::new();
+    harness
+        .app
+        .load_example_data(stamp_gui::app::Example::CoalSeamGas);
+    harness.app.set_p_value_filter(None);
+    harness.app.session.profile_level = "Genus".to_string();
+    harness.app.session.invalidate_all();
+    harness.app.show_feature_table(false);
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.settle();
+    let samples = harness
+        .app
+        .session
+        .multi
+        .output
+        .as_ref()
+        .unwrap()
+        .0
+        .profile
+        .sample_names
+        .len();
+    let texts = |app: &StampApp| -> Vec<String> {
+        app.figure()
+            .shapes
+            .iter()
+            .filter_map(|s| match s {
+                stamp_plot::Shape::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+
+    // Alpha diversity: a box per group, the measure on the value axis.
+    harness.app.set_plot_kind(PlotKind::AlphaDiversity);
+    harness.settle();
+    let shown = texts(&harness.app);
+    assert!(shown.contains(&"Shannon index".to_string()), "{shown:?}");
+    assert!(shown.contains(&"Core".to_string()));
+    harness.screenshot("alpha_diversity");
+    let mut settings = harness.app.plot_settings().clone();
+    settings.alpha_metric = AlphaMetric::Chao1;
+    settings.community_normalisation = Normalisation::Rarefy;
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    let shown = texts(&harness.app);
+    assert!(shown.iter().any(|t| t.contains("rarefied to")), "{shown:?}");
+
+    // PCoA: a point per sample and the three community tests.
+    settings.community_normalisation = Normalisation::Proportions;
+    settings.community_distance = Distance::BrayCurtis;
+    settings.pcoa.show_pc3_vs_pc2 = false;
+    settings.pcoa.show_pc1_vs_pc3 = false;
+    harness.app.set_plot_settings(settings.clone());
+    harness.app.set_plot_kind(PlotKind::Pcoa);
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), samples);
+    let shown = texts(&harness.app);
+    for start in [
+        "PCo1 (",
+        "PERMANOVA: pseudo-F = ",
+        "ANOSIM: R = ",
+        "PERMDISP: F = ",
+    ] {
+        assert!(
+            shown.iter().any(|t| t.starts_with(start)),
+            "missing {start} in {shown:?}"
+        );
+    }
+    assert!(shown.contains(&"Bray-Curtis distance".to_string()));
+    harness.screenshot("pcoa");
+    // The same seed gives the same permutation p-values on every redraw.
+    let first = shown.clone();
+    harness.app.set_plot_kind(PlotKind::Pca);
+    harness.settle();
+    harness.app.set_plot_kind(PlotKind::Pcoa);
+    harness.settle();
+    assert_eq!(texts(&harness.app), first);
+    // Another distance changes the picture; the tests can be left out.
+    settings.community_distance = Distance::Aitchison;
+    settings.pcoa_show_tests = false;
+    harness.app.set_plot_settings(settings.clone());
+    harness.app.show_plot_config(true);
+    harness.settle();
+    let shown = texts(&harness.app);
+    assert!(shown.contains(&"Aitchison distance".to_string()));
+    assert!(!shown.iter().any(|t| t.starts_with("PERMANOVA")));
+    harness.screenshot("pcoa_settings");
+    harness.app.show_plot_config(false);
+
+    // Distances within each group and between groups.
+    harness.app.set_plot_kind(PlotKind::DistanceBox);
+    harness.settle();
+    let shown = texts(&harness.app);
+    assert!(shown.contains(&"Core".to_string()) && shown.contains(&"Between groups".to_string()));
+    harness.screenshot("distance_box");
+
+    // The enterotype example holds proportions: usable as they are, but
+    // it cannot be rarefied.
+    let mut harness = Harness::enterotypes();
+    harness.app.set_plot_kind(PlotKind::Pcoa);
+    harness.settle();
+    assert!(harness.app.figure().regions.len() >= 14);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.community_normalisation = Normalisation::Rarefy;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert!(texts(&harness.app)[0].contains("Rarefying needs counts"));
+}

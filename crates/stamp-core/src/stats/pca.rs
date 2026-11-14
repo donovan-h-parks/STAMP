@@ -87,7 +87,7 @@ pub fn pca(data: &[Vec<f64>]) -> Option<Pca> {
 /// Eigenvalues and eigenvectors (as columns) of a symmetric matrix, by the
 /// cyclic Jacobi method.
 #[allow(clippy::needless_range_loop)] // rows and columns are updated in step
-fn symmetric_eigen(mut a: Vec<Vec<f64>>) -> (Vec<f64>, Vec<Vec<f64>>) {
+pub(crate) fn symmetric_eigen(mut a: Vec<Vec<f64>>) -> (Vec<f64>, Vec<Vec<f64>>) {
     let n = a.len();
     let mut v = vec![vec![0.0; n]; n];
     for (i, row) in v.iter_mut().enumerate() {

@@ -538,6 +538,22 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     },
                 )
             }
+            PlotTypeArg::AlphaDiversity | PlotTypeArg::Pcoa | PlotTypeArg::DistanceBox => {
+                let first = profile.samples_in_group1().len();
+                let samples = &profile.profile.sample_names;
+                community_figure(
+                    kind,
+                    &tree,
+                    samples,
+                    profile_level,
+                    (0..samples.len())
+                        .map(|i| usize::from(i >= first))
+                        .collect(),
+                    vec![profile.group_name1.clone(), profile.group_name2.clone()],
+                    plot,
+                    args.resampling.seed,
+                )?
+            }
             other => return Err(unavailable(other, "two groups")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;
@@ -705,6 +721,23 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                     ..Default::default()
                 },
             ),
+            kind @ (PlotTypeArg::AlphaDiversity | PlotTypeArg::Pcoa | PlotTypeArg::DistanceBox) => {
+                community_figure(
+                    kind,
+                    &tree,
+                    &profile.profile.sample_names,
+                    levels(&tree, &args.profile).1,
+                    profile
+                        .samples_in_groups()
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                        .collect(),
+                    profile.group_names.clone(),
+                    plot,
+                    COMMUNITY_SEED,
+                )?
+            }
             other => return Err(unavailable(other, "several groups")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;
@@ -761,6 +794,83 @@ fn unavailable(kind: PlotTypeArg, context: &str) -> String {
         .map(|v| v.get_name().to_string())
         .unwrap_or_default();
     format!("the {name} plot is not available for {context}")
+}
+
+/// Seed of the community tests where the command has no seed option.
+const COMMUNITY_SEED: u64 = 1;
+
+/// One of the plots of whole communities. The outcome of the community
+/// tests is also reported for the PCoA plot.
+#[allow(clippy::too_many_arguments)]
+fn community_figure(
+    kind: PlotTypeArg,
+    tree: &ProfileTree,
+    samples: &[String],
+    profile_level: &str,
+    sample_groups: Vec<usize>,
+    groups: Vec<String>,
+    plot: &PlotArgs,
+    seed: u64,
+) -> CliResult<stamp_plot::Figure> {
+    use stamp_core::stats::diversity::{AlphaMetric, Distance, Normalisation};
+    use stamp_plot::community_plots::{self, Community};
+    use stamp_plot::{feature_plots, pca_plot};
+
+    let mut rng = rng_from_seed(seed);
+    let community = Community::from_tree(
+        tree,
+        samples,
+        profile_level,
+        sample_groups,
+        groups,
+        if plot.rarefy {
+            Normalisation::Rarefy
+        } else {
+            Normalisation::Proportions
+        },
+        &mut rng,
+    )?;
+    let distance = match plot.distance {
+        DistanceArg::BrayCurtis => Distance::BrayCurtis,
+        DistanceArg::Jaccard => Distance::Jaccard,
+        DistanceArg::Aitchison => Distance::Aitchison,
+    };
+    let boxes = feature_plots::BoxOptions {
+        width: plot.plot_width,
+        height: plot.plot_height.unwrap_or(6.0),
+        ..Default::default()
+    };
+    Ok(match kind {
+        PlotTypeArg::AlphaDiversity => community_plots::alpha_plot(
+            &community,
+            match plot.alpha_metric {
+                AlphaMetricArg::Observed => AlphaMetric::Observed,
+                AlphaMetricArg::Shannon => AlphaMetric::Shannon,
+                AlphaMetricArg::Simpson => AlphaMetric::Simpson,
+                AlphaMetricArg::Chao1 => AlphaMetric::Chao1,
+            },
+            &boxes,
+        ),
+        PlotTypeArg::Pcoa => {
+            // The same permutations for the report as for the plot.
+            for line in
+                community_plots::test_notes(&community, distance, 999, &mut rng_from_seed(seed))
+            {
+                eprintln!("{line}");
+            }
+            community_plots::pcoa_plot(
+                &community,
+                distance,
+                Some((999, &mut rng_from_seed(seed))),
+                &pca_plot::Options {
+                    width: plot.plot_width,
+                    height: plot.plot_height.unwrap_or(6.0),
+                    ..Default::default()
+                },
+            )
+        }
+        _ => community_plots::distance_box_plot(&community, distance, &boxes),
+    })
 }
 
 /// Rarefaction curves of some samples of a profile, coloured by group.

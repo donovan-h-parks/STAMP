@@ -4,12 +4,14 @@
 
 use eframe::egui;
 use stamp_core::stats::cluster::Linkage;
+use stamp_core::stats::diversity::{AlphaMetric, Distance, Normalisation};
 use stamp_plot::axes::LegendPosition;
 use stamp_plot::composition;
 use stamp_plot::extended_error_bar::{self, SortBy};
 use stamp_plot::feature_plots::Field;
 use stamp_plot::heatmap::{ColorMap, Order};
 use stamp_plot::histogram::Inset;
+use stamp_plot::pca_plot;
 use stamp_plot::rarefaction;
 use stamp_plot::sample_plots::BarField;
 use stamp_plot::scatter::Spread;
@@ -236,6 +238,21 @@ impl Rows<'_> {
         self.choice("Position:", value, &positions);
     }
 
+    /// How samples are made comparable before their diversity is measured.
+    fn normalisation(&mut self, value: &mut Normalisation) {
+        let choices: Vec<(Normalisation, &str)> =
+            Normalisation::ALL.iter().map(|&n| (n, n.name())).collect();
+        self.choice("Samples:", value, &choices);
+    }
+
+    /// The distance between samples and how the samples are made comparable.
+    fn community(&mut self, distance: &mut Distance, normalisation: &mut Normalisation) {
+        let distances: Vec<(Distance, &str)> =
+            Distance::ALL.iter().map(|&d| (d, d.name())).collect();
+        self.choice("Distance:", distance, &distances);
+        self.normalisation(normalisation);
+    }
+
     fn field(&mut self, value: &mut Field) {
         self.choice(
             "Field to plot:",
@@ -316,6 +333,43 @@ impl Dialog<'_> {
 
     fn legend(&mut self, value: &mut LegendPosition) {
         self.group("Legend position", |rows| rows.legend(value));
+    }
+
+    /// The settings of a plot of samples on the axes of an ordination,
+    /// whose axes are named `axis` and a number. `extra` adds the groups
+    /// that only one kind of ordination has, after the plots to show.
+    fn ordination(
+        &mut self,
+        o: &mut pca_plot::Options,
+        axis: &str,
+        extra: impl FnOnce(&mut Dialog),
+    ) {
+        self.group("Figure size", |rows| {
+            rows.check(
+                "Fixed pixels per unit distance (recommended)",
+                &mut o.fixed_scale,
+            );
+            rows.inches("Width:", &mut o.width, 2.0..=40.0);
+            // The height follows from the width while the scale is fixed.
+            rows.inches_if(!o.fixed_scale, "Height:", &mut o.height, 2.0..=40.0);
+        });
+        self.group("Plots to show", |rows| {
+            // The main panel is always drawn.
+            rows.check_if(false, &format!("{axis}1 vs. {axis}2"), &mut true);
+            rows.check(&format!("{axis}3 vs. {axis}2"), &mut o.show_pc3_vs_pc2);
+            rows.check(&format!("{axis}1 vs. {axis}3"), &mut o.show_pc1_vs_pc3);
+        });
+        extra(self);
+        self.legend(&mut o.legend);
+        self.group(OTHER_OPTIONS, |rows| {
+            rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
+            rows.check("Assign unique shapes", &mut o.unique_shapes);
+            rows.check_if(
+                o.show_pc3_vs_pc2,
+                &format!("Rotate {axis}3 labels"),
+                &mut o.rotate_pc3_labels,
+            );
+        });
     }
 
     /// The extended error bar plot and, with `post_hoc`, the post-hoc plot,
@@ -758,31 +812,53 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
             });
         }
         PlotKind::Pca => {
-            let o = &mut settings.pca;
-            dialog.group("Figure size", |rows| {
-                rows.check(
-                    "Fixed pixels per unit distance (recommended)",
-                    &mut o.fixed_scale,
-                );
-                rows.inches("Width:", &mut o.width, 2.0..=40.0);
-                // The height follows from the width while the scale is fixed.
-                rows.inches_if(!o.fixed_scale, "Height:", &mut o.height, 2.0..=40.0);
+            dialog.ordination(&mut settings.pca, "PC", |_| {});
+        }
+        PlotKind::Pcoa => {
+            let (distance, normalisation, permutations, show_tests) = (
+                &mut settings.community_distance,
+                &mut settings.community_normalisation,
+                &mut settings.community_permutations,
+                &mut settings.pcoa_show_tests,
+            );
+            dialog.ordination(&mut settings.pcoa, "PCo", |dialog| {
+                dialog.group("Distances between samples", |rows| {
+                    rows.community(distance, normalisation);
+                    rows.check("Show community tests", show_tests);
+                    rows.count_if(*show_tests, "Permutations:", permutations, 99..=99_999);
+                });
             });
-            dialog.group("Plots to show", |rows| {
-                // The main panel is always drawn.
-                rows.check_if(false, "PC1 vs. PC2", &mut true);
-                rows.check("PC3 vs. PC2", &mut o.show_pc3_vs_pc2);
-                rows.check("PC1 vs. PC3", &mut o.show_pc1_vs_pc3);
+        }
+        PlotKind::AlphaDiversity => {
+            let o = &mut settings.alpha_box;
+            let (metric, normalisation) = (
+                &mut settings.alpha_metric,
+                &mut settings.community_normalisation,
+            );
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Diversity", |rows| {
+                let metrics: Vec<(AlphaMetric, &str)> =
+                    AlphaMetric::ALL.iter().map(|&m| (m, m.name())).collect();
+                rows.choice("Measure:", metric, &metrics);
+                rows.normalisation(normalisation);
             });
-            dialog.legend(&mut o.legend);
             dialog.group(OTHER_OPTIONS, |rows| {
-                rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
-                rows.check("Assign unique shapes", &mut o.unique_shapes);
-                rows.check_if(
-                    o.show_pc3_vs_pc2,
-                    "Rotate PC3 labels",
-                    &mut o.rotate_pc3_labels,
-                );
+                rows.check("Show average of each group", &mut o.show_averages);
+                rows.check("Show p-value", &mut o.show_p_value);
+            });
+        }
+        PlotKind::DistanceBox => {
+            let o = &mut settings.distance_box;
+            let (distance, normalisation) = (
+                &mut settings.community_distance,
+                &mut settings.community_normalisation,
+            );
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Distances between samples", |rows| {
+                rows.community(distance, normalisation);
+            });
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.check("Show average of each group", &mut o.show_averages);
             });
         }
         PlotKind::Heatmap => {

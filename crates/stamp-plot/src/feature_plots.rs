@@ -44,6 +44,15 @@ pub struct FeatureData {
     pub groups: Vec<Group>,
     /// Formatted p-value to show in the corner, if any.
     pub p_value: Option<String>,
+    /// Label of the value axis, where it is not one of the fields of a
+    /// profile.
+    pub value_label: Option<String>,
+}
+
+impl FeatureData {
+    fn axis_label(&self) -> &str {
+        self.value_label.as_deref().unwrap_or(self.field.label())
+    }
 }
 
 impl FeatureData {
@@ -85,6 +94,7 @@ impl FeatureData {
                 ),
             ],
             p_value: None,
+            value_label: None,
         })
     }
 
@@ -117,6 +127,7 @@ impl FeatureData {
             field,
             groups,
             p_value: None,
+            value_label: None,
         })
     }
 
@@ -240,7 +251,7 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
                 format!(
                     "{sample}\n{}\n{}: {value:.3}",
                     group.name,
-                    data.field.label()
+                    data.axis_label()
                 ),
             );
             column_index += 1;
@@ -259,7 +270,7 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         &mut figure,
         &frame,
         &scaled_ticks(&ticks, &y),
-        Some(data.field.label()),
+        Some(data.axis_label()),
         AXES_COLOR,
     );
     axes::title(
@@ -481,7 +492,7 @@ pub fn box_plot(data: &FeatureData, options: &BoxOptions) -> Figure {
         &mut figure,
         &frame,
         &scaled_ticks(&ticks, &y),
-        Some(data.field.label()),
+        Some(data.axis_label()),
         AXES_COLOR,
     );
     axes::title(
@@ -524,6 +535,7 @@ mod tests {
                 },
             ],
             p_value: Some("0.012".to_string()),
+            value_label: None,
         }
     }
 

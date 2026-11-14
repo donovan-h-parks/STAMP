@@ -142,18 +142,44 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             "Degenerate PCA plot. Try plotting at a different level in the hierarchy.",
         );
     };
-    let components = result.variance_fractions.len();
+    plot_ordination(
+        data,
+        &result.positions,
+        &result.variance_fractions,
+        "PC",
+        &[],
+        options,
+    )
+}
+
+/// Draw samples at positions found by any ordination: `positions[sample]`
+/// holds the coordinates of the sample of `data` with the same index, and
+/// `variance_fractions` the share of the variation each axis accounts for.
+/// Axes are named `axis` followed by their number, and `notes` are written
+/// above the plot, one to a line.
+pub fn plot_ordination(
+    data: &Data,
+    positions: &[Vec<f64>],
+    variance_fractions: &[f64],
+    axis: &str,
+    notes: &[String],
+    options: &Options,
+) -> Figure {
+    if positions.len() != data.samples.len() {
+        return Figure::message("Degenerate plot: the ordination does not match the samples");
+    }
+    let components = variance_fractions.len();
     if components < 2 {
-        return Figure::message("Degenerate PCA plot: the samples vary along a single direction.");
+        return Figure::message("Degenerate plot: the samples vary along a single direction.");
     }
     let beside = options.show_pc3_vs_pc2 && components >= 3;
     let beneath = options.show_pc1_vs_pc3 && components >= 3;
-    let coordinate = |sample: usize, component: usize| result.positions[sample][component];
+    let coordinate = |sample: usize, component: usize| positions[sample][component];
     let label = |component: usize| {
         format!(
-            "PC{} ({:.1}%)",
+            "{axis}{} ({:.1}%)",
             component + 1,
-            result.variance_fractions[component] * 100.0
+            variance_fractions[component] * 100.0
         )
     };
     let ticks_for = |component: usize| {
@@ -169,6 +195,9 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
 
     let width = options.width * INCH;
     let padding = 0.25 * INCH;
+    // Room above the plot for the notes.
+    let note_line = crate::axes::FONT_SIZE + 3.0;
+    let top = padding + note_line * notes.len() as f64;
     let left = padding + y_axis_width(&ticks[1], true);
     let bottom_labels = 0.4 * INCH;
     let gap = 0.35 * INCH;
@@ -188,7 +217,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         beside_w = if beside { span(2) * unit } else { 0.0 };
         beneath_h = if beneath { span(2) * unit } else { 0.0 };
         height =
-            2.0 * padding + main_h + if beneath { gap + beneath_h } else { 0.0 } + bottom_labels;
+            top + padding + main_h + if beneath { gap + beneath_h } else { 0.0 } + bottom_labels;
         if height > 6.0 * width {
             return Figure::message(
                 "The PCA plot would be too tall; switch off \"fixed length per unit distance\"",
@@ -196,7 +225,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         }
     } else {
         height = options.height * INCH;
-        let inner_height = height - 2.0 * padding - bottom_labels;
+        let inner_height = height - top - padding - bottom_labels;
         // With further panels the main one takes about two thirds.
         main_w = if beside {
             (inner_width - gap) * 0.66
@@ -217,10 +246,19 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     let mut figure = Figure::with_size_inches(options.width, height / INCH);
     let main = Frame {
         left,
-        top: padding,
+        top,
         right: left + main_w,
-        bottom: padding + main_h,
+        bottom: top + main_h,
     };
+    for (line, note) in notes.iter().enumerate() {
+        figure.text(
+            main.left,
+            padding + note_line * (line as f64 + 0.5) - 4.0,
+            note.clone(),
+            crate::axes::label_style()
+                .align(crate::figure::HAlign::Left, crate::figure::VAlign::Middle),
+        );
+    }
 
     let dashed = Stroke::dashed(AXES_COLOR, 1.0, 5.0, 4.0);
     let panel = |figure: &mut Figure,

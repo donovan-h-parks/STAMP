@@ -128,7 +128,8 @@ pub fn accumulation(absent: &[Vec<f64>], samples: usize) -> Vec<f64> {
 /// The Chao2 estimate of the number of features in the community a set of
 /// samples was drawn from, from the features found in exactly one and
 /// exactly two of them. `incidence` is the number of samples each feature
-/// was found in.
+/// was found in. This is the bias-corrected form, which is also defined
+/// when no feature was found in exactly two samples.
 pub fn chao2(incidence: &[usize], samples: usize) -> f64 {
     let observed = incidence.iter().filter(|&&n| n > 0).count() as f64;
     if samples == 0 {
@@ -137,25 +138,19 @@ pub fn chao2(incidence: &[usize], samples: usize) -> f64 {
     let uniques = incidence.iter().filter(|&&n| n == 1).count() as f64;
     let duplicates = incidence.iter().filter(|&&n| n == 2).count() as f64;
     let scale = (samples as f64 - 1.0) / samples as f64;
-    if duplicates > 0.0 {
-        observed + scale * uniques * uniques / (2.0 * duplicates)
-    } else {
-        observed + scale * uniques * (uniques - 1.0).max(0.0) / 2.0
-    }
+    observed + scale * uniques * (uniques - 1.0).max(0.0) / (2.0 * (duplicates + 1.0))
 }
 
 /// The Chao1 estimate of the number of features in the community a sample
-/// was drawn from, from the features seen once and twice. The
-/// bias-corrected form is used when no feature was seen exactly twice.
+/// was drawn from, from the features seen once and twice. This is the
+/// bias-corrected form, `S + F1 (F1 - 1) / (2 (F2 + 1))`, which is the one
+/// scikit-bio and QIIME report and is also defined when no feature was seen
+/// exactly twice.
 pub fn chao1(counts: &[u64]) -> f64 {
     let observed = counts.iter().filter(|&&c| c > 0).count() as f64;
     let singletons = counts.iter().filter(|&&c| c == 1).count() as f64;
     let doubletons = counts.iter().filter(|&&c| c == 2).count() as f64;
-    if doubletons > 0.0 {
-        observed + singletons * singletons / (2.0 * doubletons)
-    } else {
-        observed + singletons * (singletons - 1.0).max(0.0) / 2.0
-    }
+    observed + singletons * (singletons - 1.0).max(0.0) / (2.0 * (doubletons + 1.0))
 }
 
 #[cfg(test)]
@@ -223,8 +218,8 @@ mod tests {
 
     #[test]
     fn chao1_from_singletons_and_doubletons() {
-        // 5 observed, 2 singletons, 1 doubleton: 5 + 4 / 2.
-        close(chao1(&[1, 1, 2, 7, 9, 0]), 7.0);
+        // 5 observed, 2 singletons, 1 doubleton: 5 + 2 * 1 / (2 * 2).
+        close(chao1(&[1, 1, 2, 7, 9, 0]), 5.5);
         // No doubletons: 4 + 3 * 2 / 2.
         close(chao1(&[1, 1, 1, 8]), 7.0);
         // Nothing rare: nothing to add.
@@ -290,8 +285,8 @@ mod tests {
         close(absence_probability(1, 10, 5), 0.5);
 
         // 4 observed, 2 in one sample only, 1 in two; 5 samples:
-        // 4 + (4 / 5) * 4 / 2.
-        close(chao2(&[1, 1, 2, 5, 0], 5), 5.6);
+        // 4 + (4 / 5) * 2 * 1 / (2 * 2).
+        close(chao2(&[1, 1, 2, 5, 0], 5), 4.4);
         // No duplicates: 3 + (2 / 3) * 2 * 1 / 2.
         close(chao2(&[1, 1, 3], 3), 3.0 + 2.0 / 3.0);
         close(chao2(&[2, 3], 0), 2.0);
