@@ -334,6 +334,33 @@ impl Session {
         Ok(())
     }
 
+    /// A description of everything in the session that a plot is drawn
+    /// from, other than the selected feature: two plots of the same kind and
+    /// settings drawn from sessions with the same fingerprint are the same.
+    /// The window uses it to keep plots it has already drawn.
+    pub fn plot_fingerprint(&self) -> String {
+        let mut colors: Vec<(&String, &stamp_plot::Color)> = self.group_colors.iter().collect();
+        colors.sort_by(|a, b| a.0.cmp(b.0));
+        format!(
+            "{}|{}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{}",
+            self.generation,
+            self.seed,
+            self.profile_level,
+            self.parent_level,
+            self.unclassified,
+            self.group_field,
+            self.error,
+            colors,
+            self.other_samples_color,
+            self.samples.filter,
+            self.groups.filter,
+            self.multi.filter,
+            self.correlation.filter,
+            self.multi.post_hoc_test,
+            self.multi.post_hoc_coverage,
+        )
+    }
+
     /// Colour of a group: the one the user chose, or else one from the
     /// palette by the group's position among all groups of the field.
     pub fn group_color(&self, group: &str) -> stamp_plot::Color {

@@ -94,42 +94,77 @@ impl PlotFont {
 }
 
 /// The face of the font in force (see [`crate::axes::with_fonts`]).
+#[cfg(test)]
 fn face() -> &'static ttf_parser::Face<'static> {
     crate::axes::fonts().family.face()
 }
 
-/// Width of a single line of text at the given font size, in the same unit as
-/// the size.
+impl PlotFont {
+    /// Width of a single line of text at the given font size, in the same
+    /// unit as the size.
+    pub fn width(self, text: &str, size: f64) -> f64 {
+        let face = self.face();
+        let units: u32 = text
+            .chars()
+            .map(|c| {
+                let glyph = face.glyph_index(c).unwrap_or(ttf_parser::GlyphId(0));
+                u32::from(face.glyph_hor_advance(glyph).unwrap_or(0))
+            })
+            .sum();
+        f64::from(units) / f64::from(face.units_per_em()) * size
+    }
+
+    /// Height of capital letters above the baseline.
+    pub fn cap_height(self, size: f64) -> f64 {
+        let face = self.face();
+        let height = face
+            .capital_height()
+            .unwrap_or((f32::from(face.units_per_em()) * 0.73) as i16);
+        f64::from(height) / f64::from(face.units_per_em()) * size
+    }
+
+    /// Distance from the baseline to the top of the tallest letters.
+    pub fn ascent(self, size: f64) -> f64 {
+        // Lower-case ascenders (as in "d") are slightly taller than capitals.
+        self.cap_height(size) * 1.04
+    }
+
+    /// Distance from the baseline to the bottom of letters such as "p": the
+    /// font's descender.
+    pub fn descent(self, size: f64) -> f64 {
+        let face = self.face();
+        -f64::from(face.descender()) / f64::from(face.units_per_em()) * size
+    }
+
+    /// The font's ascender line above the baseline: where a text layout
+    /// (egui's, for one) puts the top of a line.
+    pub fn line_ascender(self, size: f64) -> f64 {
+        let face = self.face();
+        f64::from(face.ascender()) / f64::from(face.units_per_em()) * size
+    }
+}
+
+/// Width of a single line of text in the font in force, at the given font
+/// size, in the same unit as the size.
 pub fn width(text: &str, size: f64) -> f64 {
-    let face = face();
-    let units: u32 = text
-        .chars()
-        .map(|c| {
-            let glyph = face.glyph_index(c).unwrap_or(ttf_parser::GlyphId(0));
-            u32::from(face.glyph_hor_advance(glyph).unwrap_or(0))
-        })
-        .sum();
-    f64::from(units) / f64::from(face.units_per_em()) * size
+    crate::axes::fonts().family.width(text, size)
 }
 
-/// Height of capital letters above the baseline.
+/// Height of capital letters above the baseline, in the font in force.
 pub fn cap_height(size: f64) -> f64 {
-    let face = face();
-    let height = face
-        .capital_height()
-        .unwrap_or((f32::from(face.units_per_em()) * 0.73) as i16);
-    f64::from(height) / f64::from(face.units_per_em()) * size
+    crate::axes::fonts().family.cap_height(size)
 }
 
-/// Distance from the baseline to the top of the tallest letters.
+/// Distance from the baseline to the top of the tallest letters, in the font
+/// in force.
 pub fn ascent(size: f64) -> f64 {
-    // Lower-case ascenders (as in "d") are slightly taller than capitals.
-    cap_height(size) * 1.04
+    crate::axes::fonts().family.ascent(size)
 }
 
-/// Distance from the baseline to the bottom of letters such as "p".
+/// Distance from the baseline to the bottom of letters such as "p", in the
+/// font in force.
 pub fn descent(size: f64) -> f64 {
-    0.236 * size
+    crate::axes::fonts().family.descent(size)
 }
 
 /// Shorten text to `max_chars` characters followed by an ellipsis, if it is

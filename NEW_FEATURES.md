@@ -152,6 +152,15 @@ Add an entry here whenever a feature is added that v2 did not have.
   free fonts with the same letter widths as Arial, Times New Roman and
   Courier New), so plots look the same on every system and in the browser;
   SVG files name the original font first. On the command line: `--font`.
+- **Loading progress in the browser.** While the page downloads STAMP, a
+  bar shows how much has arrived (or keeps moving, where the server does
+  not say how much there is), and "Starting STAMP..." follows while it
+  starts.
+- **Plots kept once drawn.** A plot is redrawn only when something it is
+  drawn from changes: its data, filters, colours or settings, or the
+  selected feature for plots of one feature. Returning to a plot, or
+  selecting a feature while a plot of the whole data set (ANCOM, PCoA,
+  rarefaction) is shown, is immediate.
 - **Plots listed by group.** The plot selector beneath the plot lists the
   plots of an analysis under five headings, by the question they answer:
   differences between features (with the p-value histogram and multiple

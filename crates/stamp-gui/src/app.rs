@@ -37,6 +37,10 @@ const COVERAGES: [f64; 5] = [0.90, 0.95, 0.98, 0.99, 0.999];
 
 /// Zoom of the plot when the application starts, and after a reset. A plot
 /// of the default width fits beside the panels in a 1280-pixel window.
+/// Number of plots kept, so that returning to one is instant.
+const FIGURE_CACHE_SIZE: usize = 6;
+/// Plots with more shapes than this (large heatmaps) are not kept.
+const FIGURE_CACHE_SHAPES: usize = 200_000;
 const DEFAULT_ZOOM: f32 = 1.15;
 
 /// Example data built into the application: gut enterotypes from Arumugam et
@@ -108,10 +112,11 @@ fn choose_plot(ui: &mut egui::Ui, mode: Mode, current: &mut PlotKind) -> bool {
             ui.spacing_mut().button_padding.y = 1.0;
             for (index, (group, kinds)) in PlotKind::grouped(mode).into_iter().enumerate() {
                 if index > 0 {
-                    ui.add_space(5.0);
+                    ui.add_space(2.0);
                 }
-                // One point larger than egui's small text.
-                let heading = egui::TextStyle::Small.resolve(ui.style()).size + 1.0;
+                // The size of the plot names beneath, in the strong (brighter)
+                // text colour: egui's interface font has no bold.
+                let heading = egui::TextStyle::Button.resolve(ui.style()).size;
                 ui.label(egui::RichText::new(group.name()).strong().size(heading));
                 let mut divided = false;
                 for kind in kinds {
@@ -680,7 +685,9 @@ pub struct Saved {
 /// chosen it.
 ///
 /// 1: legends placed by "Best" (were at fixed corners, or absent).
-pub const DEFAULTS_VERSION: u32 = 1;
+/// 2: feature names and p-values of the extended error bar and post-hoc
+///    plots at 9 points (were 8).
+pub const DEFAULTS_VERSION: u32 = 2;
 
 impl Saved {
     /// The same, with plot settings saved under other defaults replaced by
@@ -788,6 +795,11 @@ pub struct StampApp {
     select_dialog: Option<(Mode, FeatureSelection)>,
     /// The current plot and tables, rebuilt when `view_dirty` is set.
     figure: Figure,
+    /// Plots drawn recently, by a key describing everything they were drawn
+    /// from, oldest first.
+    figure_cache: Vec<(String, Figure)>,
+    /// Number of plots drawn, as opposed to taken from the cache.
+    figures_built: usize,
     table: Table,
     table_features: Vec<String>,
     /// Every feature of the current analysis, in alphabetical order.
@@ -897,6 +909,8 @@ impl StampApp {
             selections: Default::default(),
             select_dialog: None,
             figure: Figure::message("Load a profile to begin"),
+            figure_cache: Vec::new(),
+            figures_built: 0,
             table: Table {
                 headings: Vec::new(),
                 rows: Vec::new(),
@@ -974,6 +988,11 @@ impl StampApp {
     /// Open or close the "Configure plot" window.
     pub fn show_plot_config(&mut self, show: bool) {
         self.show_plot_config = show;
+    }
+
+    /// Number of plots drawn so far, not counting those reused unchanged.
+    pub fn figures_built(&self) -> usize {
+        self.figures_built
     }
 
     /// Open or close the Preferences window, as Settings > Preferences does.
@@ -1600,12 +1619,39 @@ impl StampApp {
     /// Rebuild the plot and the tables from the session.
     fn refresh_view(&mut self) {
         self.plot_settings.highlighted = self.highlighted_features();
-        self.figure = plots::build(
-            &self.session,
+        // A plot already drawn from the same data and settings is reused:
+        // some plots (ANCOM, the community tests, NMDS, rarefaction) take a
+        // while to compute, and the view is refreshed for many reasons.
+        let kind = self.plot_kind();
+        let feature =
+            if kind.uses_selected_feature(self.mode) || kind == PlotKind::CorrelationScatter {
+                self.session.selected_feature.clone()
+            } else {
+                None
+            };
+        let key = format!(
+            "{:?}|{:?}|{feature:?}|{}|{:?}",
             self.mode,
-            self.plot_kind(),
-            &self.plot_settings,
+            kind,
+            self.session.plot_fingerprint(),
+            self.plot_settings
         );
+        if let Some(index) = self.figure_cache.iter().position(|(k, _)| *k == key) {
+            let (key, figure) = self.figure_cache.remove(index);
+            self.figure = figure.clone();
+            self.figure_cache.push((key, figure));
+        } else {
+            self.figure = plots::build(&self.session, self.mode, kind, &self.plot_settings);
+            self.figures_built += 1;
+            // Very large figures (big heatmaps) are not kept, to bound the
+            // memory used.
+            if self.figure.shapes.len() <= FIGURE_CACHE_SHAPES {
+                if self.figure_cache.len() >= FIGURE_CACHE_SIZE {
+                    self.figure_cache.remove(0);
+                }
+                self.figure_cache.push((key, self.figure.clone()));
+            }
+        }
         let s = &self.session;
         let min_exponent = self.plot_settings.min_p_exponent;
         let feature_row =

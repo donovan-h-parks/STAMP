@@ -10,6 +10,7 @@
 //! such differences, W, is high.
 
 use super::correction::Correction;
+use super::dist::f_sf;
 use super::diversity::centred_log_ratio;
 use super::effect_size::eta_squared;
 use super::multi_group::MultiGroupTest;
@@ -94,39 +95,13 @@ pub fn ancom(
         .filter(|m: &Vec<usize>| !m.is_empty())
         .collect();
 
-    // p-value of every pair of features, both ways round.
-    let mut p = vec![vec![0.0; features]; features];
-    let mut buffers: Vec<Vec<f64>> = vec![Vec::new(); members.len()];
-    for i in 0..features {
-        for j in i + 1..features {
-            for (buffer, member) in buffers.iter_mut().zip(&members) {
-                buffer.clear();
-                buffer.extend(member.iter().map(|&s| clr[s][i] - clr[s][j]));
-            }
-            let slices: Vec<&[f64]> = buffers.iter().map(Vec::as_slice).collect();
-            let (value, _) = test.run(&slices);
-            p[i][j] = value;
-            p[j][i] = value;
-        }
-    }
-
-    // Each feature's p-values are adjusted together, its comparison with
-    // itself (zero) included, as scikit-bio does; that one never counts.
-    let mut rng = rng_from_seed(0);
-    let w: Vec<usize> = p
-        .iter()
-        .enumerate()
-        .map(|(i, row)| {
-            let adjusted = Correction::HolmBonferroni
-                .correct(row, alpha, &mut rng)
-                .values;
-            adjusted
-                .iter()
-                .enumerate()
-                .filter(|&(j, value)| j != i && *value < alpha)
-                .count()
-        })
-        .collect();
+    // ANOVA on groups of two or more samples has a shortcut; any other
+    // test goes through the p-value of every pair.
+    let w = if test == MultiGroupTest::Anova && members.iter().all(|m| m.len() >= 2) {
+        w_by_anova(&clr, &members, features, alpha)
+    } else {
+        w_by_test(&clr, &members, features, test, alpha)
+    };
 
     let n = features as f64;
     let start = w.iter().copied().max().unwrap_or(0) as f64 / n;
@@ -177,6 +152,172 @@ pub fn ancom(
         test,
         alpha,
     })
+}
+
+/// W of every feature: the number of other features whose log ratio with
+/// it differs between the groups by `test`, after the Holm-Bonferroni
+/// adjustment of the feature's p-values. Each feature's p-values are
+/// adjusted together with its comparison with itself (zero), as scikit-bio
+/// does; that one never counts.
+fn w_by_test(
+    clr: &[Vec<f64>],
+    members: &[Vec<usize>],
+    features: usize,
+    test: MultiGroupTest,
+    alpha: f64,
+) -> Vec<usize> {
+    let mut p = vec![vec![0.0; features]; features];
+    let mut buffers: Vec<Vec<f64>> = vec![Vec::new(); members.len()];
+    for i in 0..features {
+        for j in i + 1..features {
+            for (buffer, member) in buffers.iter_mut().zip(members) {
+                buffer.clear();
+                buffer.extend(member.iter().map(|&s| clr[s][i] - clr[s][j]));
+            }
+            let slices: Vec<&[f64]> = buffers.iter().map(Vec::as_slice).collect();
+            let (value, _) = test.run(&slices);
+            p[i][j] = value;
+            p[j][i] = value;
+        }
+    }
+    let mut rng = rng_from_seed(0);
+    p.iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let adjusted = Correction::HolmBonferroni
+                .correct(row, alpha, &mut rng)
+                .values;
+            adjusted
+                .iter()
+                .enumerate()
+                .filter(|&(j, value)| j != i && *value < alpha)
+                .count()
+        })
+        .collect()
+}
+
+/// W by one-way ANOVA, as [`w_by_test`] gives it, but faster. Every pair
+/// has the same degrees of freedom, so a p-value passes the Holm threshold
+/// for its rank exactly when the F statistic exceeds a critical value that
+/// can be found once for each rank; the F statistics come from sums kept
+/// for each feature and group, without the p-values themselves. Every group
+/// must have at least two samples.
+fn w_by_anova(clr: &[Vec<f64>], members: &[Vec<usize>], features: usize, alpha: f64) -> Vec<usize> {
+    let sizes: Vec<f64> = members.iter().map(|m| m.len() as f64).collect();
+    let total: f64 = sizes.iter().sum();
+    let (dfn, dfd) = (sizes.len() as f64 - 1.0, total - sizes.len() as f64);
+    // Each feature's values, group after group, with each group's sum and
+    // sum of squares.
+    let order: Vec<usize> = members.iter().flatten().copied().collect();
+    let values: Vec<Vec<f64>> = (0..features)
+        .map(|f| order.iter().map(|&s| clr[s][f]).collect())
+        .collect();
+    let mut ranges = Vec::with_capacity(members.len());
+    let mut begin = 0;
+    for m in members {
+        ranges.push(begin..begin + m.len());
+        begin += m.len();
+    }
+    let sums: Vec<Vec<f64>> = values
+        .iter()
+        .map(|v| ranges.iter().map(|r| v[r.clone()].iter().sum()).collect())
+        .collect();
+    let squares: Vec<Vec<f64>> = values
+        .iter()
+        .map(|v| {
+            ranges
+                .iter()
+                .map(|r| v[r.clone()].iter().map(|x| x * x).sum())
+                .collect()
+        })
+        .collect();
+
+    // The Holm threshold at rank r of the m p-values of a feature (its own,
+    // zero, first) is alpha / (m - r + 1); the F statistic above which the
+    // p-value is smaller, found by bisection on the F distribution.
+    let m = features;
+    let critical: Vec<f64> = (1..=m)
+        .map(|rank| f_above(alpha / (m - rank + 1) as f64, dfn, dfd))
+        .collect();
+
+    let mut f_values = Vec::with_capacity(features);
+    (0..features)
+        .map(|i| {
+            f_values.clear();
+            for j in (0..features).filter(|&j| j != i) {
+                let (mut sum, mut square, mut between) = (0.0, 0.0, 0.0);
+                for (g, range) in ranges.iter().enumerate() {
+                    let dot: f64 = values[i][range.clone()]
+                        .iter()
+                        .zip(&values[j][range.clone()])
+                        .map(|(a, b)| a * b)
+                        .sum();
+                    let group_sum = sums[i][g] - sums[j][g];
+                    sum += group_sum;
+                    square += squares[i][g] + squares[j][g] - 2.0 * dot;
+                    between += group_sum * group_sum / sizes[g];
+                }
+                let correction = sum * sum / total;
+                let spread = square - correction;
+                let between = between - correction;
+                let within = spread - between;
+                // A log ratio that is the same in every sample tells nothing
+                // (ANOVA gives no p-value there).
+                let f = if spread <= 1e-12 * square.max(f64::MIN_POSITIVE) {
+                    f64::NAN
+                } else if within <= 0.0 {
+                    f64::INFINITY
+                } else {
+                    (between / dfn) / (within / dfd)
+                };
+                f_values.push(f);
+            }
+            // Largest F (smallest p-value) first; no value at all last.
+            f_values.sort_by(|a, b| match (a.is_nan(), b.is_nan()) {
+                (false, false) => b.total_cmp(a),
+                (true, true) => std::cmp::Ordering::Equal,
+                (true, false) => std::cmp::Ordering::Greater,
+                (false, true) => std::cmp::Ordering::Less,
+            });
+            // The step-down procedure rejects a run of the smallest
+            // p-values; the feature's own comparison takes rank one.
+            f_values
+                .iter()
+                .zip(&critical[1..])
+                .take_while(|(f, c)| **f > **c)
+                .count()
+        })
+        .collect()
+}
+
+/// The value of an F(dfn, dfd) statistic above which the upper-tail
+/// probability is below `p`.
+fn f_above(p: f64, dfn: f64, dfd: f64) -> f64 {
+    if p >= 1.0 {
+        return 0.0;
+    }
+    let mut high = 1.0;
+    while f_sf(high, dfn, dfd) >= p {
+        high *= 2.0;
+        if high > 1e300 {
+            return f64::INFINITY;
+        }
+    }
+    let mut low = 0.0;
+    for _ in 0..200 {
+        let middle = 0.5 * (low + high);
+        if middle <= low || middle >= high {
+            break;
+        }
+        if f_sf(middle, dfn, dfd) >= p {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    // The smallest F whose p-value is below `p`; anything above `low`
+    // passes.
+    low
 }
 
 fn mean(values: &[f64]) -> f64 {
@@ -273,5 +414,50 @@ mod tests {
         let own: Vec<usize> = (0..12).collect();
         assert!(ancom(&table, &own, MultiGroupTest::Anova, 0.05).is_none());
         assert!(ancom(&table, &groups()[..5], MultiGroupTest::Anova, 0.05).is_none());
+    }
+
+    /// The ANOVA shortcut gives the W of the general path, on data with
+    /// zeros, ties and a feature constant in every sample.
+    #[test]
+    fn the_anova_shortcut_agrees_with_the_general_path() {
+        let mut state: u64 = 7;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (state >> 33) as f64 / (1u64 << 31) as f64
+        };
+        let samples: Vec<Vec<f64>> = (0..30)
+            .map(|s| {
+                (0..60)
+                    .map(|f| {
+                        let shift = if f % 5 == 0 && s % 3 == 1 { 6.0 } else { 1.0 };
+                        let value = (next() * 40.0 * shift).floor();
+                        // Some zeros, and one feature the same everywhere.
+                        if f == 7 {
+                            10.0
+                        } else if value < 3.0 {
+                            0.0
+                        } else {
+                            value
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        let groups: Vec<usize> = (0..30).map(|s| s % 3).collect();
+        let clr: Vec<Vec<f64>> = samples.iter().map(|s| centred_log_ratio(s)).collect();
+        let members: Vec<Vec<usize>> = (0..3)
+            .map(|g| (0..30).filter(|&s| groups[s] == g).collect())
+            .collect();
+        for alpha in [0.05, 0.01, 0.2] {
+            let fast = w_by_anova(&clr, &members, 60, alpha);
+            let general = w_by_test(&clr, &members, 60, MultiGroupTest::Anova, alpha);
+            assert_eq!(fast, general, "alpha {alpha}");
+            assert!(fast.iter().any(|&w| w > 0));
+        }
+        assert!(f_above(1.0, 2.0, 10.0) == 0.0);
+        let c = f_above(0.05, 2.0, 27.0);
+        assert!((f_sf(c, 2.0, 27.0) - 0.05).abs() < 1e-12);
     }
 }

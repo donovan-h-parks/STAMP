@@ -6,20 +6,41 @@
   <title>STAMP</title>
   <meta name="description" content="STAMP: statistical analysis of taxonomic and functional profiles. Runs entirely in your browser; your data never leaves your computer.">
   <!-- Built with trunk (https://trunkrs.dev): `trunk build --release` in this directory. -->
-  <link data-trunk rel="rust" data-bin="stamp" data-wasm-opt="2">
+  <link data-trunk rel="rust" data-bin="stamp" data-cargo-profile="web" data-wasm-opt="2" data-initializer="initializer.js">
   <link data-trunk rel="icon" href="assets/icon.png">
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1b1b; }
     canvas { display: block; width: 100%; height: 100%; }
     #stamp_status {
-      position: absolute; top: 45%; width: 100%; text-align: center;
+      position: absolute; top: 42%; width: 100%; text-align: center;
       font: 16px sans-serif; color: #ccc;
     }
+    #stamp_message { margin: 0 0 12px; }
+    #stamp_detail { margin: 8px 0 0; font-size: 13px; color: #999; min-height: 1em; }
+    /* The download's progress. */
+    #stamp_track {
+      position: relative; overflow: hidden; margin: 0 auto;
+      width: 260px; height: 6px; border-radius: 3px; background: #3a3a3a;
+    }
+    #stamp_bar {
+      height: 100%; width: 0; border-radius: 3px; background: #4a90c8;
+      transition: width 0.2s;
+    }
+    /* While the size is unknown: a section of the bar moves along it. */
+    #stamp_track.busy #stamp_bar {
+      position: absolute; width: 35%; transition: none;
+      animation: stamp_busy 1.2s ease-in-out infinite;
+    }
+    @keyframes stamp_busy { from { left: -35%; } to { left: 100%; } }
   </style>
 </head>
 <body>
   <canvas id="stamp_canvas"></canvas>
-  <p id="stamp_status">Loading STAMP...</p>
+  <div id="stamp_status">
+    <p id="stamp_message">Loading STAMP...</p>
+    <div id="stamp_track" class="busy"><div id="stamp_bar"></div></div>
+    <p id="stamp_detail"></p>
+  </div>
   <noscript><p id="stamp_noscript">STAMP needs JavaScript and WebAssembly to run.</p></noscript>
 </body>
 </html>

@@ -133,11 +133,18 @@ impl TextStyle {
     /// Vertical distance from the anchor down to the baseline, before
     /// rotation.
     pub fn baseline_offset(&self) -> f64 {
+        self.baseline_offset_in(crate::axes::fonts().family)
+    }
+
+    /// As [`TextStyle::baseline_offset`], for text set in `font`. A figure's
+    /// text is set in [`Figure::font`], whatever font is in force when the
+    /// figure is drawn or saved.
+    pub fn baseline_offset_in(&self, font: text::PlotFont) -> f64 {
         match self.v_align {
-            VAlign::Top => text::ascent(self.size),
-            VAlign::Middle => text::cap_height(self.size) / 2.0,
+            VAlign::Top => font.ascent(self.size),
+            VAlign::Middle => font.cap_height(self.size) / 2.0,
             VAlign::Baseline => 0.0,
-            VAlign::Bottom => -text::descent(self.size),
+            VAlign::Bottom => -font.descent(self.size),
         }
     }
 }

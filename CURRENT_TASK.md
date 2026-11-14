@@ -10,6 +10,19 @@ Idle. Roadmap tiers 1 to 4 are all done, committed and pushed. Nothing further i
 
 ## Last completed
 
+- **Optimisation and fixes** (2026-11-15): rarefaction curves computed once
+  per distinct count (6.9 s to 0.7 s on 120 samples x 3000 features);
+  ANCOM's ANOVA path compares F with Holm critical values instead of
+  computing p-values (2.7 s to 1.0 s, 4.0 s to 1.35 s with four groups;
+  identical W); the window keeps the last six figures by a fingerprint of
+  their inputs (`Session::plot_fingerprint`, `figure_cache` in `app.rs`);
+  web build with the `web` profile (fat LTO, one codegen unit) and one copy
+  of resvg/usvg (0.45, as svg2pdf uses) without image or system-font
+  features: 21.3 MB to 13.4 MB (8.4 to 5.1 MB gzipped); a download progress
+  bar (`crates/stamp-gui/initializer.js`). Also: plot text placed by each
+  figure's own font (was wrong for every font but Arial), group headings of
+  the plot selector at the size of plot names, feature names and p-values
+  at 9 pt (`DEFAULTS_VERSION` 2). Committed and pushed.
 - **Plot font choice** (2026-11-15): `PlotFont` in `stamp-plot/src/text.rs`
   (Arial default, Times New Roman, Courier New, DejaVu Sans; bundled as
   Liberation Sans/Serif/Mono 2.1.5 under the SIL OFL, downloaded with the

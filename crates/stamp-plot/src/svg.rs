@@ -171,7 +171,7 @@ pub fn to_svg(figure: &Figure) -> String {
                     out,
                     "<text x=\"{}\" y=\"{}\" font-size=\"{}\" text-anchor=\"{anchor}\"{}{transform}>{}</text>",
                     n(*x),
-                    n(*y + style.baseline_offset()),
+                    n(*y + style.baseline_offset_in(figure.font)),
                     n(style.size),
                     fill_attr(Some(style.color)),
                     escape(text)
@@ -253,5 +253,34 @@ mod tests {
         assert_eq!(figure.font, crate::text::PlotFont::TimesNewRoman);
         assert!(to_svg(&figure)
             .contains("font-family=\"Times New Roman, Times, Liberation Serif, serif\""));
+    }
+
+    /// Vertical alignment uses the figure's font, whatever font is in force
+    /// when the SVG is written.
+    #[test]
+    fn text_is_aligned_by_the_figure_font() {
+        use crate::text::PlotFont;
+        for font in PlotFont::ALL {
+            let fonts = crate::axes::Fonts {
+                family: font,
+                ..crate::axes::Fonts::default()
+            };
+            let figure = crate::axes::with_fonts(fonts, || {
+                let mut figure = Figure::new(100.0, 100.0);
+                figure.text(
+                    10.0,
+                    50.0,
+                    "Top",
+                    TextStyle::new(10.0).align(HAlign::Left, VAlign::Top),
+                );
+                figure
+            });
+            let expected = 50.0 + font.ascent(10.0);
+            let svg = to_svg(&figure);
+            assert!(
+                svg.contains(&format!("y=\"{}\"", n(expected))),
+                "{font:?}: {svg}"
+            );
+        }
     }
 }

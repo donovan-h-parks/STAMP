@@ -37,7 +37,7 @@ CI (`.github/workflows/ci.yml`) runs fmt, clippy for both targets, and the tests
 Browser build (needs `trunk`, `cargo install trunk --locked`):
 
 ```bash
-cd crates/stamp-gui && trunk build --release   # writes crates/stamp-gui/dist (untracked)
+cd crates/stamp-gui && trunk build --release   # writes crates/stamp-gui/dist (untracked); uses the `web` profile (fat LTO), a few minutes
 ```
 
 GUI screenshots: the GUI tests render the real interface with a software rasteriser and can write PNGs, which is the only way to look at the interface on a machine without a display:

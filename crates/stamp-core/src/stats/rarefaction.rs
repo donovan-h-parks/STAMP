@@ -34,10 +34,12 @@ fn miss_probability(total: u64, count: u64, depth: u64) -> f64 {
     // where differences of large log-factorials are not.
     let (few, many) = (count.min(depth), count.max(depth));
     if few <= 64 {
+        // At most 64 factors, each between zero and one: their product
+        // cannot overflow, and an underflow to zero is right to within
+        // the precision of the result.
         (0..few)
-            .map(|j| ((total - many - j) as f64 / (total - j) as f64).ln())
-            .sum::<f64>()
-            .exp()
+            .map(|j| (total - many - j) as f64 / (total - j) as f64)
+            .product()
     } else {
         (ln_choose(total - count, depth) - ln_choose(total, depth)).exp()
     }
@@ -58,6 +60,18 @@ fn miss_probability(total: u64, count: u64, depth: u64) -> f64 {
 /// `C(total - c, n) / C(total, n)`.
 pub fn expected_richness(counts: &[u64], total: u64, depths: &[u64]) -> Vec<f64> {
     let total = total.max(counts.iter().sum());
+    // Features with the same count are missed with the same probability, so
+    // each count is worked out once and weighted by how many features have
+    // it. Many features share the small counts.
+    let mut distinct: Vec<u64> = counts.iter().copied().filter(|&c| c > 0).collect();
+    distinct.sort_unstable();
+    let mut weighted: Vec<(u64, f64)> = Vec::new();
+    for count in distinct {
+        match weighted.last_mut() {
+            Some((last, features)) if *last == count => *features += 1.0,
+            _ => weighted.push((count, 1.0)),
+        }
+    }
     depths
         .iter()
         .map(|&depth| {
@@ -65,10 +79,9 @@ pub fn expected_richness(counts: &[u64], total: u64, depths: &[u64]) -> Vec<f64>
             if depth == 0 {
                 return 0.0;
             }
-            counts
+            weighted
                 .iter()
-                .filter(|&&count| count > 0)
-                .map(|&count| 1.0 - miss_probability(total, count, depth))
+                .map(|&(count, features)| features * (1.0 - miss_probability(total, count, depth)))
                 .sum()
         })
         .collect()

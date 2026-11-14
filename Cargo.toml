@@ -44,11 +44,24 @@ rand_distr = "0.6"
 libm = "0.2"
 kodama = "0.3"
 ttf-parser = "0.25"
-resvg = "0.50"
-svg2pdf = "0.13"
+# Only text is needed to render STAMP's own SVG: no system fonts (the fonts
+# are bundled), raster images or filters, which would add to the browser
+# download.
+# The version svg2pdf builds on, so that one copy of the SVG library is
+# compiled rather than two.
+resvg = { version = "0.45", default-features = false, features = ["text"] }
+svg2pdf = { version = "0.13", default-features = false, features = ["text"] }
 
 [profile.release]
 lto = "thin"
 # Smaller downloads. Only debug information is removed: the browser build's
 # optimiser needs the other sections, and panics keep their location.
 strip = "debuginfo"
+
+# The browser build: whole-program optimisation in one unit, which makes the
+# download smaller and the code faster, at the cost of a longer build. Used
+# by trunk (crates/stamp-gui/index.html).
+[profile.web]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

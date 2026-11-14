@@ -2160,3 +2160,119 @@ fn the_plot_selector_lists_plots_by_group() {
     // The default plot is still the first offered.
     assert_eq!(harness.app.plot_kind(), PlotKind::Pca);
 }
+
+#[test]
+fn plots_already_drawn_are_reused_until_something_changes() {
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.session.profile_level = "Genus".to_string();
+    harness.app.session.invalidate_all();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::Ancom);
+    harness.settle();
+    let ancom = harness.app.figure().clone();
+    let built = harness.app.figures_built();
+
+    // ANCOM does not depend on the selected feature: it is not redrawn.
+    let other = harness.app.feature_table()[3].feature.clone();
+    harness.app.select_feature(&other);
+    harness.settle();
+    assert_eq!(harness.app.figures_built(), built);
+    assert_eq!(harness.app.figure().shapes.len(), ancom.shapes.len());
+
+    // The box plot shows the selected feature: it is drawn for each one.
+    harness.app.set_plot_kind(PlotKind::Box);
+    harness.settle();
+    let box_built = harness.app.figures_built();
+    assert_eq!(box_built, built + 1);
+    let first = harness.app.feature_table()[1].feature.clone();
+    harness.app.select_feature(&first);
+    harness.settle();
+    assert_eq!(harness.app.figures_built(), box_built + 1);
+
+    // Back to ANCOM: taken from the cache.
+    harness.app.set_plot_kind(PlotKind::Ancom);
+    harness.settle();
+    assert_eq!(harness.app.figures_built(), box_built + 1);
+    assert_eq!(harness.app.figure().regions.len(), ancom.regions.len());
+
+    // A filter, a colour or a setting draws it again.
+    harness.app.set_p_value_filter(Some(0.05));
+    harness.settle();
+    let after_filter = harness.app.figures_built();
+    assert!(after_filter > box_built + 1);
+    harness
+        .app
+        .session
+        .set_group_color("Core", stamp_plot::Color::rgb(1, 2, 3));
+    harness
+        .app
+        .set_plot_settings(harness.app.plot_settings().clone());
+    harness.settle();
+    assert!(harness.app.figures_built() > after_filter);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.ancom.marker_size += 5.0;
+    let before = harness.app.figures_built();
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert_eq!(harness.app.figures_built(), before + 1);
+}
+
+/// Text is placed by the font the figure was built in, not by the default:
+/// right-aligned text ends at its anchor and a capital H set to the middle
+/// is centred on it, in every font.
+#[test]
+fn plot_text_is_placed_by_its_own_font() {
+    use stamp_plot::figure::{HAlign, TextStyle, VAlign};
+    use stamp_plot::text::PlotFont;
+    for font in PlotFont::ALL {
+        let fonts = stamp_plot::axes::Fonts {
+            family: font,
+            ..Default::default()
+        };
+        let figure = stamp_plot::axes::with_fonts(fonts, || {
+            let mut figure = stamp_plot::Figure::new(300.0, 120.0);
+            figure.text(
+                250.0,
+                60.0,
+                "HHHH",
+                TextStyle::new(40.0).align(HAlign::Right, VAlign::Middle),
+            );
+            figure
+        });
+        assert_eq!(figure.font, font);
+        let mut renderer = Renderer::new(300.0, 120.0, 1.0);
+        stamp_gui::figure_painter::install_plot_font(&renderer.ctx);
+        let paint = |ui: &mut egui::Ui| {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| {
+                    stamp_gui::figure_painter::show(ui, &figure, 1.0, egui::vec2(300.0, 120.0));
+                });
+        };
+        renderer.run(3, paint);
+        let image = renderer.render(paint);
+        // The ink of the text: dark pixels.
+        let dark: Vec<(usize, usize)> = (0..image.height)
+            .flat_map(|y| (0..image.width).map(move |x| (x, y)))
+            .filter(|&(x, y)| {
+                let p = image.pixel(x, y);
+                (p.r() as u32 + p.g() as u32 + p.b() as u32) < 200
+            })
+            .collect();
+        assert!(dark.len() > 200, "{font:?}: no text drawn");
+        let right = dark.iter().map(|p| p.0).max().unwrap() as f64;
+        let top = dark.iter().map(|p| p.1).min().unwrap() as f64;
+        let bottom = dark.iter().map(|p| p.1).max().unwrap() as f64;
+        // H has a little side bearing: its ink ends just short of the
+        // advance width.
+        assert!(
+            (243.0..=251.0).contains(&right),
+            "{font:?}: text ends at {right}, not at 250"
+        );
+        let middle = (top + bottom) / 2.0;
+        assert!(
+            (middle - 60.0).abs() <= 2.0,
+            "{font:?}: capitals centred at {middle}, not at 60"
+        );
+    }
+}

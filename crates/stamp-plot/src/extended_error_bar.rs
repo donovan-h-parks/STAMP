@@ -148,7 +148,7 @@ impl Default for Options {
             highlighted: Vec::new(),
             axes_color: Color::rgb(0x7f, 0x7f, 0x7f),
             min_p_value_exponent: -15,
-            label_font_size: crate::axes::NOTE_SIZE,
+            label_font_size: 9.0,
             title_font_size: crate::axes::TITLE_SIZE,
         }
     }

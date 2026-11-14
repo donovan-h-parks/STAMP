@@ -3,7 +3,7 @@
 
 use eframe::egui::{self, epaint, Color32, FontFamily, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use stamp_plot::figure::{Color, Figure, HAlign, Shape};
-use stamp_plot::text::{self, PlotFont};
+use stamp_plot::text::PlotFont;
 
 /// Name of the egui font family holding a plot font.
 pub fn plot_font_family(font: PlotFont) -> FontFamily {
@@ -181,16 +181,16 @@ pub fn paint(painter: &egui::Painter, origin: Pos2, scale: f32, figure: &Figure)
 
                 // Where the text's top-left corner sits relative to its
                 // anchor, before rotation. Widths come from the same metrics
-                // as the exported files; egui places the top of a row at the
-                // font's ascender line.
-                let width = text::width(content, style.size) as f32 * scale;
+                // as the exported files, in the figure's own font; egui
+                // places the top of a row at the font's ascender line.
+                let width = figure.font.width(content, style.size) as f32 * scale;
                 let dx = match style.h_align {
                     HAlign::Left => 0.0,
                     HAlign::Center => -width / 2.0,
                     HAlign::Right => -width,
                 };
-                let ascender = 0.928 * size;
-                let dy = style.baseline_offset() as f32 * scale - ascender;
+                let ascender = figure.font.line_ascender(style.size) as f32 * scale;
+                let dy = style.baseline_offset_in(figure.font) as f32 * scale - ascender;
 
                 // Counter-clockwise degrees to egui's clockwise radians.
                 let angle = -(style.rotation as f32).to_radians();
