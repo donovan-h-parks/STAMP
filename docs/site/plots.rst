@@ -27,7 +27,8 @@ swatch in the groups section of the window.
    The figures on this page were made from the example data: the iron mine
    samples of Edwards et al. (two samples, *Red* and *Black*), the
    enterotypes (two and multiple groups) and the coal seam gas samples
-   (communities).
+   (communities). :doc:`example_eggerthellaceae` shows the group heatmap,
+   box plot, map and co-occurrence on a larger data set of 1,289 samples.
 
 Differences between features
 ----------------------------

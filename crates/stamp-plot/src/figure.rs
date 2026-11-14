@@ -369,7 +369,14 @@ impl Figure {
     pub fn message(text: &str) -> Figure {
         let mut figure = Figure::with_size_inches(6.0, 4.0);
         let style = TextStyle::new(8.0).align(HAlign::Center, VAlign::Middle);
-        figure.text(figure.width / 2.0, figure.height / 2.0, text, style);
+        // One line of text for each line of the message, centred together.
+        let lines: Vec<&str> = text.lines().collect();
+        let spacing = 8.0 * 1.4;
+        let first = figure.height / 2.0 - spacing * (lines.len().max(1) - 1) as f64 / 2.0;
+        for (i, &line) in lines.iter().enumerate() {
+            let y = first + spacing * i as f64;
+            figure.text(figure.width / 2.0, y, line, style);
+        }
         figure
     }
 }

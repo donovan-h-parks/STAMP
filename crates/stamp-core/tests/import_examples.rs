@@ -304,3 +304,110 @@ fn singlem_and_sandpiper_give_the_same_profile() {
         }
     }
 }
+
+/// The Eggerthellaceae example (SingleM coverage from Sandpiper, built into
+/// the application): the profiles and metadata agree with each other, and a
+/// test across the thirteen host groups runs on them.
+#[test]
+fn eggerthellaceae_example() {
+    use stamp_core::stats::correction::Correction;
+    use stamp_core::stats::multi_group::{MultiGroupEffectSize, MultiGroupTest};
+    use stamp_core::stats::results::{run_multi_group_analysis, MultiGroupAnalysis, Transform};
+    use stamp_core::stats::rng_from_seed;
+    use stamp_core::{Metadata, Unclassified};
+
+    let tree = ProfileTree::read(&read("examples/Eggerthellaceae/eggerthellaceae.spf")).unwrap();
+    assert_eq!(tree.num_samples(), 1289);
+    assert_eq!(
+        tree.hierarchy_headings(),
+        ["Domain", "Phylum", "Class", "Order", "Family", "Genus"]
+    );
+    let (metadata, warnings) = Metadata::read(
+        &read("examples/Eggerthellaceae/eggerthellaceae.metadata.tsv"),
+        &tree,
+    )
+    .unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(metadata.samples().len(), 1289);
+    let hosts = metadata.groups("Host_group").unwrap();
+    assert_eq!(hosts.names().count(), 13);
+    assert_eq!(
+        hosts.samples("Feral horse (Sable Island)").unwrap().len(),
+        682
+    );
+
+    let profile = tree
+        .multi_group_profile(&hosts, None, None, "Genus", Unclassified::Retain)
+        .unwrap();
+    assert_eq!(profile.profile.num_features(), 544);
+    // The relative abundance of each focus genus in the metadata was taken
+    // from the full profile; the "unclassified other" rows keep each
+    // sample's total, so the reduced profile gives the same percentages to
+    // within the rounding of its values to three significant digits. (For
+    // a BioSample of several runs the metadata holds the mean of the runs'
+    // percentages, and the profile the mean of their coverage, which differ.)
+    let samples = &profile.profile.sample_names;
+    let mut compared = 0;
+    for genus in ["Equivita", "Gorillivita", "Tapirivita"] {
+        let feature = profile.profile.feature(genus).unwrap();
+        let percentages = profile.profile.percentages(feature);
+        let field = format!("{genus}_relab");
+        for (sample, &percent) in samples.iter().zip(&percentages) {
+            if metadata.value(sample, "Runs").unwrap().contains(',') {
+                continue;
+            }
+            let expected: f64 = metadata.value(sample, &field).unwrap().parse().unwrap();
+            assert!(
+                (percent - expected).abs() <= 0.01 * expected.max(0.01),
+                "{genus} in {sample}: {percent} against {expected}"
+            );
+            compared += 1;
+        }
+    }
+    assert!(compared > 3 * 1250, "{compared}");
+
+    let analysis = MultiGroupAnalysis {
+        test: MultiGroupTest::KruskalWallis,
+        effect_size: MultiGroupEffectSize::EtaSquared,
+        correction: Correction::BenjaminiHochberg,
+        transform: Transform::None,
+    };
+    let results =
+        run_multi_group_analysis(&profile, analysis, &mut rng_from_seed(1), &mut |_, _| true)
+            .unwrap();
+    assert_eq!(results.rows.len(), 544);
+    // Gorillivita lives in great apes: its mean is highest there, and the
+    // hosts differ.
+    let row = results
+        .rows
+        .iter()
+        .find(|r| r.feature == "Gorillivita")
+        .unwrap();
+    let apes = profile
+        .group_names
+        .iter()
+        .position(|g| g == "Great apes")
+        .unwrap();
+    let highest = (0..row.group_means.len())
+        .max_by(|&a, &b| row.group_means[a].total_cmp(&row.group_means[b]))
+        .unwrap();
+    assert_eq!(highest, apes);
+    assert!(row.p_value_corrected < 1e-10, "{}", row.p_value_corrected);
+
+    // The focus-species profile: proportions of the whole community, with
+    // the rest of it and the coverage given only to a genus left out as
+    // features.
+    let species = ProfileTree::read(&read(
+        "examples/Eggerthellaceae/eggerthellaceae_mgr_species.spf",
+    ))
+    .unwrap();
+    assert_eq!(species.num_samples(), 1289);
+    let profile = species
+        .multi_group_profile(&hosts, None, None, "Species", Unclassified::FrequencyOnly)
+        .unwrap();
+    assert_eq!(profile.profile.num_features(), 15);
+    let results =
+        run_multi_group_analysis(&profile, analysis, &mut rng_from_seed(1), &mut |_, _| true)
+            .unwrap();
+    assert_eq!(results.rows.len(), 15);
+}

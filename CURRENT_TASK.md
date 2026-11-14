@@ -10,6 +10,31 @@ Idle.
 
 ## Last completed
 
+- **Eggerthellaceae built-in example dataset** (2026-11-15), on top of
+  HEAD 5352966. `examples/Eggerthellaceae/` (eggerthellaceae.spf 1,289 x
+  544 Domain..Genus, eggerthellaceae_mgr_species.spf, metadata, readme.txt
+  with provenance/caveats/reuse). GUI: `Example::EggerthellaceaeGenera`
+  and `EggerthellaceaeSpecies` ("Eggerthellaceae (genera)", "Eggerthellaceae
+  (focus species)"), gzipped by `build.rs`, `unpack`, and
+  `StampApp::eggerthellaceae_settings` (level Genus/Species, species with
+  Unclassified = frequency-only, group field Host_group, two groups
+  Domestic horse vs Feral horse (Sable Island), correlation field
+  Equivita_relab, Multiple groups mode). Heatmap refusal now says samples or
+  features and points to the group heatmap (`Figure::message` draws one
+  line per `\n`); results table window lays out only visible cells (frame
+  150 -> 100 ms with 3,903 columns; still slow, columns are not
+  virtualised). Load 65 ms, analysis + PCA settled ~0.8 s, ~47 MB resident
+  (peak 86 MB), results table +140 MB. Size: desktop +591 KB (40.18 ->
+  40.77 MB), wasm 14.71 -> 15.30 MB, gzipped 5.56 -> 6.15 MB. Tests: GUI
+  `eggerthellaceae_examples_load_with_their_own_settings`,
+  `both_built_in_examples_load` names, core `eggerthellaceae_example`,
+  golden_profiles list, heatmap limits. Docs: new
+  `example_eggerthellaceae.rst` (4 figures egg_*.png), input_files,
+  quick_start, faq (two entries), index, plots note, command_line examples
+  now name the example files (all checked to run), NEW_FEATURES, README;
+  sphinx -W passes (`pixi exec --spec sphinx --spec sphinx_rtd_theme`).
+  **Not committed** (instructed to leave changes uncommitted).
+
 - **Map of sample locations (Natural Earth)** (2026-11-15), on top of the
   other uncommitted work. Data: `scripts/naturalearth/convert.py` + README
   (Natural Earth v5.1.2 GeoJSON, SHA-256 pinned, stdlib Python, varint

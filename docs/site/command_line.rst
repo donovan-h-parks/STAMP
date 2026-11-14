@@ -60,6 +60,14 @@ the other commands::
 
    stamp-cli info --profile coal.spf --metadata coal.metadata.tsv
 
+The examples on this page use the data sets in the ``examples`` directory of
+the source repository: ``coal.spf`` (``examples/CoalSeamGas``),
+``Enterotypes.profile.spf`` (``examples/EnterotypesArumugam``), and
+``eggerthellaceae.spf``, ``eggerthellaceae_mgr_species.spf`` and
+``eggerthellaceae.metadata.tsv`` (``examples/Eggerthellaceae``, SingleM
+profiles of gut metagenomes of mammals with curated host metadata; see
+:doc:`example_eggerthellaceae`).
+
 Options common to the analyses
 ------------------------------
 
@@ -125,7 +133,7 @@ error that lists the fields or values, which catches misspellings.
 
 ::
 
-   stamp-cli multi-groups --profile community.spf --metadata metadata.tsv \
+   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
        --field Host_group --profile-level Genus \
        --where "Host_order=Perissodactyla" \
        --where-not "Host_group=Feral horse (Sable Island)"
@@ -237,8 +245,8 @@ Co-occurrence
 
 ::
 
-   stamp-cli co-occurrence --profile community.spf --profile-level Genus \
-       --metadata metadata.tsv --where Host_order=Perissodactyla \
+   stamp-cli co-occurrence --profile eggerthellaceae.spf --profile-level Genus \
+       --metadata eggerthellaceae.metadata.tsv --where Host_order=Perissodactyla \
        --top 40 --feature Equivita --feature Tapirivita --clr \
        --mark-min-coefficient 0.3 --plot genera.png --output genera.tsv
 
@@ -343,7 +351,7 @@ Colouring and shaping PCA, PCoA and NMDS plots
 horses of Sable Island) by Bray-Curtis distance, coloured by the abundance
 of *Equivita* on a log scale and shaped by captivity::
 
-   stamp-cli multi-groups --profile community.spf --metadata metadata.tsv \
+   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
        --field Host_group --where-not "Host_group=Feral horse (Sable Island)" \
        --profile-level Genus --unclassified remove \
        --plot pcoa.png --plot-type pcoa \
@@ -384,7 +392,7 @@ Box plots of several features
 three genera in the host groups of the perissodactyls on a log axis, with
 every sample as a point, the groups ordered by their median::
 
-   stamp-cli multi-groups --profile community.spf --metadata metadata.tsv \
+   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
        --field Host_group --where Host_order=Perissodactyla \
        --profile-level Genus --unclassified remove \
        --plot box.png --plot-type box --plot-feature Equivita \
@@ -424,7 +432,7 @@ every feature of the profile level, whatever the filters (unless
 ``--prevalence-only-filtered``). For example, the genera of every host group
 but the unknown and environmental samples, three of them named::
 
-   stamp-cli multi-groups --profile community.spf --metadata metadata.tsv \
+   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
        --field Host_group --where-not Host_group=Unknown \
        --where-not Host_group=Environmental \
        --profile-level Genus --unclassified remove \
@@ -466,11 +474,11 @@ example, a world map of the host groups, one marker per site sized by its
 number of samples, and the great apes alone coloured by the abundance of
 *Gorillivita* (the area is then found around them, at 1:50m)::
 
-   stamp-cli multi-groups --profile community.spf --metadata metadata.tsv \
+   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
        --field Host_group --profile-level Genus \
        --plot map.png --plot-type map --map-extent world
 
-   stamp-cli multi-groups --profile community.spf --metadata metadata.tsv \
+   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
        --field Country --where "Host_group=Great apes" --profile-level Genus \
        --plot apes.png --plot-type map --color-by feature:Gorillivita
 
@@ -522,7 +530,8 @@ features that pass the filters, so filter with care. For example, the
 prevalence of species in each host species, the hosts ordered by their
 order::
 
-   stamp-cli multi-groups --profile mgr_species.spf --metadata metadata.tsv \
+   stamp-cli multi-groups --profile eggerthellaceae_mgr_species.spf \
+       --metadata eggerthellaceae.metadata.tsv --unclassified frequency-only \
        --field Host_species --plot prevalence.png --plot-type group-heatmap \
        --heatmap-statistic prevalence --heatmap-order-field Host_order \
        --heatmap-table prevalence.tsv

@@ -113,6 +113,9 @@ Next steps
 ----------
 
 * Load your own data: see :doc:`input_files`.
+* Work through a larger data set, 1,289 gut metagenomes of mammals with
+  many host groups (**File > Open example data > Eggerthellaceae**): see
+  :doc:`example_eggerthellaceae`.
 * Learn what each test does and how to read it: :doc:`statistics` and
   :doc:`choosing_a_test`.
 * Learn what each plot shows: :doc:`plots`.

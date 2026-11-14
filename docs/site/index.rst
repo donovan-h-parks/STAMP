@@ -43,6 +43,7 @@ the same for every plot.
 
    installing
    quick_start
+   example_eggerthellaceae
    faq
 
 .. toctree::

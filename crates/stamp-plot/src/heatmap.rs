@@ -587,8 +587,18 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     {
         return Figure::message("A heatmap needs at least two features and two samples");
     }
-    if rows > MAX_ITEMS || columns > MAX_ITEMS {
-        return Figure::message("Heatmap plots are limited to 1000 samples and 1000 features. Filter the features first.");
+    if columns > MAX_ITEMS {
+        return Figure::message(&format!(
+            "Heatmap plots are limited to {MAX_ITEMS} samples, and there are {columns}.\n\
+             Use the group heatmap, which shows each group in one column,\n\
+             or keep fewer samples with a sample filter."
+        ));
+    }
+    if rows > MAX_ITEMS {
+        return Figure::message(&format!(
+            "Heatmap plots are limited to {MAX_ITEMS} features, and there are {rows}. \
+             Filter the features first."
+        ));
     }
 
     let column_vectors: Vec<Vec<f64>> = (0..columns)
@@ -974,7 +984,19 @@ mod tests {
             value_label: String::new(),
             group_colors: Vec::new(),
         };
-        assert!(texts(&plot(&big, &Options::default()))[0].contains("limited to 1000"));
+        assert!(texts(&plot(&big, &Options::default()))[0].contains("limited to 1000 features"));
+        let wide = Data {
+            features: vec!["f1".into(), "f2".into()],
+            samples: (0..1001).map(|i| format!("s{i}")).collect(),
+            values: vec![vec![1.0; 1001]; 2],
+            sample_groups: vec![0; 1001],
+            groups: vec!["A".into()],
+            value_label: String::new(),
+            group_colors: Vec::new(),
+        };
+        let lines = texts(&plot(&wide, &Options::default()));
+        assert!(lines[0].contains("limited to 1000 samples, and there are 1001"));
+        assert!(lines[1].contains("group heatmap"));
         assert!(texts(&plot(
             &data(),
             &Options {

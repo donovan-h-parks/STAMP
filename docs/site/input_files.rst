@@ -170,7 +170,7 @@ proportions between samples.
 Example data
 ------------
 
-**File > Open example data** loads one of two data sets:
+**File > Open example data** loads one of these data sets:
 
 * **Enterotypes**: genus-level profiles of 39 human faecal metagenomes and
   their enterotypes (proportions). Good for comparing groups.
@@ -178,5 +178,16 @@ Example data
   cuttings and produced water (An et al. 2013, *Environ. Sci. Technol.*
   47:10708), as counts of sequences with a full taxonomy. Good for the
   diversity, rarefaction and community plots, which need counts.
+* **Eggerthellaceae (genera)**: SingleM profiles (from Sandpiper, GTDB R232)
+  of 1,289 gut metagenomes of mammals containing the Eggerthellaceae genera
+  *Equivita*, *Gorillivita* or *Tapirivita* (Parks et al. 2026, *Microbial
+  Genomics* 12(8)), Domain to Genus, with curated host, captivity and
+  location metadata. Values are coverage, not counts. Good for comparing
+  many groups of unequal size, the sample filter, the group heatmap, the
+  map and co-occurrence; see :doc:`example_eggerthellaceae`. It opens with
+  the samples grouped by ``Host_group`` in the *Multiple groups* analysis.
+* **Eggerthellaceae (focus species)**: the same samples, with the species of
+  the three genera and the rest of the community in one row that is used
+  only for calculating proportions.
 
 More examples are in the ``examples`` directory of the source repository.

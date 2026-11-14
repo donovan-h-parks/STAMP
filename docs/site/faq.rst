@@ -79,6 +79,19 @@ How long do the ordination plots take with many samples?
    once, while a change of samples, level, distance, rarefying, seed or
    number of permutations computes it again.
 
+Can STAMP analyse profiles of coverage, such as SingleM's?
+   Yes, for analyses that compare proportions: the group tests, the
+   correlation, and most plots. Rarefaction, Chao1 and the count-based tests
+   of two samples need counts of sequences, and STAMP refuses those that
+   need whole numbers. The Eggerthellaceae example data are SingleM
+   coverage; :doc:`example_eggerthellaceae` works through them.
+
+The heatmap says it is limited to 1,000 samples. What can I do?
+   A heatmap of more samples than that cannot show them legibly. Use the
+   **Group heatmap**, which shows each group of samples in one column, or
+   keep fewer samples with the *Sample filter* (``--where`` on the command
+   line).
+
 How do I analyse many data sets in the same way?
    Use the command line program in a script; see :doc:`command_line`.
 

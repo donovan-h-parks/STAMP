@@ -59,6 +59,29 @@ const ENTEROTYPES_METADATA: &str =
 /// sequence counts down to species. Compressed when the program is built.
 const COAL_PROFILE_GZ: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/coal.spf.gz"));
 const COAL_METADATA: &str = include_str!("../../../examples/CoalSeamGas/coal.metadata.tsv");
+/// Gut metagenomes containing the Eggerthellaceae genera Equivita,
+/// Gorillivita and Tapirivita (Parks et al., 2026), profiled by SingleM and
+/// taken from Sandpiper: a genus profile of 1,289 samples, a profile of the
+/// species of these three genera, and their metadata. Compressed when the
+/// program is built.
+const EGGERTHELLACEAE_PROFILE_GZ: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/eggerthellaceae.spf.gz"));
+const EGGERTHELLACEAE_SPECIES_GZ: &[u8] = include_bytes!(concat!(
+    env!("OUT_DIR"),
+    "/eggerthellaceae_mgr_species.spf.gz"
+));
+const EGGERTHELLACEAE_METADATA_GZ: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/eggerthellaceae.metadata.tsv.gz"));
+
+/// The text of an example compressed by the build script.
+fn unpack(data: &[u8]) -> Result<String, String> {
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(data)
+        .read_to_string(&mut text)
+        .map_err(|error| format!("The example could not be read: {error}"))?;
+    Ok(text)
+}
 
 /// The datasets built into the application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,15 +90,26 @@ pub enum Example {
     Enterotypes,
     /// Counts of sequences in coal-seam samples, with a full taxonomy.
     CoalSeamGas,
+    /// SingleM coverage of genera in 1,289 gut metagenomes of mammals.
+    EggerthellaceaeGenera,
+    /// The same samples, with the species of the three focus genera.
+    EggerthellaceaeSpecies,
 }
 
 impl Example {
-    pub const ALL: [Example; 2] = [Example::Enterotypes, Example::CoalSeamGas];
+    pub const ALL: [Example; 4] = [
+        Example::Enterotypes,
+        Example::CoalSeamGas,
+        Example::EggerthellaceaeGenera,
+        Example::EggerthellaceaeSpecies,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Example::Enterotypes => "Enterotypes",
             Example::CoalSeamGas => "Coal seam gas",
+            Example::EggerthellaceaeGenera => "Eggerthellaceae (genera)",
+            Example::EggerthellaceaeSpecies => "Eggerthellaceae (focus species)",
         }
     }
 
@@ -88,6 +122,16 @@ impl Example {
             Example::CoalSeamGas => {
                 "Coal seam microbial communities (An et al., 2013): sequence counts in 44 samples, \
                  domain to species"
+            }
+            Example::EggerthellaceaeGenera => {
+                "Gut metagenomes of mammals with the Eggerthellaceae genera Equivita, Gorillivita \
+                 or Tapirivita (Parks et al., 2026): SingleM coverage of 544 genera in 1,289 \
+                 samples from Sandpiper, grouped by host"
+            }
+            Example::EggerthellaceaeSpecies => {
+                "The same 1,289 metagenomes: SingleM coverage of the species of Equivita, \
+                 Gorillivita and Tapirivita, with the rest of the community used only for \
+                 proportions"
             }
         }
     }
@@ -1818,20 +1862,60 @@ impl StampApp {
                 self.load_profile("Enterotypes.profile.spf", ENTEROTYPES_PROFILE);
                 self.load_metadata("Enterotypes.metadata.tsv", ENTEROTYPES_METADATA);
             }
-            Example::CoalSeamGas => {
-                use std::io::Read;
-                let mut spf = String::new();
-                match flate2::read::GzDecoder::new(COAL_PROFILE_GZ).read_to_string(&mut spf) {
-                    Ok(_) => {
-                        self.load_profile("coal.spf", &spf);
-                        self.load_metadata("coal.metadata.tsv", COAL_METADATA);
+            Example::CoalSeamGas => match unpack(COAL_PROFILE_GZ) {
+                Ok(spf) => {
+                    self.load_profile("coal.spf", &spf);
+                    self.load_metadata("coal.metadata.tsv", COAL_METADATA);
+                }
+                Err(message) => self.notice = Some(message),
+            },
+            Example::EggerthellaceaeGenera | Example::EggerthellaceaeSpecies => {
+                let genera = example == Example::EggerthellaceaeGenera;
+                let (name, profile) = if genera {
+                    ("eggerthellaceae.spf", EGGERTHELLACEAE_PROFILE_GZ)
+                } else {
+                    (
+                        "eggerthellaceae_mgr_species.spf",
+                        EGGERTHELLACEAE_SPECIES_GZ,
+                    )
+                };
+                let texts = unpack(profile).and_then(|spf| {
+                    unpack(EGGERTHELLACEAE_METADATA_GZ).map(|metadata| (spf, metadata))
+                });
+                match texts {
+                    Ok((spf, metadata)) => {
+                        self.load_profile(name, &spf);
+                        self.load_metadata("eggerthellaceae.metadata.tsv", &metadata);
+                        if self.notice.is_none() {
+                            self.eggerthellaceae_settings(genera);
+                        }
                     }
-                    Err(error) => {
-                        self.notice = Some(format!("The example could not be read: {error}"));
-                    }
+                    Err(message) => self.notice = Some(message),
                 }
             }
         }
+    }
+
+    /// Settings the Eggerthellaceae examples start with: the lowest level,
+    /// the samples grouped by host and compared across all hosts, and
+    /// Equivita's relative abundance for correlations. The species profile
+    /// keeps the rest of the community only for calculating proportions.
+    fn eggerthellaceae_settings(&mut self, genera: bool) {
+        let session = &mut self.session;
+        session.profile_level = if genera { "Genus" } else { "Species" }.to_string();
+        if !genera {
+            session.unclassified = Unclassified::FrequencyOnly;
+        }
+        session.set_group_field("Host_group");
+        // Two groups: domestic horses against the feral horses of Sable
+        // Island, the two largest groups.
+        session.groups.group1 = "Domestic horse".to_string();
+        session.groups.group2 = Some("Feral horse (Sable Island)".to_string());
+        session.correlation.field = Some("Equivita_relab".to_string());
+        session.invalidate_all();
+        self.apply_filters();
+        self.mode = Mode::MultipleGroups;
+        self.view_dirty = true;
     }
 
     /// Hand the application the outcome of a file request, as the file
@@ -3811,9 +3895,17 @@ impl StampApp {
                             Column::auto().at_least(70.0).clip(true).resizable(true),
                             self.table.headings.len(),
                         )
+                        // Only cells in view are drawn: a table of a thousand
+                        // samples has thousands of columns, and laying out
+                        // the text of all of them in every row slows every
+                        // frame.
                         .header(20.0, |mut header| {
                             for (column, heading) in self.table.headings.iter().enumerate() {
-                                header.col(|ui| sort.heading(ui, column, heading));
+                                header.col(|ui| {
+                                    if ui.is_rect_visible(ui.max_rect()) {
+                                        sort.heading(ui, column, heading);
+                                    }
+                                });
                             }
                         })
                         .body(|body| {
@@ -3824,7 +3916,9 @@ impl StampApp {
                                 );
                                 for cell in &self.table.rows[index] {
                                     row.col(|ui| {
-                                        plain_label(ui, shorten_number(cell));
+                                        if ui.is_rect_visible(ui.max_rect()) {
+                                            plain_label(ui, shorten_number(cell));
+                                        }
                                     });
                                 }
                                 let response = row

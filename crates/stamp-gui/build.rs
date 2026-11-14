@@ -1,10 +1,11 @@
-//! Build script: compress the larger built-in example dataset and, on
+//! Build script: compress the larger built-in example datasets and, on
 //! Windows, embed the application icon and version details in the executable
 //! so that Explorer and the taskbar show them.
 
 /// Write a gzip-compressed copy of an example file to the build directory,
 /// for the program to carry inside it. The coal-seam profile is 4 MB of
-/// text and about 80 kB compressed, which matters for the web page.
+/// text and about 80 kB compressed, the Eggerthellaceae profile 2.3 MB and
+/// 540 kB, which matters for the web page.
 fn compress_example(source: &str, name: &str) {
     use std::io::Write;
     println!("cargo:rerun-if-changed={source}");
@@ -20,6 +21,14 @@ fn compress_example(source: &str, name: &str) {
 
 fn main() {
     compress_example("../../examples/CoalSeamGas/coal.spf", "coal.spf.gz");
+    let eggerthellaceae = "../../examples/Eggerthellaceae";
+    for name in [
+        "eggerthellaceae.spf",
+        "eggerthellaceae.metadata.tsv",
+        "eggerthellaceae_mgr_species.spf",
+    ] {
+        compress_example(&format!("{eggerthellaceae}/{name}"), &format!("{name}.gz"));
+    }
     println!("cargo:rerun-if-changed=assets/stamp.ico");
     #[cfg(windows)]
     {

@@ -18,10 +18,18 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Command line.** `stamp-cli` runs every analysis, writes the result
   tables with v2's column headings, draws every plot, and converts files
   from other tools, so analyses can be scripted.
-- **Built-in example data.** File > Open example data offers two datasets
+- **Built-in example data.** File > Open example data offers datasets
   without any files: "Enterotypes" (proportions of phyla and genera in gut
-  samples) and "Coal seam gas" (sequence counts with a full taxonomy, which
-  suits the rarefaction curves) [26].
+  samples), "Coal seam gas" (sequence counts with a full taxonomy, which
+  suits the rarefaction curves) [26], and "Eggerthellaceae (genera)" and
+  "Eggerthellaceae (focus species)": SingleM coverage from Sandpiper of
+  1,289 gut metagenomes of mammals containing Equivita, Gorillivita or
+  Tapirivita (Parks et al. 2026), with curated host, captivity and location
+  metadata (`examples/Eggerthellaceae`). These open in the multiple-group
+  analysis grouped by host, at genus or species level (the species profile
+  with unclassified coverage used only for proportions). The documentation
+  has a worked example on them (`docs/site/example_eggerthellaceae.rst`):
+  group heatmap, log box plot with a sample filter, map, co-occurrence.
 - **Online documentation** (`docs/site`, published beside the browser
   version), replacing v2's PDF user's guide: installation, a quick start on
   the example data, every control of the window and command, and pages

@@ -1512,7 +1512,12 @@ fn both_built_in_examples_load() {
     use stamp_gui::app::Example;
     assert_eq!(
         Example::ALL.map(Example::name),
-        ["Enterotypes", "Coal seam gas"]
+        [
+            "Enterotypes",
+            "Coal seam gas",
+            "Eggerthellaceae (genera)",
+            "Eggerthellaceae (focus species)"
+        ]
     );
     let mut harness = Harness::new();
     harness.app.load_example_data(Example::CoalSeamGas);
@@ -1540,6 +1545,84 @@ fn both_built_in_examples_load() {
     harness.settle();
     assert_eq!(harness.app.session.profile_name, "Enterotypes.profile.spf");
     assert_eq!(harness.app.session.tree.as_ref().unwrap().num_samples(), 39);
+}
+
+#[test]
+fn eggerthellaceae_examples_load_with_their_own_settings() {
+    use stamp_gui::app::Example;
+    let mut harness = Harness::new();
+    harness
+        .app
+        .load_example_data(Example::EggerthellaceaeGenera);
+    harness.settle();
+    assert_eq!(harness.app.notice(), None);
+    let session = &harness.app.session;
+    let tree = session.tree.as_ref().expect("the genus profile loaded");
+    assert_eq!(tree.num_samples(), 1289);
+    assert_eq!(tree.hierarchy_headings().len(), 6);
+    // The same data as the file in the repository.
+    let from_file =
+        stamp_core::ProfileTree::read(&example("Eggerthellaceae/eggerthellaceae.spf")).unwrap();
+    assert_eq!(tree.num_leaves(), from_file.num_leaves());
+    assert_eq!(
+        tree.sample_total("SAMD01733366"),
+        from_file.sample_total("SAMD01733366")
+    );
+    // Its own starting settings: genera, compared across hosts.
+    assert_eq!(session.profile_level, "Genus");
+    assert_eq!(session.group_field.as_deref(), Some("Host_group"));
+    assert_eq!(harness.app.mode, Mode::MultipleGroups);
+    assert_eq!(session.multi.active_groups.len(), 13);
+    assert_eq!(session.groups.group1, "Domestic horse");
+    assert_eq!(
+        session.groups.group2.as_deref(),
+        Some("Feral horse (Sable Island)")
+    );
+    assert_eq!(session.correlation.field.as_deref(), Some("Equivita_relab"));
+    assert!(session.error.is_none(), "{:?}", session.error);
+    // The multiple-group test ran over the genera (unclassified rows are
+    // features too, as unclassified reads are retained by default).
+    let (total, passing) = session.feature_counts(Mode::MultipleGroups);
+    assert_eq!(total, 544, "{total} features");
+    assert!(passing > 0 && passing < total);
+    assert!(!harness.app.results_table().rows.is_empty());
+
+    // The sample heatmap refuses this many samples and points to the
+    // group heatmap, which draws them.
+    harness.app.set_plot_kind(PlotKind::Heatmap);
+    harness.settle();
+    let texts = figure_texts(&harness.app);
+    assert!(
+        texts[0].contains("limited to 1000 samples, and there are 1289"),
+        "{texts:?}"
+    );
+    assert!(texts.iter().any(|t| t.contains("group heatmap")));
+    harness.app.set_plot_kind(PlotKind::GroupHeatmap);
+    harness.settle();
+    assert!(harness.app.figure().shapes.len() > 100);
+    harness.screenshot("eggerthellaceae_group_heatmap");
+    // Coverage is not counts, so there is nothing to rarefy.
+    harness.app.set_plot_kind(PlotKind::Rarefaction);
+    harness.settle();
+    assert_eq!(figure_texts(&harness.app).len(), 1);
+
+    harness
+        .app
+        .load_example_data(Example::EggerthellaceaeSpecies);
+    harness.settle();
+    assert_eq!(harness.app.notice(), None);
+    let session = &harness.app.session;
+    assert_eq!(session.profile_name, "eggerthellaceae_mgr_species.spf");
+    assert_eq!(session.tree.as_ref().unwrap().num_samples(), 1289);
+    assert_eq!(session.profile_level, "Species");
+    assert_eq!(
+        session.unclassified,
+        stamp_core::Unclassified::FrequencyOnly
+    );
+    assert_eq!(harness.app.mode, Mode::MultipleGroups);
+    // The named species only: the rest of the community and the coverage
+    // placed only in a genus are not features.
+    assert_eq!(session.feature_counts(Mode::MultipleGroups).0, 15);
 }
 
 #[test]
