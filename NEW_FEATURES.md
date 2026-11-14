@@ -146,6 +146,12 @@ Add an entry here whenever a feature is added that v2 did not have.
   sizes" frame of that plot's Configure plot window. v2's text was a fixed
   8 points [57]. On the command line: `--tick-font-size`,
   `--axis-label-font-size` and `--legend-font-size`.
+- **Plots listed by group.** The plot selector beneath the plot lists the
+  plots of an analysis under five headings, by the question they answer:
+  differences between features (with the p-value histogram and multiple
+  comparison plots, which check the tests, after a divider), one feature,
+  composition, diversity, and similarity between samples. Each analysis
+  still opens on the same plot.
 - **A "Correlation" tab** beside the three kinds of analysis of v2, with
   its own statistics, filters, feature table, results table and plots.
 

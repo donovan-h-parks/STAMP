@@ -10,6 +10,10 @@ Idle. Roadmap tiers 1 to 4 are all done, committed and pushed. Nothing further i
 
 ## Last completed
 
+- **Plots grouped in the selector** (2026-11-15): `PlotGroup` and
+  `PlotKind::group`/`grouped` in `stamp-gui/src/plots.rs`, drawn by
+  `choose_plot` in `app.rs`; `PlotKind::available` still sets each mode's
+  default (its first plot). Committed and pushed.
 - **Plot font sizes** (2026-11-15): ticks 8 pt, axis labels and legends 9
   pt by default, set in Settings > Preferences (`PlotSettings::fonts`,
   `stamp_plot::axes::Fonts`, applied with `axes::with_fonts` while a figure

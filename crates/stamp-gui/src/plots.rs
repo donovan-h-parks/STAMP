@@ -74,6 +74,50 @@ impl PlotKind {
         }
     }
 
+    /// The group the plot is listed under, by the question it answers.
+    pub fn group(self) -> PlotGroup {
+        use PlotKind::*;
+        match self {
+            ExtendedErrorBar | Volcano | Ancom | PValueHistogram | MultipleComparison => {
+                PlotGroup::Differences
+            }
+            Bar | Box | PostHoc | CorrelationScatter => PlotGroup::OneFeature,
+            Composition | ProfileBar | Heatmap | Scatter | SharedFeatures | SequenceHistogram => {
+                PlotGroup::Composition
+            }
+            Rarefaction | RankAbundance | AlphaDiversity => PlotGroup::Diversity,
+            Pca | Pcoa | Nmds | DistanceBox | Mantel => PlotGroup::Similarity,
+        }
+    }
+
+    /// True for the plots that check the tests themselves rather than show
+    /// their results; they are listed last in their group, after a divider.
+    pub fn checks_the_tests(self) -> bool {
+        matches!(
+            self,
+            PlotKind::PValueHistogram | PlotKind::MultipleComparison
+        )
+    }
+
+    /// The plots offered in a mode, by group in the order of
+    /// [`PlotGroup::ALL`]; within a group they keep the order of
+    /// [`PlotKind::available`], with the checks on the tests last.
+    pub fn grouped(mode: Mode) -> Vec<(PlotGroup, Vec<PlotKind>)> {
+        PlotGroup::ALL
+            .into_iter()
+            .map(|group| {
+                let mut kinds: Vec<PlotKind> = Self::available(mode)
+                    .iter()
+                    .copied()
+                    .filter(|kind| kind.group() == group)
+                    .collect();
+                kinds.sort_by_key(|kind| kind.checks_the_tests());
+                (group, kinds)
+            })
+            .filter(|(_, kinds)| !kinds.is_empty())
+            .collect()
+    }
+
     /// The plots offered in a mode; the first is the default.
     pub fn available(mode: Mode) -> &'static [PlotKind] {
         match mode {
@@ -154,6 +198,43 @@ impl PlotKind {
             PlotKind::Box | PlotKind::PostHoc | PlotKind::CorrelationScatter => true,
             PlotKind::Bar => mode != Mode::TwoSamples,
             _ => false,
+        }
+    }
+}
+
+/// Groups of plots, by the question they answer, as the plot selector lists
+/// them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlotGroup {
+    /// Which features differ, and how much?
+    Differences,
+    /// What does the selected feature look like?
+    OneFeature,
+    /// What are the samples made of?
+    Composition,
+    /// How rich and even are the samples?
+    Diversity,
+    /// How alike are the samples, and does it follow the groups or a
+    /// variable?
+    Similarity,
+}
+
+impl PlotGroup {
+    pub const ALL: [PlotGroup; 5] = [
+        PlotGroup::Differences,
+        PlotGroup::OneFeature,
+        PlotGroup::Composition,
+        PlotGroup::Diversity,
+        PlotGroup::Similarity,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            PlotGroup::Differences => "Differences between features",
+            PlotGroup::OneFeature => "One feature",
+            PlotGroup::Composition => "Composition",
+            PlotGroup::Diversity => "Diversity",
+            PlotGroup::Similarity => "Similarity between samples",
         }
     }
 }
@@ -1207,5 +1288,47 @@ mod tests {
         // Groups without a chosen colour keep theirs from the palette.
         assert_eq!(session.group_color("A"), stamp_plot::axes::group_color(0));
         assert_eq!(session.group_color("C"), stamp_plot::axes::group_color(2));
+    }
+
+    #[test]
+    fn every_plot_is_listed_once_under_its_group() {
+        for mode in Mode::ALL {
+            let grouped = PlotKind::grouped(mode);
+            let listed: Vec<PlotKind> = grouped.iter().flat_map(|(_, k)| k.clone()).collect();
+            assert_eq!(listed.len(), PlotKind::available(mode).len(), "{mode:?}");
+            for kind in PlotKind::available(mode) {
+                assert_eq!(listed.iter().filter(|k| *k == kind).count(), 1);
+            }
+            for (group, kinds) in &grouped {
+                assert!(kinds.iter().all(|k| k.group() == *group));
+                // Checks on the tests come last in their group.
+                let first_check = kinds.iter().position(|k| k.checks_the_tests());
+                if let Some(at) = first_check {
+                    assert!(kinds[at..].iter().all(|k| k.checks_the_tests()));
+                }
+            }
+            // Groups appear in their fixed order.
+            let order: Vec<usize> = grouped
+                .iter()
+                .map(|(g, _)| PlotGroup::ALL.iter().position(|a| a == g).unwrap())
+                .collect();
+            assert!(order.windows(2).all(|w| w[0] < w[1]));
+        }
+        // Two samples have no groups of samples to compare.
+        let two_samples: Vec<PlotGroup> = PlotKind::grouped(Mode::TwoSamples)
+            .iter()
+            .map(|(g, _)| *g)
+            .collect();
+        assert!(!two_samples.contains(&PlotGroup::Similarity));
+        let differences = &PlotKind::grouped(Mode::TwoSamples)[0].1;
+        assert_eq!(
+            differences,
+            &[
+                PlotKind::ExtendedErrorBar,
+                PlotKind::Volcano,
+                PlotKind::PValueHistogram,
+                PlotKind::MultipleComparison
+            ]
+        );
     }
 }

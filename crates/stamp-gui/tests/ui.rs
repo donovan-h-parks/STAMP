@@ -2123,3 +2123,26 @@ fn font_sizes_are_set_in_the_preferences_and_per_plot() {
     harness.settle();
     harness.screenshot("configure_plot_fonts");
 }
+
+#[test]
+fn the_plot_selector_lists_plots_by_group() {
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.settle();
+    let closed = harness.screenshot("plot_selector_closed");
+    // The selector beneath the plot, at the left of the plot bar.
+    let app = &mut harness.app;
+    harness
+        .renderer
+        .click(egui::pos2(320.0, 727.0), |ui| app.draw(ui));
+    let app = &mut harness.app;
+    harness.renderer.run(30, |ui| app.draw(ui));
+    let open = harness.screenshot("plot_selector_open");
+    // The list opens over the plot.
+    assert!(
+        (0..closed.pixels.len()).any(|i| closed.pixels[i] != open.pixels[i]),
+        "the selector did not open"
+    );
+    // The default plot is still the first offered.
+    assert_eq!(harness.app.plot_kind(), PlotKind::Pca);
+}

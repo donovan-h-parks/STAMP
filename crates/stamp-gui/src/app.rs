@@ -88,6 +88,51 @@ const COMBO_WIDTH: f32 = 132.0;
 
 /// A combo box over a fixed list of choices. Returns true if the choice
 /// changed.
+/// The plot selector: the plots of a mode under a heading for each group,
+/// with the checks on the tests after a divider. Returns true if the user
+/// chose another plot.
+fn choose_plot(ui: &mut egui::Ui, mode: Mode, current: &mut PlotKind) -> bool {
+    let mut changed = false;
+    let combo = egui::ComboBox::from_id_salt("plot-kind")
+        .selected_text(current.name())
+        .width(COMBO_WIDTH)
+        .truncate()
+        // Tall enough for every plot of a mode without scrolling, where the
+        // window has room.
+        .height(ui.ctx().content_rect().height())
+        .show_ui(ui, |ui| {
+            ui.set_min_width(200.0);
+            // Rows close together, so that a mode's plots fit without
+            // scrolling.
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.spacing_mut().button_padding.y = 1.0;
+            for (index, (group, kinds)) in PlotKind::grouped(mode).into_iter().enumerate() {
+                if index > 0 {
+                    ui.add_space(5.0);
+                }
+                ui.label(egui::RichText::new(group.name()).strong().small());
+                let mut divided = false;
+                for kind in kinds {
+                    if kind.checks_the_tests() && !divided {
+                        ui.separator();
+                        divided = true;
+                    }
+                    ui.horizontal(|ui| {
+                        ui.add_space(10.0);
+                        if ui.selectable_label(*current == kind, kind.name()).clicked()
+                            && *current != kind
+                        {
+                            *current = kind;
+                            changed = true;
+                        }
+                    });
+                }
+            }
+        });
+    combo.response.on_hover_text(current.name());
+    changed
+}
+
 pub(crate) fn choose<T: PartialEq + Clone>(
     ui: &mut egui::Ui,
     id: &str,
@@ -2565,8 +2610,7 @@ impl StampApp {
             };
 
             let mut kind = self.plot_kind();
-            let kinds = named(PlotKind::available(self.mode), PlotKind::name);
-            if choose(ui, "plot-kind", &mut kind, &kinds) {
+            if choose_plot(ui, self.mode, &mut kind) {
                 self.set_plot_kind(kind);
             }
             let configure = ui
