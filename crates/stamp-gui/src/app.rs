@@ -8,13 +8,17 @@
 use eframe::egui::{self, Color32, RichText};
 use stamp_core::stats::ci::SampleCi;
 use stamp_core::stats::correction::Correction;
+use stamp_core::stats::correlation::CorrelationMethod;
 use stamp_core::stats::effect_size::{GroupEffectSize, SampleEffectSize};
 use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::post_hoc::PostHocTest;
+use stamp_core::stats::results::Transform;
 use stamp_core::stats::results::{
     format_p_value, FilterOperator, GroupCountFilter, SampleCountFilter,
 };
-use stamp_core::stats::table::{group_table, multi_group_table, sample_table, Table};
+use stamp_core::stats::table::{
+    correlation_table, group_table, multi_group_table, sample_table, Table,
+};
 use stamp_core::stats::two_group::GroupTest;
 use stamp_core::stats::two_sample::SampleTest;
 use stamp_core::stats::TestType;
@@ -349,13 +353,22 @@ impl CountFilterUi {
 /// The filters each analysis starts with, in the order of `Mode::ALL`. They
 /// are those of STAMP v2: the multiple-group effect size, eta-squared, lies
 /// between zero and one, so its filter starts at 0.8.
-fn starting_filters() -> [FilterUi; 3] {
+/// What the transform does, for the hover text of its control.
+const TRANSFORM_HELP: &str = "Centred log-ratio: p-values are computed from the logarithm of \
+    each feature relative to the geometric mean of its sample, which removes the constraint \
+    that proportions sum to one. Effect sizes, confidence intervals and plots stay in \
+    proportions.";
+
+fn starting_filters() -> [FilterUi; 4] {
     let mut filters = [
+        FilterUi::default(),
         FilterUi::default(),
         FilterUi::default(),
         FilterUi::default(),
     ];
     filters[mode_slot(Mode::MultipleGroups)].effect1_minimum = 0.8;
+    // A correlation coefficient also lies within one of zero.
+    filters[mode_slot(Mode::Correlation)].effect1_minimum = 0.5;
     filters
 }
 
@@ -718,11 +731,11 @@ impl FeatureRow {
 pub struct StampApp {
     pub session: Session,
     pub mode: Mode,
-    plot_kinds: [PlotKind; 3],
+    plot_kinds: [PlotKind; 4],
     plot_settings: PlotSettings,
     zoom: f32,
-    filters: [FilterUi; 3],
-    selections: [SelectionUi; 3],
+    filters: [FilterUi; 4],
+    selections: [SelectionUi; 4],
     /// The "Select features" window, while it is open, and the analysis it
     /// belongs to.
     select_dialog: Option<(Mode, FeatureSelection)>,
@@ -829,6 +842,7 @@ impl StampApp {
                 PlotKind::available(Mode::MultipleGroups)[0],
                 PlotKind::available(Mode::TwoGroups)[0],
                 PlotKind::available(Mode::TwoSamples)[0],
+                PlotKind::available(Mode::Correlation)[0],
             ],
             plot_settings: PlotSettings::default(),
             zoom: DEFAULT_ZOOM,
@@ -1148,6 +1162,7 @@ impl StampApp {
             Mode::TwoSamples => s.samples.output.as_ref().map(|(_, r)| &r.correction),
             Mode::TwoGroups => s.groups.output.as_ref().map(|(_, r)| &r.correction),
             Mode::MultipleGroups => s.multi.output.as_ref().map(|(_, r)| &r.correction),
+            Mode::Correlation => s.correlation.output.as_ref().map(|(_, r)| &r.correction),
         };
         let Some(summary) = summary else {
             return vec!["Run a hypothesis test first.".to_string()];
@@ -1203,6 +1218,16 @@ impl StampApp {
                 }),
             ),
             Mode::MultipleGroups => (s.multi.output.as_ref().map(|(p, _)| &p.profile), None),
+            Mode::Correlation => (
+                s.correlation.output.as_ref().map(|(p, _)| &p.profile),
+                s.correlation.output.as_ref().map(|(p, _)| {
+                    let left_out = match p.without_value {
+                        0 => String::new(),
+                        n => format!(" ({n} without a number left out)"),
+                    };
+                    format!(", Samples: {}{left_out}", p.values.len())
+                }),
+            ),
         };
         let Some(profile) = profile else {
             return String::new();
@@ -1235,6 +1260,7 @@ impl StampApp {
             Mode::TwoSamples => s.samples.output.as_ref().map(|(p, _)| &p.profile),
             Mode::TwoGroups => s.groups.output.as_ref().map(|(p, _)| &p.profile),
             Mode::MultipleGroups => s.multi.output.as_ref().map(|(p, _)| &p.profile),
+            Mode::Correlation => s.correlation.output.as_ref().map(|(p, _)| &p.profile),
         }
     }
 
@@ -1482,6 +1508,7 @@ impl StampApp {
         self.session.samples.filter.selected_features = selected(Mode::TwoSamples);
         self.session.groups.filter.selected_features = selected(Mode::TwoGroups);
         self.session.multi.filter.selected_features = selected(Mode::MultipleGroups);
+        self.session.correlation.filter.selected_features = selected(Mode::Correlation);
 
         let f = &self.filters[mode_slot(Mode::TwoSamples)];
         let filter = &mut self.session.samples.filter;
@@ -1510,6 +1537,11 @@ impl StampApp {
         let filter = &mut self.session.multi.filter;
         filter.significance = f.p_enabled.then_some(f.p_value);
         filter.min_effect_size = effect(f.effect1_enabled, f.effect1_minimum);
+
+        let f = &self.filters[mode_slot(Mode::Correlation)];
+        let filter = &mut self.session.correlation.filter;
+        filter.significance = f.p_enabled.then_some(f.p_value);
+        filter.min_coefficient = effect(f.effect1_enabled, f.effect1_minimum);
         self.view_dirty = true;
     }
 
@@ -1619,6 +1651,34 @@ impl StampApp {
                     };
                     let features = shown.iter().map(|r| r.feature.clone()).collect();
                     (multi_group_table(profile, results, shown), features)
+                }
+                None => empty_table(),
+            },
+            Mode::Correlation => match &s.correlation.output {
+                Some((profile, results)) => {
+                    effect_heading = "Correlation";
+                    feature_rows = results
+                        .rows
+                        .iter()
+                        .map(|r| {
+                            feature_row(
+                                &r.feature,
+                                r.coefficient,
+                                r.p_value,
+                                r.p_value_corrected,
+                                &r.note,
+                            )
+                        })
+                        .collect();
+                    let rows = s.correlation_rows();
+                    active = rows.iter().map(|r| r.feature.clone()).collect();
+                    let shown = if self.results_only_active {
+                        rows
+                    } else {
+                        results.rows.iter().collect()
+                    };
+                    let features = shown.iter().map(|r| r.feature.clone()).collect();
+                    (correlation_table(profile, results, shown), features)
                 }
                 None => empty_table(),
             },
@@ -2178,6 +2238,19 @@ impl StampApp {
                 let mut seconds: Vec<(Option<String>, String)> =
                     names.iter().map(|n| (Some(n.clone()), n.clone())).collect();
                 seconds.push((None, stamp_core::ALL_OTHER_SAMPLES.to_string()));
+                // Any field can say which samples belong together.
+                let mut pair_fields: Vec<(Option<String>, String)> =
+                    vec![(None, "(choose a field)".to_string())];
+                if let Some(metadata) = &self.session.metadata {
+                    pair_fields.extend(
+                        metadata
+                            .fields()
+                            .iter()
+                            .filter(|f| Some(*f) != self.session.group_field.as_ref())
+                            .map(|f| (Some(f.clone()), f.clone())),
+                    );
+                }
+                let transforms = named(&Transform::ALL, Transform::name);
                 let state = &mut self.session.groups;
                 egui::Grid::new("group-stats")
                     .num_columns(2)
@@ -2192,9 +2265,30 @@ impl StampApp {
                             let tests = named(&GroupTest::ALL, GroupTest::name);
                             choose(ui, "group-test", &mut state.analysis.test, &tests)
                         });
+                        if state.analysis.test.is_paired() {
+                            rerun |= row(ui, "Pair field:", |ui| {
+                                choose(ui, "group-pair-field", &mut state.pair_field, &pair_fields)
+                            });
+                            if let Some(pairing) = &state.pairing {
+                                ui.label("");
+                                ui.weak(pairing);
+                                ui.end_row();
+                            }
+                        }
                         rerun |= row(ui, "Type:", |ui| {
                             choose(ui, "group-type", &mut state.analysis.test_type, &test_types)
                         });
+                        // White's test works on counts; it is not transformed.
+                        ui.label("Transform:").on_hover_text(TRANSFORM_HELP);
+                        ui.add_enabled_ui(state.analysis.test != GroupTest::White, |ui| {
+                            rerun |= choose(
+                                ui,
+                                "group-transform",
+                                &mut state.analysis.transform,
+                                &transforms,
+                            );
+                        });
+                        ui.end_row();
                         row(ui, "CI method:", |ui| {
                             ui.label(state.analysis.test.ci_method());
                             false
@@ -2235,6 +2329,15 @@ impl StampApp {
                             let tests = named(&MultiGroupTest::ALL, MultiGroupTest::name);
                             choose(ui, "multi-test", &mut state.analysis.test, &tests)
                         });
+                        ui.label("Transform:").on_hover_text(TRANSFORM_HELP);
+                        let transforms = named(&Transform::ALL, Transform::name);
+                        rerun |= choose(
+                            ui,
+                            "multi-transform",
+                            &mut state.analysis.transform,
+                            &transforms,
+                        );
+                        ui.end_row();
                         post_hoc_changed |= row(ui, "Post-hoc test:", |ui| {
                             let tests = named(&PostHocTest::ALL, PostHocTest::name);
                             choose(ui, "post-hoc-test", &mut state.post_hoc_test, &tests)
@@ -2266,6 +2369,52 @@ impl StampApp {
                     });
                 self.view_dirty |= post_hoc_changed;
             }
+            Mode::Correlation => {
+                if self.session.metadata.is_none() {
+                    ui.label("Load a metadata file to correlate features with a field.");
+                    return;
+                }
+                let fields = self.session.numeric_fields();
+                if fields.is_empty() {
+                    ui.label("No metadata field holds a number for at least three samples.");
+                    return;
+                }
+                let fields: Vec<(Option<String>, String)> =
+                    fields.into_iter().map(|f| (Some(f.clone()), f)).collect();
+                let state = &mut self.session.correlation;
+                if !fields.iter().any(|(field, _)| *field == state.field) {
+                    state.field = fields[0].0.clone();
+                    rerun = true;
+                }
+                egui::Grid::new("correlation-stats")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        rerun |= row(ui, "Numeric field:", |ui| {
+                            choose(ui, "correlation-field", &mut state.field, &fields)
+                        });
+                        rerun |= row(ui, "Correlation:", |ui| {
+                            let methods = named(&CorrelationMethod::ALL, CorrelationMethod::name);
+                            choose(
+                                ui,
+                                "correlation-method",
+                                &mut state.analysis.method,
+                                &methods,
+                            )
+                        });
+                        let mut chosen = state.analysis.correction;
+                        if row(ui, "Multiple test correction:", |ui| {
+                            choose(ui, "correlation-correction", &mut chosen, &corrections)
+                        }) {
+                            correction = Some(chosen);
+                        }
+                        ui.label("");
+                        show_info |= ui
+                            .button("Correction info")
+                            .on_hover_text("Summary of the multiple test correction")
+                            .clicked();
+                        ui.end_row();
+                    });
+            }
         }
         if rerun {
             self.session.invalidate(mode);
@@ -2291,6 +2440,7 @@ impl StampApp {
             Mode::TwoSamples => self.session.samples.analysis.correction,
             Mode::TwoGroups => self.session.groups.analysis.correction,
             Mode::MultipleGroups => self.session.multi.analysis.correction,
+            Mode::Correlation => self.session.correlation.analysis.correction,
         }
         .is_false_discovery_rate();
         let selection = &mut self.selections[mode_slot(mode)];
@@ -2339,6 +2489,15 @@ impl StampApp {
                 Mode::MultipleGroups => {
                     filter.show(ui, "multi", &["Eta-squared"], &[], "", counts, fdr)
                 }
+                Mode::Correlation => filter.show(
+                    ui,
+                    "correlation",
+                    &["Correlation (absolute)"],
+                    &[],
+                    "",
+                    counts,
+                    fdr,
+                ),
             };
         if changed {
             self.apply_filters();

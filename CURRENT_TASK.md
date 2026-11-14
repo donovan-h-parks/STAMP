@@ -6,12 +6,24 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle, **waiting on the user for the go-ahead on roadmap tier 3** (numeric
-metadata, paired tests, CLR; see `docs/ROADMAP.md`). The instruction was to
-prompt for tiers 2 to 4 in order, so do not start tier 3 or 4 unasked.
+Idle, **waiting on the user for the go-ahead on roadmap tier 4** (ANCOM,
+Mantel, shared-feature plot, NMDS, rank-abundance; see `docs/ROADMAP.md`).
+The instruction was to prompt for the tiers in order, so do not start
+tier 4 unasked.
 
 ## Last completed
 
+- **Roadmap tier 3** (2026-11-14): paired t-test and Wilcoxon signed-rank
+  test (`GroupTest::PairedT`, `WilcoxonSignedRank`; pairs from
+  `Metadata::paired_groups`, the session's `groups.pair_field`); centred
+  log-ratio `Transform` on the two-group and multiple-group analyses
+  (p-values only); correlation with a numeric metadata field as a fourth
+  mode (`Mode::Correlation`, `stats/correlation.rs`, `CorrelationRun` in
+  `stats/results.rs`, `stamp-plot/src/correlation_plot.rs`,
+  `PlotKind::CorrelationScatter`); command line `--test paired-t|wilcoxon
+  --pair-field`, `--transform clr`, and the `correlation` command. Values
+  checked against SciPy 1.17. Tests, lint and web bundle done. Committed
+  (see `git log`), not pushed.
 - **Roadmap tier 2** (2026-11-14): alpha diversity, distances
   (Bray-Curtis, Jaccard, Aitchison) and PCoA in
   `stamp-core/src/stats/diversity.rs`; PERMANOVA, PERMDISP and ANOSIM in
@@ -21,8 +33,7 @@ prompt for tiers 2 to 4 in order, so do not start tier 3 or 4 unasked.
   alpha-diversity|pcoa|distance-box` (`--alpha-metric`, `--distance`,
   `--rarefy`). Values checked against scikit-bio 0.7.4. Chao1 and Chao2
   switched to the bias-corrected form. Unclassified categories are not
-  features in these analyses. Tests, lint and web bundle done; check
-  `git status` for whether it is committed.
+  features in these analyses. Committed as `ff2ba03`.
 - **Roadmap tier 1** (2026-11-14): Mann-Whitney U test
   (`GroupTest::MannWhitney`), Dunn's post-hoc test (`PostHocTest::Dunn`),
   volcano plot (`stamp-plot/src/volcano.rs`) and composition bar plot
@@ -60,8 +71,8 @@ prompt for tiers 2 to 4 in order, so do not start tier 3 or 4 unasked.
 - Branch `rust-port`, pushed to `origin` up to `b5f1820` (tag
   `feature-parity` is on `6b834ba`).
 - Tier 1 is committed locally as `466fc38` and **not pushed** (the user
-  asked for a commit only). Tier 2 is uncommitted unless `git log` shows
-  otherwise.
+  asked for a commit only), as is tier 2 (`ff2ba03`). Tier 3 is
+  committed too, and also not pushed.
 
 ## Next
 

@@ -187,8 +187,107 @@ impl Metadata {
         })
     }
 
+    /// The active samples that have a number in a field, with that number,
+    /// in the order of the metadata table.
+    pub fn numeric_values(&self, field: &str) -> Vec<(&str, f64)> {
+        let Some(f) = self.field_index(field) else {
+            return Vec::new();
+        };
+        self.samples
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| self.active[*i])
+            .filter_map(|(i, sample)| {
+                text::parse_float(&self.values[i][f])
+                    .filter(|value| value.is_finite())
+                    .map(|value| (sample.as_str(), value))
+            })
+            .collect()
+    }
+
+    /// Match the samples of two groups in pairs by the value of another
+    /// field (the subject each sample came from, say), for the paired
+    /// tests. A value forms a pair if exactly one sample of each group has
+    /// it; every other sample of the two groups is left out. The groups
+    /// returned list their samples pair by pair, in the order of the
+    /// values.
+    pub fn paired_groups(
+        &self,
+        groups: &Groups,
+        group1: &str,
+        group2: &str,
+        pair_field: &str,
+    ) -> Result<Pairing> {
+        let f = self
+            .field_index(pair_field)
+            .ok_or_else(|| StampError::new(format!("Unknown metadata field '{pair_field}'.")))?;
+        let by_value = |group: &str| -> Result<BTreeMap<&str, Vec<&String>>> {
+            let samples = groups
+                .samples(group)
+                .ok_or_else(|| StampError::new(format!("Unknown group '{group}'.")))?;
+            let mut map: BTreeMap<&str, Vec<&String>> = BTreeMap::new();
+            for sample in samples {
+                if let Some(i) = self.samples.iter().position(|s| s == sample) {
+                    map.entry(self.values[i][f].as_str())
+                        .or_default()
+                        .push(sample);
+                }
+            }
+            Ok(map)
+        };
+        if group1 == group2 {
+            return Err(StampError::new("A paired test needs two different groups."));
+        }
+        let (first, second) = (by_value(group1)?, by_value(group2)?);
+        let total: usize = first.values().chain(second.values()).map(Vec::len).sum();
+        let (mut samples1, mut samples2) = (Vec::new(), Vec::new());
+        for (value, members) in &first {
+            if let ([a], Some([b])) = (members.as_slice(), second.get(value).map(Vec::as_slice)) {
+                if !value.trim().is_empty() {
+                    samples1.push((*a).clone());
+                    samples2.push((*b).clone());
+                }
+            }
+        }
+        let pairs = samples1.len();
+        let mut paired = groups.clone();
+        paired.groups.insert(group1.to_string(), samples1);
+        paired.groups.insert(group2.to_string(), samples2);
+        Ok(Pairing {
+            groups: paired,
+            pairs,
+            unpaired: total - 2 * pairs,
+        })
+    }
+
     fn field_index(&self, field: &str) -> Option<usize> {
         self.fields.iter().position(|f| f == field)
+    }
+}
+
+/// Two groups with their samples matched in pairs; see
+/// [`Metadata::paired_groups`].
+#[derive(Debug, Clone)]
+pub struct Pairing {
+    /// The grouping, with the samples of the two groups pair by pair.
+    pub groups: Groups,
+    pub pairs: usize,
+    /// Samples of the two groups that had no partner, or more than one.
+    pub unpaired: usize,
+}
+
+impl Pairing {
+    /// A sentence saying how many pairs were found.
+    pub fn summary(&self) -> String {
+        let pairs = match self.pairs {
+            1 => "1 pair".to_string(),
+            n => format!("{n} pairs"),
+        };
+        match self.unpaired {
+            0 => pairs,
+            1 => format!("{pairs}; 1 sample without a partner left out"),
+            n => format!("{pairs}; {n} samples without a partner left out"),
+        }
     }
 }
 

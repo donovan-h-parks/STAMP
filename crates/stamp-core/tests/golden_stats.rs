@@ -492,6 +492,7 @@ fn two_group_statistics_match_python() {
             test_type: test_type(&case),
             coverage,
             correction: Correction::None,
+            transform: stamp_core::stats::results::Transform::None,
         };
         let results = run_group_analysis(
             &profile,
@@ -658,6 +659,7 @@ fn multi_group_statistics_match_python() {
             test: MultiGroupTest::from_name(case.test.as_deref().unwrap()).unwrap(),
             effect_size: MultiGroupEffectSize::EtaSquared,
             correction: Correction::None,
+            transform: stamp_core::stats::results::Transform::None,
         };
         let results =
             run_multi_group_analysis(&profile, analysis, &mut rng_from_seed(42), &mut |_, _| true)

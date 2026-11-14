@@ -8,8 +8,8 @@ use stamp_plot::axes::AXES_COLOR;
 use stamp_plot::community_plots::{self, Community};
 use stamp_plot::extended_error_bar::{self, SAMPLE1_COLOR, SAMPLE2_COLOR};
 use stamp_plot::{
-    composition, feature_plots, heatmap, histogram, pca_plot, post_hoc, rarefaction, sample_plots,
-    scatter, volcano, Color, Figure,
+    composition, correlation_plot, feature_plots, heatmap, histogram, pca_plot, post_hoc,
+    rarefaction, sample_plots, scatter, volcano, Color, Figure,
 };
 
 use crate::session::{Mode, Session};
@@ -34,6 +34,7 @@ pub enum PlotKind {
     AlphaDiversity,
     Pcoa,
     DistanceBox,
+    CorrelationScatter,
 }
 
 impl PlotKind {
@@ -56,6 +57,7 @@ impl PlotKind {
             PlotKind::AlphaDiversity => "Alpha diversity box plot",
             PlotKind::Pcoa => "PCoA plot",
             PlotKind::DistanceBox => "Distance box plot",
+            PlotKind::CorrelationScatter => "Correlation scatter plot",
         }
     }
 
@@ -88,6 +90,11 @@ impl PlotKind {
                 PlotKind::Pcoa,
                 PlotKind::DistanceBox,
             ],
+            Mode::Correlation => &[
+                PlotKind::CorrelationScatter,
+                PlotKind::Volcano,
+                PlotKind::PValueHistogram,
+            ],
             Mode::MultipleGroups => &[
                 PlotKind::Pca,
                 PlotKind::Heatmap,
@@ -119,7 +126,7 @@ impl PlotKind {
     /// True if the plot shows the selected feature only.
     pub fn uses_selected_feature(self, mode: Mode) -> bool {
         match self {
-            PlotKind::Box | PlotKind::PostHoc => true,
+            PlotKind::Box | PlotKind::PostHoc | PlotKind::CorrelationScatter => true,
             PlotKind::Bar => mode != Mode::TwoSamples,
             _ => false,
         }
@@ -162,6 +169,7 @@ pub struct PlotSettings {
     pub rarefaction: rarefaction::Options,
     pub volcano: volcano::Options,
     pub composition: composition::Options,
+    pub correlation: correlation_plot::Options,
     /// How samples are made comparable for the diversity plots, the
     /// distance between samples they use, and the number of permutations
     /// of the community tests.
@@ -248,6 +256,7 @@ impl Default for PlotSettings {
             },
             rarefaction: rarefaction::Options::default(),
             volcano: volcano::Options::default(),
+            correlation: correlation_plot::Options::default(),
             composition: composition::Options::default(),
             community_normalisation: Normalisation::Proportions,
             community_distance: Distance::BrayCurtis,
@@ -315,6 +324,7 @@ impl PlotSettings {
             PlotKind::Pca => self.pca = defaults.pca,
             PlotKind::Rarefaction => self.rarefaction = defaults.rarefaction,
             PlotKind::Volcano => self.volcano = defaults.volcano,
+            PlotKind::CorrelationScatter => self.correlation = defaults.correlation,
             PlotKind::Composition => self.composition = defaults.composition,
             PlotKind::AlphaDiversity | PlotKind::Pcoa | PlotKind::DistanceBox => {
                 match kind {
@@ -585,7 +595,12 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                 return Figure::message(NO_METADATA);
             }
             let Some((profile, results)) = &session.groups.output else {
-                return Figure::message("Running the two-group analysis...");
+                return Figure::message(
+                    session
+                        .error
+                        .as_deref()
+                        .unwrap_or("Running the two-group analysis..."),
+                );
             };
             let rows = session.group_rows();
             let color1 = session.group_color(&profile.group_name1);
@@ -700,6 +715,74 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     )
                 }
                 _ => Figure::message("This plot is not available for two groups"),
+            }
+        }
+        Mode::Correlation => {
+            if session.metadata.is_none() {
+                return Figure::message(NO_METADATA);
+            }
+            if session.correlation.field.is_none() {
+                return Figure::message(
+                    "No metadata field holds a number for at least three samples",
+                );
+            }
+            let Some((profile, results)) = &session.correlation.output else {
+                return Figure::message(
+                    session
+                        .error
+                        .as_deref()
+                        .unwrap_or("Running the correlation analysis..."),
+                );
+            };
+            match kind {
+                PlotKind::CorrelationScatter => {
+                    let Some(mut data) = feature
+                        .and_then(|name| correlation_plot::Data::from_profile(profile, name))
+                    else {
+                        return Figure::message(NO_FEATURE);
+                    };
+                    // Coloured by the groups of the group field, if any.
+                    if let Some(groups) = session.grouping() {
+                        let names: Vec<String> = groups.names().map(str::to_string).collect();
+                        for point in &mut data.points {
+                            point.group = names.iter().position(|g| {
+                                groups
+                                    .samples(g)
+                                    .is_some_and(|members| members.contains(&point.sample))
+                            });
+                        }
+                        data.group_colors = names.iter().map(|g| session.group_color(g)).collect();
+                        data.groups = names;
+                    }
+                    data.statistics =
+                        results
+                            .rows
+                            .iter()
+                            .find(|r| r.feature == data.feature)
+                            .map(|r| {
+                                format!(
+                                    "{} = {:.3}, p = {} (n = {})",
+                                    results.analysis.method.coefficient_name(),
+                                    r.coefficient,
+                                    p_text(r.p_value_corrected),
+                                    profile.values.len()
+                                )
+                            });
+                    correlation_plot::plot(&data, &settings.correlation)
+                }
+                PlotKind::Volcano => volcano::plot(
+                    &volcano::Data::from_correlation_results(results, &profile.field),
+                    &volcano_options,
+                ),
+                PlotKind::PValueHistogram => {
+                    let values: Vec<f64> = if settings.p_value_histogram_corrected {
+                        results.rows.iter().map(|r| r.p_value_corrected).collect()
+                    } else {
+                        results.rows.iter().map(|r| r.p_value).collect()
+                    };
+                    histogram::p_value_histogram(&values, &settings.p_value_histogram)
+                }
+                _ => Figure::message("This plot is not available for correlations"),
             }
         }
         Mode::MultipleGroups => {
@@ -840,7 +923,8 @@ mod tests {
             y\t50\t48\t52\t50\t49\t51\t50\t50\t50\n\
             z\t40\t40\t37\t20\t18\t18\t30\t29\t31\n\
             w\t5\t9\t2\t8\t3\t6\t4\t7\t5\n";
-        let meta = "Id\tGroup\nA1\tA\nA2\tA\nA3\tA\nB1\tB\nB2\tB\nB3\tB\nC1\tC\nC2\tC\nC3\tC\n";
+        let meta = "Id\tGroup\tDepth\nA1\tA\t1\nA2\tA\t2\nA3\tA\t4\nB1\tB\t3\nB2\tB\t6\n\
+            B3\tB\t5\nC1\tC\t9\nC2\tC\t7\nC3\tC\t8\n";
         let mut session = Session::default();
         session.load_profile("t.spf", spf).unwrap();
         session.load_metadata("t.tsv", meta).unwrap();

@@ -34,12 +34,12 @@ ordination on them, and tests on them), which is where most studies begin.
 
 ## Tier 3: numeric metadata, paired designs, compositional data
 
-- [ ] **Correlation with a numeric metadata field**: Spearman (and Pearson)
+- [x] **Correlation with a numeric metadata field**: Spearman (and Pearson)
   for every feature, with the multiple-test corrections.
-- [ ] **Plot of a feature against a numeric field**, with a fitted line.
-- [ ] **Paired tests**: paired t-test and Wilcoxon signed-rank, with a
+- [x] **Plot of a feature against a numeric field**, with a fitted line.
+- [x] **Paired tests**: paired t-test and Wilcoxon signed-rank, with a
   metadata field that identifies the pairs.
-- [ ] **Centred log-ratio transform** as an option before the existing
+- [x] **Centred log-ratio transform** as an option before the existing
   tests, to address the compositional nature of proportions.
 
 ## Tier 4: further methods

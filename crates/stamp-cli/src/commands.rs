@@ -8,12 +8,13 @@ use stamp_core::import::{biom, cog, comet, mgrast, mothur, rita, NamedText};
 use stamp_core::stats::correction::Correction;
 use stamp_core::stats::multi_group::MultiGroupEffectSize;
 use stamp_core::stats::results::{
-    run_group_analysis, run_multi_group_analysis, run_post_hoc, run_sample_analysis,
-    CorrectionSummary, GroupAnalysis, GroupCountFilter, GroupFilter, MultiGroupAnalysis,
-    MultiGroupFilter, SampleAnalysis, SampleCountFilter, SampleFilter,
+    run_correlation_analysis, run_group_analysis, run_multi_group_analysis, run_post_hoc,
+    run_sample_analysis, CorrectionSummary, CorrelationAnalysis, CorrelationFilter, GroupAnalysis,
+    GroupCountFilter, GroupFilter, MultiGroupAnalysis, MultiGroupFilter, SampleAnalysis,
+    SampleCountFilter, SampleFilter,
 };
 use stamp_core::stats::table::{
-    group_table, multi_group_table, post_hoc_table, sample_table, Table,
+    correlation_table, group_table, multi_group_table, post_hoc_table, sample_table, Table,
 };
 use stamp_core::stats::{rng_from_seed, StatsSettings};
 use stamp_core::{Groups, Metadata, MultiGroupProfile, ProfileTree, SecondGroup};
@@ -32,6 +33,7 @@ pub fn run(cli: Cli) -> CliResult {
         Command::TwoGroups(args) => two_groups(args),
         Command::MultiGroups(args) => multi_groups(args),
         Command::PostHoc(args) => post_hoc(args),
+        Command::Correlation(args) => correlation(args),
         Command::Convert(args) => convert(args.format),
     }
 }
@@ -67,14 +69,15 @@ fn load_profile(path: &Path) -> CliResult<ProfileTree> {
     core(ProfileTree::read(&read_text(path)?)).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Read the metadata, report its warnings, and group the samples.
-fn load_groups(tree: &ProfileTree, args: &MetadataArgs) -> CliResult<Groups> {
-    let (mut metadata, warnings) = core(Metadata::read(&read_text(&args.metadata)?, tree))
-        .map_err(|e| format!("{}: {e}", args.metadata.display()))?;
+/// Read the metadata, report its warnings, and leave out the samples that
+/// were excluded.
+fn load_metadata(tree: &ProfileTree, path: &Path, excluded: &[String]) -> CliResult<Metadata> {
+    let (mut metadata, warnings) = core(Metadata::read(&read_text(path)?, tree))
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     for warning in warnings {
         eprintln!("warning: {warning}");
     }
-    for sample in &args.excluded_samples {
+    for sample in excluded {
         if !metadata.samples().contains(sample) {
             return Err(format!(
                 "cannot exclude '{sample}': no such sample in the metadata"
@@ -82,12 +85,23 @@ fn load_groups(tree: &ProfileTree, args: &MetadataArgs) -> CliResult<Groups> {
         }
         metadata.set_active(sample, false);
     }
-    core(metadata.groups(&args.field)).map_err(|e| {
+    Ok(metadata)
+}
+
+/// Group the samples by a metadata field.
+fn groups_of(metadata: &Metadata, field: &str) -> CliResult<Groups> {
+    core(metadata.groups(field)).map_err(|e| {
         format!(
             "{e} Fields in the metadata file: {}.",
             metadata.fields().join(", ")
         )
     })
+}
+
+/// Read the metadata, report its warnings, and group the samples.
+fn load_groups(tree: &ProfileTree, args: &MetadataArgs) -> CliResult<Groups> {
+    let metadata = load_metadata(tree, &args.metadata, &args.excluded_samples)?;
+    groups_of(&metadata, &args.field)
 }
 
 /// The level to analyse, and the parent level as the core expects it.
@@ -394,7 +408,44 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
     };
 
     let tree = load_profile(&args.profile.profile)?;
-    let groups = load_groups(&tree, &args.metadata)?;
+    let metadata = load_metadata(
+        &tree,
+        &args.metadata.metadata,
+        &args.metadata.excluded_samples,
+    )?;
+    let mut groups = groups_of(&metadata, &args.metadata.field)?;
+    let test: stamp_core::stats::two_group::GroupTest = args.test.into();
+    match (test.is_paired(), &args.pair_field) {
+        (true, Some(field)) => {
+            let second = args
+                .group2
+                .as_deref()
+                .ok_or("a paired test needs two named groups: give --group2")?;
+            let pairing = core(metadata.paired_groups(&groups, &args.group1, second, field))
+                .map_err(|e| with_group_names(e, &groups))?;
+            eprintln!("Paired by {field}: {}.", pairing.summary());
+            groups = pairing.groups;
+        }
+        (true, None) => {
+            return Err(
+                "a paired test needs --pair-field, the metadata field that says \
+                which samples form a pair"
+                    .to_string(),
+            )
+        }
+        (false, Some(_)) => {
+            return Err(
+                "--pair-field is for the paired tests (--test paired-t or wilcoxon)".to_string(),
+            )
+        }
+        (false, None) => {}
+    }
+    let transform: stamp_core::stats::results::Transform = args.transform.into();
+    if transform != stamp_core::stats::results::Transform::None && !transform.applies_to(test) {
+        return Err(
+            "White's test works on counts and cannot be combined with --transform".to_string(),
+        );
+    }
     let (parent_level, profile_level) = levels(&tree, &args.profile);
     let group2 = match args.group2.as_deref() {
         Some(name) => SecondGroup::Named(name),
@@ -411,10 +462,11 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
     .map_err(|e| with_group_names(e, &groups))?;
 
     let analysis = GroupAnalysis {
-        test: args.test.into(),
+        test,
         test_type: args.test_type.into(),
         coverage: args.coverage,
         correction: args.correction.into(),
+        transform,
     };
     let settings = settings(&args.resampling);
     let mut rng = rng_from_seed(args.resampling.seed);
@@ -612,6 +664,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
         test: args.test.into(),
         effect_size: MultiGroupEffectSize::EtaSquared,
         correction: args.correction.into(),
+        transform: args.transform.into(),
     };
     let mut rng = rng_from_seed(args.seed);
     let results = run_multi_group_analysis(&profile, analysis, &mut rng, &mut |_, _| true)
@@ -787,6 +840,124 @@ fn post_hoc(args: PostHocArgs) -> CliResult {
         args.profile.output.as_deref(),
         &combined.expect("at least one feature is required"),
     )
+}
+
+/// Correlate every feature with a numeric metadata field.
+fn correlation(args: CorrelationArgs) -> CliResult {
+    let tree = load_profile(&args.profile.profile)?;
+    let metadata = load_metadata(&tree, &args.metadata, &args.excluded_samples)?;
+    let (parent_level, profile_level) = levels(&tree, &args.profile);
+    let profile = core(tree.correlation_profile(
+        &metadata,
+        &args.field,
+        parent_level,
+        profile_level,
+        args.profile.unclassified.into(),
+    ))
+    .map_err(|e| {
+        format!(
+            "{e} Fields in the metadata file: {}.",
+            metadata.fields().join(", ")
+        )
+    })?;
+    if profile.values.len() < 3 {
+        return Err(format!(
+            "a correlation needs at least three samples with a number for '{}'; {} found",
+            args.field,
+            profile.values.len()
+        ));
+    }
+    if profile.without_value > 0 {
+        eprintln!(
+            "{} of the samples have no number for '{}' and are left out.",
+            profile.without_value, args.field
+        );
+    }
+
+    let analysis = CorrelationAnalysis {
+        method: args.method.into(),
+        correction: args.correction.into(),
+    };
+    let mut rng = rng_from_seed(args.seed);
+    let results = run_correlation_analysis(&profile, analysis, &mut rng, &mut |_, _| true)
+        .expect("analysis is never cancelled");
+    report_correction(&results.correction);
+    let filter = CorrelationFilter {
+        selected_features: None,
+        significance: args.significance,
+        min_coefficient: args.min_correlation,
+    };
+    let rows = results.filter(&filter);
+
+    if let Some(path) = &args.plot.plot {
+        use stamp_plot::{correlation_plot, histogram, volcano};
+        let plot = &args.plot;
+        let height = plot.plot_height.unwrap_or(6.0);
+        let figure = match plot.plot_type.unwrap_or(PlotTypeArg::CorrelationScatter) {
+            PlotTypeArg::CorrelationScatter => {
+                let name = plot
+                    .plot_feature
+                    .clone()
+                    .or_else(|| rows.first().map(|r| r.feature.clone()))
+                    .ok_or("no feature passes the filters; name one with --plot-feature")?;
+                let mut data = correlation_plot::Data::from_profile(&profile, &name)
+                    .ok_or_else(|| format!("unknown feature '{name}'"))?;
+                if let Some(field) = &args.group_field {
+                    let groups = groups_of(&metadata, field)?;
+                    let names: Vec<String> = groups.names().map(str::to_string).collect();
+                    for point in &mut data.points {
+                        point.group = names.iter().position(|g| {
+                            groups
+                                .samples(g)
+                                .is_some_and(|members| members.contains(&point.sample))
+                        });
+                    }
+                    data.groups = names;
+                }
+                data.statistics = results.rows.iter().find(|r| r.feature == name).map(|r| {
+                    format!(
+                        "{} = {:.3}, p = {} (n = {})",
+                        analysis.method.coefficient_name(),
+                        r.coefficient,
+                        stamp_core::stats::results::format_p_value(r.p_value_corrected, -15),
+                        profile.values.len()
+                    )
+                });
+                correlation_plot::plot(
+                    &data,
+                    &correlation_plot::Options {
+                        width: plot.plot_width,
+                        height,
+                        ..Default::default()
+                    },
+                )
+            }
+            PlotTypeArg::Volcano => volcano::plot(
+                &volcano::Data::from_correlation_results(&results, &profile.field),
+                &volcano::Options {
+                    width: plot.plot_width,
+                    height,
+                    corrected: !plot.plot_uncorrected_p_values,
+                    ..Default::default()
+                },
+            ),
+            PlotTypeArg::PValueHistogram => {
+                let p: Vec<f64> = results.rows.iter().map(|r| r.p_value_corrected).collect();
+                histogram::p_value_histogram(
+                    &p,
+                    &histogram::PValueOptions {
+                        width: plot.plot_width,
+                        height: plot.plot_height.unwrap_or(7.0),
+                        ..Default::default()
+                    },
+                )
+            }
+            other => return Err(unavailable(other, "a correlation")),
+        };
+        write_figure(path, &figure, plot.plot_dpi)?;
+    }
+    let table = correlation_table(&profile, &results, rows);
+    write_table(args.profile.output.as_deref(), &table)
 }
 
 fn unavailable(kind: PlotTypeArg, context: &str) -> String {

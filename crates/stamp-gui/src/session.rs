@@ -6,10 +6,12 @@ use std::sync::Arc;
 
 use stamp_core::stats::ci::SampleCi;
 use stamp_core::stats::correction::Correction;
+use stamp_core::stats::correlation::CorrelationMethod;
 use stamp_core::stats::multi_group::{MultiGroupEffectSize, MultiGroupTest};
 use stamp_core::stats::post_hoc::{PostHocResult, PostHocTest};
 use stamp_core::stats::results::{
-    run_post_hoc, Control, GroupAnalysis, GroupFilter, GroupResults, GroupRow, GroupRun,
+    run_post_hoc, Control, CorrelationAnalysis, CorrelationFilter, CorrelationResults,
+    CorrelationRow, CorrelationRun, GroupAnalysis, GroupFilter, GroupResults, GroupRow, GroupRun,
     MultiGroupAnalysis, MultiGroupFilter, MultiGroupResults, MultiGroupRow, MultiGroupRun,
     SampleAnalysis, SampleFilter, SampleResults, SampleRow, SampleRun, Step,
 };
@@ -17,28 +19,36 @@ use stamp_core::stats::two_group::GroupTest;
 use stamp_core::stats::two_sample::SampleTest;
 use stamp_core::stats::{rng_from_seed, StatsSettings, TestType};
 use stamp_core::{
-    GroupProfile, Groups, Metadata, MultiGroupProfile, ProfileTree, SampleProfile, SecondGroup,
-    Unclassified,
+    CorrelationProfile, GroupProfile, Groups, Metadata, MultiGroupProfile, ProfileTree,
+    SampleProfile, SecondGroup, Unclassified,
 };
 
 use crate::jobs::Job;
 
-/// The three kinds of analysis.
+/// The kinds of analysis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     MultipleGroups,
     TwoGroups,
     TwoSamples,
+    /// Every feature against a numeric metadata field.
+    Correlation,
 }
 
 impl Mode {
-    pub const ALL: [Mode; 3] = [Mode::MultipleGroups, Mode::TwoGroups, Mode::TwoSamples];
+    pub const ALL: [Mode; 4] = [
+        Mode::MultipleGroups,
+        Mode::TwoGroups,
+        Mode::TwoSamples,
+        Mode::Correlation,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Mode::MultipleGroups => "Multiple groups",
             Mode::TwoGroups => "Two groups",
             Mode::TwoSamples => "Two samples",
+            Mode::Correlation => "Correlation",
         }
     }
 }
@@ -85,9 +95,22 @@ pub struct GroupState {
     pub group1: String,
     /// `None` compares against all other samples.
     pub group2: Option<String>,
+    /// The metadata field that says which samples of the two groups belong
+    /// together, for the paired tests.
+    pub pair_field: Option<String>,
+    /// How many pairs the last paired analysis found, as a sentence.
+    pub pairing: Option<String>,
     pub analysis: GroupAnalysis,
     pub filter: GroupFilter,
     pub output: Option<(GroupProfile, GroupResults)>,
+}
+
+/// A correlation analysis: every feature against a numeric metadata field.
+pub struct CorrelationState {
+    pub field: Option<String>,
+    pub analysis: CorrelationAnalysis,
+    pub filter: CorrelationFilter,
+    pub output: Option<(CorrelationProfile, CorrelationResults)>,
 }
 
 /// A multiple-group analysis.
@@ -105,6 +128,7 @@ enum Finished {
     Samples(Option<(SampleProfile, SampleResults)>),
     Groups(Option<(GroupProfile, GroupResults)>),
     Multi(Option<(MultiGroupProfile, MultiGroupResults)>),
+    Correlation(Option<(CorrelationProfile, CorrelationResults)>),
 }
 
 type Outcome = Result<Finished, String>;
@@ -131,6 +155,7 @@ pub struct Session {
     pub samples: SampleState,
     pub groups: GroupState,
     pub multi: MultiState,
+    pub correlation: CorrelationState,
     /// Feature shown by the single-feature plots.
     pub selected_feature: Option<String>,
     /// Colours the user has chosen for groups, by group name.
@@ -139,8 +164,8 @@ pub struct Session {
     pub other_samples_color: stamp_plot::Color,
 
     /// Which analyses are out of date.
-    dirty: [bool; 3],
-    jobs: [Option<Job<Outcome>>; 3],
+    dirty: [bool; 4],
+    jobs: [Option<Job<Outcome>>; 4],
     /// Increases whenever results change, so that views know to refresh.
     pub generation: u64,
 }
@@ -184,6 +209,7 @@ fn mode_index(mode: Mode) -> usize {
         Mode::MultipleGroups => 0,
         Mode::TwoGroups => 1,
         Mode::TwoSamples => 2,
+        Mode::Correlation => 3,
     }
 }
 
@@ -218,11 +244,14 @@ impl Default for Session {
             groups: GroupState {
                 group1: String::new(),
                 group2: None,
+                pair_field: None,
+                pairing: None,
                 analysis: GroupAnalysis {
                     test: GroupTest::Welch,
                     test_type: TestType::TwoSided,
                     coverage: 0.95,
                     correction: Correction::None,
+                    transform: stamp_core::stats::results::Transform::None,
                 },
                 filter: GroupFilter::default(),
                 output: None,
@@ -233,17 +262,27 @@ impl Default for Session {
                     test: MultiGroupTest::Anova,
                     effect_size: MultiGroupEffectSize::EtaSquared,
                     correction: Correction::None,
+                    transform: stamp_core::stats::results::Transform::None,
                 },
                 filter: MultiGroupFilter::default(),
                 post_hoc_test: PostHocTest::TukeyKramer,
                 post_hoc_coverage: 0.95,
                 output: None,
             },
+            correlation: CorrelationState {
+                field: None,
+                analysis: CorrelationAnalysis {
+                    method: CorrelationMethod::Spearman,
+                    correction: Correction::None,
+                },
+                filter: CorrelationFilter::default(),
+                output: None,
+            },
             selected_feature: None,
             group_colors: std::collections::HashMap::new(),
             other_samples_color: stamp_plot::Color::rgb(127, 127, 127),
-            dirty: [false; 3],
-            jobs: [None, None, None],
+            dirty: [false; 4],
+            jobs: [None, None, None, None],
             generation: 0,
         }
     }
@@ -289,6 +328,9 @@ impl Session {
             Some(field) => self.set_group_field(&field),
             None => self.group_field = None,
         }
+        self.groups.pair_field = None;
+        self.correlation.field = self.numeric_fields().into_iter().next();
+        self.invalidate(Mode::Correlation);
         Ok(())
     }
 
@@ -335,6 +377,32 @@ impl Session {
         self.invalidate(Mode::MultipleGroups);
     }
 
+    /// The metadata fields a correlation can be made with: those that hold
+    /// a number for at least three samples.
+    pub fn numeric_fields(&self) -> Vec<String> {
+        let Some(metadata) = &self.metadata else {
+            return Vec::new();
+        };
+        metadata
+            .fields()
+            .iter()
+            .filter(|field| {
+                metadata
+                    .samples()
+                    .iter()
+                    .filter(|sample| {
+                        metadata
+                            .value(sample, field)
+                            .and_then(|v| v.trim().parse::<f64>().ok())
+                            .is_some_and(f64::is_finite)
+                    })
+                    .count()
+                    >= 3
+            })
+            .cloned()
+            .collect()
+    }
+
     /// The samples grouped by the chosen metadata field.
     pub fn grouping(&self) -> Option<Groups> {
         self.metadata
@@ -359,6 +427,7 @@ impl Session {
         if changed {
             self.invalidate(Mode::TwoGroups);
             self.invalidate(Mode::MultipleGroups);
+            self.invalidate(Mode::Correlation);
             self.generation += 1;
         }
     }
@@ -397,7 +466,7 @@ impl Session {
     /// Mark every analysis as out of date, after a change to the profile
     /// level or another shared setting.
     pub fn invalidate_all(&mut self) {
-        self.dirty = [true; 3];
+        self.dirty = [true; 4];
     }
 
     /// True while an analysis of this kind is running.
@@ -423,6 +492,11 @@ impl Session {
             self.dirty[index] = false;
             // Dropping a running job cancels it.
             self.jobs[index] = self.start(mode);
+            if self.jobs[index].is_none() {
+                // Nothing could be started: the results are gone, and the
+                // views should show why.
+                self.generation += 1;
+            }
         }
 
         let mut finished = None;
@@ -442,6 +516,7 @@ impl Session {
                 Ok(Finished::Samples(output)) => self.samples.output = output,
                 Ok(Finished::Groups(output)) => self.groups.output = output,
                 Ok(Finished::Multi(output)) => self.multi.output = output,
+                Ok(Finished::Correlation(output)) => self.correlation.output = output,
                 Err(message) => {
                     self.error = Some(message);
                     return false;
@@ -503,6 +578,35 @@ impl Session {
                 };
                 let (g1, g2) = (self.groups.group1.clone(), self.groups.group2.clone());
                 let analysis = self.groups.analysis;
+                // A paired test takes the samples of the two groups pair by
+                // pair, as a metadata field matches them.
+                self.groups.pairing = None;
+                let groups = if analysis.test.is_paired() {
+                    let paired = match (&g2, &self.groups.pair_field, &self.metadata) {
+                        (None, _, _) => Err("A paired test needs two named groups, not \
+                            \"All other samples\"."
+                            .to_string()),
+                        (_, None, _) | (_, _, None) => Err("Choose the metadata field that \
+                            says which samples form a pair."
+                            .to_string()),
+                        (Some(g2), Some(field), Some(metadata)) => metadata
+                            .paired_groups(&groups, &g1, g2, field)
+                            .map_err(|e| e.to_string()),
+                    };
+                    match paired {
+                        Ok(pairing) => {
+                            self.groups.pairing = Some(pairing.summary());
+                            pairing.groups
+                        }
+                        Err(message) => {
+                            self.groups.output = None;
+                            self.error = Some(message);
+                            return None;
+                        }
+                    }
+                } else {
+                    groups
+                };
                 let mut state = None;
                 Some(Job::spawn_steps(move |progress, out_of_time| {
                     if state.is_none() {
@@ -533,6 +637,44 @@ impl Session {
                     let step = run.advance(profile, rng, &mut pace(progress, out_of_time));
                     finish(step, &mut state, |profile, results| {
                         Finished::Groups(results.map(|r| (profile, r)))
+                    })
+                }))
+            }
+            Mode::Correlation => {
+                let (Some(metadata), Some(field)) =
+                    (self.metadata.clone(), self.correlation.field.clone())
+                else {
+                    self.correlation.output = None;
+                    return None;
+                };
+                let analysis = self.correlation.analysis;
+                let mut state = None;
+                Some(Job::spawn_steps(move |progress, out_of_time| {
+                    if state.is_none() {
+                        match tree.correlation_profile(
+                            &metadata,
+                            &field,
+                            parent.as_deref(),
+                            &level,
+                            unclassified,
+                        ) {
+                            Ok(profile) if profile.values.len() < 3 => {
+                                return Some(Err(format!(
+                                    "A correlation needs at least three samples with a \
+                                     number for \"{field}\"."
+                                )));
+                            }
+                            Ok(profile) => {
+                                let run = CorrelationRun::new(analysis);
+                                state = Some((profile, run, rng_from_seed(seed)));
+                            }
+                            Err(error) => return Some(Err(error.to_string())),
+                        }
+                    }
+                    let (profile, run, rng) = state.as_mut()?;
+                    let step = run.advance(profile, rng, &mut pace(progress, out_of_time));
+                    finish(step, &mut state, |profile, results| {
+                        Finished::Correlation(results.map(|r| (profile, r)))
                     })
                 }))
             }
@@ -598,6 +740,11 @@ impl Session {
                 .output
                 .as_ref()
                 .is_some_and(|(_, r)| r.rows.iter().any(|row| row.feature == feature)),
+            Mode::Correlation => self
+                .correlation
+                .output
+                .as_ref()
+                .is_some_and(|(_, r)| r.rows.iter().any(|row| row.feature == feature)),
         };
         if self.selected_feature.as_deref().is_some_and(exists) {
             return;
@@ -623,6 +770,14 @@ impl Session {
             Mode::MultipleGroups => first(
                 self.multi_rows().first().map(|r| r.feature.as_str()),
                 self.multi
+                    .output
+                    .as_ref()
+                    .and_then(|(_, r)| r.rows.first())
+                    .map(|r| r.feature.as_str()),
+            ),
+            Mode::Correlation => first(
+                self.correlation_rows().first().map(|r| r.feature.as_str()),
+                self.correlation
                     .output
                     .as_ref()
                     .and_then(|(_, r)| r.rows.first())
@@ -655,6 +810,14 @@ impl Session {
         }
     }
 
+    /// Rows of the correlation results that pass the filters.
+    pub fn correlation_rows(&self) -> Vec<&CorrelationRow> {
+        match &self.correlation.output {
+            Some((_, results)) => results.filter(&self.correlation.filter),
+            None => Vec::new(),
+        }
+    }
+
     /// Number of features in total and passing the filters, for `mode`.
     pub fn feature_counts(&self, mode: Mode) -> (usize, usize) {
         match mode {
@@ -672,6 +835,13 @@ impl Session {
             Mode::MultipleGroups => (
                 self.multi.output.as_ref().map_or(0, |(_, r)| r.rows.len()),
                 self.multi_rows().len(),
+            ),
+            Mode::Correlation => (
+                self.correlation
+                    .output
+                    .as_ref()
+                    .map_or(0, |(_, r)| r.rows.len()),
+                self.correlation_rows().len(),
             ),
         }
     }
@@ -696,6 +866,12 @@ impl Session {
             Mode::MultipleGroups => {
                 self.multi.analysis.correction = correction;
                 if let Some((_, results)) = &mut self.multi.output {
+                    results.apply_correction(correction, &mut rng);
+                }
+            }
+            Mode::Correlation => {
+                self.correlation.analysis.correction = correction;
+                if let Some((_, results)) = &mut self.correlation.output {
                     results.apply_correction(correction, &mut rng);
                 }
             }
@@ -728,7 +904,12 @@ mod tests {
         P1\tx\t10\t12\t11\t30\t33\t31\t20\t21\t19\n\
         P1\ty\t50\t48\t52\t50\t49\t51\t50\t50\t50\n\
         P2\tz\t40\t40\t37\t20\t18\t18\t30\t29\t31\n";
-    const META: &str = "Id\tGroup\tSite\nA1\tA\tgut\nA2\tA\tgut\nA3\tA\tskin\nB1\tB\tgut\nB2\tB\tskin\nB3\tB\tskin\nC1\tC\tgut\nC2\tC\tgut\nC3\tC\tskin\n";
+    // "Subject" pairs the samples of A with those of B; "Depth" is a
+    // number for every sample but one.
+    const META: &str = "Id\tGroup\tSite\tSubject\tDepth\n\
+        A1\tA\tgut\ts1\t1.0\nA2\tA\tgut\ts2\t2.5\nA3\tA\tskin\ts3\t4.0\n\
+        B1\tB\tgut\ts3\t5.0\nB2\tB\tskin\ts1\t7.5\nB3\tB\tskin\ts2\t8.0\n\
+        C1\tC\tgut\ts4\t9.0\nC2\tC\tgut\ts5\t11.0\nC3\tC\tskin\ts6\tunknown\n";
 
     fn loaded() -> Session {
         let mut session = Session::default();
@@ -881,5 +1062,157 @@ mod tests {
         assert!(session.groups.output.is_none());
         assert!(session.samples.output.is_some());
         assert!(session.post_hoc().is_none());
+    }
+
+    #[test]
+    fn paired_tests_take_their_pairs_from_a_field() {
+        let mut session = loaded();
+        session.profile_level = "Genus".to_string();
+        session.groups.analysis.test = GroupTest::PairedT;
+        session.invalidate(Mode::TwoGroups);
+        // No field chosen yet: nothing is run, and the reason is given.
+        session.run_to_completion(Mode::TwoGroups);
+        assert!(session.groups.output.is_none());
+        assert!(session.error.as_deref().unwrap().contains("form a pair"));
+
+        session.groups.pair_field = Some("Subject".to_string());
+        session.invalidate(Mode::TwoGroups);
+        session.run_to_completion(Mode::TwoGroups);
+        assert!(session.error.is_none(), "{:?}", session.error);
+        assert_eq!(session.groups.pairing.as_deref(), Some("3 pairs"));
+        let (profile, results) = session.groups.output.as_ref().unwrap();
+        // Pair by pair: s1, s2, s3.
+        assert_eq!(profile.samples_in_group1(), ["A1", "A2", "A3"]);
+        assert_eq!(profile.samples_in_group2(), ["B2", "B3", "B1"]);
+        assert!(results.rows.iter().all(|r| r.note.is_empty()));
+
+        // A sample switched off takes its partner with it.
+        session.set_samples_active(&["B2".to_string()], false);
+        session.run_to_completion(Mode::TwoGroups);
+        assert_eq!(
+            session.groups.pairing.as_deref(),
+            Some("2 pairs; 1 sample without a partner left out")
+        );
+        let (profile, _) = session.groups.output.as_ref().unwrap();
+        assert_eq!(profile.samples_in_group1(), ["A2", "A3"]);
+
+        // "All other samples" cannot be paired.
+        session.groups.group2 = None;
+        session.invalidate(Mode::TwoGroups);
+        session.run_to_completion(Mode::TwoGroups);
+        assert!(session.groups.output.is_none());
+        assert!(session
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("two named groups"));
+
+        // An unpaired test ignores the field and uses every sample again.
+        session.groups.group2 = Some("B".to_string());
+        session.groups.analysis.test = GroupTest::Welch;
+        session.invalidate(Mode::TwoGroups);
+        session.run_to_completion(Mode::TwoGroups);
+        assert!(session.groups.pairing.is_none());
+        let (profile, _) = session.groups.output.as_ref().unwrap();
+        assert_eq!(profile.samples_in_group1().len(), 3);
+    }
+
+    #[test]
+    fn features_are_correlated_with_a_numeric_field() {
+        let mut session = loaded();
+        // "Depth" is the only field with numbers.
+        assert_eq!(session.numeric_fields(), ["Depth"]);
+        assert_eq!(session.correlation.field.as_deref(), Some("Depth"));
+        session.profile_level = "Genus".to_string();
+        session.invalidate_all();
+        session.run_to_completion(Mode::Correlation);
+        let (profile, results) = session.correlation.output.as_ref().unwrap();
+        // C3 has no number.
+        assert_eq!(profile.values.len(), 8);
+        assert_eq!(profile.without_value, 1);
+        assert_eq!(results.rows.len(), 3);
+        assert_eq!(results.analysis.method, CorrelationMethod::Spearman);
+        assert!(results.rows.iter().all(|r| r.coefficient.abs() <= 1.0));
+        let before: Vec<f64> = results.rows.iter().map(|r| r.coefficient).collect();
+
+        // The filters, the correction and the method.
+        session.correlation.filter.min_coefficient = Some(2.0);
+        assert_eq!(session.feature_counts(Mode::Correlation), (3, 0));
+        session.correlation.filter.min_coefficient = None;
+        session.set_correction(Mode::Correlation, Correction::Bonferroni);
+        let (_, results) = session.correlation.output.as_ref().unwrap();
+        assert!(results
+            .rows
+            .iter()
+            .all(|r| r.p_value_corrected >= r.p_value));
+        session.correlation.analysis.method = CorrelationMethod::Pearson;
+        session.invalidate(Mode::Correlation);
+        session.run_to_completion(Mode::Correlation);
+        let (_, results) = session.correlation.output.as_ref().unwrap();
+        let after: Vec<f64> = results.rows.iter().map(|r| r.coefficient).collect();
+        assert_ne!(before, after);
+
+        // Switching samples off re-runs the analysis; with too few left it
+        // says so.
+        let most: Vec<String> = ["A1", "A2", "A3", "B1", "B2", "B3"]
+            .map(String::from)
+            .to_vec();
+        session.set_samples_active(&most, false);
+        session.run_to_completion(Mode::Correlation);
+        assert!(session.error.as_deref().unwrap().contains("at least three"));
+    }
+
+    #[test]
+    fn the_transform_changes_p_values_only() {
+        use stamp_core::stats::results::Transform;
+        let mut session = loaded();
+        session.profile_level = "Genus".to_string();
+        session.invalidate_all();
+        session.run_to_completion(Mode::TwoGroups);
+        session.run_to_completion(Mode::MultipleGroups);
+        let plain: Vec<(String, f64, f64)> = session
+            .groups
+            .output
+            .as_ref()
+            .unwrap()
+            .1
+            .rows
+            .iter()
+            .map(|r| (r.feature.clone(), r.p_value, r.effect_size))
+            .collect();
+        let multi_plain: Vec<f64> = session
+            .multi
+            .output
+            .as_ref()
+            .unwrap()
+            .1
+            .rows
+            .iter()
+            .map(|r| r.p_value)
+            .collect();
+        session.groups.analysis.transform = Transform::CentredLogRatio;
+        session.multi.analysis.transform = Transform::CentredLogRatio;
+        session.invalidate_all();
+        session.run_to_completion(Mode::TwoGroups);
+        session.run_to_completion(Mode::MultipleGroups);
+        let (_, results) = session.groups.output.as_ref().unwrap();
+        let mut changed = false;
+        for (feature, p, effect) in &plain {
+            let row = results.rows.iter().find(|r| r.feature == *feature).unwrap();
+            assert_eq!(row.effect_size, *effect);
+            changed |= row.p_value != *p;
+        }
+        assert!(changed);
+        let multi: Vec<f64> = session
+            .multi
+            .output
+            .as_ref()
+            .unwrap()
+            .1
+            .rows
+            .iter()
+            .map(|r| r.p_value)
+            .collect();
+        assert_ne!(multi, multi_plain);
     }
 }

@@ -36,7 +36,7 @@ target/release/stamp examples/EnterotypesArumugam/Enterotypes.profile.spf \
 
 ![The STAMP window with the enterotype example](docs/images/gui.png)
 
-It offers the three kinds of analysis (multiple groups, two groups, two samples), every statistical test, correction and filter, all the plots with tooltips, a results table, export of plots (PNG, SVG, PDF) and tables, and conversion from the other file formats. It is new: the browser version has been tried by hand, but the desktop window has so far been exercised only through automated tests.
+It offers the three kinds of analysis of STAMP v2 (multiple groups, two groups, two samples) and a fourth, correlation with a numeric metadata field; every statistical test, correction and filter, all the plots with tooltips, a results table, export of plots (PNG, SVG, PDF) and tables, and conversion from the other file formats. It is new: the browser version has been tried by hand, but the desktop window has so far been exercised only through automated tests.
 
 ### In the browser
 
@@ -78,6 +78,14 @@ stamp-cli post-hoc --profile examples/EnterotypesArumugam/Enterotypes.profile.sp
     --metadata examples/EnterotypesArumugam/Enterotypes.metadata.tsv --field Enterotype \
     --group "Enterotype 1" --group "Enterotype 2" --group "Enterotype 3" --feature Bacteroides
 
+# Paired samples: Wilcoxon signed-rank test, pairs named by a metadata field
+stamp-cli two-groups --profile profile.spf --metadata metadata.tsv --field Treatment \
+    --group1 Before --group2 After --test wilcoxon --pair-field Subject
+
+# Correlation of every feature with a numeric metadata field
+stamp-cli correlation --profile profile.spf --metadata metadata.tsv --field Depth \
+    --method spearman --correction benjamini-hochberg --plot depth.png
+
 # Convert another tool's output to a STAMP profile
 stamp-cli convert mgrast examples/CowRumen-MG-RAST/CowRumen-MG-RAST.tsv --output cow_rumen.spf
 ```
@@ -92,7 +100,7 @@ stamp-cli two-samples --profile examples/IronMineEdwards/EdwardsIronMine.spf \
 
 ![Extended error bar plot of the iron mine example](docs/images/extended_error_bar.png)
 
-`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `pca`, `heatmap`, `rarefaction`, `volcano`, `composition`, `alpha-diversity`, `pcoa`, `distance-box` and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
+`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `pca`, `heatmap`, `rarefaction`, `volcano`, `composition`, `alpha-diversity`, `pcoa`, `distance-box`, (with the `correlation` command) `correlation-scatter` and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
 
 ```bash
 stamp-cli multi-groups --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \

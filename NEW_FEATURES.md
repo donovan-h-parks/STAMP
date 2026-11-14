@@ -48,6 +48,37 @@ Add an entry here whenever a feature is added that v2 did not have.
   with the Bonferroni adjustment. Its confidence intervals are Welch
   intervals at the adjusted level, since the test itself gives none.
 
+- **Correlation with a numeric metadata field**, as a fourth kind of
+  analysis beside multiple groups, two groups and two samples. Every
+  feature's proportion is correlated with a number known for each sample
+  (a depth, an age, a concentration) by Spearman's rank correlation or
+  Pearson's r, with a two-sided p-value and the usual multiple-test
+  corrections; the values agree with SciPy. Samples with no number in the
+  field are left out, and the status bar says how many. Features can be
+  filtered by corrected p-value and by the size of the correlation. On the
+  command line: `stamp-cli correlation --field FIELD`, with `--method
+  spearman|pearson`, `--correction`, `--significance` and
+  `--min-correlation`.
+- **Paired tests for two groups**: the **paired t-test** and the
+  **Wilcoxon signed-rank test**, for designs where each sample of one
+  group belongs with a sample of the other (the same subject before and
+  after, say). A "Pair field" names the metadata field that says which
+  samples belong together; a value shared by exactly one sample of each
+  group makes a pair, and samples without such a partner are left out of
+  the analysis and its plots, with a count of both shown. The signed-rank
+  p-value is exact for up to 50 pairs (tied differences included) and from
+  the normal approximation beyond that, as in SciPy; its confidence
+  interval is a bootstrap over the pairs. On the command line: `--test
+  paired-t|wilcoxon --pair-field FIELD`.
+- **Centred log-ratio transform** as an option ("Transform") before the
+  two-group and multiple-group tests. Proportions sum to one, so a rise in
+  one feature lowers all the others; with the transform, each p-value is
+  computed from the logarithm of the feature relative to the geometric
+  mean of all the features of its sample (zeros replaced as for the
+  Aitchison distance). Only the p-values change: effect sizes, confidence
+  intervals, group means, the post-hoc tests and the plots stay in
+  proportions. It does not apply to White's test, which works on counts.
+  On the command line: `--transform clr`.
 - **Tests on the community as a whole**, for two or more groups, on the
   distances between samples: **PERMANOVA** (do the groups differ?),
   **PERMDISP** (do the groups differ in how spread out their samples are,
@@ -89,6 +120,8 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Live plot settings.** Changes in "Configure plot" show at once, and each
   plot's settings can be returned to their defaults [32].
 - **Menu icons** (Phosphor Icons) [49].
+- **A "Correlation" tab** beside the three kinds of analysis of v2, with
+  its own statistics, filters, feature table, results table and plots.
 
 ## Plots
 
@@ -99,6 +132,15 @@ Add an entry here whenever a feature is added that v2 did not have.
   Dashed lines mark the thresholds. Corrected or uncorrected p-values can
   be plotted, features can be highlighted, and clicking a point selects
   the feature. On the command line: `--plot-type volcano`.
+- **Correlation scatter plot** (Correlation tab): the proportion of the
+  selected feature against the numeric field, one point per sample
+  coloured by the group field, with the least-squares line and the
+  correlation, its p-value and the number of samples written above. The
+  line and the text can be switched off. On the command line:
+  `stamp-cli correlation --plot FILE` (`--plot-feature`, `--group-field`).
+  The **volcano plot** and **p-value histogram** are also available for
+  correlations; the volcano plot then shows the correlation of every
+  feature against its p-value, coloured by its direction.
 - **Alpha diversity box plot**, for two groups and multiple groups: a box
   for each group of the chosen diversity measure of its samples, with the
   Kruskal-Wallis p-value. On the command line:

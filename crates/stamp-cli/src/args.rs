@@ -5,10 +5,11 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use stamp_core::stats::ci::SampleCi;
 use stamp_core::stats::correction::Correction;
+use stamp_core::stats::correlation::CorrelationMethod;
 use stamp_core::stats::effect_size::{GroupEffectSize, SampleEffectSize};
 use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::post_hoc::PostHocTest;
-use stamp_core::stats::results::FilterOperator;
+use stamp_core::stats::results::{FilterOperator, Transform};
 use stamp_core::stats::two_group::GroupTest;
 use stamp_core::stats::two_sample::SampleTest;
 use stamp_core::stats::TestType;
@@ -34,6 +35,8 @@ pub enum Command {
     MultiGroups(MultiGroupsArgs),
     /// Compare every pair of groups for one feature
     PostHoc(PostHocArgs),
+    /// Correlate every feature with a numeric metadata field
+    Correlation(CorrelationArgs),
     /// Convert another tool's output to a STAMP profile
     Convert(ConvertArgs),
 }
@@ -208,6 +211,8 @@ pub enum PlotTypeArg {
     Pcoa,
     /// Distances between samples within and between groups
     DistanceBox,
+    /// A feature against the numeric field, with a fitted line (correlation)
+    CorrelationScatter,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -291,6 +296,14 @@ pub struct TwoGroupsArgs {
     /// Statistical test
     #[arg(long, value_enum, default_value_t = GroupTestArg::Welch)]
     pub test: GroupTestArg,
+    /// For the paired tests: the metadata field that says which sample of
+    /// the first group belongs with which sample of the second (the subject
+    /// both came from, say). Samples without exactly one partner are left out
+    #[arg(long, value_name = "FIELD")]
+    pub pair_field: Option<String>,
+    /// Transform applied before the test; changes the p-values only
+    #[arg(long, value_enum, default_value_t = TransformArg::None)]
+    pub transform: TransformArg,
     /// One-sided or two-sided p-values
     #[arg(long = "type", value_enum, default_value_t = TestTypeArg::TwoSided)]
     pub test_type: TestTypeArg,
@@ -336,6 +349,9 @@ pub struct MultiGroupsArgs {
     /// Statistical test
     #[arg(long, value_enum, default_value_t = MultiGroupTestArg::Anova)]
     pub test: MultiGroupTestArg,
+    /// Transform applied before the test; changes the p-values only
+    #[arg(long, value_enum, default_value_t = TransformArg::None)]
+    pub transform: TransformArg,
     /// Multiple-test correction
     #[arg(long, value_enum, default_value_t = CorrectionArg::None)]
     pub correction: CorrectionArg,
@@ -345,6 +361,42 @@ pub struct MultiGroupsArgs {
     /// Keep only features with an eta-squared effect size of at least this value
     #[arg(long, value_name = "MINIMUM")]
     pub min_effect_size: Option<f64>,
+    /// Seed of the random number generator (used by the Storey correction)
+    #[arg(long, default_value_t = 1)]
+    pub seed: u64,
+    #[command(flatten)]
+    pub plot: PlotArgs,
+}
+
+#[derive(Args)]
+pub struct CorrelationArgs {
+    #[command(flatten)]
+    pub profile: ProfileArgs,
+    /// Metadata file describing the samples
+    #[arg(long, short)]
+    pub metadata: PathBuf,
+    /// Metadata field holding a number for each sample; samples without a
+    /// number are left out
+    #[arg(long, short)]
+    pub field: String,
+    /// Sample to leave out of the analysis (may be repeated)
+    #[arg(long = "exclude-sample", value_name = "SAMPLE")]
+    pub excluded_samples: Vec<String>,
+    /// Measure of correlation
+    #[arg(long, value_enum, default_value_t = CorrelationMethodArg::Spearman)]
+    pub method: CorrelationMethodArg,
+    /// Multiple-test correction
+    #[arg(long, value_enum, default_value_t = CorrectionArg::None)]
+    pub correction: CorrectionArg,
+    /// Keep only features with a corrected p-value at or below this level
+    #[arg(long, value_name = "P")]
+    pub significance: Option<f64>,
+    /// Keep only features whose correlation is at least this far from zero
+    #[arg(long, value_name = "MINIMUM")]
+    pub min_correlation: Option<f64>,
+    /// Metadata field whose groups colour the points of the scatter plot
+    #[arg(long, value_name = "FIELD")]
+    pub group_field: Option<String>,
     /// Seed of the random number generator (used by the Storey correction)
     #[arg(long, default_value_t = 1)]
     pub seed: u64,
@@ -574,9 +626,47 @@ impl From<CorrectionArg> for Correction {
 }
 
 #[derive(Clone, Copy, ValueEnum)]
+pub enum TransformArg {
+    /// Proportions as they are
+    None,
+    /// Centred log-ratio of the features of each sample
+    Clr,
+}
+
+impl From<TransformArg> for Transform {
+    fn from(value: TransformArg) -> Self {
+        match value {
+            TransformArg::None => Transform::None,
+            TransformArg::Clr => Transform::CentredLogRatio,
+        }
+    }
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+pub enum CorrelationMethodArg {
+    /// Pearson's r
+    Pearson,
+    /// Spearman's rank correlation
+    Spearman,
+}
+
+impl From<CorrelationMethodArg> for CorrelationMethod {
+    fn from(value: CorrelationMethodArg) -> Self {
+        match value {
+            CorrelationMethodArg::Pearson => CorrelationMethod::Pearson,
+            CorrelationMethodArg::Spearman => CorrelationMethod::Spearman,
+        }
+    }
+}
+
+#[derive(Clone, Copy, ValueEnum)]
 pub enum GroupTestArg {
     /// Mann-Whitney U test (Wilcoxon rank-sum test)
     MannWhitney,
+    /// Paired t-test (needs --pair-field)
+    PairedT,
+    /// Wilcoxon signed-rank test, for paired samples (needs --pair-field)
+    Wilcoxon,
     /// t-test assuming equal variances
     TTest,
     /// Welch's t-test
@@ -589,6 +679,8 @@ impl From<GroupTestArg> for GroupTest {
     fn from(value: GroupTestArg) -> Self {
         match value {
             GroupTestArg::MannWhitney => GroupTest::MannWhitney,
+            GroupTestArg::PairedT => GroupTest::PairedT,
+            GroupTestArg::Wilcoxon => GroupTest::WilcoxonSignedRank,
             GroupTestArg::TTest => GroupTest::TTest,
             GroupTestArg::Welch => GroupTest::Welch,
             GroupTestArg::White => GroupTest::White,

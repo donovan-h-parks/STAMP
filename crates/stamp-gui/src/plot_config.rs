@@ -762,6 +762,19 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
             });
         }
+        PlotKind::CorrelationScatter => {
+            let o = &mut settings.correlation;
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Correlation", |rows| {
+                rows.check("Show fitted line (least squares)", &mut o.show_line);
+                rows.check("Show correlation and p-value", &mut o.show_statistics);
+            });
+            dialog.legend(&mut o.legend);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
+                rows.check("Assign unique shapes", &mut o.unique_shapes);
+            });
+        }
         PlotKind::Composition => {
             let o = &mut settings.composition;
             dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));

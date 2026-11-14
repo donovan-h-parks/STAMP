@@ -23,10 +23,10 @@ pub mod stats;
 pub mod text;
 
 pub use error::{Result, StampError};
-pub use metadata::{Groups, Metadata};
+pub use metadata::{Groups, Metadata, Pairing};
 pub use profile::{
-    Feature, GroupProfile, MultiGroupProfile, Profile, SampleProfile, SecondGroup, Unclassified,
-    ALL_OTHER_SAMPLES,
+    CorrelationProfile, Feature, GroupProfile, MultiGroupProfile, Profile, SampleProfile,
+    SecondGroup, Unclassified, ALL_OTHER_SAMPLES,
 };
 pub use profile_tree::{ProfileTree, ENTIRE_SAMPLE};
 

@@ -5,6 +5,8 @@ use std::collections::HashSet;
 
 use super::ci::SampleCi;
 use super::correction::{Corrected, Correction};
+use super::correlation::{correlation_p_value, CorrelationMethod};
+use super::diversity::centred_log_ratio;
 use super::effect_size::{GroupEffectSize, SampleEffectSize};
 use super::multi_group::{MultiGroupEffectSize, MultiGroupTest};
 use super::post_hoc::{PostHocResult, PostHocTest};
@@ -12,7 +14,7 @@ use super::two_group::{FeatureCounts, GroupOutcome, GroupTest};
 use super::two_sample::SampleTest;
 use super::{mean, population_std, StampRng, StatsSettings, TestType};
 use crate::error::{Result, StampError};
-use crate::profile::{GroupProfile, MultiGroupProfile, SampleProfile};
+use crate::profile::{CorrelationProfile, GroupProfile, MultiGroupProfile, Profile, SampleProfile};
 
 /// Callback reporting progress as `(done, total)`. Returning `false` cancels
 /// the run.
@@ -361,6 +363,54 @@ impl SampleResults {
 
 // -------------------------------------------------------------- two groups
 
+/// What the values of a feature are turned into before a test between
+/// groups is applied to them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Transform {
+    /// The proportions as they are.
+    #[default]
+    None,
+    /// The centred log-ratio: the logarithm of each feature relative to the
+    /// geometric mean of all the features of its sample. The proportions
+    /// of a sample sum to one, so that a rise in one feature lowers all
+    /// the others; the transform removes that constraint.
+    CentredLogRatio,
+}
+
+impl Transform {
+    pub const ALL: [Transform; 2] = [Transform::None, Transform::CentredLogRatio];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Transform::None => "None",
+            Transform::CentredLogRatio => "Centred log-ratio",
+        }
+    }
+
+    /// True if the transform changes the p-values of this two-group test.
+    /// White's test works on counts and is left as it is.
+    pub fn applies_to(self, test: GroupTest) -> bool {
+        self == Transform::CentredLogRatio && test != GroupTest::White
+    }
+}
+
+/// The centred log-ratio of every feature of a profile in every sample,
+/// by feature and then by sample. Each sample is transformed over all the
+/// features of the profile; zeros are replaced as described for
+/// [`centred_log_ratio`].
+pub fn clr_values(profile: &Profile) -> Vec<Vec<f64>> {
+    let features = profile.features();
+    let samples = profile.sample_names.len();
+    let mut values = vec![vec![0.0; samples]; features.len()];
+    for sample in 0..samples {
+        let counts: Vec<f64> = features.iter().map(|f| f.counts[sample]).collect();
+        for (row, value) in values.iter_mut().zip(centred_log_ratio(&counts)) {
+            row[sample] = value;
+        }
+    }
+    values
+}
+
 /// Settings of a two-group analysis.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GroupAnalysis {
@@ -368,6 +418,9 @@ pub struct GroupAnalysis {
     pub test_type: TestType,
     pub coverage: f64,
     pub correction: Correction,
+    /// Applied to the values the p-value is computed from. The effect size
+    /// and its confidence interval stay in proportions.
+    pub transform: Transform,
 }
 
 /// Statistics of one feature in a two-group analysis. Means, standard
@@ -459,6 +512,8 @@ pub struct GroupRun {
     analysis: GroupAnalysis,
     settings: StatsSettings,
     outcomes: Vec<GroupOutcome>,
+    /// Transformed values, once worked out.
+    transformed: Option<Vec<Vec<f64>>>,
 }
 
 impl GroupRun {
@@ -467,6 +522,7 @@ impl GroupRun {
             analysis,
             settings: *settings,
             outcomes: Vec::new(),
+            transformed: None,
         }
     }
 
@@ -505,6 +561,9 @@ impl GroupRun {
             }
         } else {
             // The other tests treat each feature on its own.
+            if analysis.transform.applies_to(analysis.test) && self.transformed.is_none() {
+                self.transformed = Some(clr_values(&profile.profile));
+            }
             while self.outcomes.len() < features.len() {
                 match pace(self.outcomes.len(), features.len()) {
                     Control::Continue => {}
@@ -516,10 +575,19 @@ impl GroupRun {
                     .test
                     .run_all(&one, analysis.coverage, settings, rng, &mut |_, _| true)
                     .and_then(|mut outcomes| outcomes.pop());
-                match outcome {
-                    Some(outcome) => self.outcomes.push(outcome),
-                    None => return Step::Cancelled,
+                let Some(mut outcome) = outcome else {
+                    return Step::Cancelled;
+                };
+                // The p-values come from the transformed values; the effect
+                // size and its interval stay as they are.
+                if let Some(transformed) = &self.transformed {
+                    let (values1, values2) = profile.split(&transformed[self.outcomes.len()]);
+                    if let Some((one_sided, two_sided)) = analysis.test.p_values(values1, values2) {
+                        outcome.one_sided = one_sided;
+                        outcome.two_sided = two_sided;
+                    }
                 }
+                self.outcomes.push(outcome);
             }
         }
 
@@ -653,6 +721,9 @@ pub struct MultiGroupAnalysis {
     pub test: MultiGroupTest,
     pub effect_size: MultiGroupEffectSize,
     pub correction: Correction,
+    /// Applied to the values the p-value is computed from. The effect
+    /// size and the group means stay in proportions.
+    pub transform: Transform,
 }
 
 /// Statistics of one feature in a multiple-group analysis.
@@ -692,6 +763,8 @@ pub struct MultiGroupFilter {
 pub struct MultiGroupRun {
     analysis: MultiGroupAnalysis,
     rows: Vec<MultiGroupRow>,
+    /// Transformed values, once worked out.
+    transformed: Option<Vec<Vec<f64>>>,
 }
 
 impl MultiGroupRun {
@@ -699,6 +772,7 @@ impl MultiGroupRun {
         MultiGroupRun {
             analysis,
             rows: Vec::new(),
+            transformed: None,
         }
     }
 
@@ -712,6 +786,9 @@ impl MultiGroupRun {
     ) -> Step<MultiGroupResults> {
         let analysis = self.analysis;
         let features = profile.profile.features();
+        if analysis.transform == Transform::CentredLogRatio && self.transformed.is_none() {
+            self.transformed = Some(clr_values(&profile.profile));
+        }
         while self.rows.len() < features.len() {
             match pace(self.rows.len(), features.len()) {
                 Control::Continue => {}
@@ -721,7 +798,12 @@ impl MultiGroupRun {
             let feature = &features[self.rows.len()];
             let percentages = profile.percentages(feature);
             let groups: Vec<&[f64]> = percentages.iter().map(Vec::as_slice).collect();
-            let (p_value, note) = analysis.test.run(&groups);
+            let (p_value, note) = match &self.transformed {
+                Some(transformed) => analysis
+                    .test
+                    .run(&profile.split(&transformed[self.rows.len()])),
+                None => analysis.test.run(&groups),
+            };
             self.rows.push(MultiGroupRow {
                 feature: feature.name.clone(),
                 p_value,
@@ -823,6 +905,172 @@ pub fn format_p_value(p: f64, min_exponent: i32) -> String {
     format!("{p:.2e}")
 }
 
+// -------------------------------------------------------------- correlation
+
+/// Significance level used to count significant features in correlation
+/// analyses, which have no confidence-interval coverage of their own.
+const CORRELATION_ALPHA: f64 = 0.05;
+
+const TOO_FEW_VALUES: &str = "degenerate case: a correlation needs at least 3 samples";
+const CONSTANT_FEATURE: &str =
+    "degenerate case: the feature has the same proportion in every sample";
+const CONSTANT_FIELD: &str = "degenerate case: the field has the same value in every sample";
+
+/// Settings of a correlation analysis.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CorrelationAnalysis {
+    pub method: CorrelationMethod,
+    pub correction: Correction,
+}
+
+/// Correlation of one feature with a numeric metadata field.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CorrelationRow {
+    pub feature: String,
+    /// The correlation coefficient, from -1 to 1.
+    pub coefficient: f64,
+    /// Two-sided p-value against no correlation.
+    pub p_value: f64,
+    pub p_value_corrected: f64,
+    /// Mean relative frequency (%) of the feature over the samples.
+    pub mean: f64,
+    /// Standard deviation of the relative frequency (%).
+    pub std_dev: f64,
+    pub note: String,
+}
+
+/// Results of a correlation analysis, ordered by p-value.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CorrelationResults {
+    pub analysis: CorrelationAnalysis,
+    pub rows: Vec<CorrelationRow>,
+    pub correction: CorrectionSummary,
+}
+
+/// Filters applied to correlation results. A disabled filter is `None`.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CorrelationFilter {
+    pub selected_features: Option<HashSet<String>>,
+    pub significance: Option<f64>,
+    /// Remove features whose coefficient is closer to zero than this.
+    pub min_coefficient: Option<f64>,
+}
+
+/// A correlation analysis that can be carried out a few features at a
+/// time; see [`SampleRun`].
+#[derive(Debug, Clone)]
+pub struct CorrelationRun {
+    analysis: CorrelationAnalysis,
+    rows: Vec<CorrelationRow>,
+}
+
+impl CorrelationRun {
+    pub fn new(analysis: CorrelationAnalysis) -> CorrelationRun {
+        CorrelationRun {
+            analysis,
+            rows: Vec::new(),
+        }
+    }
+
+    /// Correlate further features of `profile`, which with `rng` must be
+    /// the same on every call. `pace` is asked before each feature.
+    pub fn advance(
+        &mut self,
+        profile: &CorrelationProfile,
+        rng: &mut StampRng,
+        pace: Pace<'_>,
+    ) -> Step<CorrelationResults> {
+        let analysis = self.analysis;
+        let features = profile.profile.features();
+        let samples = profile.values.len();
+        let field_varies = profile.values.iter().any(|v| *v != profile.values[0]);
+        while self.rows.len() < features.len() {
+            match pace(self.rows.len(), features.len()) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
+            }
+            let feature = &features[self.rows.len()];
+            let percentages = profile.profile.percentages(feature);
+            let (coefficient, p_value, note) =
+                match analysis.method.coefficient(&percentages, &profile.values) {
+                    Some(r) => (r, correlation_p_value(r, samples), ""),
+                    None if samples < 3 => (0.0, 1.0, TOO_FEW_VALUES),
+                    None if !field_varies => (0.0, 1.0, CONSTANT_FIELD),
+                    None => (0.0, 1.0, CONSTANT_FEATURE),
+                };
+            self.rows.push(CorrelationRow {
+                feature: feature.name.clone(),
+                coefficient,
+                p_value,
+                p_value_corrected: p_value,
+                mean: mean(&percentages),
+                std_dev: population_std(&percentages),
+                note: note.to_string(),
+            });
+        }
+        let mut rows = std::mem::take(&mut self.rows);
+        sort_rows(&mut rows, |r| r.p_value, |r| &r.feature);
+        let mut results = CorrelationResults {
+            analysis,
+            rows,
+            correction: no_correction(),
+        };
+        results.apply_correction(analysis.correction, rng);
+        Step::Done(results)
+    }
+}
+
+/// Correlate every feature of a profile with the field. Returns `None` if
+/// cancelled through `progress`.
+pub fn run_correlation_analysis(
+    profile: &CorrelationProfile,
+    analysis: CorrelationAnalysis,
+    rng: &mut StampRng,
+    progress: Progress<'_>,
+) -> Option<CorrelationResults> {
+    match CorrelationRun::new(analysis).advance(profile, rng, &mut pace_of(progress)) {
+        Step::Done(results) => Some(results),
+        Step::Paused | Step::Cancelled => None,
+    }
+}
+
+impl CorrelationResults {
+    pub fn alpha(&self) -> f64 {
+        CORRELATION_ALPHA
+    }
+
+    /// Recompute the corrected p-values with another method.
+    pub fn apply_correction(&mut self, method: Correction, rng: &mut StampRng) {
+        let p_values: Vec<f64> = self.rows.iter().map(|r| r.p_value).collect();
+        let corrected = method.correct(&p_values, self.alpha(), rng);
+        for (row, value) in self.rows.iter_mut().zip(&corrected.values) {
+            row.p_value_corrected = *value;
+        }
+        self.analysis.correction = method;
+        self.correction = summarize(method, &corrected);
+    }
+
+    /// Rows that pass the filters, in order.
+    pub fn filter(&self, filter: &CorrelationFilter) -> Vec<&CorrelationRow> {
+        self.rows
+            .iter()
+            .filter(|row| {
+                filter
+                    .selected_features
+                    .as_ref()
+                    .is_none_or(|s| s.contains(&row.feature))
+                    && filter
+                        .significance
+                        .is_none_or(|level| row.p_value_corrected <= level)
+                    && filter
+                        .min_coefficient
+                        .is_none_or(|minimum| row.coefficient.abs() >= minimum)
+            })
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -883,6 +1131,7 @@ mod tests {
             test_type: TestType::TwoSided,
             coverage: 0.95,
             correction: Correction::None,
+            transform: Transform::None,
         };
         let results = run_group_analysis(
             &profile,
@@ -1048,6 +1297,7 @@ mod tests {
             test: MultiGroupTest::Anova,
             effect_size: MultiGroupEffectSize::EtaSquared,
             correction: Correction::BenjaminiHochberg,
+            transform: Transform::None,
         };
         let r =
             run_multi_group_analysis(&profile, analysis, &mut rng_from_seed(1), &mut |_, _| true)
@@ -1202,6 +1452,7 @@ mod tests {
                 test_type: TestType::TwoSided,
                 coverage: 0.95,
                 correction: Correction::None,
+                transform: Transform::None,
             };
             let whole = run_group_analysis(
                 &profile,
@@ -1232,6 +1483,7 @@ mod tests {
             test: crate::stats::multi_group::MultiGroupTest::Anova,
             effect_size: crate::stats::multi_group::MultiGroupEffectSize::EtaSquared,
             correction: Correction::None,
+            transform: Transform::None,
         };
         let whole =
             run_multi_group_analysis(&profile, analysis, &mut rng_from_seed(3), &mut |_, _| true)
@@ -1255,5 +1507,270 @@ mod tests {
             }),
             Step::Cancelled
         );
+    }
+
+    const PAIR_META: &str = "Id\tGroup\tSubject\tDepth\n\
+        A1\tA\ts1\t1.0\nA2\tA\ts2\t2.5\nA3\tA\ts3\t4.0\n\
+        B1\tB\ts3\t5.0\nB2\tB\ts1\t7.5\nB3\tB\ts2\tunknown\n";
+
+    fn group_analysis(test: GroupTest, transform: Transform) -> GroupAnalysis {
+        GroupAnalysis {
+            test,
+            test_type: TestType::TwoSided,
+            coverage: 0.95,
+            correction: Correction::None,
+            transform,
+        }
+    }
+
+    fn group_run(profile: &GroupProfile, analysis: GroupAnalysis) -> GroupResults {
+        run_group_analysis(
+            profile,
+            analysis,
+            &settings(),
+            &mut rng_from_seed(1),
+            &mut |_, _| true,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn paired_tests_use_the_pairs_of_the_metadata() {
+        let tree = ProfileTree::read(SPF).unwrap();
+        let (metadata, _) = Metadata::read(PAIR_META, &tree).unwrap();
+        let groups = metadata.groups("Group").unwrap();
+        let pairing = metadata
+            .paired_groups(&groups, "A", "B", "Subject")
+            .unwrap();
+        assert_eq!((pairing.pairs, pairing.unpaired), (3, 0));
+        assert_eq!(pairing.summary(), "3 pairs");
+        // Pair by pair, in the order of the subjects.
+        assert_eq!(pairing.groups.samples("A").unwrap(), ["A1", "A2", "A3"]);
+        assert_eq!(pairing.groups.samples("B").unwrap(), ["B2", "B3", "B1"]);
+
+        let profile = tree
+            .group_profile(
+                &pairing.groups,
+                "A",
+                SecondGroup::Named("B"),
+                None,
+                "Feature",
+                Unclassified::Retain,
+            )
+            .unwrap();
+        assert_eq!(profile.samples_in_group2(), ["B2", "B3", "B1"]);
+        let results = group_run(
+            &profile,
+            group_analysis(GroupTest::PairedT, Transform::None),
+        );
+        let x = results.rows.iter().find(|r| r.feature == "x").unwrap();
+        // The differences in x within the pairs, as proportions of 100:
+        // 10-33, 12-31, 11-30.
+        let direct =
+            crate::stats::two_group::paired_t(&[0.10, 0.12, 0.11], &[0.33, 0.31, 0.30], 0.95);
+        assert!((x.p_value - direct.two_sided).abs() < 1e-12);
+        assert!((x.effect_size - direct.effect_size).abs() < 1e-9);
+        assert!(x.note.is_empty());
+
+        // Samples without exactly one partner are left out.
+        let mut fewer = metadata.clone();
+        fewer.set_active("B2", false);
+        let groups = fewer.groups("Group").unwrap();
+        let pairing = fewer.paired_groups(&groups, "A", "B", "Subject").unwrap();
+        assert_eq!((pairing.pairs, pairing.unpaired), (2, 1));
+        assert_eq!(
+            pairing.summary(),
+            "2 pairs; 1 sample without a partner left out"
+        );
+        assert_eq!(pairing.groups.samples("A").unwrap(), ["A2", "A3"]);
+        // Pairing by the group field itself pairs nothing.
+        let none = fewer.paired_groups(&groups, "A", "B", "Group").unwrap();
+        assert_eq!((none.pairs, none.unpaired), (0, 5));
+        assert!(fewer.paired_groups(&groups, "A", "A", "Subject").is_err());
+        assert!(fewer.paired_groups(&groups, "A", "B", "Nothing").is_err());
+    }
+
+    #[test]
+    fn centred_log_ratio_changes_only_the_p_values() {
+        let (profile, plain) = group_setup();
+        let analysis = group_analysis(plain.analysis.test, Transform::CentredLogRatio);
+        let analysis = GroupAnalysis {
+            test_type: plain.analysis.test_type,
+            coverage: plain.analysis.coverage,
+            correction: plain.analysis.correction,
+            ..analysis
+        };
+        let transformed = group_run(&profile, analysis);
+        let values = clr_values(&profile.profile);
+        // Every sample's values sum to zero over the features.
+        for sample in 0..profile.profile.sample_names.len() {
+            let sum: f64 = values.iter().map(|feature| feature[sample]).sum();
+            assert!(sum.abs() < 1e-9, "{sum}");
+        }
+        for row in &transformed.rows {
+            let before = plain
+                .rows
+                .iter()
+                .find(|r| r.feature == row.feature)
+                .unwrap();
+            assert_eq!(
+                (row.effect_size, row.lower_ci, row.upper_ci, row.mean1),
+                (
+                    before.effect_size,
+                    before.lower_ci,
+                    before.upper_ci,
+                    before.mean1
+                )
+            );
+            let index = profile
+                .profile
+                .features()
+                .iter()
+                .position(|f| f.name == row.feature)
+                .unwrap();
+            let (v1, v2) = profile.split(&values[index]);
+            let (_, two_sided) = analysis.test.p_values(v1, v2).unwrap();
+            assert!((row.p_value - two_sided).abs() < 1e-12);
+        }
+        // y is the same share of every sample, but not relative to the
+        // other features: its p-value changes.
+        let y = |results: &GroupResults| {
+            results
+                .rows
+                .iter()
+                .find(|r| r.feature == "y")
+                .unwrap()
+                .p_value
+        };
+        assert!(y(&transformed) < y(&plain));
+
+        // White's test works on counts and is not transformed.
+        assert!(!Transform::CentredLogRatio.applies_to(GroupTest::White));
+        assert!(Transform::CentredLogRatio.applies_to(GroupTest::Welch));
+        assert!(!Transform::None.applies_to(GroupTest::Welch));
+
+        // Multiple groups: the test is run on the transformed values.
+        let tree = ProfileTree::read(SPF).unwrap();
+        let (metadata, _) = Metadata::read(META, &tree).unwrap();
+        let groups = metadata.groups("Group").unwrap();
+        let multi = tree
+            .multi_group_profile(&groups, None, None, "Feature", Unclassified::Retain)
+            .unwrap();
+        let run = |transform| {
+            run_multi_group_analysis(
+                &multi,
+                MultiGroupAnalysis {
+                    test: MultiGroupTest::Anova,
+                    effect_size: MultiGroupEffectSize::EtaSquared,
+                    correction: Correction::None,
+                    transform,
+                },
+                &mut rng_from_seed(1),
+                &mut |_, _| true,
+            )
+            .unwrap()
+        };
+        let (plain, transformed) = (run(Transform::None), run(Transform::CentredLogRatio));
+        let values = clr_values(&multi.profile);
+        for row in &transformed.rows {
+            let before = plain
+                .rows
+                .iter()
+                .find(|r| r.feature == row.feature)
+                .unwrap();
+            assert_eq!(row.effect_size, before.effect_size);
+            assert_eq!(row.group_means, before.group_means);
+            let index = multi
+                .profile
+                .features()
+                .iter()
+                .position(|f| f.name == row.feature)
+                .unwrap();
+            let (p, _) = MultiGroupTest::Anova.run(&multi.split(&values[index]));
+            assert!((row.p_value - p).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn correlation_with_a_numeric_field() {
+        let tree = ProfileTree::read(SPF).unwrap();
+        let (metadata, _) = Metadata::read(PAIR_META, &tree).unwrap();
+        let profile = tree
+            .correlation_profile(&metadata, "Depth", None, "Feature", Unclassified::Retain)
+            .unwrap();
+        // B3 has no number and is left out.
+        assert_eq!(profile.profile.sample_names, ["A1", "A2", "A3", "B1", "B2"]);
+        assert_eq!(profile.values, [1.0, 2.5, 4.0, 5.0, 7.5]);
+        assert_eq!(profile.without_value, 1);
+        assert!(tree
+            .correlation_profile(&metadata, "Nothing", None, "Feature", Unclassified::Retain)
+            .is_err());
+
+        let analysis = CorrelationAnalysis {
+            method: CorrelationMethod::Spearman,
+            correction: Correction::Bonferroni,
+        };
+        let results =
+            run_correlation_analysis(&profile, analysis, &mut rng_from_seed(1), &mut |_, _| true)
+                .unwrap();
+        assert_eq!(results.rows.len(), 4);
+        let row = |name: &str| results.rows.iter().find(|r| r.feature == name).unwrap();
+        // x: 10, 12, 11, 30, 33 of 100 against 1, 2.5, 4, 5, 7.5: ranks
+        // 1 3 2 4 5 against 1 2 3 4 5, so rho = 1 - 6 * 2 / 120 = 0.9.
+        assert!((row("x").coefficient - 0.9).abs() < 1e-12);
+        assert!((row("x").p_value - correlation_p_value(0.9, 5)).abs() < 1e-12);
+        assert!((row("x").p_value_corrected - (4.0 * row("x").p_value).min(1.0)).abs() < 1e-12);
+        assert!((row("x").mean - 19.2).abs() < 1e-9);
+        assert!(row("z").coefficient < 0.0);
+        // A feature that never varies has no correlation.
+        assert_eq!((row("rare").coefficient, row("rare").p_value), (0.0, 1.0));
+        assert_eq!(row("rare").note, CONSTANT_FEATURE);
+        // Ordered by p-value.
+        assert!(results
+            .rows
+            .windows(2)
+            .all(|w| w[0].p_value <= w[1].p_value));
+
+        let all = results.filter(&CorrelationFilter::default());
+        assert_eq!(all.len(), 4);
+        let strong = results.filter(&CorrelationFilter {
+            min_coefficient: Some(0.85),
+            ..Default::default()
+        });
+        assert!(strong.iter().any(|r| r.feature == "x"));
+        assert!(strong.iter().all(|r| r.coefficient.abs() >= 0.85));
+        assert!(!strong.iter().any(|r| r.feature == "rare"));
+        let chosen = results.filter(&CorrelationFilter {
+            selected_features: Some(["y".to_string()].into_iter().collect()),
+            ..Default::default()
+        });
+        assert_eq!(chosen.len(), 1);
+
+        // Pearson gives another coefficient for the same data.
+        let pearson = run_correlation_analysis(
+            &profile,
+            CorrelationAnalysis {
+                method: CorrelationMethod::Pearson,
+                correction: Correction::None,
+            },
+            &mut rng_from_seed(1),
+            &mut |_, _| true,
+        )
+        .unwrap();
+        let x = pearson.rows.iter().find(|r| r.feature == "x").unwrap();
+        assert!(x.coefficient > 0.8 && (x.coefficient - 0.9).abs() > 1e-6);
+
+        // Fewer than three samples with a number: nothing can be said.
+        let mut few = metadata.clone();
+        for sample in ["A1", "A2", "A3"] {
+            few.set_active(sample, false);
+        }
+        let profile = tree
+            .correlation_profile(&few, "Depth", None, "Feature", Unclassified::Retain)
+            .unwrap();
+        let results =
+            run_correlation_analysis(&profile, analysis, &mut rng_from_seed(1), &mut |_, _| true)
+                .unwrap();
+        assert!(results.rows.iter().all(|r| r.note == TOO_FEW_VALUES));
     }
 }

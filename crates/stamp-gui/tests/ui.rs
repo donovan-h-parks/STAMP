@@ -135,6 +135,18 @@ fn every_plot_of_every_mode_renders() {
                 .to_lowercase()
                 .replace([' ', '-'], "_");
             let image = harness.screenshot(&name);
+            if mode == Mode::Correlation {
+                // The example has no numeric metadata field to correlate
+                // with; the plot says so instead.
+                let figure = harness.app.figure();
+                assert!(
+                    matches!(&figure.shapes[0], stamp_plot::Shape::Text { text, .. }
+                        if text.contains("holds a number")),
+                    "{kind:?}: {:?}",
+                    figure.shapes.first()
+                );
+                continue;
+            }
             if kind == PlotKind::Rarefaction {
                 // The example holds fractional values, which cannot be
                 // rarefied; the plot says so instead.
@@ -1119,7 +1131,7 @@ fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
     harness.settle();
     let after = harness.screenshot("q_value_filter_label");
     let differs = (985..1110)
-        .flat_map(|x| (335..360).map(move |y| (x, y)))
+        .flat_map(|x| (380..403).map(move |y| (x, y)))
         .any(|(x, y)| before.pixel(x, y) != after.pixel(x, y));
     assert!(differs, "the filter label did not change");
 }
@@ -1721,4 +1733,217 @@ fn community_plots_for_groups() {
     harness.app.set_plot_settings(settings);
     harness.settle();
     assert!(texts(&harness.app)[0].contains("Rarefying needs counts"));
+}
+
+/// The coal-seam metadata with two more fields: "Subject", which pairs
+/// each produced-water sample with one core sample, and "Depth", a number
+/// for every sample but the last.
+fn coal_metadata_with_pairs_and_depths() -> String {
+    let text = example("CoalSeamGas/coal.metadata.tsv");
+    let mut lines = text.lines();
+    let heading = lines.next().unwrap();
+    let column = heading
+        .split('\t')
+        .position(|h| h == "Core vs. Water")
+        .unwrap();
+    let rows: Vec<&str> = lines.filter(|l| !l.trim().is_empty()).collect();
+    let (mut cores, mut waters) = (0, 0);
+    let mut out = format!("{heading}\tSubject\tDepth\n");
+    for (i, row) in rows.iter().enumerate() {
+        let subject = if row.split('\t').nth(column) == Some("Core") {
+            cores += 1;
+            cores
+        } else {
+            waters += 1;
+            waters
+        };
+        let depth = if i + 1 == rows.len() {
+            "unknown".to_string()
+        } else {
+            format!("{:.1}", 10.0 + 7.5 * ((i * 7) % rows.len()) as f64)
+        };
+        out.push_str(&format!("{row}\ts{subject}\t{depth}\n"));
+    }
+    out
+}
+
+fn coal_with_pairs_and_depths() -> Harness {
+    let mut harness = Harness::new();
+    harness
+        .app
+        .load_profile("coal.spf", &example("CoalSeamGas/coal.spf"));
+    harness
+        .app
+        .load_metadata("coal.metadata.tsv", &coal_metadata_with_pairs_and_depths());
+    harness.app.set_p_value_filter(None);
+    harness.app.session.profile_level = "Phylum".to_string();
+    harness.app.session.invalidate_all();
+    harness
+}
+
+fn figure_texts(app: &StampApp) -> Vec<String> {
+    app.figure()
+        .shapes
+        .iter()
+        .filter_map(|s| match s {
+            stamp_plot::Shape::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn features_are_correlated_with_a_numeric_field() {
+    use stamp_core::stats::correlation::CorrelationMethod;
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.set_mode(Mode::Correlation);
+    harness.settle();
+    // Only "Depth" holds numbers.
+    assert_eq!(harness.app.session.numeric_fields(), ["Depth"]);
+    let (profile, results) = harness.app.session.correlation.output.as_ref().unwrap();
+    let samples = profile.values.len();
+    assert_eq!(profile.without_value, 1);
+    let features = results.rows.len();
+    assert!(features > 5);
+    assert!(harness
+        .app
+        .status_summary()
+        .contains(&format!("Samples: {samples} (1 without a number left out)")));
+
+    // The scatter plot of the selected feature: a point per sample, the
+    // fitted line, and the correlation.
+    assert_eq!(harness.app.plot_kind(), PlotKind::CorrelationScatter);
+    assert_eq!(harness.app.figure().regions.len(), samples);
+    let shown = figure_texts(&harness.app);
+    assert!(shown.contains(&"Depth".to_string()), "{shown:?}");
+    assert!(shown.iter().any(|t| t.starts_with("rho = ")), "{shown:?}");
+    // Coloured by the group field.
+    assert!(shown.contains(&"Core".to_string()));
+    harness.screenshot("correlation_scatter");
+
+    // The results table has a row per feature and the coefficient.
+    harness.app.show_results_table(true);
+    harness.settle();
+    let table = harness.app.results_table();
+    assert_eq!(table.rows.len(), features);
+    assert!(table
+        .headings
+        .contains(&"Spearman rank correlation (rho)".to_string()));
+    harness.screenshot("correlation_table");
+    harness.app.show_results_table(false);
+
+    // Pearson's r instead, and the options of the plot.
+    harness.app.session.correlation.analysis.method = CorrelationMethod::Pearson;
+    harness.app.session.invalidate(Mode::Correlation);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.correlation.show_line = false;
+    harness.app.set_plot_settings(settings);
+    harness.app.show_plot_config(true);
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    assert!(shown.iter().any(|t| t.starts_with("r = ")), "{shown:?}");
+    harness.screenshot("correlation_settings");
+    harness.app.show_plot_config(false);
+
+    // The other plots of the mode.
+    harness.app.set_plot_kind(PlotKind::Volcano);
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), features);
+    assert!(figure_texts(&harness.app).contains(&"Pearson correlation (r)".to_string()));
+    harness.screenshot("correlation_volcano");
+    harness.app.set_plot_kind(PlotKind::PValueHistogram);
+    harness.settle();
+    assert!(harness.app.figure().shapes.len() > 10);
+
+    // Without a numeric field the mode says what it needs.
+    let mut harness = Harness::enterotypes();
+    harness.app.set_mode(Mode::Correlation);
+    harness.settle();
+    assert!(harness.app.session.numeric_fields().is_empty());
+    assert!(figure_texts(&harness.app)[0].contains("holds a number"));
+    harness.screenshot("correlation_no_field");
+}
+
+#[test]
+fn paired_tests_and_the_log_ratio_transform() {
+    use stamp_core::stats::results::Transform;
+    use stamp_core::stats::two_group::GroupTest;
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.session.set_group_field("Core vs. Water");
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.settle();
+    let (profile, results) = harness.app.session.groups.output.as_ref().unwrap();
+    assert_eq!(profile.samples_in_group1().len(), 29);
+    let unpaired: Vec<(String, f64, f64)> = results
+        .rows
+        .iter()
+        .map(|r| (r.feature.clone(), r.p_value, r.effect_size))
+        .collect();
+
+    // A paired test with no pair field explains itself on the plot.
+    harness.app.session.groups.analysis.test = GroupTest::WilcoxonSignedRank;
+    harness.app.session.invalidate(Mode::TwoGroups);
+    harness.settle();
+    assert!(figure_texts(&harness.app)[0].contains("form a pair"));
+
+    // With the field: the 15 produced-water samples and their partners.
+    harness.app.session.groups.pair_field = Some("Subject".to_string());
+    harness.app.session.invalidate(Mode::TwoGroups);
+    harness.settle();
+    assert_eq!(
+        harness.app.session.groups.pairing.as_deref(),
+        Some("15 pairs; 14 samples without a partner left out")
+    );
+    let (profile, results) = harness.app.session.groups.output.as_ref().unwrap();
+    assert_eq!(profile.samples_in_group1().len(), 15);
+    assert_eq!(profile.samples_in_group2().len(), 15);
+    assert!(results.rows.iter().any(|r| r.p_value < 1.0));
+    harness.screenshot("paired_test");
+
+    // The transform changes p-values and nothing else.
+    harness.app.session.groups.analysis.test = GroupTest::Welch;
+    harness.app.session.groups.analysis.transform = Transform::CentredLogRatio;
+    harness.app.session.invalidate(Mode::TwoGroups);
+    harness.settle();
+    let (_, results) = harness.app.session.groups.output.as_ref().unwrap();
+    let mut changed = 0;
+    for (feature, p, effect) in &unpaired {
+        let row = results.rows.iter().find(|r| r.feature == *feature).unwrap();
+        assert_eq!(row.effect_size, *effect, "{feature}");
+        changed += usize::from(row.p_value != *p);
+    }
+    assert!(changed > unpaired.len() / 2, "{changed}");
+    harness.screenshot("transform");
+
+    // Multiple groups have the transform too.
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.settle();
+    let plain: Vec<f64> = harness
+        .app
+        .session
+        .multi
+        .output
+        .as_ref()
+        .unwrap()
+        .1
+        .rows
+        .iter()
+        .map(|r| r.p_value)
+        .collect();
+    harness.app.session.multi.analysis.transform = Transform::CentredLogRatio;
+    harness.app.session.invalidate(Mode::MultipleGroups);
+    harness.settle();
+    let transformed: Vec<f64> = harness
+        .app
+        .session
+        .multi
+        .output
+        .as_ref()
+        .unwrap()
+        .1
+        .rows
+        .iter()
+        .map(|r| r.p_value)
+        .collect();
+    assert_ne!(plain, transformed);
 }

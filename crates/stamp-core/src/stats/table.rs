@@ -5,9 +5,12 @@
 
 use super::post_hoc::PostHocResult;
 use super::results::{
-    GroupResults, GroupRow, MultiGroupResults, MultiGroupRow, SampleResults, SampleRow,
+    CorrelationResults, CorrelationRow, GroupResults, GroupRow, MultiGroupResults, MultiGroupRow,
+    SampleResults, SampleRow,
 };
-use crate::profile::{percent, Feature, GroupProfile, MultiGroupProfile, Profile, SampleProfile};
+use crate::profile::{
+    percent, CorrelationProfile, Feature, GroupProfile, MultiGroupProfile, Profile, SampleProfile,
+};
 
 /// A table of text cells with one heading per column.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -225,6 +228,48 @@ pub fn multi_group_table<'a>(
                 cells.push(num(*mean));
                 cells.push(num(*sd));
             }
+            if let Some(feature) = profile.profile.feature(&row.feature) {
+                cells.extend(sample_cells(&profile.profile, feature));
+            }
+            cells
+        })
+        .collect();
+    Table { headings, rows }
+}
+
+/// Table of correlation results. `rows` selects and orders the rows.
+pub fn correlation_table<'a>(
+    profile: &CorrelationProfile,
+    results: &CorrelationResults,
+    rows: impl IntoIterator<Item = &'a CorrelationRow>,
+) -> Table {
+    let method = results.analysis.method;
+    let mut headings = profile.profile.hierarchy_headings.clone();
+    headings.extend([
+        format!("{} ({})", method.name(), method.coefficient_name()),
+        "p-values".to_string(),
+        "p-values (corrected)".to_string(),
+        "Mean rel. freq. (%)".to_string(),
+        "Std. dev. (%)".to_string(),
+        "Note".to_string(),
+    ]);
+    headings.extend(sample_headings(&profile.profile));
+
+    let rows = rows
+        .into_iter()
+        .map(|row| {
+            let mut cells = hierarchy(&profile.profile, &row.feature);
+            cells.extend(
+                [
+                    row.coefficient,
+                    row.p_value,
+                    row.p_value_corrected,
+                    row.mean,
+                    row.std_dev,
+                ]
+                .map(num),
+            );
+            cells.push(row.note.clone());
             if let Some(feature) = profile.profile.feature(&row.feature) {
                 cells.extend(sample_cells(&profile.profile, feature));
             }

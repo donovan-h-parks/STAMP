@@ -919,3 +919,239 @@ fn every_plot_type_can_be_drawn() {
     assert!(message.contains("unknown feature 'Nope'"));
     fs::remove_dir_all(&directory).unwrap();
 }
+
+/// A small profile with metadata that pairs the samples of two groups and
+/// gives each a number, written to a directory of its own.
+fn paired_example(name: &str) -> (PathBuf, String, String) {
+    let directory = std::env::temp_dir().join(format!("stamp-cli-{name}-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let profile = directory.join("profile.spf");
+    fs::write(
+        &profile,
+        "Phylum\tGenus\tA1\tA2\tA3\tA4\tB1\tB2\tB3\tB4\n\
+         P1\tx\t10\t12\t11\t14\t30\t33\t31\t29\n\
+         P1\ty\t50\t48\t52\t47\t50\t49\t51\t50\n\
+         P2\tz\t40\t40\t37\t39\t20\t18\t18\t21\n",
+    )
+    .unwrap();
+    let metadata = directory.join("metadata.tsv");
+    fs::write(
+        &metadata,
+        "Id\tGroup\tSubject\tDepth\n\
+         A1\tA\ts1\t1.0\nA2\tA\ts2\t2.5\nA3\tA\ts3\t4.0\nA4\tA\ts4\t5.5\n\
+         B1\tB\ts4\t6.0\nB2\tB\ts3\t7.5\nB3\tB\ts2\t9.0\nB4\tB\ts9\tdeep\n",
+    )
+    .unwrap();
+    (
+        directory,
+        profile.to_str().unwrap().to_string(),
+        metadata.to_str().unwrap().to_string(),
+    )
+}
+
+#[test]
+fn paired_tests_and_the_transform() {
+    let (directory, profile, metadata) = paired_example("paired");
+    let base = [
+        "--profile",
+        &profile,
+        "--metadata",
+        &metadata,
+        "--field",
+        "Group",
+        "--group1",
+        "A",
+        "--group2",
+        "B",
+    ];
+    let run = |extra: &[&str]| {
+        let output = stamp(&with("two-groups", &base, extra));
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        (
+            Table::parse(&String::from_utf8_lossy(&output.stdout)),
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        )
+    };
+    let p_of = |table: &Table, feature: &str| -> f64 {
+        let (genus, p) = (table.column("Genus"), table.column("p-values"));
+        table.rows.iter().find(|r| r[genus] == feature).unwrap()[p]
+            .parse()
+            .unwrap()
+    };
+
+    // Three subjects have a sample in each group; A1 and B4 have no partner.
+    let (paired, messages) = run(&["--test", "paired-t", "--pair-field", "Subject"]);
+    assert!(
+        messages.contains("3 pairs; 2 samples without a partner left out"),
+        "{messages}"
+    );
+    assert!(paired.headings.iter().any(|h| h == "A2"));
+    assert!(!paired.headings.iter().any(|h| h == "A1" || h == "B4"));
+    let (unpaired, _) = run(&[]);
+    assert!(unpaired.headings.iter().any(|h| h == "A1"));
+    assert_ne!(p_of(&paired, "x"), p_of(&unpaired, "x"));
+    let (wilcoxon, _) = run(&["--test", "wilcoxon", "--pair-field", "Subject"]);
+    // Three pairs all one way: the smallest two-sided p-value is 2/8.
+    assert!((p_of(&wilcoxon, "x") - 0.25).abs() < 1e-9);
+
+    // The transform changes p-values but not effect sizes.
+    let (transformed, _) = run(&["--transform", "clr"]);
+    assert_ne!(p_of(&transformed, "y"), p_of(&unpaired, "y"));
+    let effect = unpaired.column("Difference between means");
+    let genus = unpaired.column("Genus");
+    for row in &unpaired.rows {
+        let other = transformed
+            .rows
+            .iter()
+            .find(|r| r[genus] == row[genus])
+            .unwrap();
+        assert_eq!(row[effect], other[effect]);
+    }
+    let multi = |extra: &[&str]| {
+        let base = [
+            "--profile",
+            &profile,
+            "--metadata",
+            &metadata,
+            "--field",
+            "Group",
+        ];
+        Table::parse(&stdout(&with("multi-groups", &base, extra)))
+    };
+    assert_ne!(
+        p_of(&multi(&["--transform", "clr"]), "y"),
+        p_of(&multi(&[]), "y")
+    );
+
+    // What cannot be done is said plainly.
+    let fails = |extra: &[&str]| failure(&with("two-groups", &base, extra));
+    assert!(fails(&["--test", "paired-t"]).contains("--pair-field"));
+    assert!(fails(&["--pair-field", "Subject"]).contains("paired tests"));
+    assert!(fails(&["--test", "white", "--transform", "clr"]).contains("White"));
+    assert!(fails(&["--test", "wilcoxon", "--pair-field", "Nothing"]).contains("Nothing"));
+    let one_group = [
+        "--profile",
+        &profile,
+        "--metadata",
+        &metadata,
+        "--field",
+        "Group",
+        "--group1",
+        "A",
+        "--test",
+        "paired-t",
+        "--pair-field",
+        "Subject",
+    ];
+    assert!(failure(&with("two-groups", &one_group, &[])).contains("--group2"));
+    fs::remove_dir_all(&directory).ok();
+}
+
+#[test]
+fn correlation_with_a_numeric_field() {
+    let (directory, profile, metadata) = paired_example("correlation");
+    let base = [
+        "--profile",
+        &profile,
+        "--metadata",
+        &metadata,
+        "--field",
+        "Depth",
+    ];
+    let output = stamp(&with("correlation", &base, &[]));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // B4 has no number.
+    assert!(String::from_utf8_lossy(&output.stderr).contains("1 of the samples have no number"));
+    let table = Table::parse(&String::from_utf8_lossy(&output.stdout));
+    assert_eq!(table.rows.len(), 3);
+    assert!(!table.headings.iter().any(|h| h == "B4"));
+    let (genus, rho, p) = (
+        table.column("Genus"),
+        table.column("Spearman rank correlation (rho)"),
+        table.column("p-values"),
+    );
+    let value = |feature: &str, column: usize| -> f64 {
+        table.rows.iter().find(|r| r[genus] == feature).unwrap()[column]
+            .parse()
+            .unwrap()
+    };
+    // x rises with depth and z falls.
+    assert!(value("x", rho) > 0.7 && value("z", rho) < -0.7);
+    assert!(value("x", p) < 0.05);
+    // Ordered by p-value.
+    let ps: Vec<f64> = table.rows.iter().map(|r| r[p].parse().unwrap()).collect();
+    assert!(ps.windows(2).all(|w| w[0] <= w[1]));
+
+    let pearson = Table::parse(&stdout(&with(
+        "correlation",
+        &base,
+        &["--method", "pearson"],
+    )));
+    assert!(pearson
+        .headings
+        .iter()
+        .any(|h| h == "Pearson correlation (r)"));
+    let filtered = Table::parse(&stdout(&with(
+        "correlation",
+        &base,
+        &["--min-correlation", "0.7", "--correction", "bonferroni"],
+    )));
+    assert_eq!(filtered.rows.len(), 2);
+
+    // The plots of a correlation.
+    let has = |svg: &str, label: &str| svg.contains(&format!(">{label}</text>"));
+    let scatter = svg_plot(
+        "correlation",
+        &base,
+        &["--plot-feature", "z", "--group-field", "Group"],
+        &directory,
+        "scatter",
+    );
+    assert!(has(&scatter, "z") && has(&scatter, "Depth") && has(&scatter, "A"));
+    assert!(scatter.contains("rho = -"));
+    let volcano = svg_plot(
+        "correlation",
+        &base,
+        &["--plot-type", "volcano"],
+        &directory,
+        "volcano",
+    );
+    assert!(has(&volcano, "Spearman rank correlation (rho)"));
+    svg_plot(
+        "correlation",
+        &base,
+        &["--plot-type", "p-value-histogram"],
+        &directory,
+        "histogram",
+    );
+
+    let fails = |base: &[&str], extra: &[&str]| failure(&with("correlation", base, extra));
+    assert!(fails(&base, &["--plot", "x.svg", "--plot-type", "heatmap"]).contains("not available"));
+    let text_field = [
+        "--profile",
+        &profile,
+        "--metadata",
+        &metadata,
+        "--field",
+        "Subject",
+    ];
+    assert!(fails(&text_field, &[]).contains("at least three samples"));
+    let unknown = [
+        "--profile",
+        &profile,
+        "--metadata",
+        &metadata,
+        "--field",
+        "Nothing",
+    ];
+    assert!(fails(&unknown, &[]).contains("Fields in the metadata file"));
+    fs::remove_dir_all(&directory).ok();
+}

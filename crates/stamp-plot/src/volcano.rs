@@ -1,7 +1,9 @@
 //! Volcano plot: for every feature, how large the difference is against how
 //! significant it is.
 
-use stamp_core::stats::results::{format_p_value, GroupResults, MultiGroupResults, SampleResults};
+use stamp_core::stats::results::{
+    format_p_value, CorrelationResults, GroupResults, MultiGroupResults, SampleResults,
+};
 use stamp_core::{GroupProfile, SampleProfile};
 
 use crate::axes::{
@@ -84,6 +86,34 @@ impl Data {
         }
     }
 
+    /// Correlation coefficients against their p-values. `field` is the
+    /// metadata field the features were correlated with.
+    pub fn from_correlation_results(results: &CorrelationResults, field: &str) -> Data {
+        Data {
+            points: results
+                .rows
+                .iter()
+                .map(|r| Point {
+                    feature: r.feature.clone(),
+                    effect_size: r.coefficient,
+                    p_value: r.p_value,
+                    p_value_corrected: r.p_value_corrected,
+                })
+                .collect(),
+            effect_label: format!(
+                "{} ({})",
+                results.analysis.method.name(),
+                results.analysis.method.coefficient_name()
+            ),
+            no_effect: 0.0,
+            sides: Some([
+                (format!("samples with a high {field}"), POSITIVE),
+                (format!("samples with a low {field}"), NEGATIVE),
+            ]),
+            false_discovery_rate: results.correction.method.is_false_discovery_rate(),
+        }
+    }
+
     pub fn from_multi_group_results(results: &MultiGroupResults) -> Data {
         Data {
             points: results
@@ -144,6 +174,9 @@ impl Default for Options {
     }
 }
 
+/// Colours of features that rise and that fall with a metadata field.
+const POSITIVE: Color = Color::rgb(215, 95, 75);
+const NEGATIVE: Color = Color::rgb(90, 140, 200);
 /// Colour of the features that are not significant.
 const MUTED: Color = Color::rgb(200, 200, 200);
 /// Colour of significant features when the effect size has no direction.

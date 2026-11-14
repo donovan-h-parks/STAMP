@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use crate::error::{Result, StampError};
-use crate::metadata::Groups;
+use crate::metadata::{Groups, Metadata};
 use crate::profile_tree::{ProfileTree, ENTIRE_SAMPLE};
 
 /// What to do with features that are unclassified at the profile level.
@@ -217,6 +217,33 @@ impl ProfileTree {
         Ok(SampleProfile { profile })
     }
 
+    /// Profile of the active samples that have a number in a metadata
+    /// field, with those numbers, for correlating features with the field.
+    pub fn correlation_profile(
+        &self,
+        metadata: &Metadata,
+        field: &str,
+        parent_level: Option<&str>,
+        profile_level: &str,
+        unclassified: Unclassified,
+    ) -> Result<CorrelationProfile> {
+        if !metadata.fields().iter().any(|f| f == field) {
+            return Err(StampError::new(format!(
+                "Unknown metadata field '{field}'."
+            )));
+        }
+        let mut numbered = metadata.numeric_values(field);
+        numbered.sort_by(|a, b| a.0.cmp(b.0));
+        let samples: Vec<&str> = numbered.iter().map(|(sample, _)| *sample).collect();
+        let profile = self.profile(&samples, parent_level, profile_level, unclassified)?;
+        Ok(CorrelationProfile {
+            profile,
+            field: field.to_string(),
+            values: numbered.iter().map(|(_, value)| *value).collect(),
+            without_value: metadata.active_samples().len() - numbered.len(),
+        })
+    }
+
     /// Profile of two groups of samples.
     pub fn group_profile(
         &self,
@@ -343,6 +370,18 @@ impl SampleCounts {
     }
 }
 
+/// A profile of samples that each have a number in a metadata field.
+#[derive(Debug, Clone)]
+pub struct CorrelationProfile {
+    pub profile: Profile,
+    /// The metadata field.
+    pub field: String,
+    /// The value of the field for each sample of the profile, in order.
+    pub values: Vec<f64>,
+    /// Active samples left out because the field holds no number for them.
+    pub without_value: usize,
+}
+
 /// A profile of two groups of samples. The samples of the first group come
 /// first in the profile's columns.
 #[derive(Debug, Clone)]
@@ -370,6 +409,12 @@ impl GroupProfile {
     /// Parent counts of a feature in the samples of each group.
     pub fn parent_counts(&self, feature: &Feature) -> (&[f64], &[f64]) {
         self.profile.parent_counts(feature).split_at(self.size1)
+    }
+
+    /// Values given for every sample of the profile, divided between the
+    /// groups.
+    pub fn split<'a, T>(&self, values: &'a [T]) -> (&'a [T], &'a [T]) {
+        values.split_at(self.size1)
     }
 
     /// Relative frequencies (%) of a feature in the samples of each group.
@@ -415,7 +460,9 @@ impl MultiGroupProfile {
         self.split(&all).into_iter().map(<[f64]>::to_vec).collect()
     }
 
-    fn split<'a, T>(&self, values: &'a [T]) -> Vec<&'a [T]> {
+    /// Values given for every sample of the profile, divided between the
+    /// groups.
+    pub fn split<'a, T>(&self, values: &'a [T]) -> Vec<&'a [T]> {
         let mut out = Vec::with_capacity(self.group_sizes.len());
         let mut start = 0;
         for &size in &self.group_sizes {

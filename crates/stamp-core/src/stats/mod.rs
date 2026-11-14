@@ -5,6 +5,7 @@ pub mod ci;
 pub mod cluster;
 pub mod community;
 pub mod correction;
+pub mod correlation;
 pub mod dist;
 pub mod diversity;
 pub mod effect_size;
