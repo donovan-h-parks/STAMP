@@ -6,10 +6,9 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle, **waiting on the user for the go-ahead on roadmap tier 4** (ANCOM,
-Mantel, shared-feature plot, NMDS, rank-abundance; see `docs/ROADMAP.md`).
-The instruction was to prompt for the tiers in order, so do not start
-tier 4 unasked.
+Idle. Tiers 1 to 3 of `docs/ROADMAP.md` are done, committed and
+pushed. The next task is tier 4, which the user said on 2026-11-14 will
+be done later: wait for the user to ask for it.
 
 ## Last completed
 
@@ -23,7 +22,7 @@ tier 4 unasked.
   `PlotKind::CorrelationScatter`); command line `--test paired-t|wilcoxon
   --pair-field`, `--transform clr`, and the `correlation` command. Values
   checked against SciPy 1.17. Tests, lint and web bundle done. Committed
-  (see `git log`), not pushed.
+  as `bac1bc4` and pushed.
 - **Roadmap tier 2** (2026-11-14): alpha diversity, distances
   (Bray-Curtis, Jaccard, Aitchison) and PCoA in
   `stamp-core/src/stats/diversity.rs`; PERMANOVA, PERMDISP and ANOSIM in
@@ -68,13 +67,21 @@ tier 4 unasked.
 
 ## State of the repository
 
-- Branch `rust-port`, pushed to `origin` up to `b5f1820` (tag
-  `feature-parity` is on `6b834ba`).
-- Tier 1 is committed locally as `466fc38` and **not pushed** (the user
-  asked for a commit only), as is tier 2 (`ff2ba03`). Tier 3 is
-  committed too, and also not pushed.
+- Branch `rust-port`, pushed to `origin` (tag `feature-parity` is on
+  `6b834ba`).
+- Tiers 1 to 3 are committed and pushed: `466fc38`, `ff2ba03`, `bac1bc4`.
 
 ## Next
 
-Nothing queued. What v2 has that the port still lacks is listed under "Not
-yet ported" in `docs/CHANGES_FROM_PYTHON.md`.
+**Roadmap tier 4**, deferred by the user ("We will do this later"); do not
+start it unasked:
+
+- ANCOM (differential abundance for compositional data)
+- the Mantel test
+- a shared-feature plot (UpSet / Venn)
+- NMDS ordination
+- rank-abundance curves
+
+Details are in `docs/ROADMAP.md`. Separately, what v2 has that the port
+still lacks is listed under "Not yet ported" in
+`docs/CHANGES_FROM_PYTHON.md`.
