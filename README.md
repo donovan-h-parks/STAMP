@@ -86,6 +86,11 @@ stamp-cli two-groups --profile profile.spf --metadata metadata.tsv --field Treat
 stamp-cli correlation --profile profile.spf --metadata metadata.tsv --field Depth \
     --method spearman --correction benjamini-hochberg --plot depth.png
 
+# ANCOM: features whose log ratios with the others differ between groups
+stamp-cli ancom --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \
+    --metadata examples/EnterotypesArumugam/Enterotypes.metadata.tsv --field Enterotype \
+    --group "Enterotype 1" --group "Enterotype 2" --group "Enterotype 3" --output ancom.tsv
+
 # Convert another tool's output to a STAMP profile
 stamp-cli convert mgrast examples/CowRumen-MG-RAST/CowRumen-MG-RAST.tsv --output cow_rumen.spf
 ```
@@ -100,7 +105,7 @@ stamp-cli two-samples --profile examples/IronMineEdwards/EdwardsIronMine.spf \
 
 ![Extended error bar plot of the iron mine example](docs/images/extended_error_bar.png)
 
-`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `pca`, `heatmap`, `rarefaction`, `volcano`, `composition`, `alpha-diversity`, `pcoa`, `distance-box`, (with the `correlation` command) `correlation-scatter` and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
+`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `pca`, `heatmap`, `rarefaction`, `volcano`, `composition`, `alpha-diversity`, `pcoa`, `distance-box`, `nmds`, `shared-features`, `rank-abundance`, `ancom`, (with the `correlation` command) `correlation-scatter` and `mantel`, and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
 
 ```bash
 stamp-cli multi-groups --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \

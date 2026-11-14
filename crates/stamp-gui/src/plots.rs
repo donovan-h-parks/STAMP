@@ -1,6 +1,8 @@
 //! Choosing a plot and building its figure from the session's results.
 
+use stamp_core::stats::ancom::ancom;
 use stamp_core::stats::diversity::{AlphaMetric, Distance, Normalisation};
+use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::results::format_p_value;
 use stamp_core::stats::rng_from_seed;
 use stamp_plot::axes::LegendPosition;
@@ -8,8 +10,9 @@ use stamp_plot::axes::AXES_COLOR;
 use stamp_plot::community_plots::{self, Community};
 use stamp_plot::extended_error_bar::{self, SAMPLE1_COLOR, SAMPLE2_COLOR};
 use stamp_plot::{
-    composition, correlation_plot, feature_plots, heatmap, histogram, pca_plot, post_hoc,
-    rarefaction, sample_plots, scatter, volcano, Color, Figure,
+    ancom_plot, composition, correlation_plot, feature_plots, heatmap, histogram, pca_plot,
+    post_hoc, rank_abundance, rarefaction, sample_plots, scatter, shared_features, volcano, Color,
+    Figure,
 };
 
 use crate::session::{Mode, Session};
@@ -35,6 +38,11 @@ pub enum PlotKind {
     Pcoa,
     DistanceBox,
     CorrelationScatter,
+    Nmds,
+    SharedFeatures,
+    RankAbundance,
+    Ancom,
+    Mantel,
 }
 
 impl PlotKind {
@@ -58,6 +66,11 @@ impl PlotKind {
             PlotKind::Pcoa => "PCoA plot",
             PlotKind::DistanceBox => "Distance box plot",
             PlotKind::CorrelationScatter => "Correlation scatter plot",
+            PlotKind::Nmds => "NMDS plot",
+            PlotKind::SharedFeatures => "Shared features plot",
+            PlotKind::RankAbundance => "Rank-abundance curves",
+            PlotKind::Ancom => "ANCOM plot",
+            PlotKind::Mantel => "Mantel test plot",
         }
     }
 
@@ -75,6 +88,8 @@ impl PlotKind {
                 PlotKind::Rarefaction,
                 PlotKind::Volcano,
                 PlotKind::Composition,
+                PlotKind::SharedFeatures,
+                PlotKind::RankAbundance,
             ],
             Mode::TwoGroups => &[
                 PlotKind::ExtendedErrorBar,
@@ -88,12 +103,17 @@ impl PlotKind {
                 PlotKind::Composition,
                 PlotKind::AlphaDiversity,
                 PlotKind::Pcoa,
+                PlotKind::Nmds,
                 PlotKind::DistanceBox,
+                PlotKind::Ancom,
+                PlotKind::SharedFeatures,
+                PlotKind::RankAbundance,
             ],
             Mode::Correlation => &[
                 PlotKind::CorrelationScatter,
                 PlotKind::Volcano,
                 PlotKind::PValueHistogram,
+                PlotKind::Mantel,
             ],
             Mode::MultipleGroups => &[
                 PlotKind::Pca,
@@ -106,7 +126,11 @@ impl PlotKind {
                 PlotKind::Composition,
                 PlotKind::AlphaDiversity,
                 PlotKind::Pcoa,
+                PlotKind::Nmds,
                 PlotKind::DistanceBox,
+                PlotKind::Ancom,
+                PlotKind::SharedFeatures,
+                PlotKind::RankAbundance,
             ],
         }
     }
@@ -117,7 +141,8 @@ impl PlotKind {
             PlotKind::ExtendedErrorBar
             | PlotKind::Scatter
             | PlotKind::ProfileBar
-            | PlotKind::Volcano => true,
+            | PlotKind::Volcano
+            | PlotKind::Ancom => true,
             PlotKind::Bar => mode == Mode::TwoSamples,
             _ => false,
         }
@@ -183,6 +208,15 @@ pub struct PlotSettings {
     /// plot.
     pub pcoa_show_tests: bool,
     pub distance_box: feature_plots::BoxOptions,
+    pub nmds: pca_plot::Options,
+    pub mantel: correlation_plot::Options,
+    pub shared: shared_features::Options,
+    pub rank_abundance: rank_abundance::Options,
+    pub ancom: ancom_plot::Options,
+    /// The test ANCOM applies to each log ratio, and its significance
+    /// level.
+    pub ancom_test: MultiGroupTest,
+    pub ancom_alpha: f64,
     /// Draw only the features that pass the filters in the heatmap.
     pub heatmap_only_active: bool,
     /// Show sequence counts instead of proportions in the heatmap.
@@ -275,6 +309,22 @@ impl Default for PlotSettings {
                 height: 6.0,
                 ..Default::default()
             },
+            nmds: pca_plot::Options {
+                legend,
+                show_pc3_vs_pc2: false,
+                show_pc1_vs_pc3: false,
+                ..Default::default()
+            },
+            mantel: correlation_plot::Options {
+                unique_shapes: false,
+                legend: LegendPosition::None,
+                ..Default::default()
+            },
+            shared: shared_features::Options::default(),
+            rank_abundance: rank_abundance::Options::default(),
+            ancom: ancom_plot::Options::default(),
+            ancom_test: MultiGroupTest::Anova,
+            ancom_alpha: 0.05,
             heatmap_only_active: false,
             heatmap_sequence_counts: false,
             highlighted: Vec::new(),
@@ -326,8 +376,21 @@ impl PlotSettings {
             PlotKind::Volcano => self.volcano = defaults.volcano,
             PlotKind::CorrelationScatter => self.correlation = defaults.correlation,
             PlotKind::Composition => self.composition = defaults.composition,
-            PlotKind::AlphaDiversity | PlotKind::Pcoa | PlotKind::DistanceBox => {
+            PlotKind::SharedFeatures => self.shared = defaults.shared,
+            PlotKind::RankAbundance => self.rank_abundance = defaults.rank_abundance,
+            PlotKind::Ancom => {
+                self.ancom = defaults.ancom;
+                self.ancom_test = defaults.ancom_test;
+                self.ancom_alpha = defaults.ancom_alpha;
+            }
+            PlotKind::AlphaDiversity
+            | PlotKind::Pcoa
+            | PlotKind::Nmds
+            | PlotKind::DistanceBox
+            | PlotKind::Mantel => {
                 match kind {
+                    PlotKind::Nmds => self.nmds = defaults.nmds,
+                    PlotKind::Mantel => self.mantel = defaults.mantel,
                     PlotKind::AlphaDiversity => {
                         self.alpha_metric = defaults.alpha_metric;
                         self.alpha_box = defaults.alpha_box;
@@ -338,7 +401,7 @@ impl PlotSettings {
                     }
                     _ => self.distance_box = defaults.distance_box,
                 }
-                // The three plots share these.
+                // The plots of whole communities share these.
                 self.community_normalisation = defaults.community_normalisation;
                 self.community_distance = defaults.community_distance;
                 self.community_permutations = defaults.community_permutations;
@@ -423,7 +486,50 @@ fn community_plot(
                 .then_some((settings.community_permutations, &mut rng)),
             &settings.pcoa,
         ),
+        PlotKind::Nmds => community_plots::nmds_plot(&community, distance, &settings.nmds),
         _ => community_plots::distance_box_plot(&community, distance, &settings.distance_box),
+    }
+}
+
+/// The plots drawn from the proportions of every feature in some samples
+/// and their groups: shared features and rank-abundance curves.
+fn proportion_plot(kind: PlotKind, data: &composition::Data, settings: &PlotSettings) -> Figure {
+    match kind {
+        PlotKind::SharedFeatures => {
+            let shared = shared_features::Data::from_composition(
+                data,
+                settings.shared.min_prevalence / 100.0,
+            );
+            shared_features::plot(&shared, &settings.shared)
+        }
+        _ => rank_abundance::plot(data, &settings.rank_abundance),
+    }
+}
+
+/// The ANCOM plot of a profile whose sample `i` is in group
+/// `sample_groups[i]`.
+fn ancom_figure(
+    profile: &stamp_core::Profile,
+    sample_groups: &[usize],
+    groups: &[String],
+    settings: &PlotSettings,
+) -> Figure {
+    let features = profile.features();
+    let samples: Vec<Vec<f64>> = (0..profile.sample_names.len())
+        .map(|s| features.iter().map(|f| f.counts[s]).collect())
+        .collect();
+    match ancom(&samples, sample_groups, settings.ancom_test, settings.ancom_alpha) {
+        Some(result) => {
+            let names: Vec<String> = features.iter().map(|f| f.name.clone()).collect();
+            let options = ancom_plot::Options {
+                highlighted: settings.highlighted.clone(),
+                ..settings.ancom.clone()
+            };
+            ancom_plot::plot(&result, &names, groups, &options)
+        }
+        None => Figure::message(
+            "ANCOM needs two groups with samples, a group of more than one sample, and two features",
+        ),
     }
 }
 
@@ -571,13 +677,16 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     &volcano::Data::from_sample_results(profile, results),
                     &volcano_options,
                 ),
-                PlotKind::Composition => {
+                PlotKind::Composition | PlotKind::SharedFeatures | PlotKind::RankAbundance => {
                     let mut data = composition::Data::from_profile(
                         &profile.profile,
                         vec![0, 1],
                         profile.profile.sample_names.clone(),
                     );
                     data.group_colors = vec![SAMPLE1_COLOR, SAMPLE2_COLOR];
+                    if matches!(kind, PlotKind::SharedFeatures | PlotKind::RankAbundance) {
+                        return proportion_plot(kind, &data, settings);
+                    }
                     // With two samples there are only the samples to draw.
                     composition::plot(
                         &data,
@@ -688,7 +797,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     ]);
                     volcano::plot(&data, &volcano_options)
                 }
-                PlotKind::Composition => {
+                PlotKind::Composition | PlotKind::SharedFeatures | PlotKind::RankAbundance => {
                     let first = profile.samples_in_group1().len();
                     let samples = profile.profile.sample_names.len();
                     let mut data = composition::Data::from_profile(
@@ -697,9 +806,28 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         vec![profile.group_name1.clone(), profile.group_name2.clone()],
                     );
                     data.group_colors = vec![color1, color2];
-                    composition::plot(&data, &settings.composition)
+                    if kind == PlotKind::Composition {
+                        composition::plot(&data, &settings.composition)
+                    } else {
+                        proportion_plot(kind, &data, settings)
+                    }
                 }
-                PlotKind::AlphaDiversity | PlotKind::Pcoa | PlotKind::DistanceBox => {
+                PlotKind::Ancom => {
+                    let first = profile.samples_in_group1().len();
+                    let groups: Vec<usize> = (0..profile.profile.sample_names.len())
+                        .map(|i| usize::from(i >= first))
+                        .collect();
+                    ancom_figure(
+                        &profile.profile,
+                        &groups,
+                        &[profile.group_name1.clone(), profile.group_name2.clone()],
+                        settings,
+                    )
+                }
+                PlotKind::AlphaDiversity
+                | PlotKind::Pcoa
+                | PlotKind::Nmds
+                | PlotKind::DistanceBox => {
                     let first = profile.samples_in_group1().len();
                     let samples = &profile.profile.sample_names;
                     community_plot(
@@ -781,6 +909,34 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         results.rows.iter().map(|r| r.p_value).collect()
                     };
                     histogram::p_value_histogram(&values, &settings.p_value_histogram)
+                }
+                PlotKind::Mantel => {
+                    let Some(tree) = &session.tree else {
+                        return Figure::message(NO_RESULTS);
+                    };
+                    let samples = &profile.profile.sample_names;
+                    let mut rng = rng_from_seed(session.seed);
+                    match Community::from_tree(
+                        tree,
+                        samples,
+                        &session.profile_level,
+                        vec![0; samples.len()],
+                        vec![String::new()],
+                        settings.community_normalisation,
+                        &mut rng,
+                    ) {
+                        Ok(community) => community_plots::mantel_plot(
+                            &community,
+                            &profile.values,
+                            &profile.field,
+                            settings.community_distance,
+                            results.analysis.method,
+                            settings.community_permutations,
+                            &mut rng,
+                            &settings.mantel,
+                        ),
+                        Err(message) => Figure::message(&message),
+                    }
                 }
                 _ => Figure::message("This plot is not available for correlations"),
             }
@@ -877,7 +1033,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     &volcano::Data::from_multi_group_results(results),
                     &volcano_options,
                 ),
-                PlotKind::Composition => {
+                PlotKind::Composition | PlotKind::SharedFeatures | PlotKind::RankAbundance => {
                     let mut data = composition::Data::from_profile(
                         &profile.profile,
                         profile
@@ -889,24 +1045,38 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         profile.group_names.clone(),
                     );
                     data.group_colors = colors.clone();
-                    composition::plot(&data, &settings.composition)
+                    if kind == PlotKind::Composition {
+                        composition::plot(&data, &settings.composition)
+                    } else {
+                        proportion_plot(kind, &data, settings)
+                    }
                 }
-                PlotKind::AlphaDiversity | PlotKind::Pcoa | PlotKind::DistanceBox => {
-                    community_plot(
-                        session,
-                        kind,
-                        &profile.profile.sample_names,
-                        profile
-                            .samples_in_groups()
-                            .iter()
-                            .enumerate()
-                            .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
-                            .collect(),
-                        profile.group_names.clone(),
-                        colors.clone(),
-                        settings,
-                    )
+                PlotKind::Ancom => {
+                    let groups: Vec<usize> = profile
+                        .samples_in_groups()
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                        .collect();
+                    ancom_figure(&profile.profile, &groups, &profile.group_names, settings)
                 }
+                PlotKind::AlphaDiversity
+                | PlotKind::Pcoa
+                | PlotKind::Nmds
+                | PlotKind::DistanceBox => community_plot(
+                    session,
+                    kind,
+                    &profile.profile.sample_names,
+                    profile
+                        .samples_in_groups()
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                        .collect(),
+                    profile.group_names.clone(),
+                    colors.clone(),
+                    settings,
+                ),
                 _ => Figure::message("This plot is not available for multiple groups"),
             }
         }

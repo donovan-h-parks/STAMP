@@ -409,6 +409,207 @@ pub fn pcoa(distances: &DistanceMatrix) -> Option<Ordination> {
     })
 }
 
+/// A non-metric multidimensional scaling of samples.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Nmds {
+    /// Coordinates of each sample: `positions[sample][axis]`.
+    pub positions: Vec<Vec<f64>>,
+    /// Kruskal's stress-1 of the layout: how far the order of the distances
+    /// in the layout departs from the order of the distances given, from 0
+    /// (not at all) upwards. Below 0.1 is usually taken as a good layout,
+    /// above 0.2 as a poor one.
+    pub stress: f64,
+}
+
+/// Most iterations of the NMDS layout.
+const NMDS_ITERATIONS: usize = 500;
+
+/// Non-metric multidimensional scaling (Kruskal 1964) in `dimensions`
+/// dimensions: a layout of the samples whose distances follow the order of
+/// the given distances as closely as possible, whatever their size. It
+/// starts from the PCoA layout, so the result is the same every time, and
+/// improves it by the SMACOF method (de Leeuw 1977) with monotone
+/// regression; equal distances are kept equal (Kruskal's secondary
+/// approach to ties). The axes are rotated to the principal axes of the
+/// layout, the first spreading the samples most.
+///
+/// `None` for fewer than three samples or if all distances are zero.
+pub fn nmds(distances: &DistanceMatrix, dimensions: usize) -> Option<Nmds> {
+    let n = distances.size();
+    if n < 3 || dimensions == 0 {
+        return None;
+    }
+    let start = pcoa(distances)?;
+    let mut positions: Vec<Vec<f64>> = start
+        .positions
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            (0..dimensions)
+                .map(|k| match row.get(k) {
+                    Some(value) => *value,
+                    // A deterministic nudge where the PCoA has no axis.
+                    None => 1e-3 * (((i * 7919 + k * 104_729) % 97) as f64 / 97.0 - 0.5),
+                })
+                .collect()
+        })
+        .collect();
+
+    // Pairs of samples in order of their given distance, in blocks of
+    // equal distances.
+    let mut pairs: Vec<(usize, usize)> = (0..n)
+        .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
+        .collect();
+    pairs.sort_by(|a, b| distances.get(a.0, a.1).total_cmp(&distances.get(b.0, b.1)));
+    let mut blocks: Vec<std::ops::Range<usize>> = Vec::new();
+    let mut begin = 0;
+    for k in 1..=pairs.len() {
+        let same = k < pairs.len()
+            && distances.get(pairs[k].0, pairs[k].1)
+                == distances.get(pairs[begin].0, pairs[begin].1);
+        if !same {
+            blocks.push(begin..k);
+            begin = k;
+        }
+    }
+
+    let layout_distances = |positions: &[Vec<f64>]| -> Vec<f64> {
+        pairs
+            .iter()
+            .map(|&(i, j)| {
+                positions[i]
+                    .iter()
+                    .zip(&positions[j])
+                    .map(|(a, b)| (a - b) * (a - b))
+                    .sum::<f64>()
+                    .sqrt()
+            })
+            .collect()
+    };
+    // The monotone (non-decreasing) fit to layout distances, in pair order.
+    let disparities = |d: &[f64]| -> Vec<f64> {
+        // Pool adjacent violators over the blocks, each weighted by its size.
+        let mut pools: Vec<(f64, f64, usize)> = Vec::new(); // (mean, weight, blocks)
+        for block in &blocks {
+            let weight = block.len() as f64;
+            let mut mean = d[block.clone()].iter().sum::<f64>() / weight;
+            let (mut total, mut count) = (weight, 1);
+            while let Some(&(last, last_weight, last_count)) = pools.last() {
+                if last <= mean {
+                    break;
+                }
+                mean = (mean * total + last * last_weight) / (total + last_weight);
+                total += last_weight;
+                count += last_count;
+                pools.pop();
+            }
+            pools.push((mean, total, count));
+        }
+        let mut fitted = Vec::with_capacity(d.len());
+        let mut block = 0;
+        for (mean, _, count) in pools {
+            for _ in 0..count {
+                fitted.extend(std::iter::repeat_n(mean, blocks[block].len()));
+                block += 1;
+            }
+        }
+        fitted
+    };
+    let stress = |d: &[f64], fitted: &[f64]| -> f64 {
+        let raw: f64 = d.iter().zip(fitted).map(|(a, b)| (a - b) * (a - b)).sum();
+        let total: f64 = d.iter().map(|a| a * a).sum();
+        if total > 0.0 {
+            (raw / total).sqrt()
+        } else {
+            0.0
+        }
+    };
+
+    let target = (n * (n - 1) / 2) as f64;
+    let mut previous = f64::INFINITY;
+    for _ in 0..NMDS_ITERATIONS {
+        let d = layout_distances(&positions);
+        let mut fitted = disparities(&d);
+        let current = stress(&d, &fitted);
+        if current < 1e-12 || previous - current < 1e-9 * previous.min(1.0) {
+            break;
+        }
+        previous = current;
+        // Disparities scaled to a fixed total, so the layout cannot shrink
+        // to nothing.
+        let sum_sq: f64 = fitted.iter().map(|f| f * f).sum();
+        if sum_sq <= 0.0 {
+            break;
+        }
+        let scale = (target / sum_sq).sqrt();
+        fitted.iter_mut().for_each(|f| *f *= scale);
+        // The Guttman transform.
+        let mut b = vec![vec![0.0; n]; n];
+        for (k, &(i, j)) in pairs.iter().enumerate() {
+            if d[k] > 0.0 {
+                let value = -fitted[k] / d[k];
+                b[i][j] = value;
+                b[j][i] = value;
+            }
+        }
+        for (i, row) in b.iter_mut().enumerate() {
+            row[i] = -row.iter().sum::<f64>();
+        }
+        positions = (0..n)
+            .map(|i| {
+                (0..dimensions)
+                    .map(|k| (0..n).map(|j| b[i][j] * positions[j][k]).sum::<f64>() / n as f64)
+                    .collect()
+            })
+            .collect();
+    }
+    let d = layout_distances(&positions);
+    let final_stress = stress(&d, &disparities(&d));
+    Some(Nmds {
+        positions: principal_axes(positions, dimensions),
+        stress: final_stress,
+    })
+}
+
+/// A layout centred and rotated to its principal axes, largest spread
+/// first, each with its largest coordinate positive.
+fn principal_axes(positions: Vec<Vec<f64>>, dimensions: usize) -> Vec<Vec<f64>> {
+    let n = positions.len() as f64;
+    let means: Vec<f64> = (0..dimensions)
+        .map(|k| positions.iter().map(|p| p[k]).sum::<f64>() / n)
+        .collect();
+    let centred: Vec<Vec<f64>> = positions
+        .iter()
+        .map(|p| p.iter().zip(&means).map(|(v, m)| v - m).collect())
+        .collect();
+    let covariance: Vec<Vec<f64>> = (0..dimensions)
+        .map(|a| {
+            (0..dimensions)
+                .map(|b| centred.iter().map(|p| p[a] * p[b]).sum::<f64>())
+                .collect()
+        })
+        .collect();
+    let (values, vectors) = symmetric_eigen(covariance);
+    let mut order: Vec<usize> = (0..dimensions).collect();
+    order.sort_by(|&a, &b| values[b].total_cmp(&values[a]));
+    let mut rotated = vec![Vec::with_capacity(dimensions); centred.len()];
+    for &k in &order {
+        let column: Vec<f64> = centred
+            .iter()
+            .map(|p| (0..dimensions).map(|a| p[a] * vectors[a][k]).sum())
+            .collect();
+        let extreme = column
+            .iter()
+            .copied()
+            .fold(0.0f64, |a, b| if b.abs() > a.abs() { b } else { a });
+        let sign = if extreme < 0.0 { -1.0 } else { 1.0 };
+        for (row, value) in rotated.iter_mut().zip(column) {
+            row.push(sign * value);
+        }
+    }
+    rotated
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -628,5 +829,127 @@ pub(crate) mod tests {
             CommunityTable::new(&profile, Normalisation::Rarefy, &mut rng),
             Err(NEEDS_COUNTS)
         );
+    }
+
+    fn euclidean(points: &[[f64; 2]]) -> DistanceMatrix {
+        DistanceMatrix::from_fn(points.len(), |i, j| {
+            let (a, b) = (points[i], points[j]);
+            ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
+        })
+    }
+
+    const POINTS: [[f64; 2]; 8] = [
+        [0.0, 0.0],
+        [3.0, 1.0],
+        [1.0, 4.0],
+        [5.0, 5.0],
+        [2.0, 2.5],
+        [6.0, 0.5],
+        [4.0, 3.0],
+        [0.5, 6.0],
+    ];
+
+    #[test]
+    fn nmds_recovers_a_layout_from_the_order_of_its_distances() {
+        // Squared distances keep only the order of the distances; a
+        // layout in two dimensions still fits them perfectly.
+        let plain = euclidean(&POINTS);
+        let squared = DistanceMatrix::from_fn(8, |i, j| plain.get(i, j).powi(2));
+        let result = nmds(&squared, 2).unwrap();
+        assert!(result.stress < 1e-3, "{}", result.stress);
+        // So the layout's distances follow the original ones in order.
+        let layout = DistanceMatrix::from_fn(8, |i, j| {
+            let (a, b) = (&result.positions[i], &result.positions[j]);
+            ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
+        });
+        let pairs: Vec<(usize, usize)> = (0..8)
+            .flat_map(|i| (i + 1..8).map(move |j| (i, j)))
+            .collect();
+        let rho = crate::stats::correlation::CorrelationMethod::Spearman
+            .coefficient(
+                &pairs
+                    .iter()
+                    .map(|&(i, j)| plain.get(i, j))
+                    .collect::<Vec<_>>(),
+                &pairs
+                    .iter()
+                    .map(|&(i, j)| layout.get(i, j))
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+        assert!(rho > 0.99, "{rho}");
+        // Centred, with the first axis spreading the samples most.
+        let spread = |k: usize| result.positions.iter().map(|p| p[k] * p[k]).sum::<f64>();
+        assert!(spread(0) >= spread(1));
+        let mean: f64 = result.positions.iter().map(|p| p[0]).sum::<f64>();
+        assert!(mean.abs() < 1e-9);
+    }
+
+    #[test]
+    fn nmds_improves_on_the_pcoa_layout() {
+        let matrix = distances(&table(), Distance::BrayCurtis);
+        let result = nmds(&matrix, 2).unwrap();
+        assert!(result.positions.iter().all(|p| p.len() == 2));
+        // Stress of the PCoA layout in two dimensions, measured the same way.
+        let start = pcoa(&matrix).unwrap();
+        let two: Vec<Vec<f64>> = start.positions.iter().map(|p| p[..2].to_vec()).collect();
+        let pcoa_stress = {
+            let again = nmds_stress(&matrix, &two);
+            assert!(again > 0.0);
+            again
+        };
+        assert!(
+            result.stress <= pcoa_stress + 1e-12,
+            "{} > {pcoa_stress}",
+            result.stress
+        );
+        assert_eq!(nmds(&matrix, 2), Some(result));
+        // Degenerate input.
+        assert!(nmds(&DistanceMatrix::from_fn(2, |_, _| 1.0), 2).is_none());
+        assert!(nmds(&DistanceMatrix::from_fn(5, |_, _| 0.0), 2).is_none());
+    }
+
+    /// Kruskal's stress-1 of a layout against distances, with the monotone
+    /// fit computed by brute force: the best non-decreasing sequence.
+    fn nmds_stress(matrix: &DistanceMatrix, positions: &[Vec<f64>]) -> f64 {
+        let n = matrix.size();
+        let mut pairs: Vec<(f64, f64)> = (0..n)
+            .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
+            .map(|(i, j)| {
+                let d = positions[i]
+                    .iter()
+                    .zip(&positions[j])
+                    .map(|(a, b)| (a - b) * (a - b))
+                    .sum::<f64>()
+                    .sqrt();
+                (matrix.get(i, j), d)
+            })
+            .collect();
+        pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // Pool adjacent violators, ignoring ties in the given distances.
+        let mut pools: Vec<(f64, f64)> = Vec::new();
+        for &(_, d) in &pairs {
+            let (mut mean, mut weight) = (d, 1.0);
+            while let Some(&(last, w)) = pools.last() {
+                if last <= mean {
+                    break;
+                }
+                mean = (mean * weight + last * w) / (weight + w);
+                weight += w;
+                pools.pop();
+            }
+            pools.push((mean, weight));
+        }
+        let fitted: Vec<f64> = pools
+            .iter()
+            .flat_map(|&(mean, weight)| std::iter::repeat_n(mean, weight as usize))
+            .collect();
+        let raw: f64 = pairs
+            .iter()
+            .zip(&fitted)
+            .map(|(p, f)| (p.1 - f).powi(2))
+            .sum();
+        let total: f64 = pairs.iter().map(|p| p.1 * p.1).sum();
+        (raw / total).sqrt()
     }
 }

@@ -50,7 +50,7 @@ impl Data {
     }
 
     /// One bar per group: the mean of each feature over the group's samples.
-    fn by_group(&self) -> Data {
+    pub(crate) fn by_group(&self) -> Data {
         let members: Vec<Vec<usize>> = (0..self.groups.len())
             .map(|group| {
                 (0..self.samples.len())

@@ -5,6 +5,7 @@
 use eframe::egui;
 use stamp_core::stats::cluster::Linkage;
 use stamp_core::stats::diversity::{AlphaMetric, Distance, Normalisation};
+use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_plot::axes::LegendPosition;
 use stamp_plot::composition;
 use stamp_plot::extended_error_bar::{self, SortBy};
@@ -12,9 +13,11 @@ use stamp_plot::feature_plots::Field;
 use stamp_plot::heatmap::{ColorMap, Order};
 use stamp_plot::histogram::Inset;
 use stamp_plot::pca_plot;
+use stamp_plot::rank_abundance;
 use stamp_plot::rarefaction;
 use stamp_plot::sample_plots::BarField;
 use stamp_plot::scatter::Spread;
+use stamp_plot::shared_features;
 
 use crate::app::choose;
 use crate::plots::{PlotKind, PlotSettings};
@@ -840,6 +843,111 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                     rows.check("Show community tests", show_tests);
                     rows.count_if(*show_tests, "Permutations:", permutations, 99..=99_999);
                 });
+            });
+        }
+        PlotKind::Nmds => {
+            let o = &mut settings.nmds;
+            let (distance, normalisation) = (
+                &mut settings.community_distance,
+                &mut settings.community_normalisation,
+            );
+            dialog.group("Figure size", |rows| {
+                rows.check(
+                    "Fixed pixels per unit distance (recommended)",
+                    &mut o.fixed_scale,
+                );
+                rows.inches("Width:", &mut o.width, 2.0..=40.0);
+                rows.inches_if(!o.fixed_scale, "Height:", &mut o.height, 2.0..=40.0);
+            });
+            dialog.group("Distances between samples", |rows| {
+                rows.community(distance, normalisation);
+            });
+            dialog.legend(&mut o.legend);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
+                rows.check("Assign unique shapes", &mut o.unique_shapes);
+            });
+        }
+        PlotKind::Mantel => {
+            let o = &mut settings.mantel;
+            let (distance, normalisation, permutations) = (
+                &mut settings.community_distance,
+                &mut settings.community_normalisation,
+                &mut settings.community_permutations,
+            );
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Distances between samples", |rows| {
+                rows.community(distance, normalisation);
+                rows.count("Permutations:", permutations, 99..=99_999);
+            });
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.check("Show fitted line (least squares)", &mut o.show_line);
+                rows.check("Show Mantel test", &mut o.show_statistics);
+                rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
+            });
+        }
+        PlotKind::Ancom => {
+            let o = &mut settings.ancom;
+            let (test, alpha) = (&mut settings.ancom_test, &mut settings.ancom_alpha);
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Log-ratio tests", |rows| {
+                let tests: Vec<(MultiGroupTest, &str)> =
+                    MultiGroupTest::ALL.iter().map(|&t| (t, t.name())).collect();
+                rows.choice("Test:", test, &tests);
+                rows.number("Significance level:", alpha, 0.001, 0.0001..=0.5);
+            });
+            dialog.legend(&mut o.legend);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
+            });
+        }
+        PlotKind::SharedFeatures => {
+            let o = &mut settings.shared;
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Shared features", |rows| {
+                rows.choice(
+                    "Style:",
+                    &mut o.style,
+                    &[
+                        (shared_features::Style::UpSet, "UpSet"),
+                        (shared_features::Style::Venn, "Venn (two or three groups)"),
+                    ],
+                );
+                // Two samples are groups of one sample each.
+                rows.number_if(
+                    mode != Mode::TwoSamples,
+                    "Present in at least (% of samples):",
+                    &mut o.min_prevalence,
+                    1.0,
+                    0.0..=100.0,
+                );
+                rows.count_if(
+                    o.style == shared_features::Style::UpSet,
+                    "Combinations shown:",
+                    &mut o.max_intersections,
+                    1..=200,
+                );
+            });
+        }
+        PlotKind::RankAbundance => {
+            let o = &mut settings.rank_abundance;
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Curves", |rows| {
+                if mode != Mode::TwoSamples {
+                    rows.choice(
+                        "Curves for:",
+                        &mut o.curves,
+                        &[
+                            (rank_abundance::Curves::Samples, "Each sample"),
+                            (rank_abundance::Curves::Groups, "Each group (mean)"),
+                        ],
+                    );
+                }
+                rows.check("Logarithmic proportions", &mut o.log_scale);
+            });
+            dialog.legend(&mut o.legend);
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.number("Line width:", &mut o.line_width, 0.1, 0.25..=10.0);
             });
         }
         PlotKind::AlphaDiversity => {

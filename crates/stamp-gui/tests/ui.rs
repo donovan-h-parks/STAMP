@@ -1947,3 +1947,126 @@ fn paired_tests_and_the_log_ratio_transform() {
         .collect();
     assert_ne!(plain, transformed);
 }
+
+#[test]
+fn tier_four_plots() {
+    use stamp_plot::shared_features::Style;
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.session.profile_level = "Genus".to_string();
+    harness.app.session.invalidate_all();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.settle();
+    let features = harness
+        .app
+        .session
+        .multi
+        .output
+        .as_ref()
+        .unwrap()
+        .0
+        .profile
+        .num_features();
+    let samples = harness
+        .app
+        .session
+        .multi
+        .output
+        .as_ref()
+        .unwrap()
+        .0
+        .profile
+        .sample_names
+        .len();
+
+    // ANCOM: a point per feature, clicking one selects it.
+    harness.app.set_plot_kind(PlotKind::Ancom);
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), features);
+    let summary = figure_texts(&harness.app)
+        .into_iter()
+        .find(|t| t.starts_with("ANCOM (ANOVA, alpha = 0.05): "))
+        .unwrap();
+    assert!(
+        summary.ends_with(&format!("of {features} features differ")),
+        "{summary}"
+    );
+    harness.screenshot("ancom");
+
+    // NMDS of the samples.
+    harness.app.set_plot_kind(PlotKind::Nmds);
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), samples);
+    assert!(figure_texts(&harness.app)
+        .iter()
+        .any(|t| t.starts_with("Stress = ")));
+    harness.screenshot("nmds");
+
+    // Shared features: UpSet for four groups; Venn is refused with a reason.
+    harness.app.set_plot_kind(PlotKind::SharedFeatures);
+    harness.settle();
+    assert!(!harness.app.figure().regions.is_empty());
+    harness.screenshot("shared_upset");
+    let mut settings = harness.app.plot_settings().clone();
+    settings.shared.style = Style::Venn;
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    assert!(figure_texts(&harness.app)[0].contains("two or three groups"));
+
+    // Rank-abundance curves: one per sample, or per group.
+    harness.app.set_plot_kind(PlotKind::RankAbundance);
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), samples);
+    harness.screenshot("rank_abundance");
+    settings.rank_abundance.curves = stamp_plot::rank_abundance::Curves::Groups;
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), 4);
+
+    // Two groups: a Venn diagram of the two.
+    harness.app.session.set_group_field("Core vs. Water");
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.app.set_plot_kind(PlotKind::SharedFeatures);
+    harness.settle();
+    let in_core = {
+        let (profile, _) = harness.app.session.groups.output.as_ref().unwrap();
+        let first = profile.samples_in_group1().len();
+        let data = stamp_plot::composition::Data::from_profile(
+            &profile.profile,
+            (0..profile.profile.sample_names.len())
+                .map(|i| usize::from(i >= first))
+                .collect(),
+            vec![profile.group_name1.clone(), profile.group_name2.clone()],
+        );
+        let shared = stamp_plot::shared_features::Data::from_composition(&data, 0.5);
+        shared.presence.iter().filter(|p| p[0]).count()
+    };
+    assert!(figure_texts(&harness.app).contains(&format!("Core ({in_core})")));
+    harness.screenshot("shared_venn");
+    harness.app.show_plot_config(true);
+    harness.settle();
+    harness.screenshot("shared_venn_settings");
+    harness.app.show_plot_config(false);
+
+    // The Mantel test of community distances against differences in depth.
+    harness.app.set_mode(Mode::Correlation);
+    harness.app.set_plot_kind(PlotKind::Mantel);
+    harness.settle();
+    let n = harness
+        .app
+        .session
+        .correlation
+        .output
+        .as_ref()
+        .unwrap()
+        .0
+        .values
+        .len();
+    assert_eq!(harness.app.figure().regions.len(), n * (n - 1) / 2);
+    let shown = figure_texts(&harness.app);
+    assert!(
+        shown.iter().any(|t| t.starts_with("Mantel test: rho = ")),
+        "{shown:?}"
+    );
+    assert!(shown.contains(&"Difference in Depth".to_string()));
+    harness.screenshot("mantel");
+}

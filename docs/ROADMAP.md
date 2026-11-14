@@ -44,11 +44,11 @@ ordination on them, and tests on them), which is where most studies begin.
 
 ## Tier 4: further methods
 
-- [ ] **ANCOM** for compositional differential abundance.
-- [ ] **Mantel test** between two distance matrices.
-- [ ] **Shared-feature plot** (UpSet or Venn) for "core" features.
-- [ ] **NMDS** ordination.
-- [ ] **Rank-abundance curves**.
+- [x] **ANCOM** for compositional differential abundance.
+- [x] **Mantel test** between two distance matrices.
+- [x] **Shared-feature plot** (UpSet or Venn) for "core" features.
+- [x] **NMDS** ordination.
+- [x] **Rank-abundance curves**.
 
 ## Considered and left out
 

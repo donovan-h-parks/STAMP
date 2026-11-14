@@ -6,6 +6,7 @@ use std::path::Path;
 
 use stamp_core::import::{biom, cog, comet, mgrast, mothur, rita, NamedText};
 use stamp_core::stats::correction::Correction;
+use stamp_core::stats::diversity::DistanceMatrix;
 use stamp_core::stats::multi_group::MultiGroupEffectSize;
 use stamp_core::stats::results::{
     run_correlation_analysis, run_group_analysis, run_multi_group_analysis, run_post_hoc,
@@ -14,7 +15,8 @@ use stamp_core::stats::results::{
     SampleCountFilter, SampleFilter,
 };
 use stamp_core::stats::table::{
-    correlation_table, group_table, multi_group_table, post_hoc_table, sample_table, Table,
+    ancom_table, correlation_table, group_table, multi_group_table, post_hoc_table, sample_table,
+    Table,
 };
 use stamp_core::stats::{rng_from_seed, StatsSettings};
 use stamp_core::{Groups, Metadata, MultiGroupProfile, ProfileTree, SecondGroup};
@@ -34,6 +36,7 @@ pub fn run(cli: Cli) -> CliResult {
         Command::MultiGroups(args) => multi_groups(args),
         Command::PostHoc(args) => post_hoc(args),
         Command::Correlation(args) => correlation(args),
+        Command::Ancom(args) => ancom(args),
         Command::Convert(args) => convert(args.format),
     }
 }
@@ -377,6 +380,15 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
                     ..Default::default()
                 },
             ),
+            kind @ (PlotTypeArg::SharedFeatures | PlotTypeArg::RankAbundance) => proportion_figure(
+                kind,
+                &composition::Data::from_profile(
+                    &profile.profile,
+                    vec![0, 1],
+                    profile.profile.sample_names.clone(),
+                ),
+                plot,
+            )?,
             other => return Err(unavailable(other, "two samples")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;
@@ -590,7 +602,32 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     },
                 )
             }
-            PlotTypeArg::AlphaDiversity | PlotTypeArg::Pcoa | PlotTypeArg::DistanceBox => {
+            PlotTypeArg::SharedFeatures | PlotTypeArg::RankAbundance | PlotTypeArg::Ancom => {
+                let first = profile.samples_in_group1().len();
+                let sample_groups: Vec<usize> = (0..profile.profile.sample_names.len())
+                    .map(|i| usize::from(i >= first))
+                    .collect();
+                let names = vec![profile.group_name1.clone(), profile.group_name2.clone()];
+                if kind == PlotTypeArg::Ancom {
+                    let result = run_ancom(
+                        &profile.profile,
+                        &sample_groups,
+                        stamp_core::stats::multi_group::MultiGroupTest::Anova,
+                        0.05,
+                    )?;
+                    ancom_figure(&profile.profile, &result, &names, plot)
+                } else {
+                    proportion_figure(
+                        kind,
+                        &composition::Data::from_profile(&profile.profile, sample_groups, names),
+                        plot,
+                    )?
+                }
+            }
+            PlotTypeArg::AlphaDiversity
+            | PlotTypeArg::Pcoa
+            | PlotTypeArg::Nmds
+            | PlotTypeArg::DistanceBox => {
                 let first = profile.samples_in_group1().len();
                 let samples = &profile.profile.sample_names;
                 community_figure(
@@ -774,23 +811,53 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                     ..Default::default()
                 },
             ),
-            kind @ (PlotTypeArg::AlphaDiversity | PlotTypeArg::Pcoa | PlotTypeArg::DistanceBox) => {
-                community_figure(
-                    kind,
-                    &tree,
-                    &profile.profile.sample_names,
-                    levels(&tree, &args.profile).1,
-                    profile
-                        .samples_in_groups()
-                        .iter()
-                        .enumerate()
-                        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
-                        .collect(),
-                    profile.group_names.clone(),
-                    plot,
-                    COMMUNITY_SEED,
-                )?
+            kind @ (PlotTypeArg::SharedFeatures
+            | PlotTypeArg::RankAbundance
+            | PlotTypeArg::Ancom) => {
+                let sample_groups: Vec<usize> = profile
+                    .samples_in_groups()
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                    .collect();
+                if kind == PlotTypeArg::Ancom {
+                    let result = run_ancom(
+                        &profile.profile,
+                        &sample_groups,
+                        stamp_core::stats::multi_group::MultiGroupTest::Anova,
+                        0.05,
+                    )?;
+                    ancom_figure(&profile.profile, &result, &profile.group_names, plot)
+                } else {
+                    proportion_figure(
+                        kind,
+                        &composition::Data::from_profile(
+                            &profile.profile,
+                            sample_groups,
+                            profile.group_names.clone(),
+                        ),
+                        plot,
+                    )?
+                }
             }
+            kind @ (PlotTypeArg::AlphaDiversity
+            | PlotTypeArg::Pcoa
+            | PlotTypeArg::Nmds
+            | PlotTypeArg::DistanceBox) => community_figure(
+                kind,
+                &tree,
+                &profile.profile.sample_names,
+                levels(&tree, &args.profile).1,
+                profile
+                    .samples_in_groups()
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                    .collect(),
+                profile.group_names.clone(),
+                plot,
+                COMMUNITY_SEED,
+            )?,
             other => return Err(unavailable(other, "several groups")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;
@@ -952,6 +1019,59 @@ fn correlation(args: CorrelationArgs) -> CliResult {
                     },
                 )
             }
+            PlotTypeArg::Mantel => {
+                use stamp_core::stats::diversity::Normalisation;
+                use stamp_plot::community_plots::{self, Community};
+                let samples = &profile.profile.sample_names;
+                let mut rng = rng_from_seed(args.seed);
+                let community = Community::from_tree(
+                    &tree,
+                    samples,
+                    profile_level,
+                    vec![0; samples.len()],
+                    vec![String::new()],
+                    if plot.rarefy {
+                        Normalisation::Rarefy
+                    } else {
+                        Normalisation::Proportions
+                    },
+                    &mut rng,
+                )?;
+                let distance = distance_of(plot);
+                let test = stamp_core::stats::community::mantel(
+                    &DistanceMatrix::from_fn(samples.len(), |i, j| {
+                        (profile.values[i] - profile.values[j]).abs()
+                    }),
+                    &stamp_core::stats::diversity::distances(&community.table.abundances, distance),
+                    analysis.method,
+                    999,
+                    &mut rng_from_seed(args.seed),
+                );
+                eprintln!(
+                    "Mantel test of {} distance against difference in {}: {} = {:.4}, p = {} (999 permutations)",
+                    distance.name(),
+                    profile.field,
+                    analysis.method.coefficient_name(),
+                    test.statistic,
+                    stamp_core::stats::results::format_p_value(test.p_value, -15)
+                );
+                community_plots::mantel_plot(
+                    &community,
+                    &profile.values,
+                    &profile.field,
+                    distance,
+                    analysis.method,
+                    999,
+                    &mut rng_from_seed(args.seed),
+                    &correlation_plot::Options {
+                        width: plot.plot_width,
+                        height,
+                        unique_shapes: false,
+                        legend: stamp_plot::axes::LegendPosition::None,
+                        ..Default::default()
+                    },
+                )
+            }
             other => return Err(unavailable(other, "a correlation")),
         };
         write_figure(path, &figure, plot.plot_dpi)?;
@@ -1040,8 +1160,140 @@ fn community_figure(
                 },
             )
         }
+        PlotTypeArg::Nmds => community_plots::nmds_plot(
+            &community,
+            distance,
+            &pca_plot::Options {
+                width: plot.plot_width,
+                height: plot.plot_height.unwrap_or(6.0),
+                ..Default::default()
+            },
+        ),
         _ => community_plots::distance_box_plot(&community, distance, &boxes),
     })
+}
+
+/// The distance chosen for the plots of whole communities.
+fn distance_of(plot: &PlotArgs) -> stamp_core::stats::diversity::Distance {
+    use stamp_core::stats::diversity::Distance;
+    match plot.distance {
+        DistanceArg::BrayCurtis => Distance::BrayCurtis,
+        DistanceArg::Jaccard => Distance::Jaccard,
+        DistanceArg::Aitchison => Distance::Aitchison,
+    }
+}
+
+/// The plots drawn from the proportions of every feature: shared features
+/// and rank-abundance curves.
+fn proportion_figure(
+    kind: PlotTypeArg,
+    data: &stamp_plot::composition::Data,
+    plot: &PlotArgs,
+) -> CliResult<stamp_plot::Figure> {
+    use stamp_plot::{rank_abundance, shared_features};
+    if !(0.0..=100.0).contains(&plot.min_prevalence) {
+        return Err("--min-prevalence must be a percentage, from 0 to 100".to_string());
+    }
+    Ok(match kind {
+        PlotTypeArg::SharedFeatures => shared_features::plot(
+            &shared_features::Data::from_composition(data, plot.min_prevalence / 100.0),
+            &shared_features::Options {
+                width: plot.plot_width,
+                height: plot.plot_height.unwrap_or(5.0),
+                style: match plot.shared_style {
+                    SharedStyleArg::Upset => shared_features::Style::UpSet,
+                    SharedStyleArg::Venn => shared_features::Style::Venn,
+                },
+                min_prevalence: plot.min_prevalence,
+                ..Default::default()
+            },
+        ),
+        _ => rank_abundance::plot(
+            data,
+            &rank_abundance::Options {
+                width: plot.plot_width,
+                height: plot.plot_height.unwrap_or(5.0),
+                curves: match plot.rank_curves {
+                    RankCurvesArg::Samples => rank_abundance::Curves::Samples,
+                    RankCurvesArg::Groups => rank_abundance::Curves::Groups,
+                },
+                ..Default::default()
+            },
+        ),
+    })
+}
+
+/// ANCOM on a profile whose sample `i` is in group `sample_groups[i]`.
+fn run_ancom(
+    profile: &stamp_core::Profile,
+    sample_groups: &[usize],
+    test: stamp_core::stats::multi_group::MultiGroupTest,
+    alpha: f64,
+) -> CliResult<stamp_core::stats::ancom::AncomResult> {
+    if !(alpha > 0.0 && alpha < 1.0) {
+        return Err("--alpha must lie between 0 and 1".to_string());
+    }
+    let features = profile.features();
+    let samples: Vec<Vec<f64>> = (0..profile.sample_names.len())
+        .map(|s| features.iter().map(|f| f.counts[s]).collect())
+        .collect();
+    stamp_core::stats::ancom::ancom(&samples, sample_groups, test, alpha).ok_or_else(|| {
+        "ANCOM needs two groups with samples, a group of more than one sample, and two features"
+            .to_string()
+    })
+}
+
+fn ancom_figure(
+    profile: &stamp_core::Profile,
+    result: &stamp_core::stats::ancom::AncomResult,
+    groups: &[String],
+    plot: &PlotArgs,
+) -> stamp_plot::Figure {
+    let names: Vec<String> = profile.features().iter().map(|f| f.name.clone()).collect();
+    stamp_plot::ancom_plot::plot(
+        result,
+        &names,
+        groups,
+        &stamp_plot::ancom_plot::Options {
+            width: plot.plot_width,
+            height: plot.plot_height.unwrap_or(6.0),
+            ..Default::default()
+        },
+    )
+}
+
+/// ANCOM between groups, written as a table.
+fn ancom(args: AncomArgs) -> CliResult {
+    let tree = load_profile(&args.profile.profile)?;
+    let profile = multi_group_profile(&tree, &args.profile, &args.metadata, &args.groups)?;
+    let sample_groups: Vec<usize> = profile
+        .samples_in_groups()
+        .iter()
+        .enumerate()
+        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+        .collect();
+    let result = run_ancom(
+        &profile.profile,
+        &sample_groups,
+        args.test.into(),
+        args.alpha,
+    )?;
+    eprintln!(
+        "ANCOM: {} of {} features differ between the groups.",
+        result.rejected(),
+        result.rows.len()
+    );
+    if let Some(path) = &args.plot.plot {
+        let figure = match args.plot.plot_type.unwrap_or(PlotTypeArg::Ancom) {
+            PlotTypeArg::Ancom => {
+                ancom_figure(&profile.profile, &result, &profile.group_names, &args.plot)
+            }
+            other => return Err(unavailable(other, "the ancom command")),
+        };
+        write_figure(path, &figure, args.plot.plot_dpi)?;
+    }
+    let table = ancom_table(&profile.profile, &result, profile.group_names.len());
+    write_table(args.profile.output.as_deref(), &table)
 }
 
 /// Rarefaction curves of some samples of a profile, coloured by group.

@@ -5,8 +5,8 @@ use stamp_core::stats::correlation::least_squares;
 use stamp_core::CorrelationProfile;
 
 use crate::axes::{
-    group_color, legend, marker, scaled_ticks, title, x_axis, y_axis, y_axis_width, Frame,
-    LabelRotation, LegendPosition, Marker, AXES_COLOR, INCH,
+    group_color, legend, marker, scaled_ticks, x_axis, y_axis, y_axis_width, Frame, LabelRotation,
+    LegendPosition, Marker, AXES_COLOR, INCH,
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
@@ -35,6 +35,9 @@ pub struct Data {
     pub group_colors: Vec<Color>,
     /// The correlation and its p-value, written on the plot.
     pub statistics: Option<String>,
+    /// Name of the values on the vertical axis; `None` for the proportion
+    /// of the feature, in percent.
+    pub value_label: Option<String>,
 }
 
 impl Data {
@@ -62,6 +65,7 @@ impl Data {
             groups: Vec::new(),
             group_colors: Vec::new(),
             statistics: None,
+            value_label: None,
         })
     }
 
@@ -106,6 +110,8 @@ impl Default for Options {
 
 /// Colour of the points when the samples are not grouped.
 const UNGROUPED: Color = Color::rgb(128, 177, 211);
+/// Height of a line of text above the plot.
+const TEXT_LINE: f64 = crate::axes::FONT_SIZE + 4.0;
 /// Colour of the fitted line.
 const LINE: Color = Color::rgb(60, 60, 60);
 
@@ -134,11 +140,13 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     let x_ticks = Ticks::covering(x_low - x_pad, x_high + x_pad);
     let y_ticks = Ticks::covering(0.0, if y_high > 0.0 { y_high * 1.05 } else { 1.0 });
 
+    let statistics_shown = options.show_statistics && data.statistics.is_some();
     let mut figure = Figure::with_size_inches(options.width, options.height);
     let padding = 0.2 * INCH;
     let frame = Frame {
         left: padding + y_axis_width(&y_ticks, true),
-        top: padding + 0.25 * INCH,
+        // A line for the title, and one for the correlation beneath it.
+        top: padding + 0.25 * INCH + if statistics_shown { TEXT_LINE } else { 0.0 },
         right: figure.width - padding,
         bottom: figure.height - padding - 0.4 * INCH,
     };
@@ -196,10 +204,16 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             2.0 * radius + 2.0,
             2.0 * radius + 2.0,
             &point.sample,
-            format!(
-                "{}{group}\n\n{}: {}\n{}: {:.3}%",
-                point.sample, data.field, point.value, data.feature, point.percent
-            ),
+            match &data.value_label {
+                None => format!(
+                    "{}{group}\n\n{}: {}\n{}: {:.3}%",
+                    point.sample, data.field, point.value, data.feature, point.percent
+                ),
+                Some(label) => format!(
+                    "{}{group}\n\n{}: {:.4}\n{label}: {:.4}",
+                    point.sample, data.field, point.value, point.percent
+                ),
+            },
         );
     }
 
@@ -215,10 +229,21 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         &mut figure,
         &frame,
         &scaled_ticks(&y_ticks, &y),
-        Some("Proportion of sequences (%)"),
+        Some(
+            data.value_label
+                .as_deref()
+                .unwrap_or("Proportion of sequences (%)"),
+        ),
         AXES_COLOR,
     );
-    title(&mut figure, &frame, &data.feature);
+    // The title above the line of the correlation, so that the two never
+    // overlap.
+    figure.text(
+        (frame.left + frame.right) / 2.0,
+        frame.top - 5.0 - if statistics_shown { TEXT_LINE } else { 0.0 },
+        data.feature.clone(),
+        crate::axes::label_style().align(HAlign::Center, VAlign::Baseline),
+    );
     if let (true, Some(statistics)) = (options.show_statistics, &data.statistics) {
         figure.text(
             frame.left,
@@ -266,6 +291,7 @@ mod tests {
             groups: vec!["Shallow".to_string(), "Deep".to_string()],
             group_colors: Vec::new(),
             statistics: Some("rho = 0.900, p = 0.037".to_string()),
+            value_label: None,
         }
     }
 

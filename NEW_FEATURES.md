@@ -48,6 +48,25 @@ Add an entry here whenever a feature is added that v2 did not have.
   with the Bonferroni adjustment. Its confidence intervals are Welch
   intervals at the adjusted level, since the test itself gives none.
 
+- **ANCOM** (analysis of composition of microbiomes), for two or more
+  groups: for every pair of features, the logarithm of their ratio is
+  compared between the groups (ANOVA, or Kruskal-Wallis), each feature's
+  p-values are adjusted by the Holm-Bonferroni method, and W counts the
+  features it differs from. Features whose W reaches the cut-off are
+  called different; the cut-off is chosen as scikit-bio chooses it, and W
+  and the calls agree with scikit-bio 0.7.4. Zeros are replaced as for the
+  centred log-ratio transform. On the command line: `stamp-cli ancom`,
+  which writes a table of W, the call and the effect on the log-ratio
+  scale for every feature (`--test`, `--alpha`, `--group`).
+- **Mantel test** (correlation tab): are the distances between samples'
+  communities related to how far apart the samples are in a numeric
+  metadata field? The statistic is the Spearman or Pearson correlation
+  chosen for the analysis; the two-sided p-value comes from permuting the
+  samples. The statistic agrees with scikit-bio.
+- **NMDS** (non-metric multidimensional scaling) of the samples by
+  Bray-Curtis, Jaccard or Aitchison distance, in two dimensions, with
+  Kruskal's stress. It starts from the PCoA layout, so it is the same
+  every time.
 - **Correlation with a numeric metadata field**, as a fourth kind of
   analysis beside multiple groups, two groups and two samples. Every
   feature's proportion is correlated with a number known for each sample
@@ -141,6 +160,32 @@ Add an entry here whenever a feature is added that v2 did not have.
   The **volcano plot** and **p-value histogram** are also available for
   correlations; the volcano plot then shows the correlation of every
   feature against its p-value, coloured by its direction.
+- **ANCOM plot**, for two groups and multiple groups: W of every feature
+  against how much it differs on the centred log-ratio scale (the
+  difference in means for two groups, eta-squared for more), with the
+  features called different in red and the cut-off as a dashed line. The
+  test and significance level are options. On the command line:
+  `stamp-cli ancom --plot FILE`, or `--plot-type ancom` with
+  `two-groups` and `multi-groups`.
+- **NMDS plot**, for two groups and multiple groups, beside the PCA and
+  PCoA plots, with the stress written above it. On the command line:
+  `--plot-type nmds`.
+- **Shared features plot**, in all three analysis types: which features
+  each group (or sample) has, and which combinations of groups share
+  them, as an UpSet plot (the largest combinations, with a matrix of dots
+  beneath) or as a Venn diagram for two or three groups. A feature counts
+  as present in a group if it is found in at least a chosen percentage of
+  the group's samples (50% to start with). Hovering a bar or a count
+  lists its features. On the command line: `--plot-type shared-features`,
+  with `--shared-style upset|venn` and `--min-prevalence`.
+- **Rank-abundance curves**, in all three analysis types: each sample's
+  (or each group's mean) features from the most abundant to the least,
+  against their proportion on a logarithmic scale. On the command line:
+  `--plot-type rank-abundance`, with `--rank-curves samples|groups`.
+- **Mantel test plot** (correlation tab): the community distance of every
+  pair of samples against their difference in the numeric field, with
+  the Mantel test above it. On the command line: `stamp-cli correlation
+  --plot-type mantel`, which also prints the test.
 - **Alpha diversity box plot**, for two groups and multiple groups: a box
   for each group of the chosen diversity measure of its samples, with the
   Kruskal-Wallis p-value. On the command line:

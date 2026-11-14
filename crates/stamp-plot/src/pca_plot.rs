@@ -175,12 +175,15 @@ pub fn plot_ordination(
     let beside = options.show_pc3_vs_pc2 && components >= 3;
     let beneath = options.show_pc1_vs_pc3 && components >= 3;
     let coordinate = |sample: usize, component: usize| positions[sample][component];
+    // An ordination with no share of the variation per axis (NMDS) gives
+    // `NaN`, and its axes are named only.
     let label = |component: usize| {
-        format!(
-            "{axis}{} ({:.1}%)",
-            component + 1,
-            variance_fractions[component] * 100.0
-        )
+        let fraction = variance_fractions[component];
+        if fraction.is_nan() {
+            format!("{axis}{}", component + 1)
+        } else {
+            format!("{axis}{} ({:.1}%)", component + 1, fraction * 100.0)
+        }
     };
     let ticks_for = |component: usize| {
         let values = (0..data.samples.len()).map(|s| coordinate(s, component));

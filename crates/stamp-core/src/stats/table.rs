@@ -3,6 +3,7 @@
 //! Column headings follow STAMP v2 so that existing downstream scripts keep
 //! working.
 
+use super::ancom::AncomResult;
 use super::post_hoc::PostHocResult;
 use super::results::{
     CorrelationResults, CorrelationRow, GroupResults, GroupRow, MultiGroupResults, MultiGroupRow,
@@ -274,6 +275,37 @@ pub fn correlation_table<'a>(
                 cells.extend(sample_cells(&profile.profile, feature));
             }
             cells
+        })
+        .collect();
+    Table { headings, rows }
+}
+
+/// Table of ANCOM results for the features of `profile`, most different
+/// first (by W). `groups` is the number of groups compared.
+pub fn ancom_table(profile: &Profile, result: &AncomResult, groups: usize) -> Table {
+    let mut headings = profile.hierarchy_headings.clone();
+    headings.extend([
+        "W".to_string(),
+        "Reject null hypothesis".to_string(),
+        AncomResult::effect_name(groups).to_string(),
+    ]);
+    let mut order: Vec<usize> = (0..result.rows.len()).collect();
+    order.sort_by(|&a, &b| {
+        result.rows[b]
+            .w
+            .cmp(&result.rows[a].w)
+            .then_with(|| profile.features()[a].name.cmp(&profile.features()[b].name))
+    });
+    let rows = order
+        .into_iter()
+        .filter_map(|i| {
+            let feature = profile.features().get(i)?;
+            let row = &result.rows[i];
+            let mut cells = hierarchy(profile, &feature.name);
+            cells.push(row.w.to_string());
+            cells.push(if row.reject { "True" } else { "False" }.to_string());
+            cells.push(num(row.clr_effect));
+            Some(cells)
         })
         .collect();
     Table { headings, rows }

@@ -37,6 +37,8 @@ pub enum Command {
     PostHoc(PostHocArgs),
     /// Correlate every feature with a numeric metadata field
     Correlation(CorrelationArgs),
+    /// Find features that differ between groups by ANCOM
+    Ancom(AncomArgs),
     /// Convert another tool's output to a STAMP profile
     Convert(ConvertArgs),
 }
@@ -147,6 +149,30 @@ pub struct PlotArgs {
     /// What each curve of a rarefaction plot stands for
     #[arg(long, value_enum, default_value_t = RarefactionCurvesArg::Samples)]
     pub rarefaction_curves: RarefactionCurvesArg,
+    /// What each curve of a rank-abundance plot stands for
+    #[arg(long, value_enum, default_value_t = RankCurvesArg::Samples)]
+    pub rank_curves: RankCurvesArg,
+    /// Style of the shared-features plot (Venn: two or three groups)
+    #[arg(long, value_enum, default_value_t = SharedStyleArg::Upset)]
+    pub shared_style: SharedStyleArg,
+    /// For the shared-features plot: a feature is present in a group if found
+    /// in at least this percentage of the group's samples
+    #[arg(long, default_value_t = 50.0, value_name = "PERCENT")]
+    pub min_prevalence: f64,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum RankCurvesArg {
+    /// Each sample
+    Samples,
+    /// The mean proportions of each group
+    Groups,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum SharedStyleArg {
+    Upset,
+    Venn,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
@@ -213,6 +239,16 @@ pub enum PlotTypeArg {
     DistanceBox,
     /// A feature against the numeric field, with a fitted line (correlation)
     CorrelationScatter,
+    /// Samples placed by non-metric multidimensional scaling of a distance
+    Nmds,
+    /// Features present in each group, and in which groups together
+    SharedFeatures,
+    /// Each sample's features from most to least abundant
+    RankAbundance,
+    /// ANCOM: W against the difference in centred log ratios, per feature
+    Ancom,
+    /// Community distance against difference in the numeric field (correlation)
+    Mantel,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -400,6 +436,26 @@ pub struct CorrelationArgs {
     /// Seed of the random number generator (used by the Storey correction)
     #[arg(long, default_value_t = 1)]
     pub seed: u64,
+    #[command(flatten)]
+    pub plot: PlotArgs,
+}
+
+#[derive(Args)]
+pub struct AncomArgs {
+    #[command(flatten)]
+    pub profile: ProfileArgs,
+    #[command(flatten)]
+    pub metadata: MetadataArgs,
+    /// Group to include (may be repeated) [default: every group]
+    #[arg(long = "group", value_name = "GROUP")]
+    pub groups: Vec<String>,
+    /// Test applied to the log ratio of every pair of features
+    #[arg(long, value_enum, default_value_t = MultiGroupTestArg::Anova)]
+    pub test: MultiGroupTestArg,
+    /// Significance level of each log-ratio test, after the Holm-Bonferroni
+    /// correction of each feature's tests
+    #[arg(long, default_value_t = 0.05)]
+    pub alpha: f64,
     #[command(flatten)]
     pub plot: PlotArgs,
 }

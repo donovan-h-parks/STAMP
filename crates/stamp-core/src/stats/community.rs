@@ -2,6 +2,7 @@
 //! made of? All work on the distances between samples and get their
 //! p-values by permuting which group each sample belongs to.
 
+use super::correlation::CorrelationMethod;
 use super::diversity::{pcoa, DistanceMatrix};
 use super::two_sample::random_index;
 use super::StampRng;
@@ -232,6 +233,65 @@ impl CommunityTest {
     }
 }
 
+/// The Mantel test (Mantel 1967): are two sets of distances between the
+/// same samples related? The statistic is the correlation of the distances
+/// between every pair of samples, by `method`; its two-sided p-value comes
+/// from permuting the samples of the first matrix (rows and columns
+/// together) and counting correlations at least as far from zero, as
+/// scikit-bio does. The statistic is `NaN` for fewer than three samples or
+/// distances that do not vary.
+pub fn mantel(
+    x: &DistanceMatrix,
+    y: &DistanceMatrix,
+    method: CorrelationMethod,
+    permutations: usize,
+    rng: &mut StampRng,
+) -> PermutationTest {
+    let n = x.size();
+    let undefined = PermutationTest {
+        statistic: f64::NAN,
+        p_value: f64::NAN,
+        permutations,
+    };
+    if n < 3 || y.size() != n {
+        return undefined;
+    }
+    let pairs = |m: &DistanceMatrix, order: &[usize]| -> Vec<f64> {
+        (0..n)
+            .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
+            .map(|(i, j)| m.get(order[i], order[j]))
+            .collect()
+    };
+    let identity: Vec<usize> = (0..n).collect();
+    let fixed = pairs(y, &identity);
+    let Some(observed) = method.coefficient(&pairs(x, &identity), &fixed) else {
+        return undefined;
+    };
+    if permutations == 0 {
+        return PermutationTest {
+            statistic: observed,
+            ..undefined
+        };
+    }
+    let threshold = observed.abs() - 1e-9;
+    let mut order = identity;
+    let mut as_extreme = 1;
+    for _ in 0..permutations {
+        for i in (1..n).rev() {
+            order.swap(i, random_index(rng, i + 1));
+        }
+        let r = method.coefficient(&pairs(x, &order), &fixed).unwrap_or(0.0);
+        if r.abs() >= threshold {
+            as_extreme += 1;
+        }
+    }
+    PermutationTest {
+        statistic: observed,
+        p_value: as_extreme as f64 / (permutations + 1) as f64,
+        permutations,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,5 +389,66 @@ mod tests {
             assert!(test.run(&matrix, &[0, 1], 99, &mut rng).statistic.is_nan());
             assert!(!test.name().is_empty() && !test.statistic_name().is_empty());
         }
+    }
+
+    fn matrix(rows: [[f64; 5]; 5]) -> DistanceMatrix {
+        DistanceMatrix::from_fn(5, |i, j| rows[i][j])
+    }
+
+    /// Statistics from scikit-bio 0.7.4 (`mantel`); its p-value was 0.021
+    /// for both with 999 permutations, which our own permutations must
+    /// come close to: only the identity and its reverse-ordered relatives
+    /// are as extreme among the 120 orderings of five samples.
+    #[test]
+    fn mantel_matches_scikit_bio() {
+        let x = matrix([
+            [0.0, 1.0, 2.0, 3.0, 4.0],
+            [1.0, 0.0, 1.5, 2.5, 3.5],
+            [2.0, 1.5, 0.0, 1.2, 2.0],
+            [3.0, 2.5, 1.2, 0.0, 0.7],
+            [4.0, 3.5, 2.0, 0.7, 0.0],
+        ]);
+        let y = matrix([
+            [0.0, 2.0, 3.0, 7.0, 9.0],
+            [2.0, 0.0, 2.0, 5.0, 8.0],
+            [3.0, 2.0, 0.0, 4.0, 4.0],
+            [7.0, 5.0, 4.0, 0.0, 2.0],
+            [9.0, 8.0, 4.0, 2.0, 0.0],
+        ]);
+        let mut rng = rng_from_seed(1);
+        let pearson = mantel(&x, &y, CorrelationMethod::Pearson, 999, &mut rng);
+        assert!((pearson.statistic - 0.9461893613372058).abs() < 1e-12);
+        assert!(
+            pearson.p_value > 0.005 && pearson.p_value < 0.05,
+            "{}",
+            pearson.p_value
+        );
+        let spearman = mantel(&x, &y, CorrelationMethod::Spearman, 999, &mut rng);
+        assert!((spearman.statistic - 0.9167365318904004).abs() < 1e-12);
+        assert!(spearman.p_value < 0.05);
+        // The same seed gives the same p-value.
+        let again = mantel(
+            &x,
+            &y,
+            CorrelationMethod::Pearson,
+            999,
+            &mut rng_from_seed(1),
+        );
+        assert_eq!(again, pearson);
+
+        // A matrix against itself, and undefined cases.
+        assert!(
+            (mantel(&x, &x, CorrelationMethod::Pearson, 0, &mut rng).statistic - 1.0).abs() < 1e-12
+        );
+        let flat = DistanceMatrix::from_fn(5, |_, _| 1.0);
+        assert!(mantel(&x, &flat, CorrelationMethod::Pearson, 9, &mut rng)
+            .statistic
+            .is_nan());
+        let small = DistanceMatrix::from_fn(2, |_, _| 1.0);
+        assert!(
+            mantel(&small, &small, CorrelationMethod::Pearson, 9, &mut rng)
+                .statistic
+                .is_nan()
+        );
     }
 }

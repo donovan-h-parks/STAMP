@@ -15,6 +15,7 @@
 //!
 //! This crate must stay free of egui and of filesystem access.
 
+pub mod ancom_plot;
 pub mod axes;
 pub mod axis;
 pub mod community_plots;
@@ -28,9 +29,11 @@ pub mod heatmap;
 pub mod histogram;
 pub mod pca_plot;
 pub mod post_hoc;
+pub mod rank_abundance;
 pub mod rarefaction;
 pub mod sample_plots;
 pub mod scatter;
+pub mod shared_features;
 pub mod svg;
 pub mod text;
 pub mod volcano;

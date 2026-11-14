@@ -1,6 +1,7 @@
 //! Statistical tests, confidence intervals, effect sizes and multiple-test
 //! corrections.
 
+pub mod ancom;
 pub mod ci;
 pub mod cluster;
 pub mod community;

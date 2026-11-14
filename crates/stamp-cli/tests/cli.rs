@@ -1155,3 +1155,207 @@ fn correlation_with_a_numeric_field() {
     assert!(fails(&unknown, &[]).contains("Fields in the metadata file"));
     fs::remove_dir_all(&directory).ok();
 }
+
+#[test]
+fn ancom_matches_scikit_bio_and_new_plots_are_drawn() {
+    // The table scikit-bio 0.7.4's `ancom` was run on: W was 7, 7, 2, 2, 2,
+    // 2, 2, 2 for three groups, with the first two features different, and
+    // 7, 1, 1, 1, 1, 1, 1, 0 for the first two groups.
+    let rows = [
+        [57.0, 45.0, 47.0, 55.0, 43.0, 51.0, 53.0, 29.0],
+        [22.0, 32.0, 31.0, 54.0, 56.0, 20.0, 39.0, 52.0],
+        [25.0, 51.0, 24.0, 38.0, 52.0, 32.0, 33.0, 31.0],
+        [48.0, 30.0, 59.0, 37.0, 39.0, 40.0, 43.0, 42.0],
+        [160.0, 59.0, 52.0, 51.0, 48.0, 44.0, 33.0, 59.0],
+        [152.0, 28.0, 53.0, 26.0, 54.0, 44.0, 24.0, 21.0],
+        [148.0, 21.0, 25.0, 40.0, 58.0, 38.0, 52.0, 56.0],
+        [208.0, 45.0, 37.0, 40.0, 30.0, 39.0, 35.0, 29.0],
+        [472.0, 4.0, 23.0, 27.0, 58.0, 47.0, 55.0, 28.0],
+        [384.0, 6.8, 39.0, 20.0, 44.0, 53.0, 46.0, 26.0],
+        [328.0, 6.0, 58.0, 55.0, 27.0, 40.0, 57.0, 53.0],
+        [384.0, 9.0, 21.0, 49.0, 38.0, 23.0, 29.0, 41.0],
+    ];
+    let directory = std::env::temp_dir().join(format!("stamp-cli-ancom-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let samples: Vec<String> = (1..=12).map(|i| format!("S{i:02}")).collect();
+    let mut spf = format!("Feature\t{}\n", samples.join("\t"));
+    for f in 0..8 {
+        let values: Vec<String> = rows.iter().map(|r| r[f].to_string()).collect();
+        spf.push_str(&format!("f{f}\t{}\n", values.join("\t")));
+    }
+    let mut metadata = "Id\tGroup\tDepth\n".to_string();
+    for (i, sample) in samples.iter().enumerate() {
+        let group = ["A", "B", "C"][i / 4];
+        metadata.push_str(&format!(
+            "{sample}\t{group}\t{}\n",
+            (i * 5 % 12) as f64 + 0.5
+        ));
+    }
+    let (profile, meta) = (
+        directory.join("input.spf"),
+        directory.join("input-metadata.tsv"),
+    );
+    fs::write(&profile, spf).unwrap();
+    fs::write(&meta, metadata).unwrap();
+    let base = [
+        "--profile",
+        profile.to_str().unwrap(),
+        "--metadata",
+        meta.to_str().unwrap(),
+        "--field",
+        "Group",
+    ];
+    let w_of = |table: &Table| -> Vec<(String, String, String)> {
+        let (feature, w, reject) = (
+            table.column("Feature"),
+            table.column("W"),
+            table.column("Reject null hypothesis"),
+        );
+        let mut rows: Vec<(String, String, String)> = table
+            .rows
+            .iter()
+            .map(|r| (r[feature].clone(), r[w].clone(), r[reject].clone()))
+            .collect();
+        rows.sort();
+        rows
+    };
+    let output = stamp(&with("ancom", &base, &[]));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("2 of 8 features differ"));
+    let table = Table::parse(&String::from_utf8_lossy(&output.stdout));
+    let expected: Vec<(String, String, String)> = [7, 7, 2, 2, 2, 2, 2, 2]
+        .iter()
+        .enumerate()
+        .map(|(f, w)| {
+            (
+                format!("f{f}"),
+                w.to_string(),
+                if f < 2 { "True" } else { "False" }.to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(w_of(&table), expected);
+    // Most different first.
+    assert_eq!(table.rows[0][table.column("W")], "7");
+    assert!(table.headings.iter().any(|h| h == "Eta-squared of CLR"));
+
+    let two = Table::parse(&stdout(&with(
+        "ancom",
+        &base,
+        &["--group", "A", "--group", "B"],
+    )));
+    let ws: Vec<String> = w_of(&two).into_iter().map(|r| r.1).collect();
+    assert_eq!(ws, ["7", "1", "1", "1", "1", "1", "1", "0"]);
+    assert!(two.headings.iter().any(|h| h == "Difference in mean CLR"));
+    assert!(failure(&with("ancom", &base, &["--alpha", "2"])).contains("--alpha"));
+
+    // Plots: the ANCOM plot, NMDS, shared features, rank-abundance curves.
+    let has = |svg: &str, label: &str| svg.contains(&format!(">{label}</text>"));
+    let ancom_svg = svg_plot("ancom", &base, &[], &directory, "ancom");
+    assert!(has(&ancom_svg, "W") && ancom_svg.contains("2 of 8 features differ"));
+    let nmds = svg_plot(
+        "multi-groups",
+        &base,
+        &["--plot-type", "nmds"],
+        &directory,
+        "nmds",
+    );
+    assert!(has(&nmds, "NMDS1") && nmds.contains("Stress = "));
+    let venn = svg_plot(
+        "multi-groups",
+        &base,
+        &[
+            "--plot-type",
+            "shared-features",
+            "--shared-style",
+            "venn",
+            "--min-prevalence",
+            "100",
+        ],
+        &directory,
+        "venn",
+    );
+    assert!(has(&venn, "A (8)"), "{venn}");
+    let upset = svg_plot(
+        "two-groups",
+        &base,
+        &[
+            "--group1",
+            "A",
+            "--group2",
+            "B",
+            "--plot-type",
+            "shared-features",
+        ],
+        &directory,
+        "upset",
+    );
+    assert!(has(&upset, "Features"));
+    let ranks = svg_plot(
+        "multi-groups",
+        &base,
+        &["--plot-type", "rank-abundance", "--rank-curves", "groups"],
+        &directory,
+        "ranks",
+    );
+    assert!(has(&ranks, "Rank") && has(&ranks, "C"));
+    let ancom_groups = svg_plot(
+        "two-groups",
+        &base,
+        &["--group1", "A", "--group2", "C", "--plot-type", "ancom"],
+        &directory,
+        "ancom-two",
+    );
+    assert!(has(&ancom_groups, "Difference in mean CLR"));
+    let two_samples = [
+        "--profile",
+        profile.to_str().unwrap(),
+        "--sample1",
+        "S01",
+        "--sample2",
+        "S12",
+    ];
+    let ranks = svg_plot(
+        "two-samples",
+        &two_samples,
+        &["--plot-type", "rank-abundance"],
+        &directory,
+        "ranks-two",
+    );
+    assert!(has(&ranks, "S12"));
+
+    // The Mantel test, with correlations.
+    let correlation = [
+        "--profile",
+        profile.to_str().unwrap(),
+        "--metadata",
+        meta.to_str().unwrap(),
+        "--field",
+        "Depth",
+    ];
+    let mantel = svg_plot(
+        "correlation",
+        &correlation,
+        &["--plot-type", "mantel"],
+        &directory,
+        "mantel",
+    );
+    assert!(mantel.contains("Mantel test: rho = "), "mantel plot");
+    assert!(has(&mantel, "Difference in Depth"));
+    let mut args = with("correlation", &correlation, &["--plot-type", "mantel"]);
+    let path = directory.join("mantel2.svg");
+    args.extend_from_slice(&["--plot", path.to_str().unwrap()]);
+    let output = stamp(&args);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Mantel test of Bray-Curtis distance"));
+    assert!(failure(&with(
+        "multi-groups",
+        &base,
+        &["--plot", "x.svg", "--plot-type", "mantel"]
+    ))
+    .contains("not available"));
+    fs::remove_dir_all(&directory).ok();
+}

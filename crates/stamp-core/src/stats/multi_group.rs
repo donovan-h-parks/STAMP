@@ -3,7 +3,7 @@
 use super::dist::{chi2_sf, f_sf};
 
 /// Statistical tests for multiple groups.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum MultiGroupTest {
     Anova,
     KruskalWallis,

@@ -2,9 +2,10 @@
 //! placed by the distances between them, and those distances within and
 //! between groups.
 
-use stamp_core::stats::community::CommunityTest;
+use stamp_core::stats::community::{mantel, CommunityTest};
+use stamp_core::stats::correlation::CorrelationMethod;
 use stamp_core::stats::diversity::{
-    distances, pcoa, AlphaMetric, CommunityTable, Distance, Normalisation,
+    distances, nmds, pcoa, AlphaMetric, CommunityTable, Distance, DistanceMatrix, Normalisation,
 };
 use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::results::format_p_value;
@@ -14,7 +15,7 @@ use stamp_core::{ProfileTree, Unclassified};
 use crate::axes::group_color;
 use crate::feature_plots::{self, BoxOptions, FeatureData, Field, Group};
 use crate::figure::{Color, Figure};
-use crate::pca_plot;
+use crate::{correlation_plot, pca_plot};
 
 /// The samples of a community with their groups.
 #[derive(Debug, Clone, PartialEq)]
@@ -196,20 +197,7 @@ pub fn pcoa_plot(
             "Degenerate PCoA plot: the samples are all the same by this distance",
         );
     };
-    let data = pca_plot::Data {
-        samples: community
-            .samples
-            .iter()
-            .zip(&community.sample_groups)
-            .map(|(name, &group)| pca_plot::Sample {
-                name: name.clone(),
-                group,
-                proportions: Vec::new(),
-            })
-            .collect(),
-        groups: community.groups.clone(),
-        group_colors: community.group_colors.clone(),
-    };
+    let data = ordination_data(community);
     let mut notes = vec![match community.depth_note() {
         Some(note) => format!("{} distance. {note}.", distance.name()),
         None => format!("{} distance", distance.name()),
@@ -225,6 +213,116 @@ pub fn pcoa_plot(
         &notes,
         options,
     )
+}
+
+/// Non-metric multidimensional scaling plot of the samples by a distance,
+/// in two dimensions, with its stress.
+pub fn nmds_plot(community: &Community, distance: Distance, options: &pca_plot::Options) -> Figure {
+    let matrix = distances(&community.table.abundances, distance);
+    let Some(layout) = nmds(&matrix, 2) else {
+        return Figure::message(
+            "Degenerate NMDS plot: it needs three samples that are not all the same",
+        );
+    };
+    let data = ordination_data(community);
+    let mut notes = vec![match community.depth_note() {
+        Some(note) => format!("{} distance. {note}.", distance.name()),
+        None => format!("{} distance", distance.name()),
+    }];
+    let quality = match layout.stress {
+        s if s < 0.05 => "excellent",
+        s if s < 0.1 => "good",
+        s if s < 0.2 => "fair",
+        _ => "poor",
+    };
+    notes.push(format!("Stress = {:.3} ({quality})", layout.stress));
+    let options = pca_plot::Options {
+        show_pc3_vs_pc2: false,
+        show_pc1_vs_pc3: false,
+        ..options.clone()
+    };
+    pca_plot::plot_ordination(
+        &data,
+        &layout.positions,
+        &[f64::NAN, f64::NAN],
+        "NMDS",
+        &notes,
+        &options,
+    )
+}
+
+/// The samples of a community as an ordination plot wants them.
+fn ordination_data(community: &Community) -> pca_plot::Data {
+    pca_plot::Data {
+        samples: community
+            .samples
+            .iter()
+            .zip(&community.sample_groups)
+            .map(|(name, &group)| pca_plot::Sample {
+                name: name.clone(),
+                group,
+                proportions: Vec::new(),
+            })
+            .collect(),
+        groups: community.groups.clone(),
+        group_colors: community.group_colors.clone(),
+    }
+}
+
+/// The Mantel test between the distances of a community and the
+/// differences of a number known for each sample (`values`, in the order of
+/// the community's samples), drawn as one point per pair of samples.
+#[allow(clippy::too_many_arguments)]
+pub fn mantel_plot(
+    community: &Community,
+    values: &[f64],
+    field: &str,
+    distance: Distance,
+    method: CorrelationMethod,
+    permutations: usize,
+    rng: &mut StampRng,
+    options: &correlation_plot::Options,
+) -> Figure {
+    let n = community.samples.len();
+    if values.len() != n || n < 3 {
+        return Figure::message("The Mantel test needs at least three samples");
+    }
+    let matrix = distances(&community.table.abundances, distance);
+    let differences = DistanceMatrix::from_fn(n, |i, j| (values[i] - values[j]).abs());
+    let test = mantel(&differences, &matrix, method, permutations, rng);
+    let label = format!("{} distance", distance.name());
+    let mut statistics = if test.statistic.is_nan() {
+        "Mantel test: undefined, the distances do not vary".to_string()
+    } else {
+        format!(
+            "Mantel test: {} = {:.3}, p = {} ({} permutations)",
+            method.coefficient_name(),
+            test.statistic,
+            format_p_value(test.p_value, -15),
+            test.permutations
+        )
+    };
+    if let Some(note) = community.depth_note() {
+        statistics.push_str(&format!(". {note}"));
+    }
+    let data = correlation_plot::Data {
+        feature: format!("{label} against difference in {field}"),
+        field: format!("Difference in {field}"),
+        points: (0..n)
+            .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
+            .map(|(i, j)| correlation_plot::Point {
+                sample: format!("{} : {}", community.samples[i], community.samples[j]),
+                value: differences.get(i, j),
+                percent: matrix.get(i, j),
+                group: None,
+            })
+            .collect(),
+        groups: Vec::new(),
+        group_colors: Vec::new(),
+        statistics: Some(statistics),
+        value_label: Some(label),
+    };
+    correlation_plot::plot(&data, options)
 }
 
 /// Colour of the distances between samples of different groups.
@@ -435,5 +533,55 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn nmds_and_mantel_plots() {
+        let community = community(Normalisation::Proportions);
+        let figure = nmds_plot(
+            &community,
+            Distance::BrayCurtis,
+            &pca_plot::Options::default(),
+        );
+        assert_eq!(figure.regions.len(), 6);
+        let shown = texts(&figure);
+        assert!(
+            shown.iter().any(|t| t.starts_with("Stress = ")),
+            "{shown:?}"
+        );
+        assert!(shown.contains(&"NMDS1".to_string()) && shown.contains(&"NMDS2".to_string()));
+
+        let values = [1.0, 2.0, 3.0, 10.0, 11.0, 12.0];
+        let figure = mantel_plot(
+            &community,
+            &values,
+            "Depth",
+            Distance::BrayCurtis,
+            CorrelationMethod::Spearman,
+            99,
+            &mut rng_from_seed(1),
+            &correlation_plot::Options::default(),
+        );
+        // A point for each of the 15 pairs of samples.
+        assert_eq!(figure.regions.len(), 15);
+        let shown = texts(&figure);
+        assert!(
+            shown.iter().any(|t| t.starts_with("Mantel test: rho = 0.")),
+            "{shown:?}"
+        );
+        assert!(shown.contains(&"Difference in Depth".to_string()));
+        assert!(shown.contains(&"Bray-Curtis distance".to_string()));
+        assert!(figure.regions[0].tooltip.contains("A1 : A2"));
+        let short = mantel_plot(
+            &community,
+            &values[..2],
+            "Depth",
+            Distance::BrayCurtis,
+            CorrelationMethod::Pearson,
+            9,
+            &mut rng_from_seed(1),
+            &correlation_plot::Options::default(),
+        );
+        assert!(short.regions.is_empty());
     }
 }

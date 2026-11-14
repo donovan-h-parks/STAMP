@@ -6,12 +6,18 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle. Tiers 1 to 3 of `docs/ROADMAP.md` are done, committed and
-pushed. The next task is tier 4, which the user said on 2026-11-14 will
-be done later: wait for the user to ask for it.
+Idle. Roadmap tiers 1 to 4 are all done, committed and pushed. Nothing further is queued.
 
 ## Last completed
 
+- **Roadmap tier 4** (2026-11-14): ANCOM (`stats/ancom.rs`, matches
+  scikit-bio 0.7.4), the Mantel test (`community::mantel`), NMDS
+  (`diversity::nmds`), and the plots `PlotKind::{Ancom, Nmds,
+  SharedFeatures, RankAbundance, Mantel}` (`ancom_plot.rs`,
+  `shared_features.rs`, `rank_abundance.rs`, `community_plots.rs`); the
+  `stamp-cli ancom` command and plot types `ancom`, `nmds`,
+  `shared-features`, `rank-abundance`, `mantel`. Tests, lint and web
+  bundle done. Committed and pushed.
 - **Roadmap tier 3** (2026-11-14): paired t-test and Wilcoxon signed-rank
   test (`GroupTest::PairedT`, `WilcoxonSignedRank`; pairs from
   `Metadata::paired_groups`, the session's `groups.pair_field`); centred
@@ -73,15 +79,6 @@ be done later: wait for the user to ask for it.
 
 ## Next
 
-**Roadmap tier 4**, deferred by the user ("We will do this later"); do not
-start it unasked:
-
-- ANCOM (differential abundance for compositional data)
-- the Mantel test
-- a shared-feature plot (UpSet / Venn)
-- NMDS ordination
-- rank-abundance curves
-
-Details are in `docs/ROADMAP.md`. Separately, what v2 has that the port
-still lacks is listed under "Not yet ported" in
-`docs/CHANGES_FROM_PYTHON.md`.
+Nothing queued. What v2 has that the port still lacks is listed under "Not
+yet ported" in `docs/CHANGES_FROM_PYTHON.md`; `docs/ROADMAP.md` lists what
+was considered and left out.
