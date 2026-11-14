@@ -3,22 +3,25 @@
 
 use eframe::egui::{self, epaint, Color32, FontFamily, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use stamp_plot::figure::{Color, Figure, HAlign, Shape};
-use stamp_plot::text;
+use stamp_plot::text::{self, PlotFont};
 
-/// Name of the egui font family holding the plot font.
-pub const PLOT_FONT: &str = "stamp-plot";
+/// Name of the egui font family holding a plot font.
+pub fn plot_font_family(font: PlotFont) -> FontFamily {
+    FontFamily::Name(format!("stamp-plot-{}", font.key()).into())
+}
 
-/// Register the plot font with egui. Call once at start-up.
+/// Register the plot fonts with egui, each as a family of its own. Call
+/// once at start-up.
 pub fn install_plot_font(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
-    fonts.font_data.insert(
-        PLOT_FONT.to_owned(),
-        std::sync::Arc::new(egui::FontData::from_static(text::FONT_DATA)),
-    );
-    fonts.families.insert(
-        FontFamily::Name(PLOT_FONT.into()),
-        vec![PLOT_FONT.to_owned()],
-    );
+    for font in PlotFont::ALL {
+        let name = format!("stamp-plot-{}", font.key());
+        fonts.font_data.insert(
+            name.clone(),
+            std::sync::Arc::new(egui::FontData::from_static(font.data())),
+        );
+        fonts.families.insert(plot_font_family(font), vec![name]);
+    }
     crate::icons::add_to_fonts(&mut fonts);
     ctx.set_fonts(fonts);
 }
@@ -173,7 +176,7 @@ pub fn paint(painter: &egui::Painter, origin: Pos2, scale: f32, figure: &Figure)
                 style,
             } => {
                 let size = style.size as f32 * scale;
-                let font = FontId::new(size, FontFamily::Name(PLOT_FONT.into()));
+                let font = FontId::new(size, plot_font_family(figure.font));
                 let galley = painter.layout_no_wrap(content.clone(), font, color32(style.color));
 
                 // Where the text's top-left corner sits relative to its

@@ -25,6 +25,8 @@ pub struct Fonts {
     pub axis_label: f64,
     /// The text of a legend.
     pub legend: f64,
+    /// The font of all plot text.
+    pub family: crate::text::PlotFont,
 }
 
 impl Default for Fonts {
@@ -33,6 +35,7 @@ impl Default for Fonts {
             tick: 8.0,
             axis_label: 9.0,
             legend: 9.0,
+            family: crate::text::PlotFont::default(),
         }
     }
 }
@@ -813,6 +816,7 @@ mod tests {
             tick: 11.0,
             axis_label: 14.0,
             legend: 6.5,
+            ..Fonts::default()
         };
         let (mut figure, mut plain) = (Figure::new(320.0, 240.0), Figure::new(320.0, 240.0));
         let width = with_fonts(chosen, || {

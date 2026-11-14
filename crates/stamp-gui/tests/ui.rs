@@ -2117,6 +2117,20 @@ fn font_sizes_are_set_in_the_preferences_and_per_plot() {
     harness.settle();
     assert_eq!(size_of(&harness.app, "Enterotype 1"), 11.0);
 
+    // Arial is the font to start with; the preferences change it.
+    assert_eq!(harness.app.figure().font, stamp_plot::text::PlotFont::Arial);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.fonts.family = stamp_plot::text::PlotFont::TimesNewRoman;
+    harness.app.set_plot_settings(settings);
+    harness.app.show_preferences(true);
+    harness.settle();
+    assert_eq!(
+        harness.app.figure().font,
+        stamp_plot::text::PlotFont::TimesNewRoman
+    );
+    harness.screenshot("preferences_font_times");
+    harness.app.show_preferences(false);
+
     // Configure plot has a frame of the plot's own font sizes.
     harness.app.set_plot_kind(PlotKind::Heatmap);
     harness.app.show_plot_config(true);

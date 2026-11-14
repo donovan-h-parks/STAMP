@@ -146,6 +146,12 @@ Add an entry here whenever a feature is added that v2 did not have.
   sizes" frame of that plot's Configure plot window. v2's text was a fixed
   8 points [57]. On the command line: `--tick-font-size`,
   `--axis-label-font-size` and `--legend-font-size`.
+- **Font of plots.** Settings > Preferences chooses the font of all plot
+  text: Arial (the default), Times New Roman, Courier New or DejaVu Sans
+  (v2's font) [58]. The fonts are bundled (Liberation Sans, Serif and Mono,
+  free fonts with the same letter widths as Arial, Times New Roman and
+  Courier New), so plots look the same on every system and in the browser;
+  SVG files name the original font first. On the command line: `--font`.
 - **Plots listed by group.** The plot selector beneath the plot lists the
   plots of an analysis under five headings, by the question they answer:
   differences between features (with the p-value histogram and multiple

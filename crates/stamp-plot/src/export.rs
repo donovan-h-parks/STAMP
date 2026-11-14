@@ -57,8 +57,8 @@ pub fn to_png(figure: &Figure, dpi: f64) -> Result<Vec<u8>, ExportError> {
     let mut options = usvg::Options::default();
     options
         .fontdb_mut()
-        .load_font_data(crate::text::FONT_DATA.to_vec());
-    options.font_family = crate::text::FONT_FAMILY.to_string();
+        .load_font_data(figure.font.data().to_vec());
+    options.font_family = figure.font.bundled_family().to_string();
     let tree = usvg::Tree::from_str(&to_svg(figure), &options)
         .map_err(|e| ExportError(format!("Could not render the plot: {e}")))?;
 
@@ -101,8 +101,8 @@ pub fn to_pdf(figure: &Figure) -> Result<Vec<u8>, ExportError> {
     let mut options = usvg::Options::default();
     options
         .fontdb_mut()
-        .load_font_data(crate::text::FONT_DATA.to_vec());
-    options.font_family = crate::text::FONT_FAMILY.to_string();
+        .load_font_data(figure.font.data().to_vec());
+    options.font_family = figure.font.bundled_family().to_string();
     let tree = usvg::Tree::from_str(&to_svg(figure), &options)
         .map_err(|e| ExportError(format!("Could not render the plot: {e}")))?;
     // 96 SVG pixels per inch, so that the page has the figure's size in points.
@@ -171,6 +171,45 @@ mod tests {
             .unwrap_err()
             .0
             .contains("too large"));
+    }
+
+    /// Every font is drawn, and draws differently: the bundled font is the
+    /// one used, whatever is installed on the machine.
+    #[cfg(feature = "png")]
+    #[test]
+    fn png_text_is_drawn_in_the_figure_font() {
+        use crate::text::PlotFont;
+        let ink = |font: PlotFont| {
+            let fonts = crate::axes::Fonts {
+                family: font,
+                ..crate::axes::Fonts::default()
+            };
+            let figure = crate::axes::with_fonts(fonts, sample);
+            let png = to_png(&figure, 288.0).unwrap();
+            let image = resvg::tiny_skia::Pixmap::decode_png(&png).unwrap();
+            image
+                .pixels()
+                .iter()
+                .enumerate()
+                .filter(|(i, p)| (i % 288) >= 144 && p.green() < 100)
+                .map(|(i, _)| i)
+                .collect::<Vec<usize>>()
+        };
+        let drawn: Vec<Vec<usize>> = PlotFont::ALL.into_iter().map(ink).collect();
+        for (font, pixels) in PlotFont::ALL.iter().zip(&drawn) {
+            assert!(pixels.len() > 100, "{font:?}: {} dark pixels", pixels.len());
+        }
+        for i in 0..drawn.len() {
+            for j in i + 1..drawn.len() {
+                assert_ne!(
+                    drawn[i],
+                    drawn[j],
+                    "{:?} and {:?}",
+                    PlotFont::ALL[i],
+                    PlotFont::ALL[j]
+                );
+            }
+        }
     }
 
     #[cfg(feature = "pdf")]

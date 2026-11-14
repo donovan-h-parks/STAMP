@@ -3167,6 +3167,13 @@ impl StampApp {
                             ui.add(drag).changed()
                         };
                         let fonts = &mut self.plot_settings.fonts;
+                        redraw |= row(ui, "Plot font:", |ui| {
+                            let families = named(
+                                &stamp_plot::text::PlotFont::ALL,
+                                stamp_plot::text::PlotFont::name,
+                            );
+                            choose(ui, "plot-font", &mut fonts.family, &families)
+                        });
                         redraw |= row(ui, "Axis label font size:", |ui| {
                             font(ui, &mut fonts.axis_label)
                         });

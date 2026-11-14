@@ -3,7 +3,6 @@
 use std::fmt::Write;
 
 use crate::figure::{Color, Figure, HAlign, Shape, Stroke};
-use crate::text::FONT_FAMILY_WITH_FALLBACKS;
 
 /// Round to a precision that keeps files small without visible error.
 fn n(value: f64) -> String {
@@ -75,14 +74,15 @@ fn points_attr(points: &[(f64, f64)]) -> String {
         .join(" ")
 }
 
-/// Render a figure as a standalone SVG document. Text stays as text, in
-/// DejaVu Sans, so it remains editable in vector-graphics programs.
+/// Render a figure as a standalone SVG document. Text stays as text, in the
+/// figure's font, so it remains editable in vector-graphics programs.
 pub fn to_svg(figure: &Figure) -> String {
     let (w, h) = (n(figure.width), n(figure.height));
     let mut out = String::new();
     let _ = writeln!(
         out,
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}pt\" height=\"{h}pt\" viewBox=\"0 0 {w} {h}\" font-family=\"{FONT_FAMILY_WITH_FALLBACKS}\">"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}pt\" height=\"{h}pt\" viewBox=\"0 0 {w} {h}\" font-family=\"{}\">",
+        figure.font.css_families()
     );
     let _ = writeln!(
         out,
@@ -239,5 +239,19 @@ mod tests {
             None,
         );
         assert!(to_svg(&figure).contains("fill=\"#0000ff\" fill-opacity=\"0.502\""));
+    }
+
+    #[test]
+    fn the_font_of_a_figure_is_named_in_its_svg() {
+        let svg = to_svg(&Figure::new(10.0, 10.0));
+        assert!(svg.contains("font-family=\"Arial, Helvetica, Liberation Sans, sans-serif\""));
+        let fonts = crate::axes::Fonts {
+            family: crate::text::PlotFont::TimesNewRoman,
+            ..crate::axes::Fonts::default()
+        };
+        let figure = crate::axes::with_fonts(fonts, || Figure::new(10.0, 10.0));
+        assert_eq!(figure.font, crate::text::PlotFont::TimesNewRoman);
+        assert!(to_svg(&figure)
+            .contains("font-family=\"Times New Roman, Times, Liberation Serif, serif\""));
     }
 }

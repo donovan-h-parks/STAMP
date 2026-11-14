@@ -66,7 +66,7 @@ Packaging and releases are described in `docs/RELEASING.md` (`scripts/package.sh
 Four crates, each depending only on those above it:
 
 - **`stamp-core`** — profiles, metadata, file import and all statistics. No file system access, threads or UI, so it compiles unchanged to WebAssembly; callers hand it text or bytes. Long analyses take a progress callback and exist in a resumable form (`SampleRun`, `GroupRun`, `MultiGroupRun` in `stats/results.rs`) that can pause between features and gives identical results wherever it pauses.
-- **`stamp-plot`** — every plot builds a backend-neutral `Figure` (sizes in points; shapes plus `regions` that carry tooltips and the item each area stands for). `svg.rs` writes SVG; PNG and PDF are derived from the SVG (`export.rs`, optional features). Text is measured with the bundled DejaVu Sans so layout is the same everywhere.
+- **`stamp-plot`** — every plot builds a backend-neutral `Figure` (sizes in points; shapes plus `regions` that carry tooltips and the item each area stands for). `svg.rs` writes SVG; PNG and PDF are derived from the SVG (`export.rs`, optional features). Text is drawn and measured with bundled fonts (`text.rs`: Liberation Sans, Serif and Mono, which have the letter widths of Arial, Times New Roman and Courier New, and DejaVu Sans; Arial by default), so layout is the same everywhere; each `Figure` records the font it was built with.
 - **`stamp-cli`** — analyses, plots and file conversion from the command line; output tables keep STAMP v2's column headings.
 - **`stamp-gui`** — egui/eframe application, built both as the `stamp` binary and as the web page.
 

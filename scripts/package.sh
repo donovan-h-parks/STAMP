@@ -36,6 +36,12 @@ mkdir -p "$stage"
 # Documentation and a small set of example data go in every package.
 cp "$root/README.md" "$root/LICENSE.txt" "$stage/"
 cp "$root/docs/CHANGES_FROM_PYTHON.md" "$stage/"
+# The fonts of plots and of the menu icons are compiled into the programs;
+# their licenses go with them.
+mkdir -p "$stage/fonts"
+cp "$root/crates/stamp-plot/fonts/LICENSE-Liberation.txt" \
+   "$root/crates/stamp-plot/fonts/LICENSE-DejaVu.txt" \
+   "$root/crates/stamp-gui/assets/Phosphor-LICENSE.txt" "$stage/fonts/"
 mkdir -p "$stage/examples"
 cp -r "$root/examples/EnterotypesArumugam" "$root/examples/IronMineEdwards" "$stage/examples/"
 assets="$root/crates/stamp-gui/assets"

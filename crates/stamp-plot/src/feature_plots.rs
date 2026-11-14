@@ -692,6 +692,7 @@ mod tests {
             tick: 10.0,
             axis_label: 12.0,
             legend: 9.0,
+            ..crate::axes::Fonts::default()
         };
         let figure = crate::axes::with_fonts(shared, || box_plot(&data(), &BoxOptions::default()));
         assert_eq!(size(&figure, "Bacteroides"), crate::axes::TITLE_SIZE);

@@ -145,6 +145,9 @@ pub struct PlotArgs {
     /// Font size of the plot's legend, in points
     #[arg(long, default_value_t = 9.0, value_name = "POINTS")]
     pub legend_font_size: f64,
+    /// Font of the plot's text
+    #[arg(long, value_enum, default_value_t = FontArg::Arial)]
+    pub font: FontArg,
     /// Measure of the alpha diversity plot
     #[arg(long, value_enum, default_value_t = AlphaMetricArg::Shannon)]
     pub alpha_metric: AlphaMetricArg,
@@ -168,6 +171,30 @@ pub struct PlotArgs {
     /// in at least this percentage of the group's samples
     #[arg(long, default_value_t = 50.0, value_name = "PERCENT")]
     pub min_prevalence: f64,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum FontArg {
+    /// Arial (bundled as Liberation Sans, with the same letter widths)
+    Arial,
+    /// Times New Roman (bundled as Liberation Serif)
+    TimesNewRoman,
+    /// Courier New (bundled as Liberation Mono)
+    CourierNew,
+    /// DejaVu Sans, the font of STAMP v2's plots
+    DejavuSans,
+}
+
+impl From<FontArg> for stamp_plot::text::PlotFont {
+    fn from(value: FontArg) -> Self {
+        use stamp_plot::text::PlotFont;
+        match value {
+            FontArg::Arial => PlotFont::Arial,
+            FontArg::TimesNewRoman => PlotFont::TimesNewRoman,
+            FontArg::CourierNew => PlotFont::CourierNew,
+            FontArg::DejavuSans => PlotFont::DejaVuSans,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]

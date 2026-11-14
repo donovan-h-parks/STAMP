@@ -1428,6 +1428,11 @@ fn plot_font_sizes_can_be_chosen() {
     let svg = svg_plot("multi-groups", base, &sized, &directory, "sized");
     assert_eq!(font(&svg, "Enterotype 1"), "12");
     assert_eq!(font(&svg, "Proportion of sequences (%)"), "14");
+    assert!(plain.contains("font-family=\"Arial, Helvetica, Liberation Sans, sans-serif\""));
+    let mut times = extra.to_vec();
+    times.extend_from_slice(&["--font", "times-new-roman"]);
+    let svg = svg_plot("multi-groups", base, &times, &directory, "times");
+    assert!(svg.contains("font-family=\"Times New Roman, Times, Liberation Serif, serif\""));
     let mut bad = with("multi-groups", base, &extra);
     bad.extend_from_slice(&["--plot", "x.svg", "--legend-font-size", "0"]);
     assert!(failure(&bad).contains("font sizes"));

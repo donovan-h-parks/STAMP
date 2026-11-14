@@ -58,6 +58,7 @@ fn fonts_of(plot: &PlotArgs) -> CliResult<stamp_plot::axes::Fonts> {
         tick: plot.tick_font_size,
         axis_label: plot.axis_label_font_size,
         legend: plot.legend_font_size,
+        family: plot.font.into(),
     })
 }
 

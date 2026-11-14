@@ -10,6 +10,13 @@ Idle. Roadmap tiers 1 to 4 are all done, committed and pushed. Nothing further i
 
 ## Last completed
 
+- **Plot font choice** (2026-11-15): `PlotFont` in `stamp-plot/src/text.rs`
+  (Arial default, Times New Roman, Courier New, DejaVu Sans; bundled as
+  Liberation Sans/Serif/Mono 2.1.5 under the SIL OFL, downloaded with the
+  user's consent from the liberation-fonts GitHub release, and DejaVu
+  Sans); part of `axes::Fonts`, recorded in each `Figure`, used by
+  measuring, the egui painter, SVG and PNG/PDF export; Preferences "Plot
+  font", command line `--font`. Committed and pushed.
 - **Plots grouped in the selector** (2026-11-15): `PlotGroup` and
   `PlotKind::group`/`grouped` in `stamp-gui/src/plots.rs`, drawn by
   `choose_plot` in `app.rs`; `PlotKind::available` still sets each mode's

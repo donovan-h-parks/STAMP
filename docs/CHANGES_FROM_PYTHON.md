@@ -60,7 +60,7 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 14 | done | A command-line interface (`stamp-cli`) is new; STAMP v2 was graphical only. |
 | 15 | done | Asking for a one-sided p-value from a test that has none (chi-square and G-tests) is an error. STAMP v2 reported an infinite p-value. |
 | 16 | done | In saved tables, whole numbers such as counts are written without a decimal point (`5`, not `5.0`), and other numbers in their shortest exact form. Column headings are unchanged. |
-| 17 | done | Plots are drawn by STAMP itself rather than by matplotlib, following the same layout, font (DejaVu Sans, bundled) and colours. Small details differ, such as the exact choice of axis ticks. |
+| 17 | done | Plots are drawn by STAMP itself rather than by matplotlib, following the same layout and colours (and, before change 58, the same font, DejaVu Sans). Small details differ, such as the exact choice of axis ticks. |
 | 18 | done | In the extended error bar plot, sorting by effect size treats ratios symmetrically (0.5 and 2 are the same size of effect), and a confidence interval that runs past fixed axis limits is clipped at the axis without an end cap. |
 | 19 | done | The heatmap clusters features and samples on the Euclidean distances between their abundance vectors. STAMP v2 passed the distance matrix to SciPy in a form that made it cluster the rows of the distance matrix itself, which gives a different tree. |
 | 20 | done | The PCA plot uses a standard principal component analysis (matching NumPy's SVD). The sign of each component, which is arbitrary, is chosen so that the sample furthest from the origin is positive. |
@@ -101,6 +101,7 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 55 | done | Fisher's exact test counts tables whose probability equals the observed table's up to a relative rounding error of 1e-7, as R's `fisher.test` and SciPy do, and its p-values are clamped to [0, 1]; the Šidák correction is computed as -expm1(n log1p(-p)), as statsmodels does, which keeps small p-values exact. No result in the reference cases changed. |
 | 56 | done | The Kruskal-Wallis H-test is computed for groups of any size, as R's `kruskal.test` computes it (the chi-square approximation with the tie correction); groups without samples are left out. v2 refused any group of fewer than five samples, reporting p = 1 with the note "at least one group contains less than 5 samples". This also affects the Kruskal-Wallis p-value of the alpha diversity plot and ANCOM with the Kruskal-Wallis test. Decided by the user (2026-11-15). |
 | 57 | done | Axis labels and legend text are 9 points rather than v2's 8; tick labels stay at 8. All three can be changed in the preferences, and text particular to a plot in its Configure plot window. The room left for an axis grows with its text, so larger sizes are not cut off. |
+| 58 | done | Plot text is set in Arial by default, the usual font of scientific figures, rather than v2's DejaVu Sans (matplotlib's default). Arial cannot be bundled, so it is drawn with Liberation Sans, which has the same letter widths, and SVG files ask for Arial first. Settings > Preferences offers Arial, Times New Roman, Courier New (bundled as Liberation Serif and Mono) and DejaVu Sans. |
 
 ## Kept as is
 

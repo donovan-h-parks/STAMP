@@ -207,6 +207,8 @@ pub struct Figure {
     pub background: Color,
     pub shapes: Vec<Shape>,
     pub regions: Vec<Region>,
+    /// The font of all its text: the one in force when it was made.
+    pub font: crate::text::PlotFont,
 }
 
 impl Figure {
@@ -239,6 +241,7 @@ impl Figure {
             background: Color::WHITE,
             shapes: Vec::new(),
             regions: Vec::new(),
+            font: crate::axes::fonts().family,
         }
     }
 
