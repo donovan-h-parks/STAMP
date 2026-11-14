@@ -43,7 +43,12 @@ rand_chacha = { version = "0.10", default-features = false }
 rand_distr = "0.6"
 libm = "0.2"
 kodama = "0.3"
+# Eigen decompositions for the ordinations (pure Rust).
+nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 ttf-parser = "0.25"
+# Triangulates the filled outlines of the map plot for the on-screen painter
+# (pure Rust).
+earcut = "0.4"
 # Only text is needed to render STAMP's own SVG: no system fonts (the fonts
 # are bundled), raster images or filters, which would add to the browser
 # download.

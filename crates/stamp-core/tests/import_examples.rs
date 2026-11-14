@@ -204,3 +204,103 @@ fn cog_categories_example() {
         )
     );
 }
+
+/// Rows of a profile keyed by their seven names, with values as numbers.
+fn rows_by_lineage(spf: &str) -> (Vec<String>, HashMap<String, Vec<f64>>) {
+    let mut lines = spf.lines();
+    let header: Vec<String> = lines
+        .next()
+        .unwrap()
+        .split('\t')
+        .map(str::to_string)
+        .collect();
+    let rows = lines
+        .filter(|l| !l.is_empty())
+        .map(|line| {
+            let cells: Vec<&str> = line.split('\t').collect();
+            let values = cells[7..].iter().map(|c| c.parse().unwrap()).collect();
+            (cells[..7].join("\t"), values)
+        })
+        .collect();
+    (header, rows)
+}
+
+fn sandpiper_files(names: &[&str]) -> (Vec<String>, Vec<String>) {
+    let names: Vec<String> = names.iter().map(|n| format!("{n}.json")).collect();
+    let texts = names
+        .iter()
+        .map(|n| read(&format!("crates/stamp-core/tests/data/singlem/{n}")))
+        .collect();
+    (names, texts)
+}
+
+#[test]
+fn sandpiper_profiles_match_the_python_conversion() {
+    use stamp_core::import::sandpiper;
+    let runs = ["SRR28772463", "ERR4084076", "SRR28771658"];
+    let (names, texts) = sandpiper_files(&runs);
+    let files: Vec<NamedText<'_>> = names
+        .iter()
+        .zip(&texts)
+        .map(|(name, text)| NamedText { name, text })
+        .collect();
+    let spf = sandpiper::to_spf(&files).unwrap();
+    ProfileTree::read(&spf).unwrap();
+
+    // The reference was written by the flatten/fill_lineage functions of a
+    // Python script that the importer replaces.
+    let expected = read("crates/stamp-core/tests/data/singlem/expected_from_python.spf");
+    let (actual_header, actual) = rows_by_lineage(&spf);
+    let (expected_header, expected) = rows_by_lineage(&expected);
+    assert_eq!(actual_header, expected_header);
+    assert_eq!(actual.len(), expected.len());
+    for (lineage, values) in &expected {
+        let got = actual
+            .get(lineage)
+            .unwrap_or_else(|| panic!("missing row {lineage}"));
+        for (a, e) in got.iter().zip(values) {
+            // The importer keeps six significant digits.
+            assert!((a - e).abs() <= 1e-5 * e.abs(), "{lineage}: {a} vs {e}");
+        }
+    }
+
+    // GlobDB profiles have the same form.
+    let globdb = read("crates/stamp-core/tests/data/singlem/SRR28772463.globdb.json");
+    let both = [
+        NamedText {
+            name: "a.json",
+            text: &globdb,
+        },
+        files[1],
+    ];
+    ProfileTree::read(&sandpiper::to_spf(&both).unwrap()).unwrap();
+}
+
+#[test]
+fn singlem_and_sandpiper_give_the_same_profile() {
+    use stamp_core::import::{sandpiper, singlem};
+    // The SingleM file holds the same two runs as the Sandpiper files, with
+    // coverages to two decimals as SingleM writes them.
+    let text = read("crates/stamp-core/tests/data/singlem/singlem_condensed.tsv");
+    let from_singlem = singlem::to_spf(&[NamedText {
+        name: "singlem_condensed.tsv",
+        text: &text,
+    }])
+    .unwrap();
+    let (names, texts) = sandpiper_files(&["SRR28772463", "ERR4084076"]);
+    let files: Vec<NamedText<'_>> = names
+        .iter()
+        .zip(&texts)
+        .map(|(name, text)| NamedText { name, text })
+        .collect();
+    let from_sandpiper = sandpiper::to_spf(&files).unwrap();
+    let (header_a, a) = rows_by_lineage(&from_singlem);
+    let (header_b, b) = rows_by_lineage(&from_sandpiper);
+    assert_eq!(header_a, header_b);
+    assert_eq!(a.len(), b.len());
+    for (lineage, values) in &a {
+        for (x, y) in values.iter().zip(&b[lineage]) {
+            assert!((x - y).abs() < 0.006, "{lineage}: {x} vs {y}");
+        }
+    }
+}

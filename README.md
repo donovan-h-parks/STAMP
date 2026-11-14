@@ -91,8 +91,31 @@ stamp-cli ancom --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \
     --metadata examples/EnterotypesArumugam/Enterotypes.metadata.tsv --field Enterotype \
     --group "Enterotype 1" --group "Enterotype 2" --group "Enterotype 3" --output ancom.tsv
 
+# Co-occurrence: correlations between the 30 most abundant genera (centred log ratios)
+stamp-cli co-occurrence --profile examples/CoalSeamGas/coal.spf --profile-level Genus \
+    --clr --plot genera.png --output genera.tsv
+
+# Several features in one box plot, log axis, every sample as a point
+stamp-cli multi-groups --profile examples/CoalSeamGas/coal.spf --profile-level Genus \
+    --metadata examples/CoalSeamGas/coal.metadata.tsv --field Environment \
+    --plot box.png --plot-type box --plot-feature g__Methanobacterium \
+    --plot-feature g__Thauera --box-log --box-points --box-counts
+
+# Prevalence against mean abundance of every genus, one panel per group
+stamp-cli multi-groups --profile examples/CoalSeamGas/coal.spf --profile-level Genus \
+    --metadata examples/CoalSeamGas/coal.metadata.tsv --field Environment \
+    --plot prevalence.png --plot-type prevalence-abundance \
+    --highlight g__Methanobacterium --prevalence-table prevalence.tsv
+
+# Only some samples: those whose metadata match (--where may be repeated)
+stamp-cli multi-groups --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \
+    --metadata examples/EnterotypesArumugam/Enterotypes.metadata.tsv --field Enterotype \
+    --where Nationality=japanese --where Nationality=french --where-not Enterotype=Infant
+
 # Convert another tool's output to a STAMP profile
 stamp-cli convert mgrast examples/CowRumen-MG-RAST/CowRumen-MG-RAST.tsv --output cow_rumen.spf
+stamp-cli convert singlem singlem_condensed_profile.tsv --output community.spf
+stamp-cli convert sandpiper sandpiper/*.json --output community.spf
 ```
 
 The two-sample and two-group commands can also draw the filtered results as an extended error bar plot, as PNG, SVG or PDF:
@@ -105,7 +128,7 @@ stamp-cli two-samples --profile examples/IronMineEdwards/EdwardsIronMine.spf \
 
 ![Extended error bar plot of the iron mine example](docs/images/extended_error_bar.png)
 
-`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `pca`, `heatmap`, `rarefaction`, `volcano`, `composition`, `alpha-diversity`, `pcoa`, `distance-box`, `nmds`, `shared-features`, `rank-abundance`, `ancom`, (with the `correlation` command) `correlation-scatter` and `mantel`, and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
+`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `pca`, `heatmap`, `rarefaction`, `volcano`, `composition`, `alpha-diversity`, `pcoa`, `distance-box`, `nmds`, `shared-features`, `rank-abundance`, `ancom`, `group-heatmap` (a summary of each feature in each group), `map` (sample locations on a map made with Natural Earth), (with the `correlation` command) `correlation-scatter` and `mantel`, and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
 
 ```bash
 stamp-cli multi-groups --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \

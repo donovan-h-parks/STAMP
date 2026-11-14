@@ -19,6 +19,10 @@ use stamp_core::Unclassified;
 #[derive(Parser)]
 #[command(name = "stamp-cli", version = stamp_core::VERSION, propagate_version = true)]
 pub struct Cli {
+    /// Do not show the progress of slow steps (shown on standard error,
+    /// only when it is a terminal)
+    #[arg(long, short = 'q', global = true)]
+    pub quiet: bool,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -39,6 +43,8 @@ pub enum Command {
     Correlation(CorrelationArgs),
     /// Find features that differ between groups by ANCOM
     Ancom(AncomArgs),
+    /// Correlate features with each other across samples (co-occurrence)
+    CoOccurrence(CoOccurrenceArgs),
     /// Convert another tool's output to a STAMP profile
     Convert(ConvertArgs),
 }
@@ -51,6 +57,22 @@ pub struct InfoArgs {
     /// Metadata file describing the samples
     #[arg(long, short)]
     pub metadata: Option<PathBuf>,
+    #[command(flatten)]
+    pub sample_filter: SampleFilterArgs,
+}
+
+/// Choosing samples by their metadata values.
+#[derive(Args)]
+pub struct SampleFilterArgs {
+    /// Keep only samples whose metadata meet a condition: FIELD=VALUE, or for
+    /// numbers FIELD<X, FIELD<=X, FIELD>X or FIELD>=X (may be repeated;
+    /// values given for one field are alternatives, different fields must all
+    /// match). Quote it: --where "Site=deep sea"
+    #[arg(long = "where", value_name = "CONDITION")]
+    pub where_: Vec<String>,
+    /// Leave out samples with this metadata value, FIELD=VALUE (may be repeated)
+    #[arg(long = "where-not", value_name = "FIELD=VALUE")]
+    pub where_not: Vec<String>,
 }
 
 /// Which features to analyse and where to write the results.
@@ -85,6 +107,8 @@ pub struct MetadataArgs {
     /// Sample to leave out of the analysis (may be repeated)
     #[arg(long = "exclude-sample", value_name = "SAMPLE")]
     pub excluded_samples: Vec<String>,
+    #[command(flatten)]
+    pub sample_filter: SampleFilterArgs,
 }
 
 /// Settings of the resampling methods.
@@ -112,9 +136,11 @@ pub struct PlotArgs {
     /// heatmap for several groups, post-hoc for the post-hoc command]
     #[arg(long, value_enum, value_name = "TYPE")]
     pub plot_type: Option<PlotTypeArg>,
-    /// Feature shown by the bar and box plots [default: the most significant]
+    /// Feature shown by the bar, box and correlation scatter plots [default:
+    /// the most significant]; may be repeated for a box plot of several
+    /// features
     #[arg(long, value_name = "FEATURE")]
-    pub plot_feature: Option<String>,
+    pub plot_feature: Vec<String>,
     /// Height of the plot, in inches, for plots of fixed height
     #[arg(long, value_name = "INCHES")]
     pub plot_height: Option<f64>,
@@ -285,6 +311,15 @@ pub enum PlotTypeArg {
     Ancom,
     /// Community distance against difference in the numeric field (correlation)
     Mantel,
+    /// Features against groups: each cell a summary of the feature in the
+    /// group (mean, median, maximum or prevalence); see the --heatmap-* options
+    GroupHeatmap,
+    /// Prevalence against mean abundance of every feature, per group; see the
+    /// --prevalence-* options
+    PrevalenceAbundance,
+    /// Where the samples were taken, from latitude and longitude fields of
+    /// the metadata, on a map; see the --map-* options and --color-by
+    Map,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -407,6 +442,16 @@ pub struct TwoGroupsArgs {
     pub resampling: ResamplingArgs,
     #[command(flatten)]
     pub plot: PlotArgs,
+    #[command(flatten)]
+    pub heatmap: HeatmapArgs,
+    #[command(flatten)]
+    pub boxes: BoxArgs,
+    #[command(flatten)]
+    pub prevalence: PrevalenceArgs,
+    #[command(flatten)]
+    pub ordination: OrdinationArgs,
+    #[command(flatten)]
+    pub map: MapArgs,
 }
 
 #[derive(Args)]
@@ -438,6 +483,16 @@ pub struct MultiGroupsArgs {
     pub seed: u64,
     #[command(flatten)]
     pub plot: PlotArgs,
+    #[command(flatten)]
+    pub heatmap: HeatmapArgs,
+    #[command(flatten)]
+    pub boxes: BoxArgs,
+    #[command(flatten)]
+    pub prevalence: PrevalenceArgs,
+    #[command(flatten)]
+    pub ordination: OrdinationArgs,
+    #[command(flatten)]
+    pub map: MapArgs,
 }
 
 #[derive(Args)]
@@ -454,6 +509,8 @@ pub struct CorrelationArgs {
     /// Sample to leave out of the analysis (may be repeated)
     #[arg(long = "exclude-sample", value_name = "SAMPLE")]
     pub excluded_samples: Vec<String>,
+    #[command(flatten)]
+    pub sample_filter: SampleFilterArgs,
     /// Measure of correlation
     #[arg(long, value_enum, default_value_t = CorrelationMethodArg::Spearman)]
     pub method: CorrelationMethodArg,
@@ -474,6 +531,10 @@ pub struct CorrelationArgs {
     pub seed: u64,
     #[command(flatten)]
     pub plot: PlotArgs,
+    #[command(flatten)]
+    pub ordination: OrdinationArgs,
+    #[command(flatten)]
+    pub map: MapArgs,
 }
 
 #[derive(Args)]
@@ -580,6 +641,25 @@ pub enum ConvertFormat {
         #[command(flatten)]
         output: OutputArg,
     },
+    /// SingleM condensed taxonomic profiles (`singlem pipe -p` or
+    /// `singlem summarise`); each file may hold several samples. Values are
+    /// coverages, in seven ranks from Domain to Species
+    Singlem {
+        /// SingleM condensed profile files
+        #[arg(required = true)]
+        inputs: Vec<PathBuf>,
+        #[command(flatten)]
+        output: OutputArg,
+    },
+    /// Sandpiper condensed profiles (JSON from the Sandpiper API), one file
+    /// per sample. Values are coverages, in seven ranks from Domain to Species
+    Sandpiper {
+        /// Sandpiper JSON files
+        #[arg(required = true)]
+        inputs: Vec<PathBuf>,
+        #[command(flatten)]
+        output: OutputArg,
+    },
     /// Add COG categories to an IMG/M COG profile
     Cog {
         /// IMG/M profile with COG ids, annotations and counts
@@ -598,6 +678,588 @@ pub struct OutputArg {
     /// Write the STAMP profile to this file instead of standard output
     #[arg(long, short)]
     pub output: Option<PathBuf>,
+}
+
+/// Options of the heatmaps: the group heatmap (`--plot-type group-heatmap`)
+/// and, for the colours and order, the heatmap of samples.
+#[derive(Args)]
+pub struct HeatmapArgs {
+    /// Group heatmap: what each cell shows, a summary of the feature's relative
+    /// abundance in the group's samples
+    #[arg(long, value_enum, default_value_t = GroupStatisticArg::Mean, value_name = "STATISTIC")]
+    pub heatmap_statistic: GroupStatisticArg,
+    /// Group heatmap, prevalence: a feature counts as present in a sample when
+    /// its relative abundance is above zero and at least this percentage
+    #[arg(long, default_value_t = 0.0, value_name = "PERCENT")]
+    pub heatmap_min_abundance: f64,
+    /// Group heatmap: show only this many features, those of highest mean
+    /// abundance across all samples (0: every feature that passes the filters)
+    #[arg(long, default_value_t = 50, value_name = "N")]
+    pub heatmap_top: usize,
+    /// Group heatmap: scale of the colours
+    #[arg(long, value_enum, default_value_t = ScaleArg::Linear)]
+    pub heatmap_scale: ScaleArg,
+    /// Group heatmap, log10 scale: smallest value shown; smaller (non-zero)
+    /// values take its colour
+    #[arg(long, default_value_t = 0.001, value_name = "VALUE")]
+    pub heatmap_log_floor: f64,
+    /// Group heatmap: draw cells whose value is zero in the colour scale's
+    /// lowest colour instead of grey
+    #[arg(long)]
+    pub heatmap_no_grey_zeros: bool,
+    /// Group heatmap: write each cell's value in it
+    #[arg(long)]
+    pub heatmap_values: bool,
+    /// Group heatmap: format of the values written in the cells
+    #[arg(long, value_enum, default_value_t = NumberFormatArg::Decimals)]
+    pub heatmap_value_format: NumberFormatArg,
+    /// Group heatmap: decimals (or significant digits) of the values in the cells
+    #[arg(long, default_value_t = 1, value_name = "N")]
+    pub heatmap_value_digits: usize,
+    /// Order of the rows (features)
+    #[arg(long, value_enum, default_value_t = RowOrderArg::Cluster)]
+    pub heatmap_row_order: RowOrderArg,
+    /// Order of the columns (groups or samples); category orders groups by
+    /// --heatmap-order-field [default: category with --heatmap-order-field,
+    /// otherwise cluster]
+    #[arg(long, value_enum)]
+    pub heatmap_column_order: Option<ColumnOrderArg>,
+    /// Group heatmap: metadata field whose value (the most common among a
+    /// group's samples) is shown as a coloured strip above each group, and
+    /// orders the groups with --heatmap-column-order category; for example
+    /// Host_order for groups of Host_species
+    #[arg(long, value_name = "FIELD")]
+    pub heatmap_order_field: Option<String>,
+    /// Linkage of the hierarchical clustering
+    #[arg(long, value_enum, default_value_t = LinkageArg::Average)]
+    pub heatmap_linkage: LinkageArg,
+    /// Leave out the dendrograms of clustered rows and columns
+    #[arg(long)]
+    pub heatmap_no_dendrograms: bool,
+    /// Colour scale of the cells
+    #[arg(long, value_enum, value_name = "MAP")]
+    pub heatmap_color_map: Option<ColorMapArg>,
+    /// Group heatmap: width of each cell, in inches; the figure is sized to fit
+    /// its cells unless --heatmap-fixed-size is given
+    #[arg(long, default_value_t = 0.22, value_name = "INCHES")]
+    pub heatmap_cell_width: f64,
+    /// Group heatmap: height of each cell, in inches
+    #[arg(long, default_value_t = 0.16, value_name = "INCHES")]
+    pub heatmap_cell_height: f64,
+    /// Group heatmap: use --plot-width and --plot-height for the figure
+    /// instead of fitting it to its cells
+    #[arg(long)]
+    pub heatmap_fixed_size: bool,
+    /// Group heatmap: also write the value of every cell (features by groups)
+    /// to this tab-separated file
+    #[arg(long, value_name = "FILE")]
+    pub heatmap_table: Option<PathBuf>,
+}
+
+/// Options of the ordination plots (`--plot-type pca`, `pcoa`, `nmds`):
+/// what colours and shapes the samples.
+#[derive(Args)]
+pub struct OrdinationArgs {
+    /// PCA, PCoA and NMDS plots: what colours the samples: group (the groups
+    /// of the analysis), field:NAME (a metadata field; a colour scale if its
+    /// values are numbers, else a colour per value), category:NAME (a colour
+    /// per value even for numbers) or feature:NAME (the relative abundance,
+    /// %, of a feature at the profile level)
+    #[arg(long, default_value = "group", value_name = "SOURCE")]
+    pub color_by: String,
+    /// PCA, PCoA and NMDS plots: categorical metadata field that gives the
+    /// samples their marker shapes [default: the groups]
+    #[arg(long, value_name = "FIELD")]
+    pub shape_by: Option<String>,
+    /// Colouring by a number: linear or logarithmic (log10) colour scale;
+    /// zeros are drawn at half the smallest positive value
+    #[arg(long, value_enum, default_value_t = ColorScaleArg::Linear)]
+    pub color_scale: ColorScaleArg,
+    /// Colouring by a number: the colour map
+    #[arg(long, value_enum, default_value_t = ColorMapArg::Viridis)]
+    pub color_map: ColorMapArg,
+    /// Colouring by a number: which samples are drawn on top
+    #[arg(long, value_enum, default_value_t = DrawOrderArg::HighOnTop)]
+    pub draw_order: DrawOrderArg,
+    /// PCA, PCoA and NMDS plots: area of the markers, in square points
+    #[arg(long, default_value_t = 30.0, value_name = "POINTS")]
+    pub marker_size: f64,
+    /// PCA, PCoA and NMDS plots: opacity of the markers, from 0 to 1
+    #[arg(long, default_value_t = 1.0, value_name = "OPACITY")]
+    pub opacity: f64,
+}
+
+/// Options of the map of sample locations (`--plot-type map`). Markers are
+/// coloured and shaped by --color-by and --shape-by (with --color-scale,
+/// --color-map, --draw-order, --marker-size and --opacity), as in the
+/// ordination plots.
+#[derive(Args)]
+pub struct MapArgs {
+    /// Map: metadata field holding each sample's latitude in decimal degrees
+    /// [default: a field named latitude or lat]
+    #[arg(long, value_name = "FIELD")]
+    pub map_lat_field: Option<String>,
+    /// Map: metadata field holding each sample's longitude in decimal degrees
+    /// [default: a field named longitude, lon, long or lng]
+    #[arg(long, value_name = "FIELD")]
+    pub map_lon_field: Option<String>,
+    /// Map: the area shown: auto (around the samples), world, europe, africa,
+    /// asia, north-america, south-america, oceania, or WEST,EAST,SOUTH,NORTH
+    /// in degrees (e.g. -10,30,35,60)
+    #[arg(
+        long,
+        default_value = "auto",
+        value_name = "EXTENT",
+        allow_hyphen_values = true
+    )]
+    pub map_extent: String,
+    /// Map: projection
+    #[arg(long, value_enum, default_value_t = MapProjectionArg::EqualEarth)]
+    pub map_projection: MapProjectionArg,
+    /// Map: detail of the coastlines and borders: 110m for the world, 50m for
+    /// regions [default: auto, by the width of the area]
+    #[arg(long, value_enum, default_value_t = MapResolutionArg::Auto)]
+    pub map_resolution: MapResolutionArg,
+    /// Map: what sizes the markers: count (samples at the site), fixed,
+    /// field:NAME (a numeric metadata field) or feature:NAME (the relative
+    /// abundance, %, of a feature)
+    #[arg(long, default_value = "count", value_name = "SOURCE")]
+    pub map_size_by: String,
+    /// Map: sizes from the logarithms of the numbers
+    #[arg(long)]
+    pub map_size_log: bool,
+    /// Map: area of the largest markers, in square points (--marker-size is
+    /// that of the smallest)
+    #[arg(long, default_value_t = 400.0, value_name = "POINTS")]
+    pub map_max_marker_size: f64,
+    /// Map: one marker per site for the samples with the same colour and
+    /// shape (the default)
+    #[arg(long, overrides_with = "no_map_aggregate")]
+    pub map_aggregate: bool,
+    /// Map: one marker per sample
+    #[arg(long)]
+    pub no_map_aggregate: bool,
+    /// Map: samples whose coordinates round to the same multiple of this many
+    /// degrees are at the same site [default: about 3 points on the map,
+    /// e.g. 2 degrees for the world]
+    #[arg(long, value_name = "DEGREES")]
+    pub map_site_precision: Option<f64>,
+    /// Map: how the numbers of the samples at a site colour its marker
+    #[arg(long, value_enum, default_value_t = MapSiteValueArg::Mean)]
+    pub map_site_value: MapSiteValueArg,
+    /// Map, one marker per sample: spread the samples at a site around it
+    #[arg(long)]
+    pub map_jitter: bool,
+    /// Map: draw lines of longitude and latitude (the default)
+    #[arg(long, overrides_with = "no_map_graticule")]
+    pub map_graticule: bool,
+    /// Map: no lines of longitude and latitude
+    #[arg(long)]
+    pub no_map_graticule: bool,
+    /// Map: leave the sea white
+    #[arg(long)]
+    pub no_map_ocean: bool,
+    /// Map: no outlines of countries and coasts (the land is still filled)
+    #[arg(long)]
+    pub no_map_borders: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum MapProjectionArg {
+    /// Equal Earth: true areas
+    EqualEarth,
+    Robinson,
+    /// Longitude and latitude as x and y
+    Equirectangular,
+    /// Mercator, to 85° north and south
+    Mercator,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum MapResolutionArg {
+    Auto,
+    #[value(name = "110m")]
+    Low,
+    #[value(name = "50m")]
+    Medium,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum MapSiteValueArg {
+    Mean,
+    #[value(alias = "maximum")]
+    Max,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum ColorScaleArg {
+    Linear,
+    Log10,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum DrawOrderArg {
+    /// Highest values drawn last, on top
+    HighOnTop,
+    /// Lowest values drawn last, on top
+    LowOnTop,
+    /// In the order of the samples
+    SampleOrder,
+}
+
+/// Options of the box plot (`--plot-type box`) and the bar plot of one
+/// feature.
+#[derive(Args)]
+pub struct BoxArgs {
+    /// Box plot without --plot-feature: show the N most significant features
+    #[arg(long, default_value_t = 1, value_name = "N")]
+    pub box_top: usize,
+    /// Box plot of several features: a box per group at each feature, or one
+    /// panel per feature
+    #[arg(long, value_enum, default_value_t = BoxLayoutArg::Grouped)]
+    pub box_layout: BoxLayoutArg,
+    /// Box plot with one panel per feature: give each panel its own value axis
+    #[arg(long)]
+    pub box_independent_axes: bool,
+    /// Box plot: logarithmic (log10) value axis; zeros are drawn on a line
+    /// labelled 0 below a break in the axis
+    #[arg(long)]
+    pub box_log: bool,
+    /// Box plot: draw every sample as a small semi-transparent point
+    #[arg(long)]
+    pub box_points: bool,
+    /// Box plot: write the number of samples after each group's name
+    #[arg(long)]
+    pub box_counts: bool,
+    /// Box plot: horizontal boxes (groups or features down the side)
+    #[arg(long)]
+    pub box_horizontal: bool,
+    /// Box plot: order of the groups [default: field with --box-order-field,
+    /// otherwise given]
+    #[arg(long, value_enum)]
+    pub box_group_order: Option<GroupOrderArg>,
+    /// Box plot: metadata field whose value (the most common among a group's
+    /// samples) orders the groups, for example Host_order for groups of hosts
+    #[arg(long, value_name = "FIELD")]
+    pub box_order_field: Option<String>,
+    /// Bar plot of one feature in every sample: logarithmic (log10) value axis
+    #[arg(long)]
+    pub bar_log: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum BoxLayoutArg {
+    /// Features along the axis, a box per group (coloured) at each
+    Grouped,
+    /// One panel per feature, the groups along the axis of each
+    Panels,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum GroupOrderArg {
+    /// As in the analysis (--group order, or the order in the metadata)
+    Given,
+    Alphabetical,
+    /// Highest median (of the first feature) first
+    Median,
+    /// By --box-order-field, then by name
+    Field,
+}
+
+/// Options of the prevalence-abundance plot (`--plot-type
+/// prevalence-abundance`).
+#[derive(Args)]
+pub struct PrevalenceArgs {
+    /// Prevalence-abundance plot: one panel per group, every group in one
+    /// panel, or each feature once at the group where it is most prevalent
+    #[arg(long, value_enum, default_value_t = PrevalenceViewArg::Panels)]
+    pub prevalence_view: PrevalenceViewArg,
+    /// Prevalence-abundance plot, combined view: show only this group
+    #[arg(long, value_name = "GROUP")]
+    pub prevalence_group: Option<String>,
+    /// Prevalence-abundance plot: a feature counts as present in a sample when
+    /// its relative abundance is above zero and at least this percentage
+    #[arg(long, default_value_t = 0.0, value_name = "PERCENT")]
+    pub prevalence_min_abundance: f64,
+    /// Prevalence-abundance plot: take the mean abundance over all samples of
+    /// the group or only over those where the feature is present
+    #[arg(long, value_enum, default_value_t = MeanOverArg::All)]
+    pub prevalence_mean: MeanOverArg,
+    /// Prevalence-abundance plot, specificity view: colour a feature by its
+    /// group when its prevalence there exceeds its prevalence in every other
+    /// group by at least this many percentage points
+    #[arg(long, default_value_t = 50.0, value_name = "POINTS")]
+    pub prevalence_specificity: f64,
+    /// Prevalence-abundance plot: only the features that pass the filters
+    /// [default: every feature of the profile]
+    #[arg(long)]
+    pub prevalence_only_filtered: bool,
+    /// Prevalence-abundance plot: also write the prevalence and mean
+    /// abundance of every feature in every group to this tab-separated file
+    #[arg(long, value_name = "FILE")]
+    pub prevalence_table: Option<PathBuf>,
+    /// Prevalence-abundance plot: draw this feature in red and name it (may be
+    /// repeated)
+    #[arg(long, value_name = "FEATURE")]
+    pub highlight: Vec<String>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum PrevalenceViewArg {
+    /// One panel per group, on the same axes
+    Panels,
+    /// Every group (or --prevalence-group) in one panel, coloured by group
+    Combined,
+    /// Each feature once, at the group where it is most prevalent, coloured
+    /// by that group if it is specific to it and grey if shared
+    Specificity,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum MeanOverArg {
+    /// Every sample of the group (absent counts as zero)
+    All,
+    /// Only the samples where the feature is present
+    Present,
+}
+
+#[derive(Args)]
+pub struct CoOccurrenceArgs {
+    #[command(flatten)]
+    pub profile: ProfileArgs,
+    /// Metadata file describing the samples; needed for --where, --where-not,
+    /// --exclude-sample and --group
+    #[arg(long, short)]
+    pub metadata: Option<PathBuf>,
+    /// Metadata field that defines the groups, for --group
+    #[arg(long, short)]
+    pub field: Option<String>,
+    /// Correlate only within this group of --field [default: all samples]
+    #[arg(long, value_name = "GROUP")]
+    pub group: Option<String>,
+    /// Sample to leave out (may be repeated)
+    #[arg(long = "exclude-sample", value_name = "SAMPLE")]
+    pub excluded_samples: Vec<String>,
+    #[command(flatten)]
+    pub sample_filter: SampleFilterArgs,
+    /// Measure of correlation
+    #[arg(long, value_enum, default_value_t = CorrelationMethodArg::Spearman)]
+    pub method: CorrelationMethodArg,
+    /// Correlate centred log ratios instead of proportions, which removes the
+    /// bias of proportions that must sum to 100%
+    #[arg(long)]
+    pub clr: bool,
+    /// Number of features correlated, those ranked first by --rank-by
+    #[arg(long, default_value_t = 30, value_name = "N")]
+    pub top: usize,
+    /// How features are ranked for --top
+    #[arg(long, value_enum, default_value_t = RankingArg::MeanAbundance)]
+    pub rank_by: RankingArg,
+    /// Feature to include whatever its rank (may be repeated); with --top 0,
+    /// only these features are correlated
+    #[arg(long = "feature", value_name = "FEATURE")]
+    pub features: Vec<String>,
+    /// Instead of every pair of features, correlate this feature with every
+    /// other feature of the profile; the plot shows the strongest correlations
+    #[arg(long, value_name = "FEATURE")]
+    pub with: Option<String>,
+    /// With --with: number of correlations shown in the plot
+    #[arg(long, default_value_t = 30, value_name = "N")]
+    pub partners: usize,
+    /// Mark correlations with a Benjamini-Hochberg q-value below this level
+    #[arg(long, default_value_t = 0.05, value_name = "Q")]
+    pub q_threshold: f64,
+    /// Mark only correlations at least this far from zero (with a large number
+    /// of samples, weak correlations are significant too)
+    #[arg(long, default_value_t = 0.0, value_name = "R")]
+    pub mark_min_coefficient: f64,
+    /// Do not mark significant correlations in the plot
+    #[arg(long)]
+    pub no_marks: bool,
+    /// Leave out features present in fewer than this percentage of the
+    /// samples (unless named with --feature or --with)
+    #[arg(long, default_value_t = 0.0, value_name = "PERCENT")]
+    pub min_feature_prevalence: f64,
+    /// Write each correlation in its cell of the heatmap
+    #[arg(long)]
+    pub show_values: bool,
+    /// Order of the features in the heatmap
+    #[arg(long, value_enum, default_value_t = CoOrderArg::Cluster)]
+    pub order: CoOrderArg,
+    /// Leave out the dendrograms
+    #[arg(long)]
+    pub no_dendrograms: bool,
+    /// Size of each cell of the heatmap (or height of each bar), in inches;
+    /// the figure is sized to fit unless --fixed-size is given
+    #[arg(long, default_value_t = 0.16, value_name = "INCHES")]
+    pub cell_size: f64,
+    /// Use --plot-width and --plot-height for the figure instead of fitting
+    /// it to its cells
+    #[arg(long)]
+    pub fixed_size: bool,
+    /// Colour scale of the cells, run from +1 (first colour) to -1
+    #[arg(long, value_enum, default_value_t = ColorMapArg::RedToBlue, value_name = "MAP")]
+    pub color_map: ColorMapArg,
+    #[command(flatten)]
+    pub plot: PlotArgs,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum GroupStatisticArg {
+    /// Mean relative abundance (%)
+    Mean,
+    /// Median relative abundance (%)
+    Median,
+    /// Largest relative abundance (%) in any sample of the group
+    Max,
+    /// Percentage of the group's samples in which the feature is present
+    Prevalence,
+}
+
+impl From<GroupStatisticArg> for stamp_core::stats::group_summary::GroupStatistic {
+    fn from(value: GroupStatisticArg) -> Self {
+        use stamp_core::stats::group_summary::GroupStatistic;
+        match value {
+            GroupStatisticArg::Mean => GroupStatistic::Mean,
+            GroupStatisticArg::Median => GroupStatistic::Median,
+            GroupStatisticArg::Max => GroupStatistic::Maximum,
+            GroupStatisticArg::Prevalence => GroupStatistic::Prevalence,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum ScaleArg {
+    Linear,
+    Log10,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum NumberFormatArg {
+    /// A fixed number of decimals
+    Decimals,
+    /// A fixed number of significant digits
+    Significant,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum RowOrderArg {
+    /// Hierarchical clustering (see --heatmap-linkage)
+    Cluster,
+    /// Most abundant first
+    MeanAbundance,
+    Alphabetical,
+    /// As in the profile
+    Original,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum ColumnOrderArg {
+    /// Hierarchical clustering (see --heatmap-linkage)
+    Cluster,
+    /// Group heatmap: by --heatmap-order-field, then by name
+    Category,
+    Alphabetical,
+    /// As in the analysis
+    Original,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum CoOrderArg {
+    /// Hierarchical clustering of the correlations
+    Cluster,
+    /// As chosen: by rank, then the features given with --feature
+    Original,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum RankingArg {
+    MeanAbundance,
+    /// Number of samples in which the feature is present
+    Prevalence,
+}
+
+impl From<RankingArg> for stamp_core::stats::co_occurrence::FeatureRanking {
+    fn from(value: RankingArg) -> Self {
+        use stamp_core::stats::co_occurrence::FeatureRanking;
+        match value {
+            RankingArg::MeanAbundance => FeatureRanking::MeanAbundance,
+            RankingArg::Prevalence => FeatureRanking::Prevalence,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum LinkageArg {
+    /// Mean distance between members (UPGMA)
+    Average,
+    Centroid,
+    /// Distance between the closest members
+    Nearest,
+    /// Distance between the furthest members
+    Furthest,
+    Ward,
+}
+
+impl From<LinkageArg> for stamp_core::stats::cluster::Linkage {
+    fn from(value: LinkageArg) -> Self {
+        use stamp_core::stats::cluster::Linkage;
+        match value {
+            LinkageArg::Average => Linkage::Average,
+            LinkageArg::Centroid => Linkage::Centroid,
+            LinkageArg::Nearest => Linkage::Nearest,
+            LinkageArg::Furthest => Linkage::Furthest,
+            LinkageArg::Ward => Linkage::Ward,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum ColorMapArg {
+    Blues,
+    BlueToRedToGreen,
+    BlueToWhiteToRed,
+    Cividis,
+    CoolToWarm,
+    Grayscale,
+    Jet,
+    Magma,
+    OrangeToRed,
+    Paired,
+    Plasma,
+    PurpleToGreen,
+    Reds,
+    RedToBlue,
+    RedToYellowToBlue,
+    Spectral,
+    Viridis,
+    YellowToOrangeToRed,
+}
+
+impl From<ColorMapArg> for stamp_plot::heatmap::ColorMap {
+    fn from(value: ColorMapArg) -> Self {
+        use stamp_plot::heatmap::ColorMap;
+        match value {
+            ColorMapArg::Blues => ColorMap::Blues,
+            ColorMapArg::BlueToRedToGreen => ColorMap::BlueToRedToGreen,
+            ColorMapArg::BlueToWhiteToRed => ColorMap::BlueToWhiteToRed,
+            ColorMapArg::CoolToWarm => ColorMap::CoolToWarm,
+            ColorMapArg::Grayscale => ColorMap::Grayscale,
+            ColorMapArg::Jet => ColorMap::Jet,
+            ColorMapArg::OrangeToRed => ColorMap::OrangeToRed,
+            ColorMapArg::Paired => ColorMap::Paired,
+            ColorMapArg::PurpleToGreen => ColorMap::PurpleToGreen,
+            ColorMapArg::Reds => ColorMap::Reds,
+            ColorMapArg::RedToBlue => ColorMap::RedToBlue,
+            ColorMapArg::RedToYellowToBlue => ColorMap::RedToYellowToBlue,
+            ColorMapArg::Spectral => ColorMap::Spectral,
+            ColorMapArg::YellowToOrangeToRed => ColorMap::YellowToOrangeToRed,
+            ColorMapArg::Viridis => ColorMap::Viridis,
+            ColorMapArg::Plasma => ColorMap::Plasma,
+            ColorMapArg::Magma => ColorMap::Magma,
+            ColorMapArg::Cividis => ColorMap::Cividis,
+        }
+    }
 }
 
 // ----------------------------------------------------------------- choices

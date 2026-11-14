@@ -351,6 +351,139 @@ fn info_describes_profile_and_metadata() {
 }
 
 #[test]
+fn samples_are_chosen_by_their_metadata() {
+    let info = stdout(&with(
+        "info",
+        &ENTEROTYPES[..4],
+        &["--where", "Nationality=japanese"],
+    ));
+    assert!(
+        info.contains("Sample filter: Nationality = japanese (13 of 39 samples kept)"),
+        "{info}"
+    );
+    assert!(
+        info.contains("Enterotype: Enterotype 1 (6), Enterotype 3 (3), Infant (4)"),
+        "{info}"
+    );
+    assert!(info.contains("Nationality: japanese (13)"), "{info}");
+
+    // The filter gives the same results as leaving out every other sample
+    // by name.
+    let metadata =
+        fs::read_to_string(repo().join("examples/EnterotypesArumugam/Enterotypes.metadata.tsv"))
+            .unwrap();
+    let others: Vec<String> = metadata
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let cells: Vec<&str> = line.split('\t').collect();
+            (!matches!(cells[2], "japanese" | "french")).then(|| cells[0].to_string())
+        })
+        .collect();
+    let mut excluded = with("multi-groups", &ENTEROTYPES, &[]);
+    for sample in &others {
+        excluded.extend(["--exclude-sample", sample.as_str()]);
+    }
+    let output = stamp(&with(
+        "multi-groups",
+        &ENTEROTYPES,
+        &[
+            "--where",
+            "Nationality=japanese",
+            "--where",
+            "Nationality = french",
+        ],
+    ));
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(
+            "Sample filter (Nationality is one of japanese, french): kept 21 of 39 samples."
+        ),
+        "{stderr}"
+    );
+    let filtered = String::from_utf8(output.stdout).unwrap();
+    // Leaving the samples out by name keeps their groups, empty; the filter
+    // drops groups it empties, so compare the tables, not the group lists.
+    assert_eq!(filtered, stdout(&excluded));
+
+    // --where-not leaves samples out; different fields must all match.
+    let table = |extra: &[&str]| Table::parse(&stdout(&with("multi-groups", &ENTEROTYPES, extra)));
+    let not = table(&[
+        "--where-not",
+        "Enterotype=Infant",
+        "--where",
+        "Nationality=japanese",
+    ]);
+    let only = table(&[
+        "--where",
+        "Enterotype=Enterotype 1",
+        "--where",
+        "Enterotype=Enterotype 3",
+        "--where",
+        "Nationality=japanese",
+    ]);
+    assert_eq!(not.rows, only.rows);
+
+    // The two-group and correlation commands take the same options.
+    let two = stdout(&with(
+        "two-groups",
+        &ENTEROTYPES,
+        &[
+            "--group1",
+            "Enterotype 1",
+            "--group2",
+            "Enterotype 3",
+            "--where",
+            "Nationality=japanese",
+        ],
+    ));
+    assert!(Table::parse(&two).rows.len() > 5);
+
+    // Mistakes are reported.
+    let misspelled = failure(&with(
+        "multi-groups",
+        &ENTEROTYPES,
+        &["--where", "Nationality=japan"],
+    ));
+    assert!(
+        misspelled.contains("No sample has the value 'japan' in the metadata field 'Nationality'"),
+        "{misspelled}"
+    );
+    assert!(failure(&with(
+        "multi-groups",
+        &ENTEROTYPES,
+        &["--where", "Natonality=japanese"]
+    ))
+    .contains("Unknown metadata field 'Natonality'"));
+    assert!(failure(&with(
+        "multi-groups",
+        &ENTEROTYPES,
+        &[
+            "--where",
+            "Nationality=japanese",
+            "--where-not",
+            "Nationality=japanese"
+        ]
+    ))
+    .contains("the sample filter leaves no samples"));
+    assert!(failure(&with(
+        "multi-groups",
+        &ENTEROTYPES,
+        &["--where", "Nationality"]
+    ))
+    .contains("FIELD=VALUE"));
+    assert!(failure(&[
+        "info",
+        "--profile",
+        ENTEROTYPES[1],
+        "--where",
+        "Nationality=japanese"
+    ])
+    .contains("need a metadata file"));
+}
+
+#[test]
 fn filters_and_corrections_reduce_the_table() {
     let base = with(
         "two-groups",
@@ -530,6 +663,51 @@ fn convert_and_output_file() {
         "--assign-to-each-code",
     ]);
     assert_eq!(cog.lines().count(), 5);
+}
+
+#[test]
+fn convert_singlem_and_sandpiper_profiles() {
+    let data = "crates/stamp-core/tests/data/singlem";
+    let runs = ["SRR28772463", "ERR4084076"];
+    let files: Vec<String> = runs.iter().map(|r| format!("{data}/{r}.json")).collect();
+    let mut args = vec!["convert", "sandpiper"];
+    args.extend(files.iter().map(String::as_str));
+    let sandpiper = stdout(&args);
+    let header = "Domain\tPhylum\tClass\tOrder\tFamily\tGenus\tSpecies\tSRR28772463\tERR4084076";
+    assert_eq!(sandpiper.lines().next().unwrap(), header);
+    assert!(sandpiper
+        .contains("\tunclassified f__Oscillospiraceae\tunclassified f__Oscillospiraceae\t"));
+
+    let singlem_file = format!("{data}/singlem_condensed.tsv");
+    let singlem = stdout(&["convert", "singlem", &singlem_file]);
+    assert_eq!(singlem.lines().next().unwrap(), header);
+    assert_eq!(singlem.lines().count(), sandpiper.lines().count());
+
+    // The converted profile can be analysed at once.
+    let directory = std::env::temp_dir().join(format!("stamp-cli-singlem-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let target = directory.join("sandpiper.spf");
+    let mut args = vec!["convert", "sandpiper", "--output", target.to_str().unwrap()];
+    args.extend(files.iter().map(String::as_str));
+    stdout(&args);
+    let table = Table::parse(&stdout(&[
+        "two-samples",
+        "--profile",
+        target.to_str().unwrap(),
+        "--sample1",
+        "SRR28772463",
+        "--sample2",
+        "ERR4084076",
+        "--profile-level",
+        "Phylum",
+    ]));
+    assert!(table.rows.len() > 5);
+    fs::remove_dir_all(&directory).unwrap();
+
+    assert!(failure(&["convert", "singlem", "examples/heatmap.spf"])
+        .contains("does not appear to be a SingleM condensed profile"));
+    assert!(failure(&["convert", "sandpiper", "examples/heatmap.spf"])
+        .contains("does not appear to be a Sandpiper condensed profile"));
 }
 
 #[test]
@@ -1436,5 +1614,807 @@ fn plot_font_sizes_can_be_chosen() {
     let mut bad = with("multi-groups", base, &extra);
     bad.extend_from_slice(&["--plot", "x.svg", "--legend-font-size", "0"]);
     assert!(failure(&bad).contains("font sizes"));
+    fs::remove_dir_all(&directory).ok();
+}
+
+const COAL: [&str; 8] = [
+    "--profile",
+    "examples/CoalSeamGas/coal.spf",
+    "--metadata",
+    "examples/CoalSeamGas/coal.metadata.tsv",
+    "--field",
+    "Environment",
+    "--profile-level",
+    "Genus",
+];
+
+#[test]
+fn group_heatmap_summarises_each_group() {
+    let directory =
+        std::env::temp_dir().join(format!("stamp-cli-group-heatmap-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let table_path = directory.join("summary.tsv");
+    let svg = svg_plot(
+        "multi-groups",
+        &COAL,
+        &[
+            "--plot-type",
+            "group-heatmap",
+            "--heatmap-statistic",
+            "prevalence",
+            "--heatmap-top",
+            "12",
+            "--heatmap-order-field",
+            "Core vs. Water",
+            "--heatmap-values",
+            "--heatmap-table",
+            table_path.to_str().unwrap(),
+        ],
+        &directory,
+        "prevalence",
+    );
+    for text in [
+        ">Core (n=8)</text>",
+        ">Produced water (n=15)</text>",
+        ">Prevalence (% of samples)</text>",
+        ">The 12 features of highest mean abundance, of 631</text>",
+    ] {
+        assert!(svg.contains(text), "{text} is not in the plot");
+    }
+    let summary = Table::parse(&fs::read_to_string(&table_path).unwrap());
+    assert_eq!(
+        summary.headings,
+        [
+            "Feature (Prevalence)",
+            "Core",
+            "Deep cutting",
+            "Produced water",
+            "Shallow cutting"
+        ]
+    );
+    assert_eq!(summary.rows.len(), 12);
+    // Prevalences are percentages of a group's samples: multiples of
+    // 100/8 for the eight Core samples.
+    for row in &summary.rows {
+        let core: f64 = row[1].parse().unwrap();
+        let eighths = core / 12.5;
+        assert!((eighths - eighths.round()).abs() < 1e-9, "{core}");
+        for cell in &row[1..] {
+            let value: f64 = cell.parse().unwrap();
+            assert!((0.0..=100.0).contains(&value));
+        }
+    }
+
+    // The sample filter leaves out the produced water; the maximum is at
+    // least the mean.
+    let filtered = |statistic: &str, name: &str| {
+        let path = directory.join(format!("{name}_cells.tsv"));
+        svg_plot(
+            "multi-groups",
+            &COAL,
+            &[
+                "--where",
+                "Core vs. Water=Core",
+                "--plot-type",
+                "group-heatmap",
+                "--heatmap-statistic",
+                statistic,
+                "--heatmap-top",
+                "0",
+                "--heatmap-scale",
+                "log10",
+                "--heatmap-table",
+                path.to_str().unwrap(),
+            ],
+            &directory,
+            name,
+        );
+        Table::parse(&fs::read_to_string(&path).unwrap())
+    };
+    let (max, mean) = (filtered("max", "max"), filtered("mean", "mean"));
+    assert_eq!(max.headings.len(), 4);
+    assert!(!max.headings.iter().any(|h| h == "Produced water"));
+    assert_eq!(max.rows.len(), mean.rows.len());
+    for (a, b) in max.rows.iter().zip(&mean.rows) {
+        assert_eq!(a[0], b[0]);
+        for (x, y) in a[1..].iter().zip(&b[1..]) {
+            assert!(x.parse::<f64>().unwrap() >= y.parse::<f64>().unwrap() - 1e-12);
+        }
+    }
+
+    // Two groups.
+    let svg = svg_plot(
+        "two-groups",
+        &ENTEROTYPES,
+        &[
+            "--group1",
+            "Enterotype 1",
+            "--group2",
+            "Enterotype 3",
+            "--plot-type",
+            "group-heatmap",
+            "--heatmap-statistic",
+            "median",
+        ],
+        &directory,
+        "two_groups",
+    );
+    assert!(svg.contains(">Median proportion (%)</text>"));
+    assert!(svg.contains(">Enterotype 1 (n=8)</text>"));
+
+    // Mistakes are explained.
+    let plot = directory.join("bad.svg");
+    let base = with(
+        "multi-groups",
+        &COAL,
+        &[
+            "--plot",
+            plot.to_str().unwrap(),
+            "--plot-type",
+            "group-heatmap",
+        ],
+    );
+    let mut no_field = base.clone();
+    no_field.extend(["--heatmap-column-order", "category"]);
+    assert!(failure(&no_field).contains("needs --heatmap-order-field"));
+    let mut unknown = base.clone();
+    unknown.extend(["--heatmap-order-field", "Nope"]);
+    assert!(failure(&unknown).contains("unknown metadata field 'Nope'"));
+    fs::remove_dir_all(&directory).unwrap();
+}
+
+#[test]
+fn co_occurrence_correlates_features() {
+    let directory =
+        std::env::temp_dir().join(format!("stamp-cli-co-occurrence-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let base = [
+        "--profile",
+        "examples/CoalSeamGas/coal.spf",
+        "--profile-level",
+        "Genus",
+    ];
+    let svg = svg_plot(
+        "co-occurrence",
+        &base,
+        &["--top", "12", "--clr", "--feature", "g__Methanobacterium"],
+        &directory,
+        "matrix",
+    );
+    assert!(svg.contains(">Spearman rho (centred log ratios)</text>"));
+    assert!(svg.contains(">g__Methanobacterium</text>"));
+    let table = Table::parse(&fs::read_to_string(directory.join("matrix.tsv")).unwrap());
+    assert_eq!(
+        table.headings,
+        [
+            "Feature 1",
+            "Feature 2",
+            "rho",
+            "p-value",
+            "q-value (Benjamini-Hochberg)"
+        ]
+    );
+    // 13 features: 78 pairs, with q-values no smaller than p-values and
+    // sorted by q-value.
+    assert_eq!(table.rows.len(), 78);
+    let q: Vec<f64> = table.rows.iter().map(|r| r[4].parse().unwrap()).collect();
+    assert!(q.windows(2).all(|w| w[0] <= w[1]));
+    for row in &table.rows {
+        let (rho, p, q): (f64, f64, f64) = (
+            row[2].parse().unwrap(),
+            row[3].parse().unwrap(),
+            row[4].parse().unwrap(),
+        );
+        assert!((-1.0..=1.0).contains(&rho) && q >= p);
+    }
+
+    // Pearson on proportions, within one group of samples.
+    let mut args = vec!["co-occurrence"];
+    args.extend_from_slice(&base);
+    args.extend([
+        "--metadata",
+        "examples/CoalSeamGas/coal.metadata.tsv",
+        "--field",
+        "Environment",
+        "--group",
+        "Produced water",
+        "--method",
+        "pearson",
+        "--top",
+        "5",
+    ]);
+    let table = Table::parse(&stdout(&args));
+    assert_eq!(table.headings[2], "r");
+    assert_eq!(table.rows.len(), 10);
+
+    // The correlations of one feature with every other.
+    let svg = svg_plot(
+        "co-occurrence",
+        &base,
+        &["--with", "g__Methanobacterium", "--partners", "8"],
+        &directory,
+        "partners",
+    );
+    assert!(svg.contains(">Correlations with g__Methanobacterium</text>"));
+    let table = Table::parse(&fs::read_to_string(directory.join("partners.tsv")).unwrap());
+    assert!(table.rows.len() > 100);
+    assert!(table.rows.iter().all(|r| r[0] == "g__Methanobacterium"));
+    let strength: Vec<f64> = table
+        .rows
+        .iter()
+        .map(|r| r[2].parse::<f64>().unwrap().abs())
+        .collect();
+    assert!(strength.windows(2).all(|w| w[0] >= w[1]));
+
+    // Mistakes are explained.
+    let mut unknown = vec!["co-occurrence"];
+    unknown.extend_from_slice(&base);
+    unknown.extend(["--feature", "g__Nothing"]);
+    assert!(failure(&unknown).contains("Unknown feature 'g__Nothing'"));
+    let mut no_metadata = vec!["co-occurrence"];
+    no_metadata.extend_from_slice(&base);
+    no_metadata.extend(["--where", "Environment=Core"]);
+    assert!(failure(&no_metadata).contains("need --metadata"));
+    fs::remove_dir_all(&directory).unwrap();
+}
+
+#[test]
+fn box_plots_of_several_features_on_a_logarithmic_axis() {
+    let directory =
+        std::env::temp_dir().join(format!("stamp-cli-multi-box-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let has = |svg: &str, label: &str| svg.contains(&format!(">{label}</text>"));
+    let features = [
+        "--plot-type",
+        "box",
+        "--plot-feature",
+        "g__Methanobacterium",
+        "--plot-feature",
+        "g__Pseudomonas",
+        "--plot-feature",
+        "g__Thauera",
+    ];
+    let mut extra = features.to_vec();
+    extra.extend(["--box-log", "--box-points", "--box-counts"]);
+    let svg = svg_plot("multi-groups", &COAL, &extra, &directory, "grouped");
+    for label in [
+        "g__Methanobacterium",
+        "g__Thauera",
+        "Core (n=8)",
+        "Produced water (n=15)",
+        "0",
+        "0.01",
+        "1",
+    ] {
+        assert!(has(&svg, label), "grouped: no {label:?}");
+    }
+    // A point per sample of each feature: 44 samples, three features.
+    assert!(svg.matches("<circle").count() >= 3 * 44);
+
+    // One panel per feature, groups ordered by another field: the three
+    // core groups before the produced water.
+    extra.extend([
+        "--box-layout",
+        "panels",
+        "--box-order-field",
+        "Core vs. Water",
+        "--box-horizontal",
+    ]);
+    let svg = svg_plot("multi-groups", &COAL, &extra, &directory, "panels");
+    assert_eq!(svg.matches(">Produced water (n=15)</text>").count(), 3);
+    let at = |label: &str| svg.find(&format!(">{label}</text>")).unwrap();
+    assert!(at("Shallow cutting (n=11)") < at("Produced water (n=15)"));
+
+    // The most significant features when none is named; two groups too.
+    let svg = svg_plot(
+        "multi-groups",
+        &COAL,
+        &[
+            "--plot-type",
+            "box",
+            "--box-top",
+            "4",
+            "--box-group-order",
+            "median",
+        ],
+        &directory,
+        "top",
+    );
+    assert!(has(&svg, "g__Thauera"));
+    let two = svg_plot(
+        "two-groups",
+        &ENTEROTYPES,
+        &[
+            "--group1",
+            "Enterotype 1",
+            "--group2",
+            "Enterotype 3",
+            "--plot-type",
+            "box",
+            "--plot-feature",
+            "Prevotella",
+            "--plot-feature",
+            "Bacteroides",
+            "--box-log",
+        ],
+        &directory,
+        "two",
+    );
+    assert!(has(&two, "Prevotella") && has(&two, "Bacteroides") && has(&two, "0.1"));
+
+    // The bar plot of one feature on a logarithmic axis.
+    let bar = svg_plot(
+        "multi-groups",
+        &COAL,
+        &[
+            "--plot-type",
+            "bar",
+            "--plot-feature",
+            "g__Thauera",
+            "--bar-log",
+        ],
+        &directory,
+        "bar",
+    );
+    assert!(has(&bar, "0.01") && has(&bar, "g__Thauera"));
+
+    let mut args = with("multi-groups", &COAL, &features);
+    args.extend(["--plot", "x.svg", "--box-group-order", "field"]);
+    assert!(failure(&args).contains("--box-order-field"));
+    let mut args = with("multi-groups", &COAL, &features);
+    args.extend(["--plot", "x.svg", "--box-order-field", "Nope"]);
+    assert!(failure(&args).contains("unknown metadata field 'Nope'"));
+    let mut args = with(
+        "multi-groups",
+        &COAL,
+        &[
+            "--plot-type",
+            "bar",
+            "--plot-feature",
+            "g__Thauera",
+            "--plot-feature",
+            "g__Pseudomonas",
+        ],
+    );
+    args.extend(["--plot", "x.svg"]);
+    assert!(failure(&args).contains("shows one feature"));
+}
+
+#[test]
+fn prevalence_against_mean_abundance() {
+    let directory =
+        std::env::temp_dir().join(format!("stamp-cli-prevalence-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let table_path = directory.join("prevalence.tsv");
+    let svg = svg_plot(
+        "multi-groups",
+        &COAL,
+        &[
+            "--plot-type",
+            "prevalence-abundance",
+            "--highlight",
+            "g__Methanobacterium",
+            "--prevalence-table",
+            table_path.to_str().unwrap(),
+        ],
+        &directory,
+        "panels",
+    );
+    for text in [
+        ">Core (n=8)</text>",
+        ">Produced water (n=15)</text>",
+        ">Prevalence (% of samples)</text>",
+        ">Mean relative abundance (%)</text>",
+        ">g__Methanobacterium</text>",
+    ] {
+        assert!(svg.contains(text), "{text} is not in the plot");
+    }
+    let table = Table::parse(&fs::read_to_string(&table_path).unwrap());
+    assert_eq!(
+        table.headings,
+        [
+            "Feature",
+            "Group",
+            "Samples",
+            "Samples where present",
+            "Prevalence (%)",
+            "Mean abundance (%)",
+            "Mean abundance where present (%)"
+        ]
+    );
+    // Four groups and all samples for each of the 631 genera.
+    assert_eq!(table.rows.len(), 631 * 5);
+    for row in &table.rows {
+        let samples: f64 = row[2].parse().unwrap();
+        let present: f64 = row[3].parse().unwrap();
+        let prevalence: f64 = row[4].parse().unwrap();
+        assert!((prevalence - 100.0 * present / samples).abs() < 1e-9);
+        if present > 0.0 {
+            let all: f64 = row[5].parse().unwrap();
+            let where_present: f64 = row[6].parse().unwrap();
+            assert!((where_present * present - all * samples).abs() < 1e-6 * samples.max(1.0));
+        }
+    }
+    let water = table
+        .rows
+        .iter()
+        .find(|r| r[0] == "g__Methanobacterium" && r[1] == "Produced water")
+        .unwrap();
+    assert_eq!(water[2], "15");
+
+    // The other views, the mean where present and the sample filter.
+    let svg = svg_plot(
+        "multi-groups",
+        &COAL,
+        &[
+            "--where-not",
+            "Environment=Core",
+            "--plot-type",
+            "prevalence-abundance",
+            "--prevalence-view",
+            "specificity",
+            "--prevalence-mean",
+            "present",
+            "--prevalence-min-abundance",
+            "0.1",
+        ],
+        &directory,
+        "specificity",
+    );
+    assert!(
+        svg.contains(">Shared (specificity &lt; 50)</text>")
+            || svg.contains(">Shared (specificity < 50)</text>")
+    );
+    assert!(svg.contains(">Mean relative abundance where present (%)</text>"));
+    assert!(svg.contains("0.1%)</text>"));
+    let svg = svg_plot(
+        "two-groups",
+        &COAL,
+        &[
+            "--group1",
+            "Core",
+            "--plot-type",
+            "prevalence-abundance",
+            "--prevalence-view",
+            "combined",
+            "--prevalence-group",
+            "Core",
+        ],
+        &directory,
+        "combined",
+    );
+    assert!(svg.contains(">Core (n=8)</text>"));
+
+    let mut args = with(
+        "multi-groups",
+        &COAL,
+        &[
+            "--plot-type",
+            "prevalence-abundance",
+            "--highlight",
+            "g__Nothing",
+        ],
+    );
+    args.extend(["--plot", "x.svg"]);
+    assert!(failure(&args).contains("unknown feature 'g__Nothing'"));
+    let mut args = with(
+        "multi-groups",
+        &COAL,
+        &[
+            "--plot-type",
+            "prevalence-abundance",
+            "--prevalence-group",
+            "Ocean",
+        ],
+    );
+    args.extend(["--plot", "x.svg"]);
+    assert!(failure(&args).contains("not a group of the analysis"));
+}
+
+/// The PCA, PCoA and NMDS plots coloured by a number, a category or a
+/// feature's abundance, and shaped by another field.
+#[test]
+fn ordinations_are_coloured_and_shaped_by_other_fields() {
+    let directory =
+        std::env::temp_dir().join(format!("stamp-cli-ordination-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let has = |svg: &str, label: &str| svg.contains(&format!(">{label}</text>"));
+    // The coal metadata with a number for every sample but the first.
+    let text = fs::read_to_string(repo().join("examples/CoalSeamGas/coal.metadata.tsv")).unwrap();
+    let mut metadata = String::new();
+    for (i, line) in text.lines().filter(|l| !l.trim().is_empty()).enumerate() {
+        let depth = match i {
+            0 => "Depth".to_string(),
+            1 => "NA".to_string(),
+            _ => format!("{}", 100 + 13 * i),
+        };
+        metadata.push_str(&format!("{line}\t{depth}\n"));
+    }
+    let metadata_path = directory.join("coal.metadata.tsv");
+    fs::write(&metadata_path, metadata).unwrap();
+    let coal = [
+        "--profile",
+        "examples/CoalSeamGas/coal.spf",
+        "--metadata",
+        metadata_path.to_str().unwrap(),
+        "--field",
+        "Environment",
+        "--profile-level",
+        "Phylum",
+    ];
+
+    let pca = svg_plot(
+        "multi-groups",
+        &coal,
+        &[
+            "--plot-type",
+            "pca",
+            "--color-by",
+            "field:Depth",
+            "--shape-by",
+            "Company",
+            "--color-map",
+            "magma",
+        ],
+        &directory,
+        "pca-depth",
+    );
+    assert!(has(&pca, "Depth") && has(&pca, "No value (1)") && has(&pca, "Company"));
+
+    let pcoa = svg_plot(
+        "multi-groups",
+        &coal,
+        &[
+            "--plot-type",
+            "pcoa",
+            "--color-by",
+            "feature:p__Proteobacteria",
+            "--color-scale",
+            "log10",
+            "--opacity",
+            "0.7",
+            "--draw-order",
+            "low-on-top",
+        ],
+        &directory,
+        "pcoa-feature",
+    );
+    assert!(has(&pcoa, "p__Proteobacteria (%)") && has(&pcoa, "Logarithmic scale"));
+    assert!(has(
+        &pcoa,
+        "The tests compare the groups of Environment, not the colours"
+    ));
+    // The groups keep their shapes, listed under the group field.
+    assert!(has(&pcoa, "Environment"));
+
+    let nmds = svg_plot(
+        "two-groups",
+        &[
+            "--profile",
+            "examples/CoalSeamGas/coal.spf",
+            "--metadata",
+            metadata_path.to_str().unwrap(),
+            "--field",
+            "Core vs. Water",
+            "--group1",
+            "Core",
+        ],
+        &["--plot-type", "nmds", "--color-by", "category:Company"],
+        &directory,
+        "nmds-company",
+    );
+    assert!(has(&nmds, "Company") && nmds.contains(">CP ("));
+
+    // Mistakes are reported.
+    let refused = directory.join("refused.svg");
+    for (extra, message) in [
+        (["--color-by", "Depth"], "expected group, field:NAME"),
+        (
+            ["--color-by", "field:Nothing"],
+            "unknown metadata field 'Nothing'",
+        ),
+        (
+            ["--shape-by", "Nothing"],
+            "unknown metadata field 'Nothing'",
+        ),
+        (
+            ["--color-by", "feature:Nothing"],
+            "unknown feature 'Nothing'",
+        ),
+        (["--opacity", "2"], "--opacity"),
+    ] {
+        let mut args = with("multi-groups", &coal, &["--plot-type", "pca"]);
+        args.extend_from_slice(&extra);
+        args.extend_from_slice(&["--plot", refused.to_str().unwrap()]);
+        let text = failure(&args);
+        assert!(text.contains(message), "{text}");
+        assert!(!refused.exists());
+    }
+    fs::remove_dir_all(&directory).ok();
+}
+
+/// Progress is drawn on standard error only when it is a terminal (here it
+/// is a pipe, as in scripts, logs and tests), never with --quiet, and when
+/// forced (for this test) it is drawn over one line and cleared.
+#[test]
+fn progress_is_shown_only_on_a_terminal() {
+    let dir = std::env::temp_dir().join(format!("stamp-progress-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let plot = dir.join("pcoa.svg");
+    let table = dir.join("table.tsv");
+    let args = [
+        "multi-groups",
+        "-p",
+        "examples/CoalSeamGas/coal.spf",
+        "-m",
+        "examples/CoalSeamGas/coal.metadata.tsv",
+        "-f",
+        "Environment",
+        "--profile-level",
+        "Phylum",
+        "--plot",
+        plot.to_str().unwrap(),
+        "--plot-type",
+        "pcoa",
+        "-o",
+        table.to_str().unwrap(),
+    ];
+    let run = |force: bool, quiet: bool| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_stamp-cli"));
+        command.args(args).current_dir(repo());
+        if quiet {
+            command.arg("--quiet");
+        }
+        if force {
+            command.env("STAMP_FORCE_PROGRESS", "1");
+        } else {
+            command.env_remove("STAMP_FORCE_PROGRESS");
+        }
+        let output = command.output().expect("stamp-cli runs");
+        assert!(output.status.success());
+        (
+            String::from_utf8(output.stderr).unwrap(),
+            fs::read(&table).unwrap(),
+        )
+    };
+    let (plain, plain_table) = run(false, false);
+    assert!(!plain.contains('\r'), "{plain:?}");
+    assert!(!plain.contains('\x1b'), "{plain:?}");
+    assert!(plain.contains("PERMANOVA: pseudo-F"), "{plain:?}");
+
+    let (forced, forced_table) = run(true, false);
+    assert!(forced.contains("\r\x1b[2K"), "{forced:?}");
+    assert!(forced.contains("Reading examples/CoalSeamGas/coal.spf..."));
+    assert!(forced.contains("Writing the results table"));
+    // The report is the same, once the progress is taken out, and so is
+    // the table.
+    let cleaned: String = forced
+        .split('\n')
+        .map(|line| line.rsplit("\r\x1b[2K").next().unwrap_or(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(cleaned, plain);
+    assert_eq!(forced_table, plain_table);
+
+    let (quiet, _) = run(true, true);
+    assert_eq!(quiet, plain);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+const ENTEROTYPES_LOCATIONS: [&str; 6] = [
+    "--profile",
+    "examples/EnterotypesArumugam/Enterotypes.profile.spf",
+    "--metadata",
+    "examples/EnterotypesArumugam/Enterotypes.metadata.locations.tsv",
+    "--field",
+    "Enterotype",
+];
+
+#[test]
+fn samples_are_drawn_on_a_map() {
+    let directory = std::env::temp_dir().join(format!("stamp-cli-map-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let svg = svg_plot(
+        "multi-groups",
+        &ENTEROTYPES_LOCATIONS,
+        &[
+            "--plot-type",
+            "map",
+            "--color-by",
+            "feature:Bacteroides",
+            "--color-scale",
+            "log10",
+        ],
+        &directory,
+        "world",
+    );
+    assert!(svg.contains(">39 samples at 7 sites (within 2°)</text>"));
+    assert!(svg.contains(">Bacteroides (%), mean at site</text>"));
+    assert!(svg.contains(">Samples at site</text>"));
+    // The land, filled.
+    assert!(svg.matches("<path d=").count() > 100);
+
+    let svg = svg_plot(
+        "two-groups",
+        &ENTEROTYPES_LOCATIONS,
+        &[
+            "--group1",
+            "Enterotype 1",
+            "--plot-type",
+            "map",
+            "--map-extent",
+            "europe",
+            "--map-projection",
+            "robinson",
+            "--map-resolution",
+            "50m",
+            "--no-map-aggregate",
+            "--map-jitter",
+            "--map-size-by",
+            "fixed",
+            "--shape-by",
+            "Gender",
+        ],
+        &directory,
+        "europe",
+    );
+    assert!(svg.contains("outside the area shown</text>"), "{svg}");
+    assert!(svg.contains(">10°E</text>") && svg.contains(">50°N</text>"));
+    assert!(svg.contains(">Gender</text>"));
+    assert!(!svg.contains("Samples at site"));
+
+    // A custom area, and the correlation analysis (sized by a number).
+    let svg = svg_plot(
+        "correlation",
+        &[
+            "--profile",
+            "examples/EnterotypesArumugam/Enterotypes.profile.spf",
+            "--metadata",
+            "examples/EnterotypesArumugam/Enterotypes.metadata.locations.tsv",
+            "--field",
+            "Latitude",
+        ],
+        &[
+            "--plot-type",
+            "map",
+            "--map-extent",
+            "-130,20,20,60",
+            "--map-projection",
+            "mercator",
+            "--map-size-by",
+            "field:Longitude",
+            "--group-field",
+            "Nationality",
+            "--no-map-graticule",
+            "--no-map-ocean",
+        ],
+        &directory,
+        "custom",
+    );
+    assert!(svg.contains(">Nationality</text>"));
+    assert!(svg.contains(">Longitude, mean at site</text>"));
+    assert!(!svg.contains("°W</text>"));
+
+    // Mistakes are explained.
+    let base = with(
+        "multi-groups",
+        &ENTEROTYPES_LOCATIONS,
+        &["--plot", "x.svg", "--plot-type", "map"],
+    );
+    let mut args = base.clone();
+    args.extend(["--map-extent", "mars"]);
+    assert!(failure(&args).contains("--map-extent 'mars'"));
+    let mut args = base.clone();
+    args.extend(["--map-lat-field", "Nope"]);
+    assert!(failure(&args).contains("unknown metadata field 'Nope'"));
+    let mut args = base;
+    args.extend(["--map-size-by", "field:Gender"]);
+    assert!(failure(&args).contains("does not hold numbers"));
+    let message = failure(&with(
+        "multi-groups",
+        &ENTEROTYPES,
+        &["--plot", "x.svg", "--plot-type", "map"],
+    ));
+    assert!(message.contains("no latitude field"), "{message}");
     fs::remove_dir_all(&directory).ok();
 }

@@ -149,6 +149,20 @@ pub fn to_svg(figure: &Figure) -> String {
                     stroke_attr(stroke.as_ref())
                 );
             }
+            Shape::Area { rings, fill, .. } => {
+                let mut d = String::new();
+                for ring in rings {
+                    for (i, (x, y)) in ring.iter().enumerate() {
+                        let _ = write!(d, "{}{},{}", if i == 0 { "M" } else { "L" }, n(*x), n(*y));
+                    }
+                    d.push('Z');
+                }
+                let _ = writeln!(
+                    out,
+                    "<path d=\"{d}\" fill-rule=\"evenodd\"{}/>",
+                    fill_attr(Some(*fill))
+                );
+            }
             Shape::Text { x, y, text, style } => {
                 let anchor = match style.h_align {
                     HAlign::Left => "start",
@@ -210,7 +224,12 @@ mod tests {
             TextStyle::new(8.0).align(HAlign::Right, VAlign::Baseline),
         );
         figure.text(90.0, 25.0, "p-value", TextStyle::new(8.0).rotated(90.0));
+        figure.area(
+            vec![vec![(0.0, 0.0), (4.0, 0.0), (4.0, 4.0)]],
+            Color::rgb(0, 0, 255),
+        );
         let svg = to_svg(&figure);
+        assert!(svg.contains("<path d=\"M0,0L4,0L4,4Z\" fill-rule=\"evenodd\" fill=\"#0000ff\"/>"));
 
         assert!(svg.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100pt\" height=\"50pt\" viewBox=\"0 0 100 50\""));
         assert!(svg.contains("<polyline points=\"0,0 10,5.5\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1\" stroke-dasharray=\"4 2\"/>"));

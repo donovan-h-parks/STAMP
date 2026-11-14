@@ -48,15 +48,19 @@ impl Harness {
         harness
     }
 
-    /// Run frames until the analysis of the current mode has finished.
+    /// Run frames until the analysis of the current mode, and the plot,
+    /// have finished.
     fn settle(&mut self) {
         for _ in 0..2000 {
             let app = &mut self.app;
             self.renderer.run(2, |ui| app.draw(ui));
-            if !self.app.session.is_running(self.app.mode) {
+            if !self.app.is_busy() {
+                // A finished analysis may start computing a slow plot.
                 let app = &mut self.app;
                 self.renderer.run(3, |ui| app.draw(ui));
-                return;
+                if !self.app.is_busy() {
+                    return;
+                }
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
@@ -143,6 +147,18 @@ fn every_plot_of_every_mode_renders() {
                     matches!(&figure.shapes[0], stamp_plot::Shape::Text { text, .. }
                         if text.contains("holds a number")),
                     "{kind:?}: {:?}",
+                    figure.shapes.first()
+                );
+                continue;
+            }
+            if kind == PlotKind::Map {
+                // The example metadata has no coordinates; the plot says
+                // so (`samples_are_placed_on_a_map` uses some).
+                let figure = harness.app.figure();
+                assert!(
+                    matches!(&figure.shapes[0], stamp_plot::Shape::Text { text, .. }
+                        if text.contains("latitude or longitude")),
+                    "{mode:?}: {:?}",
                     figure.shapes.first()
                 );
                 continue;
@@ -265,10 +281,10 @@ fn built_in_example_and_opened_files_are_loaded() {
         name: name.to_string(),
         bytes: text.as_bytes().to_vec(),
     };
-    harness.app.deliver(Event::Profile(file(
+    harness.app.deliver(Event::Profile(vec![file(
         "small.spf",
         "F\tA\tB\nx\t1\t2\ny\t3\t4\n",
-    )));
+    )]));
     harness.settle();
     assert_eq!(harness.app.session.profile_name, "small.spf");
     assert!(harness.app.session.metadata.is_none());
@@ -982,6 +998,143 @@ fn mothur_files_open_from_load_profile() {
     ));
     assert_eq!(harness.app.pending_profile(), None);
     assert_eq!(harness.app.session.tree.as_ref().unwrap().num_samples(), 39);
+}
+
+#[test]
+fn singlem_and_sandpiper_profiles_open_from_load_profile() {
+    let data = "../stamp-core/tests/data/singlem";
+    let ranks = [
+        "Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species",
+    ];
+
+    // Several Sandpiper files chosen together make one profile.
+    let mut harness = Harness::new();
+    let runs = ["SRR28772463", "ERR4084076", "SRR28771658"];
+    let files = runs
+        .iter()
+        .map(|run| opened(&format!("{data}/{run}.json")))
+        .collect();
+    harness.app.deliver(Event::Profile(files));
+    harness.settle();
+    assert_eq!(harness.app.notice(), None);
+    let tree = harness
+        .app
+        .session
+        .tree
+        .as_ref()
+        .expect("the profile loaded");
+    assert_eq!(tree.hierarchy_headings(), ranks);
+    assert_eq!(tree.sample_names(), runs);
+
+    // A SingleM condensed profile holds several samples in one file.
+    let mut harness = Harness::new();
+    harness
+        .app
+        .open_profile_file(opened(&format!("{data}/singlem_condensed.tsv")));
+    assert_eq!(harness.app.pending_profile(), None);
+    assert_eq!(harness.app.notice(), None);
+    let tree = harness
+        .app
+        .session
+        .tree
+        .as_ref()
+        .expect("the profile loaded");
+    assert_eq!(tree.hierarchy_headings(), ranks);
+    assert_eq!(tree.sample_names(), ["SRR28772463", "ERR4084076"]);
+
+    // One Sandpiper file is a single sample, which is not enough; mixing
+    // formats is refused.
+    let mut harness = Harness::new();
+    harness
+        .app
+        .open_profile_file(opened(&format!("{data}/SRR28772463.json")));
+    assert!(harness
+        .app
+        .notice()
+        .unwrap()
+        .contains("choose the files of all samples"));
+    harness.app.deliver(Event::Profile(vec![
+        opened(&format!("{data}/SRR28772463.json")),
+        opened(&format!("{data}/singlem_condensed.tsv")),
+    ]));
+    harness.settle();
+    assert!(harness
+        .app
+        .notice()
+        .unwrap()
+        .contains("only if they are Sandpiper profiles"));
+    assert!(harness.app.session.tree.is_none());
+}
+
+#[test]
+fn the_sample_filter_restricts_analyses_and_plots() {
+    let mut harness = Harness::enterotypes();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.settle();
+    let before = harness
+        .app
+        .session
+        .multi
+        .output
+        .as_ref()
+        .unwrap()
+        .0
+        .group_names
+        .clone();
+    assert!(before.len() >= 3);
+
+    let japanese = ["japanese".to_string()];
+    harness
+        .app
+        .set_sample_filter(Some(("Nationality", &japanese)));
+    harness.settle();
+    harness.screenshot("sample_filter");
+    assert_eq!(harness.app.notice(), None);
+    let metadata = harness.app.session.metadata.as_ref().unwrap();
+    assert_eq!(metadata.num_selected(), 13);
+    assert_eq!(metadata.active_samples().len(), 13);
+    let (profile, _) = harness.app.session.multi.output.as_ref().unwrap();
+    assert_eq!(
+        profile.group_names,
+        ["Enterotype 1", "Enterotype 3", "Infant"]
+    );
+    assert_eq!(profile.profile.sample_names.len(), 13);
+    // The two-sample lists offer only the samples kept.
+    harness.app.set_mode(Mode::TwoSamples);
+    harness.settle();
+    let s1 = harness.app.session.samples.sample1.clone();
+    assert_eq!(
+        harness
+            .app
+            .session
+            .metadata
+            .as_ref()
+            .unwrap()
+            .value(&s1, "Nationality"),
+        Some("japanese")
+    );
+
+    // A misspelled field is reported; clearing the filter returns every
+    // sample, and new metadata starts without one.
+    harness.app.set_sample_filter(Some(("Nope", &japanese)));
+    assert!(harness
+        .app
+        .notice()
+        .unwrap()
+        .contains("Unknown metadata field"));
+    harness.app.set_sample_filter(None);
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.settle();
+    let (profile, _) = harness.app.session.multi.output.as_ref().unwrap();
+    assert_eq!(profile.group_names, before);
+    harness
+        .app
+        .set_sample_filter(Some(("Nationality", &japanese)));
+    harness.app.load_metadata(
+        "Enterotypes.metadata.tsv",
+        &example("EnterotypesArumugam/Enterotypes.metadata.tsv"),
+    );
+    assert_eq!(harness.app.session.sample_filter(), None);
 }
 
 #[test]
@@ -2275,4 +2428,822 @@ fn plot_text_is_placed_by_its_own_font() {
             "{font:?}: capitals centred at {middle}, not at 60"
         );
     }
+}
+
+#[test]
+fn group_heatmap_summarises_groups() {
+    use stamp_core::stats::group_summary::GroupStatistic;
+    use stamp_plot::group_heatmap::{ColumnOrder, Scale};
+    let mut harness = Harness::new();
+    harness
+        .app
+        .load_example_data(stamp_gui::app::Example::CoalSeamGas);
+    harness.app.set_p_value_filter(None);
+    harness.app.session.profile_level = "Genus".to_string();
+    harness.app.session.set_group_field("Environment");
+    harness.app.session.invalidate_all();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::GroupHeatmap);
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    // A column per group, named with its number of samples.
+    for group in ["Core (n=8)", "Deep cutting (n=10)", "Produced water (n=15)"] {
+        assert!(
+            shown.contains(&group.to_string()),
+            "{group} not in {shown:?}"
+        );
+    }
+    assert!(shown.contains(&"Mean proportion (%)".to_string()));
+    assert!(shown
+        .iter()
+        .any(|t| t.starts_with("The 50 features of highest mean abundance, of")));
+
+    // Prevalence on a log scale, groups ordered by a coarser field.
+    let mut settings = harness.app.plot_settings().clone();
+    settings.group_heatmap_summary.statistic = GroupStatistic::Prevalence;
+    settings.group_heatmap_summary.max_features = Some(20);
+    settings.group_heatmap.scale = Scale::Log10;
+    settings.group_heatmap.column_order = ColumnOrder::Category;
+    settings.group_heatmap.show_values = true;
+    settings.group_heatmap_category_field = Some("Core vs. Water".to_string());
+    harness.app.set_plot_settings(settings.clone());
+    harness.app.show_plot_config(true);
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    assert!(shown.contains(&"Prevalence (% of samples) (log scale)".to_string()));
+    assert!(shown.contains(&"Core".to_string()));
+    // Columns by category: the three Core groups, then Produced water.
+    let x_of = |name: &str| {
+        harness
+            .app
+            .figure()
+            .shapes
+            .iter()
+            .find_map(|s| match s {
+                stamp_plot::Shape::Text { text, x, .. } if text.starts_with(name) => Some(*x),
+                _ => None,
+            })
+            .unwrap()
+    };
+    assert!(x_of("Shallow cutting") < x_of("Produced water"));
+    assert!(x_of("Core (n=") < x_of("Deep cutting"));
+    harness.screenshot("group_heatmap_settings");
+
+    // The sample filter reaches the summaries.
+    let water = ["Produced water".to_string()];
+    harness
+        .app
+        .set_sample_filter(Some(("Core vs. Water", &["Core".to_string()])));
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    assert!(!shown.iter().any(|t| t.starts_with("Produced water (n=")));
+    assert!(shown.contains(&"Core (n=8)".to_string()));
+    harness
+        .app
+        .set_sample_filter(Some(("Core vs. Water", &water)));
+    harness.settle();
+    assert!(figure_texts(&harness.app)
+        .iter()
+        .any(|t| t.contains("at least two groups") || t.starts_with("Produced water (n=15)")));
+    harness.app.set_sample_filter(None);
+
+    // Two groups.
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.app.set_plot_kind(PlotKind::GroupHeatmap);
+    harness.settle();
+    assert!(harness.app.figure().regions.len() >= 2);
+}
+
+#[test]
+fn co_occurrence_heatmap_and_one_feature() {
+    use stamp_plot::co_occurrence_plot::View;
+    let mut harness = Harness::new();
+    harness
+        .app
+        .load_example_data(stamp_gui::app::Example::CoalSeamGas);
+    harness.app.set_p_value_filter(None);
+    harness.app.session.profile_level = "Genus".to_string();
+    harness.app.session.set_group_field("Environment");
+    harness.app.session.invalidate_all();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::CoOccurrence);
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    assert!(shown.contains(&"Spearman rho (proportions)".to_string()));
+    assert!(shown
+        .iter()
+        .any(|t| t.starts_with("44 samples; 30 features of highest mean abundance")));
+    // 30 x 30 cells less the diagonal, each with a tooltip.
+    assert_eq!(harness.app.figure().regions.len(), 30 * 29);
+
+    let mut settings = harness.app.plot_settings().clone();
+    settings.co_occurrence.clr = true;
+    settings.co_occurrence.top = 10;
+    settings.co_occurrence_features = "g__Methanobacterium\n\n".to_string();
+    settings.co_occurrence_group = Some("Produced water".to_string());
+    harness.app.set_plot_settings(settings.clone());
+    harness.app.show_plot_config(true);
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    assert!(shown.contains(&"Spearman rho (centred log ratios)".to_string()));
+    assert!(
+        shown
+            .iter()
+            .any(|t| t.starts_with("15 samples; 10 features")),
+        "{shown:?}"
+    );
+    assert!(shown.contains(&"g__Methanobacterium".to_string()));
+    harness.screenshot("co_occurrence_settings");
+
+    // A misspelt feature is reported in the plot.
+    settings.co_occurrence_features = "g__Nothing".to_string();
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    assert!(figure_texts(&harness.app).contains(&"Unknown feature 'g__Nothing'".to_string()));
+
+    // The selected feature against every other.
+    settings.co_occurrence_features.clear();
+    settings.co_occurrence.view = View::OneFeature;
+    harness.app.set_plot_settings(settings);
+    harness.app.show_plot_config(false);
+    harness.app.select_feature("g__Methanobacterium");
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    assert!(shown.contains(&"Correlations with g__Methanobacterium".to_string()));
+    harness.screenshot("co_occurrence_one_feature");
+
+    // Correlation analyses offer it too.
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.set_mode(Mode::Correlation);
+    harness.app.set_plot_kind(PlotKind::CoOccurrence);
+    harness.settle();
+    assert!(figure_texts(&harness.app)
+        .iter()
+        .any(|t| t.starts_with("Spearman rho")));
+}
+
+/// The settings of the group and co-occurrence heatmaps, drawn on their
+/// own so that they can be looked at.
+#[test]
+fn heatmap_settings_dialogs() {
+    use stamp_gui::plot_config::{show, Context};
+    use stamp_gui::plots::PlotSettings;
+    let context = Context {
+        fields: vec!["Host_species".into(), "Host_order".into()],
+        groups: vec!["Horse".into(), "Tapir".into()],
+        ..Context::default()
+    };
+    for (kind, name, height) in [
+        (PlotKind::GroupHeatmap, "dialog_group_heatmap", 1150.0),
+        (PlotKind::CoOccurrence, "dialog_co_occurrence", 1050.0),
+    ] {
+        let mut renderer = Renderer::new(420.0, height, 1.0);
+        let mut settings = PlotSettings::default();
+        let image = renderer.render(|ui| {
+            egui::Frame::window(ui.style()).show(ui, |ui| {
+                show(ui, Mode::MultipleGroups, kind, &mut settings, &context);
+            });
+        });
+        assert!(ink(&image, 0, 0, 420, 600) > 0.05);
+        if let Ok(directory) = std::env::var("STAMP_SCREENSHOTS") {
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(
+                PathBuf::from(directory).join(format!("{name}.png")),
+                image.to_png(),
+            )
+            .unwrap();
+        }
+    }
+}
+
+#[test]
+fn box_plot_of_several_features_and_the_prevalence_plot() {
+    use stamp_gui::plots::BoxFeatures;
+    use stamp_plot::feature_plots::{BoxLayout, GroupOrder};
+    let texts = |figure: &stamp_plot::Figure| -> Vec<String> {
+        figure
+            .shapes
+            .iter()
+            .filter_map(|s| match s {
+                stamp_plot::Shape::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let mut harness = Harness::enterotypes();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::Box);
+    harness.settle();
+    // Phyla, the profile level of these tests.
+    harness.app.select_feature("Bacteroidetes");
+    harness.settle();
+    // One box per group (the three enterotypes and the unclassified).
+    let groups = harness.app.figure().regions.len();
+    assert!(groups >= 3);
+
+    // Ctrl+click adds features to the list the box plot then shows, and a
+    // second time removes them.
+    harness.app.toggle_box_feature("Bacteroidetes");
+    harness.app.toggle_box_feature("Firmicutes");
+    harness.app.toggle_box_feature("Proteobacteria");
+    harness.settle();
+    assert_eq!(
+        harness.app.plot_settings().box_features,
+        BoxFeatures::Listed
+    );
+    assert_eq!(harness.app.figure().regions.len(), 3 * groups);
+    harness.app.toggle_box_feature("Proteobacteria");
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), 2 * groups);
+    assert_eq!(
+        harness.app.plot_settings().box_feature_list,
+        "Bacteroidetes\nFirmicutes"
+    );
+
+    // Log axis, points, counts, panels, ordered by a field.
+    let mut settings = harness.app.plot_settings().clone();
+    settings.box_plot.log_scale = true;
+    settings.box_plot.show_points = true;
+    settings.box_plot.show_counts = true;
+    settings.box_plot.layout = BoxLayout::Panels;
+    settings.box_plot.group_order = GroupOrder::Category;
+    settings.box_category_field = Some("Enterotype".into());
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    let figure = harness.app.figure().clone();
+    assert_eq!(figure.regions.len(), 2 * groups);
+    let shown = texts(&figure);
+    assert!(shown.iter().any(|t| t == "0.1"), "{shown:?}");
+    assert!(shown.iter().any(|t| t.starts_with("Enterotype 1 (n=")));
+    assert!(figure
+        .shapes
+        .iter()
+        .any(|s| matches!(s, stamp_plot::Shape::Circle { stroke: None, .. })));
+    harness.screenshot("box_plot_several_features");
+
+    // The most significant features.
+    let mut settings = harness.app.plot_settings().clone();
+    settings.box_features = BoxFeatures::MostSignificant;
+    settings.box_feature_count = 4;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), 4 * groups);
+
+    // Prevalence against mean abundance: a panel per group, the selected
+    // feature highlighted and named.
+    harness.app.set_plot_kind(PlotKind::PrevalenceAbundance);
+    harness.settle();
+    let figure = harness.app.figure().clone();
+    assert!(!figure.regions.is_empty());
+    let shown = texts(&figure);
+    assert!(shown.iter().any(|t| t == "Bacteroidetes"), "{shown:?}");
+    assert!(shown.iter().any(|t| t == "Mean relative abundance (%)"));
+    assert!(figure
+        .regions
+        .iter()
+        .any(|r| r.item == "Bacteroidetes" && r.tooltip.contains("present in")));
+    harness.screenshot("prevalence_abundance");
+    let mut settings = harness.app.plot_settings().clone();
+    settings.prevalence.view = stamp_plot::prevalence_plot::View::Specificity;
+    settings.prevalence_highlight_selected = false;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    let shown = texts(harness.app.figure());
+    assert!(!shown.iter().any(|t| t == "Bacteroidetes"));
+    assert!(shown.iter().any(|t| t.starts_with("Shared (specificity")));
+
+    // Two groups too.
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.app.set_plot_kind(PlotKind::PrevalenceAbundance);
+    harness.settle();
+    assert!(!harness.app.figure().regions.is_empty());
+}
+
+#[test]
+fn box_and_prevalence_settings_dialogs() {
+    use stamp_gui::plot_config::{show, Context};
+    use stamp_gui::plots::{BoxFeatures, PlotSettings};
+    let context = Context {
+        fields: vec!["Host_group".into(), "Host_order".into()],
+        groups: vec!["Horse".into(), "Tapir".into()],
+        ..Context::default()
+    };
+    for (kind, name, height) in [
+        (PlotKind::Box, "dialog_box_plot", 1100.0),
+        (
+            PlotKind::PrevalenceAbundance,
+            "dialog_prevalence_abundance",
+            1050.0,
+        ),
+    ] {
+        let mut renderer = Renderer::new(420.0, height, 1.0);
+        let mut settings = PlotSettings {
+            box_features: BoxFeatures::Listed,
+            box_feature_list: "Equivita\nTapirivita\nGorillivita".into(),
+            ..PlotSettings::default()
+        };
+        let image = renderer.render(|ui| {
+            egui::Frame::window(ui.style()).show(ui, |ui| {
+                show(ui, Mode::MultipleGroups, kind, &mut settings, &context);
+            });
+        });
+        assert!(ink(&image, 0, 0, 420, 600) > 0.05);
+        if let Ok(directory) = std::env::var("STAMP_SCREENSHOTS") {
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(
+                PathBuf::from(directory).join(format!("{name}.png")),
+                image.to_png(),
+            )
+            .unwrap();
+        }
+    }
+}
+
+/// The ordinations (PCA, PCoA with its community tests, NMDS) are computed
+/// once for their data and settings: changing only how the plot looks
+/// (colours, shapes, marker size, opacity, legend, fonts) draws it again
+/// from the kept layout.
+#[test]
+fn styling_an_ordination_does_not_compute_it_again() {
+    use stamp_plot::ordination_style::ColorSource;
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.session.set_group_field("Environment");
+    harness.app.session.invalidate_all();
+    harness.app.set_mode(Mode::MultipleGroups);
+    for kind in [PlotKind::Pca, PlotKind::Pcoa, PlotKind::Nmds] {
+        harness.app.set_plot_kind(kind);
+        harness.settle();
+        let computed = harness.app.ordinations_computed();
+        let built = harness.app.figures_built();
+        let first = harness.app.figure().clone();
+        assert!(!first.regions.is_empty(), "{kind:?}: no samples drawn");
+        // The results table, slow to build for large profiles, is kept too.
+        let table = harness.app.results_table().rows.as_ptr();
+        assert!(!harness.app.results_table().rows.is_empty());
+
+        let mut settings = harness.app.plot_settings().clone();
+        for options in [&mut settings.pca, &mut settings.pcoa, &mut settings.nmds] {
+            options.color_by = ColorSource::Field("Depth".to_string());
+            options.shape_by = Some("Company".to_string());
+            options.marker_size *= 2.0;
+            options.opacity = 0.5;
+            options.legend = stamp_plot::axes::LegendPosition::Best;
+            options.note_font_size += 1.0;
+        }
+        settings.fonts.tick += 1.0;
+        harness.app.set_plot_settings(settings.clone());
+        harness.settle();
+        // Drawn again, differently, but not computed again.
+        assert!(harness.app.figures_built() > built, "{kind:?}");
+        assert_ne!(harness.app.figure().shapes, first.shapes, "{kind:?}");
+        assert_eq!(harness.app.ordinations_computed(), computed, "{kind:?}");
+        assert_eq!(harness.app.results_table().rows.as_ptr(), table, "{kind:?}");
+        // The samples are where they were.
+        let centres = |figure: &stamp_plot::Figure| -> Vec<String> {
+            figure.regions.iter().map(|r| r.tooltip.clone()).collect()
+        };
+        assert_eq!(
+            centres(harness.app.figure()).len(),
+            centres(&first).len(),
+            "{kind:?}"
+        );
+
+        // A change of what it is computed from computes it again.
+        if kind != PlotKind::Pca {
+            settings.community_distance = stamp_core::stats::diversity::Distance::Jaccard;
+            harness.app.set_plot_settings(settings.clone());
+            harness.settle();
+            assert_eq!(harness.app.ordinations_computed(), computed + 1, "{kind:?}");
+            settings.community_distance = stamp_core::stats::diversity::Distance::BrayCurtis;
+        }
+        if kind == PlotKind::Pcoa {
+            settings.community_permutations += 1;
+            harness.app.set_plot_settings(settings.clone());
+            harness.settle();
+            assert_eq!(harness.app.ordinations_computed(), computed + 2);
+        }
+        // Back to the first look: from the kept layout again.
+        let mut plain = settings.clone();
+        plain.pca = Default::default();
+        plain.pcoa = Default::default();
+        plain.nmds = Default::default();
+        let before = harness.app.ordinations_computed();
+        harness.app.set_plot_settings(plain);
+        harness.settle();
+        assert_eq!(harness.app.ordinations_computed(), before, "{kind:?}");
+    }
+}
+
+/// PCA, PCoA and NMDS plots coloured by a metadata field (a number or a
+/// category) or by the abundance of a feature, and shaped by another field.
+#[test]
+fn ordinations_are_coloured_and_shaped_by_other_fields() {
+    use stamp_plot::ordination_style::{ColorScale, ColorSource};
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.session.set_group_field("Environment");
+    harness.app.session.invalidate_all();
+    harness.app.show_feature_table(false);
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::Pca);
+    harness.settle();
+    // Coloured by group: the legend inside the frame names the groups.
+    let plain = figure_texts(&harness.app);
+    assert!(plain.contains(&"Core".to_string()));
+    let samples = harness.app.figure().regions.len() / 3;
+
+    // By a number: a colour bar titled with the field; the sample whose
+    // depth is "unknown" is drawn hollow and counted.
+    let mut settings = harness.app.plot_settings().clone();
+    settings.pca.color_by = ColorSource::Field("Depth".to_string());
+    settings.pca.shape_by = Some("Company".to_string());
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    for wanted in ["Depth", "No value (1)", "Company"] {
+        assert!(
+            shown.contains(&wanted.to_string()),
+            "{wanted} not in {shown:?}"
+        );
+    }
+    let tooltip = &harness.app.figure().regions[0].tooltip;
+    assert!(
+        tooltip.contains("Depth: ") && tooltip.contains("Company: "),
+        "{tooltip}"
+    );
+    harness.screenshot("pca_coloured_by_depth");
+
+    // The same field drawn by category.
+    settings.pca.color_by = ColorSource::Category("Depth".to_string());
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    assert!(figure_texts(&harness.app)
+        .iter()
+        .any(|t| t.starts_with("10.0 (")));
+
+    // By the abundance of the selected feature, on a log scale; changing
+    // the selection changes the plot.
+    let features: Vec<String> = harness
+        .app
+        .session
+        .multi
+        .output
+        .as_ref()
+        .unwrap()
+        .1
+        .rows
+        .iter()
+        .map(|r| r.feature.clone())
+        .collect();
+    harness.app.select_feature(&features[0]);
+    settings.pca.color_by = ColorSource::SelectedFeature;
+    settings.pca.color_scale = ColorScale::Log10;
+    settings.pca.shape_by = None;
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    let first = format!("{} (%)", features[0]);
+    assert!(
+        figure_texts(&harness.app).contains(&first),
+        "{:?}",
+        figure_texts(&harness.app)
+    );
+    harness.app.select_feature(&features[1]);
+    harness.settle();
+    let second = format!("{} (%)", features[1]);
+    assert!(figure_texts(&harness.app).contains(&second));
+    // Coloured by abundance, the groups keep their shapes in the legend.
+    assert!(figure_texts(&harness.app)
+        .iter()
+        .any(|t| t.starts_with("Core (")));
+
+    // A feature by name, and a name that is not a feature.
+    settings.pca.color_by = ColorSource::Feature(features[2].clone());
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    assert_eq!(harness.app.figure().regions.len(), 3 * samples);
+    settings.pca.color_by = ColorSource::Feature("No such feature".to_string());
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    assert!(figure_texts(&harness.app)[0].contains("unknown feature"));
+
+    // PCoA: the community tests still compare the groups.
+    settings.pcoa.color_by = ColorSource::Field("Company".to_string());
+    settings.pcoa.show_pc3_vs_pc2 = false;
+    settings.pcoa.show_pc1_vs_pc3 = false;
+    harness.app.set_plot_settings(settings.clone());
+    harness.app.set_plot_kind(PlotKind::Pcoa);
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    assert!(shown
+        .iter()
+        .any(|t| t == "The tests compare the groups of Environment, not the colours"));
+    assert!(shown.contains(&"Company".to_string()));
+    assert_eq!(harness.app.figure().regions.len(), samples);
+    harness.screenshot("pcoa_coloured_by_company");
+
+    // NMDS too.
+    settings.nmds.color_by = ColorSource::Field("Depth".to_string());
+    harness.app.set_plot_settings(settings);
+    harness.app.set_plot_kind(PlotKind::Nmds);
+    harness.settle();
+    assert!(figure_texts(&harness.app).contains(&"Depth".to_string()));
+}
+
+/// The colour and shape settings of the ordination plots, drawn on their
+/// own so that they can be looked at.
+#[test]
+fn ordination_settings_dialogs() {
+    use stamp_gui::plot_config::{show, Context};
+    use stamp_gui::plots::PlotSettings;
+    use stamp_plot::ordination_style::ColorSource;
+    let context = Context {
+        fields: vec![
+            "Host_group".into(),
+            "Host_order".into(),
+            "Captivity".into(),
+            "Latitude".into(),
+        ],
+        groups: vec!["Horse".into(), "Tapir".into()],
+        numeric_fields: vec!["Latitude".into()],
+        ..Context::default()
+    };
+    for (kind, name, height) in [
+        (PlotKind::Pca, "dialog_pca", 1000.0),
+        (PlotKind::Pcoa, "dialog_pcoa", 1100.0),
+    ] {
+        let mut renderer = Renderer::new(420.0, height, 1.0);
+        let mut settings = PlotSettings::default();
+        settings.pca.color_by = ColorSource::Field("Latitude".into());
+        settings.pcoa.color_by = ColorSource::Feature("Equivita".into());
+        settings.pcoa.shape_by = Some("Captivity".into());
+        let image = renderer.render(|ui| {
+            egui::Frame::window(ui.style()).show(ui, |ui| {
+                show(ui, Mode::MultipleGroups, kind, &mut settings, &context);
+            });
+        });
+        assert!(ink(&image, 0, 0, 420, 600) > 0.05);
+        // Showing the controls changes nothing.
+        assert_eq!(settings.pca.color_by, ColorSource::Field("Latitude".into()));
+        assert_eq!(
+            settings.pcoa.color_by,
+            ColorSource::Feature("Equivita".into())
+        );
+        if let Ok(directory) = std::env::var("STAMP_SCREENSHOTS") {
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(
+                PathBuf::from(directory).join(format!("{name}.png")),
+                image.to_png(),
+            )
+            .unwrap();
+        }
+    }
+}
+
+/// A plot that takes a while to compute is computed in the background: the
+/// window stays usable, the plot area shows what is being done and how far
+/// it has got (after a moment, so that quick plots do not flicker), the
+/// calculation can be cancelled, and the plot is drawn once it is done.
+#[test]
+fn a_slow_plot_shows_its_progress_and_can_be_cancelled() {
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.session.set_group_field("Environment");
+    harness.app.session.invalidate_all();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::Pca);
+    harness.settle();
+    assert!(!harness.app.figure().regions.is_empty());
+
+    // So many permutations that the tests take far longer than the test.
+    let mut settings = harness.app.plot_settings().clone();
+    settings.community_permutations = 50_000_000;
+    harness.app.set_plot_settings(settings.clone());
+    harness.app.set_plot_kind(PlotKind::Pcoa);
+    let app = &mut harness.app;
+    // A few frames: too soon for the progress to be shown.
+    harness.renderer.run(3, |ui| app.draw(ui));
+    assert!(harness.app.is_busy());
+    let early = harness.screenshot("slow_plot_starting");
+    // Long enough (in the time of the interface) for it to be shown.
+    let app = &mut harness.app;
+    harness.renderer.run(30, |ui| app.draw(ui));
+    let (stage, fraction) = harness
+        .app
+        .plot_progress()
+        .expect("the plot is being computed");
+    assert!(
+        [
+            "Reading the samples",
+            "Computing Bray-Curtis distances",
+            "Finding the principal coordinates",
+            "PERMANOVA"
+        ]
+        .contains(&stage.as_str()),
+        "{stage}"
+    );
+    if stage == "PERMANOVA" {
+        assert!(fraction.is_some_and(|f| f < 1.0));
+    }
+    let shown = harness.screenshot("slow_plot_progress");
+    // The plot before is greyed out and a panel drawn over it: the picture
+    // differs from that of a moment before.
+    assert_ne!(early.pixels, shown.pixels);
+
+    // The rest of the window still answers: another analysis setting can be
+    // changed while the plot is computed.
+    harness.app.set_p_value_filter(Some(0.05));
+    let app = &mut harness.app;
+    harness.renderer.run(2, |ui| app.draw(ui));
+    assert!(harness.app.plot_progress().is_some());
+
+    harness.app.cancel_plot();
+    assert!(harness.app.plot_progress().is_none());
+    assert!(!harness.app.is_busy());
+    harness.settle();
+    assert_eq!(
+        figure_texts(&harness.app),
+        ["The calculation of this plot was cancelled"]
+    );
+    harness.screenshot("slow_plot_cancelled");
+
+    // Fewer permutations: computed, and drawn.
+    settings.community_permutations = 99;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert!(!harness.app.figure().regions.is_empty());
+    assert!(figure_texts(&harness.app)
+        .iter()
+        .any(|t| t.starts_with("PERMANOVA: pseudo-F")));
+}
+
+/// The map of sample locations: markers at the sites of the metadata's
+/// latitudes and longitudes, with tooltips; it follows the sample filter,
+/// and its settings dialog.
+#[test]
+fn samples_are_placed_on_a_map() {
+    let mut harness = Harness::new();
+    harness.app.load_profile(
+        "Enterotypes.profile.spf",
+        &example("EnterotypesArumugam/Enterotypes.profile.spf"),
+    );
+    harness.app.load_metadata(
+        "Enterotypes.metadata.locations.tsv",
+        &example("EnterotypesArumugam/Enterotypes.metadata.locations.tsv"),
+    );
+    harness.app.set_p_value_filter(None);
+    harness.app.set_mode(Mode::MultipleGroups);
+    assert!(PlotKind::available(Mode::MultipleGroups).contains(&PlotKind::Map));
+    assert!(PlotKind::available(Mode::TwoGroups).contains(&PlotKind::Map));
+    assert!(PlotKind::available(Mode::Correlation).contains(&PlotKind::Map));
+    assert!(!PlotKind::available(Mode::TwoSamples).contains(&PlotKind::Map));
+    harness.app.set_plot_kind(PlotKind::Map);
+    harness.settle();
+    let samples = harness
+        .app
+        .session
+        .multi
+        .output
+        .as_ref()
+        .unwrap()
+        .0
+        .profile
+        .sample_names
+        .len();
+    let texts = figure_texts(&harness.app);
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.starts_with(&format!("{samples} samples at "))),
+        "{texts:?}"
+    );
+    let figure = harness.app.figure();
+    assert!(figure
+        .regions
+        .iter()
+        .any(|r| r.tooltip.contains("35.68°N, 139.69°E")));
+    harness.screenshot("map");
+
+    // Coloured by a feature, on a log scale; sized by a numeric field is
+    // refused for a text field.
+    let mut settings = harness.app.plot_settings().clone();
+    settings.map.color_by =
+        stamp_plot::ordination_style::ColorSource::Feature("Bacteroidetes".into());
+    settings.map.color_scale = stamp_plot::ordination_style::ColorScale::Log10;
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    let texts = figure_texts(&harness.app);
+    assert!(
+        texts.iter().any(|t| t == "Bacteroidetes (%), mean at site"),
+        "{texts:?}"
+    );
+    settings.map.size_by = stamp_plot::map_plot::SizeSource::Field("Gender".into());
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    assert!(figure_texts(&harness.app)[0].contains("does not hold numbers"));
+    settings.map.size_by = stamp_plot::map_plot::SizeSource::Count;
+    harness.app.set_plot_settings(settings);
+
+    // Only the samples kept by the filter.
+    let japanese = ["japanese".to_string()];
+    harness
+        .app
+        .set_sample_filter(Some(("Nationality", &japanese)));
+    harness.settle();
+    let texts = figure_texts(&harness.app);
+    assert!(
+        texts.iter().any(|t| t.starts_with("13 samples at 1 site")),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn map_settings_dialog() {
+    use stamp_gui::plot_config::{show, Context};
+    use stamp_gui::plots::PlotSettings;
+    use stamp_plot::map_plot::{Extent, SizeSource};
+    let context = Context {
+        fields: vec![
+            "Host_group".into(),
+            "Captivity".into(),
+            "Latitude".into(),
+            "Longitude".into(),
+            "Depth".into(),
+        ],
+        groups: vec!["Horse".into(), "Tapir".into()],
+        numeric_fields: vec!["Latitude".into(), "Longitude".into(), "Depth".into()],
+        lat_field: Some("Latitude".into()),
+        lon_field: Some("Longitude".into()),
+    };
+    let mut renderer = Renderer::new(420.0, 1010.0, 1.0);
+    let mut settings = PlotSettings::default();
+    settings.map.extent = Extent::Custom {
+        west: -20.0,
+        east: 55.0,
+        south: -37.0,
+        north: 39.0,
+    };
+    settings.map.color_by =
+        stamp_plot::ordination_style::ColorSource::Feature("Gorillivita".into());
+    settings.map.size_by = SizeSource::Field("Depth".into());
+    let before = settings.clone();
+    let image = renderer.render(|ui| {
+        egui::Frame::window(ui.style()).show(ui, |ui| {
+            show(
+                ui,
+                Mode::MultipleGroups,
+                PlotKind::Map,
+                &mut settings,
+                &context,
+            );
+        });
+    });
+    assert!(ink(&image, 0, 0, 420, 900) > 0.05);
+    // Showing the controls changes nothing.
+    assert_eq!(settings, before);
+    if let Ok(directory) = std::env::var("STAMP_SCREENSHOTS") {
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            PathBuf::from(directory).join("dialog_map.png"),
+            image.to_png(),
+        )
+        .unwrap();
+    }
+}
+
+/// The picture of a plot being computed in the documentation: the PCoA of
+/// the large example dataset part-way through its community tests (999
+/// permutations each). Taken only if a frame falls in the middle of a test,
+/// which depends on the speed of the machine.
+#[test]
+fn a_plot_part_way_through_its_community_tests() {
+    let mut harness = Harness::new();
+    harness
+        .app
+        .load_profile("profiles.tsv", &example("LargeDataset/profiles.tsv"));
+    harness
+        .app
+        .load_metadata("metadata.tsv", &example("LargeDataset/metadata.tsv"));
+    harness.app.set_p_value_filter(None);
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::Pca);
+    harness.settle();
+    assert_eq!(harness.app.plot_settings().community_permutations, 999);
+    harness.app.set_plot_kind(PlotKind::Pcoa);
+    let mut seen = Vec::new();
+    for _ in 0..3000 {
+        let app = &mut harness.app;
+        harness.renderer.run(1, |ui| app.draw(ui));
+        let Some((stage, fraction)) = harness.app.plot_progress() else {
+            if !harness.app.is_busy() {
+                break;
+            }
+            continue;
+        };
+        seen.push(stage.clone());
+        let tests = ["PERMANOVA", "ANOSIM", "PERMDISP"];
+        if tests.contains(&stage.as_str()) && fraction.is_some_and(|f| (0.4..0.6).contains(&f)) {
+            harness.screenshot("gui_plot_progress");
+            break;
+        }
+    }
+    assert!(!seen.is_empty(), "no progress was shown");
+    harness.app.cancel_plot();
 }

@@ -183,6 +183,16 @@ pub enum Shape {
         text: String,
         style: TextStyle,
     },
+    /// A filled area without an outline: an outer ring followed by holes,
+    /// any of them concave (the land of a map). `triangles` holds indices
+    /// into the rings' points taken one after another, three to a
+    /// triangle, for painters that cannot fill concave shapes themselves;
+    /// [`Figure::area`] works them out.
+    Area {
+        rings: Vec<Vec<(f64, f64)>>,
+        triangles: Vec<u32>,
+        fill: Color,
+    },
 }
 
 /// An area of the figure that belongs to one data item, for tooltips and
@@ -237,6 +247,7 @@ impl Figure {
                     }
                 }
                 Shape::Text { style, .. } => style.color = map(style.color, false),
+                Shape::Area { fill, .. } => *fill = map(*fill, true),
             }
         }
     }
@@ -300,6 +311,34 @@ impl Figure {
         });
     }
 
+    /// A filled area: `rings[0]` is its outline and any further rings are
+    /// holes in it. Rings of fewer than three points are ignored.
+    pub fn area(&mut self, rings: Vec<Vec<(f64, f64)>>, fill: Color) {
+        let rings: Vec<Vec<(f64, f64)>> = rings.into_iter().filter(|r| r.len() >= 3).collect();
+        if rings.is_empty() {
+            return;
+        }
+        let mut holes = Vec::new();
+        let mut count = 0u32;
+        for ring in &rings {
+            if count > 0 {
+                holes.push(count);
+            }
+            count += ring.len() as u32;
+        }
+        let mut triangles = Vec::new();
+        earcut::Earcut::new().earcut(
+            rings.iter().flatten().map(|&(x, y)| [x, y]),
+            &holes,
+            &mut triangles,
+        );
+        self.shapes.push(Shape::Area {
+            rings,
+            triangles,
+            fill,
+        });
+    }
+
     pub fn text(&mut self, x: f64, y: f64, text: impl Into<String>, style: TextStyle) {
         self.shapes.push(Shape::Text {
             x,
@@ -347,6 +386,54 @@ mod tests {
         assert_eq!(Color::from_hex("#12"), None);
         assert_eq!(Color::from_hex("#zzzzzz"), None);
         assert_eq!(Color::grey(0.9), Color::rgb(230, 230, 230));
+    }
+
+    #[test]
+    fn concave_areas_are_triangulated() {
+        let mut figure = Figure::new(10.0, 10.0);
+        // An L shape, and a square with a square hole.
+        figure.area(
+            vec![vec![
+                (0.0, 0.0),
+                (2.0, 0.0),
+                (2.0, 1.0),
+                (1.0, 1.0),
+                (1.0, 2.0),
+                (0.0, 2.0),
+            ]],
+            Color::BLACK,
+        );
+        figure.area(
+            vec![
+                vec![(0.0, 0.0), (3.0, 0.0), (3.0, 3.0), (0.0, 3.0)],
+                vec![(1.0, 1.0), (1.0, 2.0), (2.0, 2.0), (2.0, 1.0)],
+            ],
+            Color::BLACK,
+        );
+        figure.area(vec![vec![(0.0, 0.0), (1.0, 1.0)]], Color::BLACK);
+        assert_eq!(figure.shapes.len(), 2);
+        let area = |shape: &Shape| -> f64 {
+            let Shape::Area {
+                rings, triangles, ..
+            } = shape
+            else {
+                panic!("not an area")
+            };
+            let points: Vec<(f64, f64)> = rings.iter().flatten().copied().collect();
+            triangles
+                .chunks(3)
+                .map(|t| {
+                    let (a, b, c) = (
+                        points[t[0] as usize],
+                        points[t[1] as usize],
+                        points[t[2] as usize],
+                    );
+                    ((b.0 - a.0) * (c.1 - a.1) - (c.0 - a.0) * (b.1 - a.1)).abs() / 2.0
+                })
+                .sum()
+        };
+        assert!((area(&figure.shapes[0]) - 3.0).abs() < 1e-12);
+        assert!((area(&figure.shapes[1]) - 8.0).abs() < 1e-12);
     }
 
     #[test]

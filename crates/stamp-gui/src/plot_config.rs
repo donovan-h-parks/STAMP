@@ -4,15 +4,22 @@
 
 use eframe::egui;
 use stamp_core::stats::cluster::Linkage;
+use stamp_core::stats::co_occurrence::FeatureRanking;
+use stamp_core::stats::correlation::CorrelationMethod;
 use stamp_core::stats::diversity::{AlphaMetric, Distance, Normalisation};
+use stamp_core::stats::group_summary::GroupStatistic;
 use stamp_core::stats::multi_group::MultiGroupTest;
+use stamp_core::stats::prevalence::MeanOver;
 use stamp_plot::axes::LegendPosition;
+use stamp_plot::co_occurrence_plot::View;
 use stamp_plot::composition;
 use stamp_plot::extended_error_bar::{self, SortBy};
-use stamp_plot::feature_plots::Field;
+use stamp_plot::feature_plots::{BoxLayout, Field, GroupOrder as BoxGroupOrder};
+use stamp_plot::group_heatmap::{ColumnOrder as GroupOrder, NumberFormat, Scale};
 use stamp_plot::heatmap::{ColorMap, Order};
 use stamp_plot::histogram::Inset;
 use stamp_plot::pca_plot;
+use stamp_plot::prevalence_plot::View as PrevalenceView;
 use stamp_plot::rank_abundance;
 use stamp_plot::rarefaction;
 use stamp_plot::sample_plots::BarField;
@@ -20,7 +27,7 @@ use stamp_plot::scatter::Spread;
 use stamp_plot::shared_features;
 
 use crate::app::choose;
-use crate::plots::{PlotKind, PlotSettings};
+use crate::plots::{BoxFeatures, PlotKind, PlotSettings};
 use crate::session::Mode;
 
 /// The rows of a settings grid. Each method adds one labelled row and
@@ -148,6 +155,24 @@ impl Rows<'_> {
         options: &[(T, &str)],
     ) {
         self.when(enabled, |rows| rows.choice(label, value, options));
+    }
+
+    /// A line of text, such as a name.
+    fn line(&mut self, label: &str, value: &mut String) {
+        self.text(label);
+        let edit = egui::TextEdit::singleline(value).desired_width(170.0);
+        self.changed |= self.put(edit);
+        self.ui.end_row();
+    }
+
+    /// Lines of text, such as names one per line.
+    fn lines(&mut self, label: &str, value: &mut String) {
+        self.text(label);
+        let edit = egui::TextEdit::multiline(value)
+            .desired_rows(3)
+            .desired_width(170.0);
+        self.changed |= self.put(edit);
+        self.ui.end_row();
     }
 
     fn check(&mut self, label: &str, value: &mut bool) {
@@ -361,6 +386,7 @@ impl Dialog<'_> {
         o: &mut pca_plot::Options,
         axis: &str,
         notes: bool,
+        context: &Context,
         extra: impl FnOnce(&mut Dialog),
     ) {
         self.group("Figure size", |rows| {
@@ -379,6 +405,7 @@ impl Dialog<'_> {
             rows.check(&format!("{axis}1 vs. {axis}3"), &mut o.show_pc1_vs_pc3);
         });
         extra(self);
+        self.colours_and_shapes(o, context);
         self.legend(&mut o.legend);
         if notes {
             self.group(FONT_SIZES, |rows| {
@@ -387,12 +414,292 @@ impl Dialog<'_> {
         }
         self.group(OTHER_OPTIONS, |rows| {
             rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
+            rows.number("Opacity:", &mut o.opacity, 0.01, 0.05..=1.0);
             rows.check("Assign unique shapes", &mut o.unique_shapes);
             rows.check_if(
                 o.show_pc3_vs_pc2,
                 &format!("Rotate {axis}3 labels"),
                 &mut o.rotate_pc3_labels,
             );
+        });
+    }
+
+    /// What colours and shapes the samples of an ordination plot: the
+    /// groups, a metadata field (numeric fields marked), or the abundance
+    /// of a feature; and a field for the shapes.
+    fn colours_and_shapes(&mut self, o: &mut pca_plot::Options, context: &Context) {
+        self.styles(
+            Styles {
+                color_by: &mut o.color_by,
+                shape_by: &mut o.shape_by,
+                color_map: &mut o.color_map,
+                color_scale: &mut o.color_scale,
+                draw_order: &mut o.draw_order,
+            },
+            "Groups",
+            context,
+            |_, _| {},
+        );
+    }
+
+    /// The "Colours and shapes" group of the ordination plots and the map.
+    /// `no_shape` names the shapes without a field; `extra` adds rows
+    /// after the colour scale, told whether the colours are a scale.
+    fn styles(
+        &mut self,
+        o: Styles,
+        no_shape: &str,
+        context: &Context,
+        extra: impl FnOnce(&mut Rows, bool),
+    ) {
+        use stamp_plot::ordination_style::{ColorScale, ColorSource, DrawOrder};
+        self.group("Colours and shapes", |rows| {
+            let numeric = |field: &str| context.numeric_fields.iter().any(|f| f == field);
+            let typed = match &*o.color_by {
+                ColorSource::Feature(name) => name.clone(),
+                _ => String::new(),
+            };
+            // A field drawn by category is chosen as the field, with the
+            // box below ticked.
+            let mut as_categories = matches!(*o.color_by, ColorSource::Category(_));
+            let mut shown = match &*o.color_by {
+                ColorSource::Category(field) => ColorSource::Field(field.clone()),
+                other => other.clone(),
+            };
+            let mut options: Vec<(ColorSource, String)> = vec![
+                (ColorSource::Group, "Groups".to_string()),
+                (ColorSource::SelectedFeature, "Selected feature".to_string()),
+                (
+                    ColorSource::Feature(typed.clone()),
+                    "Feature by name".to_string(),
+                ),
+            ];
+            for field in &context.fields {
+                let name = if numeric(field) {
+                    format!("{field} (numeric)")
+                } else {
+                    field.clone()
+                };
+                options.push((ColorSource::Field(field.clone()), name));
+            }
+            let named: Vec<(ColorSource, &str)> = options
+                .iter()
+                .map(|(source, name)| (source.clone(), name.as_str()))
+                .collect();
+            rows.choice("Colour by:", &mut shown, &named);
+            let mut name = typed;
+            let by_name = matches!(shown, ColorSource::Feature(_));
+            rows.when(by_name, |rows| rows.line("Feature:", &mut name));
+            if by_name {
+                shown = ColorSource::Feature(name);
+            }
+            let numeric_field = matches!(&shown, ColorSource::Field(f) if numeric(f));
+            rows.check_if(
+                numeric_field,
+                "Treat the numbers as categories",
+                &mut as_categories,
+            );
+            *o.color_by = match shown {
+                ColorSource::Field(field) if numeric_field && as_categories => {
+                    ColorSource::Category(field)
+                }
+                other => other,
+            };
+            let scale = matches!(
+                *o.color_by,
+                ColorSource::Feature(_) | ColorSource::SelectedFeature
+            ) || (numeric_field && !as_categories);
+            let maps: Vec<(ColorMap, &str)> =
+                ColorMap::ALL.iter().map(|&m| (m, m.name())).collect();
+            rows.choice_if(scale, "Colour map:", o.color_map, &maps);
+            let scales: Vec<(ColorScale, &str)> =
+                ColorScale::ALL.iter().map(|&s| (s, s.name())).collect();
+            rows.choice_if(scale, "Colour scale:", o.color_scale, &scales);
+            let orders: Vec<(DrawOrder, &str)> =
+                DrawOrder::ALL.iter().map(|&d| (d, d.name())).collect();
+            rows.choice_if(scale, "Drawing order:", o.draw_order, &orders);
+            extra(rows, scale);
+
+            let mut shapes: Vec<(Option<String>, &str)> = vec![(None, no_shape)];
+            shapes.extend(context.fields.iter().map(|f| (Some(f.clone()), f.as_str())));
+            rows.choice("Shape by:", o.shape_by, &shapes);
+        });
+    }
+
+    /// The map of sample locations.
+    fn map(&mut self, settings: &mut PlotSettings, context: &Context) {
+        use stamp_plot::geo::{Projection, Resolution};
+        use stamp_plot::map_plot::{Extent, Region, SiteValue, SizeSource};
+        let o = &mut settings.map;
+        self.group("Figure size", |rows| {
+            rows.inches("Width:", &mut o.width, 2.0..=40.0);
+        });
+        let (lat_field, lon_field) = (&mut settings.map_lat_field, &mut settings.map_lon_field);
+        self.group("Sample locations", |rows| {
+            for (label, value, found) in [
+                ("Latitude field:", lat_field, &context.lat_field),
+                ("Longitude field:", lon_field, &context.lon_field),
+            ] {
+                let automatic = match found {
+                    Some(field) if value.is_none() => format!("Automatic ({field})"),
+                    _ => "Automatic".to_string(),
+                };
+                let mut fields: Vec<(Option<String>, &str)> = vec![(None, automatic.as_str())];
+                fields.extend(context.fields.iter().map(|f| (Some(f.clone()), f.as_str())));
+                rows.choice(label, value, &fields);
+            }
+        });
+        self.group("Map", |rows| {
+            let projections: Vec<(Projection, &str)> =
+                Projection::ALL.iter().map(|&p| (p, p.name())).collect();
+            rows.choice("Projection:", &mut o.projection, &projections);
+            // A custom area keeps its numbers while another is chosen.
+            let custom = match o.extent {
+                Extent::Custom { .. } => o.extent,
+                _ => Extent::Custom {
+                    west: -30.0,
+                    east: 60.0,
+                    south: -40.0,
+                    north: 40.0,
+                },
+            };
+            let mut areas: Vec<(Extent, &str)> = vec![
+                (Extent::Auto, Extent::Auto.name()),
+                (Extent::World, Extent::World.name()),
+            ];
+            areas.extend(Region::ALL.iter().map(|&r| (Extent::Region(r), r.name())));
+            areas.push((custom, custom.name()));
+            rows.choice("Area:", &mut o.extent, &areas);
+            if let Extent::Custom {
+                west,
+                east,
+                south,
+                north,
+            } = &mut o.extent
+            {
+                rows.text("Longitudes:");
+                let mut changed = false;
+                rows.ui.horizontal(|ui| {
+                    changed |= ui
+                        .add(egui::DragValue::new(west).speed(0.5).range(-180.0..=179.0))
+                        .changed();
+                    ui.label("to");
+                    changed |= ui
+                        .add(egui::DragValue::new(east).speed(0.5).range(-179.0..=180.0))
+                        .changed();
+                });
+                rows.ui.end_row();
+                rows.text("Latitudes:");
+                rows.ui.horizontal(|ui| {
+                    changed |= ui
+                        .add(egui::DragValue::new(south).speed(0.5).range(-90.0..=89.0))
+                        .changed();
+                    ui.label("to");
+                    changed |= ui
+                        .add(egui::DragValue::new(north).speed(0.5).range(-89.0..=90.0))
+                        .changed();
+                });
+                rows.ui.end_row();
+                if *east <= *west {
+                    *east = (*west + 1.0).min(180.0);
+                }
+                if *north <= *south {
+                    *north = (*south + 1.0).min(90.0);
+                }
+                rows.changed |= changed;
+            }
+            let details: Vec<(Resolution, &str)> =
+                Resolution::ALL.iter().map(|&r| (r, r.name())).collect();
+            rows.choice("Detail:", &mut o.resolution, &details);
+            rows.check("Colour the sea", &mut o.ocean);
+            rows.check("Outline countries and coasts", &mut o.borders);
+            rows.check("Lines of longitude and latitude", &mut o.graticule);
+        });
+        let site_value = &mut o.site_value;
+        self.styles(
+            Styles {
+                color_by: &mut o.color_by,
+                shape_by: &mut o.shape_by,
+                color_map: &mut o.color_map,
+                color_scale: &mut o.color_scale,
+                draw_order: &mut o.draw_order,
+            },
+            "None (circles)",
+            context,
+            |rows, scale| {
+                let values: Vec<(SiteValue, &str)> =
+                    SiteValue::ALL.iter().map(|&v| (v, v.name())).collect();
+                rows.choice_if(scale, "Value of a site:", site_value, &values);
+            },
+        );
+        self.group("Markers", |rows| {
+            rows.check("One marker per site", &mut o.aggregate);
+            let mut precision = (o.site_precision > 0.0).then_some(o.site_precision);
+            rows.when(o.aggregate || o.jitter, |rows| {
+                rows.optional(
+                    "Site size (degrees):",
+                    &mut precision,
+                    0.1,
+                    0.01,
+                    0.001..=10.0,
+                );
+            });
+            o.site_precision = precision.unwrap_or(0.0);
+            rows.check_if(!o.aggregate, "Spread the samples of a site", &mut o.jitter);
+            let typed = match &o.size_by {
+                SizeSource::Feature(name) => name.clone(),
+                _ => String::new(),
+            };
+            let mut sizes: Vec<(SizeSource, String)> = vec![
+                (SizeSource::Count, "Number of samples".to_string()),
+                (SizeSource::Fixed, "Same size".to_string()),
+                (SizeSource::SelectedFeature, "Selected feature".to_string()),
+                (
+                    SizeSource::Feature(typed.clone()),
+                    "Feature by name".to_string(),
+                ),
+            ];
+            sizes.extend(
+                context
+                    .numeric_fields
+                    .iter()
+                    .map(|f| (SizeSource::Field(f.clone()), f.clone())),
+            );
+            let named: Vec<(SizeSource, &str)> =
+                sizes.iter().map(|(s, n)| (s.clone(), n.as_str())).collect();
+            rows.choice("Size by:", &mut o.size_by, &named);
+            let mut name = typed;
+            let by_name = matches!(o.size_by, SizeSource::Feature(_));
+            rows.when(by_name, |rows| rows.line("Feature:", &mut name));
+            if by_name {
+                o.size_by = SizeSource::Feature(name);
+            }
+            let sized = o.size_by != SizeSource::Fixed;
+            rows.number(
+                if sized {
+                    "Smallest marker:"
+                } else {
+                    "Marker size:"
+                },
+                &mut o.marker_size,
+                1.0,
+                1.0..=2000.0,
+            );
+            rows.number_if(
+                sized,
+                "Largest marker:",
+                &mut o.max_marker_size,
+                1.0,
+                1.0..=5000.0,
+            );
+            rows.check_if(sized, "Logarithmic sizes", &mut o.size_log);
+            rows.number("Opacity:", &mut o.opacity, 0.01, 0.05..=1.0);
+        });
+        self.group(OTHER_OPTIONS, |rows| {
+            rows.check("Show legend", &mut o.legend);
+        });
+        self.group(FONT_SIZES, |rows| {
+            rows.font("Notes above the map:", &mut o.note_font_size);
         });
     }
 
@@ -510,9 +817,38 @@ const FONT_SIZES: &str = "Font sizes";
 /// Width of the frames around groups of options, so that they line up.
 const GROUP_WIDTH: f32 = 350.0;
 
+/// What the settings of some plots offer to choose from: the fields of the
+/// metadata (and which of them hold numbers) and the groups of the
+/// analysis.
+#[derive(Debug, Clone, Default)]
+pub struct Context {
+    pub fields: Vec<String>,
+    pub groups: Vec<String>,
+    pub numeric_fields: Vec<String>,
+    /// The fields that look like a latitude and a longitude.
+    pub lat_field: Option<String>,
+    pub lon_field: Option<String>,
+}
+
+/// The settings of colours and shapes shared by the ordination plots and
+/// the map.
+struct Styles<'a> {
+    color_by: &'a mut stamp_plot::ordination_style::ColorSource,
+    shape_by: &'a mut Option<String>,
+    color_map: &'a mut ColorMap,
+    color_scale: &'a mut stamp_plot::ordination_style::ColorScale,
+    draw_order: &'a mut stamp_plot::ordination_style::DrawOrder,
+}
+
 /// The controls for the settings of one plot. Returns true if a setting
 /// changed.
-pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSettings) -> bool {
+pub fn show(
+    ui: &mut egui::Ui,
+    mode: Mode,
+    kind: PlotKind,
+    settings: &mut PlotSettings,
+    context: &Context,
+) -> bool {
     let mut dialog = Dialog { ui, changed: false };
     match kind {
         PlotKind::ExtendedErrorBar => dialog.error_bar(
@@ -564,6 +900,7 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
             });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.field(field);
+                rows.check("Logarithmic axis (log10)", &mut o.log_scale);
                 rows.check("Show average of each group", &mut o.show_averages);
                 rows.check("Show p-value", &mut o.show_p_value);
                 rows.truncate(&mut o.truncate_labels);
@@ -572,17 +909,168 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
         PlotKind::Box => {
             let o = &mut settings.box_plot;
             let field = &mut settings.feature_field;
+            let which = &mut settings.box_features;
+            let count = &mut settings.box_feature_count;
+            let list = &mut settings.box_feature_list;
+            let order_field = &mut settings.box_category_field;
+            dialog.group("Features", |rows| {
+                rows.choice(
+                    "Show:",
+                    which,
+                    &[
+                        (BoxFeatures::Selected, "The selected feature"),
+                        (
+                            BoxFeatures::MostSignificant,
+                            "The most significant features",
+                        ),
+                        (BoxFeatures::Listed, "The features listed below"),
+                    ],
+                );
+                let listed = *which == BoxFeatures::Listed;
+                rows.count_if(
+                    *which == BoxFeatures::MostSignificant,
+                    "Number of features:",
+                    count,
+                    1..=50,
+                );
+                rows.when(listed, |rows| {
+                    rows.lines("Features (one per line):", list);
+                    rows.text("");
+                    rows.ui.add_enabled(
+                        listed,
+                        egui::Label::new(
+                            egui::RichText::new(
+                                "Ctrl+click features in the feature table\nto add or remove them.",
+                            )
+                            .weak(),
+                        ),
+                    );
+                    rows.ui.end_row();
+                });
+            });
+            dialog.group("Layout", |rows| {
+                rows.choice(
+                    "Several features:",
+                    &mut o.layout,
+                    &[
+                        (BoxLayout::Grouped, "A box per group at each feature"),
+                        (BoxLayout::Panels, "One panel per feature"),
+                    ],
+                );
+                rows.check_if(
+                    o.layout == BoxLayout::Panels,
+                    "Same value axis in every panel",
+                    &mut o.shared_axis,
+                );
+                rows.check("Horizontal boxes", &mut o.horizontal);
+                rows.check("Logarithmic axis (log10)", &mut o.log_scale);
+            });
+            dialog.group("Groups", |rows| {
+                rows.choice(
+                    "Order:",
+                    &mut o.group_order,
+                    &[
+                        (BoxGroupOrder::AsGiven, "As in the analysis"),
+                        (BoxGroupOrder::Alphabetical, "Alphabetical"),
+                        (BoxGroupOrder::Median, "Highest median first"),
+                        (BoxGroupOrder::Category, "By a metadata field"),
+                    ],
+                );
+                let mut fields: Vec<(Option<String>, &str)> = vec![(None, "None")];
+                fields.extend(context.fields.iter().map(|f| (Some(f.clone()), f.as_str())));
+                rows.choice_if(
+                    o.group_order == BoxGroupOrder::Category,
+                    "Field:",
+                    order_field,
+                    &fields,
+                );
+                rows.check("Show number of samples", &mut o.show_counts);
+            });
+            dialog.group("Samples", |rows| {
+                rows.check("Show every sample as a point", &mut o.show_points);
+                rows.number_if(
+                    o.show_points,
+                    "Point size:",
+                    &mut o.point_size,
+                    0.1,
+                    0.5..=10.0,
+                );
+            });
             dialog.group("Figure size", |rows| {
                 rows.inches("Height:", &mut o.height, 2.0..=40.0);
                 rows.inches("Width:", &mut o.width, 2.0..=40.0);
             });
             dialog.group(FONT_SIZES, |rows| {
-                rows.font("Title and p-value:", &mut o.title_font_size);
+                rows.font("Titles and p-values:", &mut o.title_font_size);
             });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.field(field);
                 rows.check("Show average of each group", &mut o.show_averages);
                 rows.check("Show p-value", &mut o.show_p_value);
+                rows.truncate(&mut o.truncate_labels);
+            });
+        }
+        PlotKind::PrevalenceAbundance => {
+            let o = &mut settings.prevalence;
+            let min_abundance = &mut settings.prevalence_min_abundance;
+            let only_active = &mut settings.prevalence_only_active;
+            let selected = &mut settings.prevalence_highlight_selected;
+            let listed = &mut settings.prevalence_highlight;
+            dialog.group("Figure size", |rows| {
+                rows.size(&mut o.width, &mut o.height);
+            });
+            dialog.group("Values", |rows| {
+                rows.number(
+                    "Present at or above (%):",
+                    min_abundance,
+                    0.001,
+                    0.0..=100.0,
+                );
+                rows.choice(
+                    "Mean abundance over:",
+                    &mut o.mean_over,
+                    &[
+                        (MeanOver::AllSamples, "All samples of the group"),
+                        (MeanOver::PresentSamples, "Samples where present"),
+                    ],
+                );
+                rows.check("Plot only active features", only_active);
+            });
+            dialog.group("View", |rows| {
+                let views: Vec<(PrevalenceView, &str)> =
+                    PrevalenceView::ALL.iter().map(|&v| (v, v.name())).collect();
+                rows.choice("Show:", &mut o.view, &views);
+                let mut groups: Vec<(Option<String>, &str)> = vec![(None, "Every group")];
+                groups.extend(context.groups.iter().map(|g| (Some(g.clone()), g.as_str())));
+                rows.choice_if(
+                    o.view == PrevalenceView::Combined,
+                    "Group:",
+                    &mut o.group,
+                    &groups,
+                );
+                rows.number_if(
+                    o.view == PrevalenceView::Specificity,
+                    "Specific at (percentage points):",
+                    &mut o.specificity,
+                    0.5,
+                    0.0..=100.0,
+                );
+            });
+            dialog.group("Highlighted features", |rows| {
+                rows.check("Highlight the selected feature", selected);
+                rows.lines("Also highlight (one per line):", listed);
+                rows.check("Name highlighted features", &mut o.label_highlighted);
+            });
+            dialog.group("Points", |rows| {
+                rows.number("Point size:", &mut o.point_size, 0.1, 0.5..=20.0);
+                rows.number("Opacity:", &mut o.opacity, 0.01, 0.02..=1.0);
+            });
+            dialog.legend(&mut o.legend);
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Panel titles:", &mut o.title_font_size);
+                rows.font("Names of highlighted features:", &mut o.label_font_size);
+            });
+            dialog.group(OTHER_OPTIONS, |rows| {
                 rows.truncate(&mut o.truncate_labels);
             });
         }
@@ -877,8 +1365,9 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
             });
         }
         PlotKind::Pca => {
-            dialog.ordination(&mut settings.pca, "PC", false, |_| {});
+            dialog.ordination(&mut settings.pca, "PC", false, context, |_| {});
         }
+        PlotKind::Map => dialog.map(settings, context),
         PlotKind::Pcoa => {
             let (distance, normalisation, permutations, show_tests) = (
                 &mut settings.community_distance,
@@ -886,7 +1375,7 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 &mut settings.community_permutations,
                 &mut settings.pcoa_show_tests,
             );
-            dialog.ordination(&mut settings.pcoa, "PCo", true, |dialog| {
+            dialog.ordination(&mut settings.pcoa, "PCo", true, context, |dialog| {
                 dialog.group("Distances between samples", |rows| {
                     rows.community(distance, normalisation);
                     rows.check("Show community tests", show_tests);
@@ -911,12 +1400,14 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
             dialog.group("Distances between samples", |rows| {
                 rows.community(distance, normalisation);
             });
+            dialog.colours_and_shapes(o, context);
             dialog.legend(&mut o.legend);
             dialog.group(FONT_SIZES, |rows| {
                 rows.font("Notes above the plot:", &mut o.note_font_size);
             });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
+                rows.number("Opacity:", &mut o.opacity, 0.01, 0.05..=1.0);
                 rows.check("Assign unique shapes", &mut o.unique_shapes);
             });
         }
@@ -1056,6 +1547,272 @@ pub fn show(ui: &mut egui::Ui, mode: Mode, kind: PlotKind, settings: &mut PlotSe
                 rows.check("Show average of each group", &mut o.show_averages);
             });
         }
+        PlotKind::GroupHeatmap => {
+            let o = &mut settings.group_heatmap;
+            let summary = &mut settings.group_heatmap_summary;
+            let only_active = &mut settings.group_heatmap_only_active;
+            let field = &mut settings.group_heatmap_category_field;
+            dialog.group("Figure size", |rows| {
+                rows.check("Fit the figure to its cells", &mut o.fit_to_cells);
+                rows.inches_if(o.fit_to_cells, "Cell width:", &mut o.cell_width, 0.02..=2.0);
+                rows.inches_if(
+                    o.fit_to_cells,
+                    "Cell height:",
+                    &mut o.cell_height,
+                    0.02..=2.0,
+                );
+                rows.inches_if(!o.fit_to_cells, "Width:", &mut o.width, 2.0..=40.0);
+                rows.inches_if(!o.fit_to_cells, "Height:", &mut o.height, 2.0..=40.0);
+            });
+            dialog.group("Values", |rows| {
+                let statistics: Vec<(GroupStatistic, &str)> = vec![
+                    (GroupStatistic::Mean, "Mean proportion (%)"),
+                    (GroupStatistic::Median, "Median proportion (%)"),
+                    (GroupStatistic::Maximum, "Maximum proportion (%)"),
+                    (GroupStatistic::Prevalence, "Prevalence (% of samples)"),
+                ];
+                rows.choice("Statistic:", &mut summary.statistic, &statistics);
+                rows.number_if(
+                    summary.statistic == GroupStatistic::Prevalence,
+                    "Present at or above (%):",
+                    &mut summary.min_abundance,
+                    0.01,
+                    0.0..=100.0,
+                );
+                rows.check("Plot only active features", only_active);
+                let mut capped = summary.max_features.is_some();
+                if rows
+                    .ui
+                    .checkbox(&mut capped, "Most abundant features:")
+                    .changed()
+                {
+                    summary.max_features = capped.then_some(50);
+                    rows.changed = true;
+                }
+                match &mut summary.max_features {
+                    Some(n) => {
+                        rows.changed |= rows
+                            .ui
+                            .add(egui::DragValue::new(n).range(1..=5000))
+                            .changed();
+                    }
+                    None => {
+                        rows.ui.weak("all");
+                    }
+                }
+                rows.ui.end_row();
+            });
+            dialog.group("Colours", |rows| {
+                rows.choice(
+                    "Scale:",
+                    &mut o.scale,
+                    &[
+                        (Scale::Linear, "Linear"),
+                        (Scale::Log10, "Logarithmic (log10)"),
+                    ],
+                );
+                rows.number_if(
+                    o.scale == Scale::Log10,
+                    "Smallest value shown:",
+                    &mut o.log_floor,
+                    0.0001,
+                    0.000001..=10.0,
+                );
+                let maps: Vec<(ColorMap, &str)> =
+                    ColorMap::ALL.iter().map(|&m| (m, m.name())).collect();
+                rows.choice("Colour map:", &mut o.color_map, &maps);
+                rows.check("Show zeros in grey", &mut o.grey_zeros);
+                rows.check("Show colour scale", &mut o.show_color_scale);
+            });
+            dialog.group("Sort rows", |rows| {
+                rows.order("Method:", &mut o.row_order);
+                let clustered = matches!(o.row_order, Order::Cluster(_));
+                rows.check_if(clustered, "Show dendrogram", &mut o.show_row_dendrogram);
+            });
+            dialog.group("Sort columns", |rows| {
+                let mut fields: Vec<(Option<String>, &str)> = vec![(None, "None")];
+                fields.extend(context.fields.iter().map(|f| (Some(f.clone()), f.as_str())));
+                rows.choice("Label groups by field:", field, &fields);
+                rows.choice(
+                    "Method:",
+                    &mut o.column_order,
+                    &[
+                        (
+                            GroupOrder::Cluster(Linkage::Average),
+                            "Cluster: average (UPGMA)",
+                        ),
+                        (
+                            GroupOrder::Cluster(Linkage::Nearest),
+                            "Cluster: nearest neighbour",
+                        ),
+                        (
+                            GroupOrder::Cluster(Linkage::Furthest),
+                            "Cluster: furthest neighbour",
+                        ),
+                        (GroupOrder::Cluster(Linkage::Centroid), "Cluster: centroid"),
+                        (GroupOrder::Cluster(Linkage::Ward), "Cluster: Ward"),
+                        (GroupOrder::Category, "By the field above"),
+                        (GroupOrder::Alphabetical, "Alphabetical"),
+                        (GroupOrder::Original, "As in the analysis"),
+                    ],
+                );
+                let clustered = matches!(o.column_order, GroupOrder::Cluster(_));
+                rows.check_if(clustered, "Show dendrogram", &mut o.show_column_dendrogram);
+                rows.inches_if(
+                    o.show_row_dendrogram || o.show_column_dendrogram,
+                    "Dendrogram size:",
+                    &mut o.dendrogram_size,
+                    0.1..=5.0,
+                );
+                rows.check("Show number of samples", &mut o.show_group_sizes);
+            });
+            dialog.group("Values in the cells", |rows| {
+                rows.check("Show values", &mut o.show_values);
+                rows.choice_if(
+                    o.show_values,
+                    "Format:",
+                    &mut o.number_format,
+                    &[
+                        (NumberFormat::Decimals, "Decimal places"),
+                        (NumberFormat::Significant, "Significant digits"),
+                    ],
+                );
+                rows.count_if(o.show_values, "Digits:", &mut o.digits, 0..=6);
+                rows.font_if(o.show_values, "Font size:", &mut o.value_font_size);
+            });
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Feature and group names:", &mut o.label_font_size);
+            });
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.truncate(&mut o.truncate_labels);
+            });
+        }
+        PlotKind::CoOccurrence => {
+            let co = &mut settings.co_occurrence;
+            let o = &mut settings.co_occurrence_options;
+            let features = &mut settings.co_occurrence_features;
+            let group = &mut settings.co_occurrence_group;
+            dialog.group("Correlation", |rows| {
+                rows.choice(
+                    "Show:",
+                    &mut co.view,
+                    &[
+                        (View::Matrix, "Every pair of features"),
+                        (View::OneFeature, "The selected feature against all others"),
+                    ],
+                );
+                rows.choice(
+                    "Measure:",
+                    &mut co.method,
+                    &[
+                        (CorrelationMethod::Spearman, "Spearman rank correlation"),
+                        (CorrelationMethod::Pearson, "Pearson correlation"),
+                    ],
+                );
+                rows.choice(
+                    "Values:",
+                    &mut co.clr,
+                    &[(true, "Centred log ratios"), (false, "Proportions (%)")],
+                );
+                if mode != Mode::Correlation {
+                    let mut groups: Vec<(Option<String>, &str)> =
+                        vec![(None, "All samples of the analysis")];
+                    groups.extend(context.groups.iter().map(|g| (Some(g.clone()), g.as_str())));
+                    rows.choice("Samples:", group, &groups);
+                }
+            });
+            dialog.group("Features", |rows| {
+                let matrix = co.view == View::Matrix;
+                rows.choice_if(
+                    matrix,
+                    "Rank features by:",
+                    &mut co.ranking,
+                    &[
+                        (FeatureRanking::MeanAbundance, "Mean abundance"),
+                        (FeatureRanking::Prevalence, "Prevalence"),
+                    ],
+                );
+                rows.count_if(matrix, "Number of features:", &mut co.top, 0..=500);
+                rows.when(matrix, |rows| {
+                    rows.lines("Always include (one per line):", features)
+                });
+                rows.count_if(
+                    !matrix,
+                    "Correlations shown:",
+                    &mut co.partner_count,
+                    1..=500,
+                );
+                rows.number(
+                    "Present in at least (% of samples):",
+                    &mut co.min_prevalence,
+                    0.5,
+                    0.0..=100.0,
+                );
+            });
+            dialog.group("Significance", |rows| {
+                rows.check(
+                    "Mark significant correlations (*)",
+                    &mut co.mark_significant,
+                );
+                rows.number_if(
+                    co.mark_significant,
+                    "q-value below (Benjamini-Hochberg):",
+                    &mut co.q_threshold,
+                    0.005,
+                    0.0001..=1.0,
+                );
+                rows.number_if(
+                    co.mark_significant,
+                    "Correlation at least (|r|):",
+                    &mut co.mark_min_coefficient,
+                    0.01,
+                    0.0..=1.0,
+                );
+            });
+            dialog.group("Figure", |rows| {
+                rows.check("Fit the figure to its cells", &mut o.fit_to_cells);
+                rows.inches_if(o.fit_to_cells, "Cell size:", &mut o.cell_size, 0.02..=2.0);
+                rows.inches_if(!o.fit_to_cells, "Width:", &mut o.width, 2.0..=40.0);
+                rows.inches_if(!o.fit_to_cells, "Height:", &mut o.height, 2.0..=40.0);
+                let matrix = co.view == View::Matrix;
+                rows.choice_if(
+                    matrix,
+                    "Order:",
+                    &mut o.order,
+                    &[
+                        (Order::Cluster(Linkage::Average), "Cluster: average (UPGMA)"),
+                        (
+                            Order::Cluster(Linkage::Furthest),
+                            "Cluster: furthest neighbour",
+                        ),
+                        (Order::Cluster(Linkage::Ward), "Cluster: Ward"),
+                        (Order::Original, "As chosen"),
+                    ],
+                );
+                rows.check_if(
+                    matrix && matches!(o.order, Order::Cluster(_)),
+                    "Show dendrogram",
+                    &mut o.show_dendrogram,
+                );
+                rows.check_if(matrix, "Show values in the cells", &mut o.show_values);
+                let maps: Vec<(ColorMap, &str)> =
+                    ColorMap::ALL.iter().map(|&m| (m, m.name())).collect();
+                rows.choice("Colour map:", &mut o.color_map, &maps);
+                rows.check("Reverse colours (red for positive)", &mut o.reverse_colors);
+                rows.check_if(matrix, "Show colour scale", &mut o.show_color_scale);
+            });
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Feature names:", &mut o.label_font_size);
+                rows.font_if(
+                    co.view == View::Matrix && o.show_values,
+                    "Values in the cells:",
+                    &mut o.value_font_size,
+                );
+            });
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.truncate(&mut o.truncate_labels);
+            });
+        }
         PlotKind::Heatmap => {
             let o = &mut settings.heatmap;
             let counts = &mut settings.heatmap_sequence_counts;
@@ -1130,7 +1887,7 @@ mod tests {
                 let mut drawn = false;
                 let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
                     let before = ui.min_rect();
-                    assert!(!show(ui, mode, kind, &mut settings));
+                    assert!(!show(ui, mode, kind, &mut settings, &Context::default()));
                     drawn = ui.min_rect().height() > before.height() + 40.0;
                 });
                 assert!(drawn, "{mode:?} {kind:?} has no settings");

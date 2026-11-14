@@ -38,3 +38,12 @@ Please also cite the methods you report. The main ones are:
 
 STAMP is free software, released under the GNU General Public License
 version 3.
+
+The map of sample locations is made with `Natural Earth
+<https://www.naturalearthdata.com/>`_ (public domain): the 1:110m and 1:50m
+countries and lakes of release 5.1.2. Natural Earth asks for no credit, but
+"Made with Natural Earth" in a figure legend or the methods is appreciated.
+Its projections are Equal Earth (Šavrič B, Patterson T, Jenny B. 2019. The
+Equal Earth map projection. *Int J Geogr Inf Sci* 33:454–465) and Robinson
+(as tabulated by Snyder JP. 1993. *Flattening the Earth*. University of
+Chicago Press).

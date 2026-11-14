@@ -1,7 +1,6 @@
 //! Choosing a plot and building its figure from the session's results.
 
-use stamp_core::stats::ancom::ancom;
-use stamp_core::stats::diversity::{AlphaMetric, Distance, Normalisation};
+use stamp_core::stats::diversity::{AlphaMetric, Distance, DistanceMatrix, Normalisation};
 use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::results::format_p_value;
 use stamp_core::stats::rng_from_seed;
@@ -10,12 +9,308 @@ use stamp_plot::axes::AXES_COLOR;
 use stamp_plot::community_plots::{self, Community};
 use stamp_plot::extended_error_bar::{self, SAMPLE1_COLOR, SAMPLE2_COLOR};
 use stamp_plot::{
-    ancom_plot, composition, correlation_plot, feature_plots, heatmap, histogram, pca_plot,
-    post_hoc, rank_abundance, rarefaction, sample_plots, scatter, shared_features, volcano, Color,
-    Figure,
+    ancom_plot, co_occurrence_plot, composition, correlation_plot, feature_plots, group_heatmap,
+    heatmap, histogram, map_plot, multi_box, pca_plot, post_hoc, prevalence_plot, rank_abundance,
+    rarefaction, sample_plots, scatter, shared_features, volcano, Color, Figure,
 };
 
 use crate::session::{Mode, Session};
+
+/// The slow parts of plots already computed (the layouts of the ordination
+/// plots, PCoA with its community tests, NMDS, the distances and Mantel
+/// test, ANCOM), by what they were computed from, so that changing how a
+/// plot looks (colours, shapes, sizes, fonts, the legend) draws it again
+/// without computing it again.
+///
+/// A plot whose slow part is not kept asks for it to be computed
+/// ([`take_request`](Self::take_request)) and is drawn as a placeholder; the
+/// window computes it in a job (on another thread on the desktop, in time
+/// slices in the browser), showing its progress, keeps the outcome here
+/// and draws the plot again.
+#[derive(Default)]
+pub struct OrdinationCache {
+    /// Most recently used last.
+    entries: std::sync::Mutex<Vec<(OrdinationKey, Cached)>>,
+    computed: std::sync::atomic::AtomicUsize,
+    /// The slow part the last plot built needs, not yet kept.
+    request: std::sync::Mutex<Option<PlotRequest>>,
+    /// Compute what is needed at once, while the plot is built, instead of
+    /// asking for it: for tests and scripts that build figures directly.
+    synchronous: std::sync::atomic::AtomicBool,
+}
+
+/// What an ordination layout is computed from.
+#[derive(Clone)]
+struct OrdinationKey {
+    /// The profiles the samples come from: the layout belongs to this
+    /// data, not to another loaded later (held, so that it cannot be
+    /// mistaken for one that takes its place in memory).
+    tree: Option<std::sync::Arc<stamp_core::ProfileTree>>,
+    /// Everything else: the plot, its inputs and settings.
+    inputs: String,
+}
+
+impl PartialEq for OrdinationKey {
+    fn eq(&self, other: &Self) -> bool {
+        let same_tree = match (&self.tree, &other.tree) {
+            (Some(a), Some(b)) => std::sync::Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        };
+        same_tree && self.inputs == other.inputs
+    }
+}
+
+/// The slow part of a plot.
+#[derive(Clone)]
+pub enum Cached {
+    Pca(Option<stamp_core::stats::pca::Pca>),
+    Community(Result<community_plots::Layout, String>),
+    /// Distances between samples, and the depth they were rarefied to.
+    Distances(std::sync::Arc<DistanceMatrix>, Option<u64>),
+    Mantel {
+        matrix: std::sync::Arc<DistanceMatrix>,
+        differences: std::sync::Arc<DistanceMatrix>,
+        test: stamp_core::stats::community::PermutationTest,
+        depth: Option<u64>,
+    },
+    Ancom(Option<std::sync::Arc<stamp_core::stats::ancom::AncomResult>>),
+    /// Nothing could be computed, for the reason given.
+    Unavailable(String),
+}
+
+/// Work computing the slow part of a plot, in steps as [`Job::spawn_steps`]
+/// takes them: `None` while there is more to do, `Some(None)` once
+/// cancelled.
+///
+/// [`Job::spawn_steps`]: crate::jobs::Job::spawn_steps
+type Work =
+    Box<dyn FnMut(&crate::jobs::Progress, &dyn Fn() -> bool) -> Option<Option<Cached>> + Send>;
+
+/// The slow part of a plot, to be computed.
+pub struct PlotRequest {
+    key: OrdinationKey,
+    work: Work,
+}
+
+/// The slow part of a plot being computed.
+pub struct RunningPlot {
+    key: OrdinationKey,
+    job: crate::jobs::Job<Option<Cached>>,
+}
+
+/// How a [`RunningPlot`] is getting on.
+pub enum PlotPoll {
+    Running,
+    /// Finished, and kept in the cache.
+    Finished,
+    Cancelled,
+    Failed,
+}
+
+impl PlotRequest {
+    /// Start computing.
+    pub fn start(self) -> RunningPlot {
+        RunningPlot {
+            key: self.key,
+            job: crate::jobs::Job::spawn_steps(self.work),
+        }
+    }
+
+    /// Whether this asks for what `running` computes.
+    pub fn is_running_in(&self, running: &RunningPlot) -> bool {
+        self.key == running.key
+    }
+
+    /// A text that tells requests apart.
+    pub fn id(&self) -> String {
+        self.key.inputs.clone()
+    }
+}
+
+impl RunningPlot {
+    /// A text that tells calculations apart, as [`PlotRequest::id`].
+    pub fn id(&self) -> String {
+        self.key.inputs.clone()
+    }
+
+    pub fn progress(&self) -> &crate::jobs::Progress {
+        self.job.progress()
+    }
+
+    pub fn cancel(&self) {
+        self.job.cancel();
+    }
+
+    /// Collect the outcome, if there is one, into `cache`.
+    pub fn poll(&self, cache: &OrdinationCache) -> PlotPoll {
+        match self.job.poll() {
+            Ok(Some(value)) => {
+                cache.insert(self.key.clone(), value);
+                PlotPoll::Finished
+            }
+            Ok(None) => PlotPoll::Cancelled,
+            Err(true) => PlotPoll::Running,
+            Err(false) => PlotPoll::Failed,
+        }
+    }
+}
+
+/// Layouts kept.
+const ORDINATION_CACHE_SIZE: usize = 6;
+
+/// The text of the placeholder drawn while the slow part of a plot is
+/// computed.
+pub const COMPUTING: &str = "Computing the plot...";
+
+/// A [`Work`] that does `compute` in one piece, saying first that it is
+/// doing `stage` (so that, in the browser, the page shows that before the
+/// work begins).
+fn work_in_one_piece(stage: &str, compute: impl FnOnce() -> Cached + Send + 'static) -> Work {
+    let stage = stage.to_string();
+    let mut compute = Some(compute);
+    let mut announced = false;
+    Box::new(move |progress, _| {
+        if !progress.report_stage(&stage, 0, 0) {
+            return Some(None);
+        }
+        if !std::mem::replace(&mut announced, true) {
+            return None;
+        }
+        compute.take().map(|compute| Some(compute()))
+    })
+}
+
+/// How a run inside a [`Work`] paces itself: it reports what it is doing,
+/// stops once cancelled, pauses when its time is up, and pauses too
+/// whenever it starts something new, so that in the browser the page says
+/// so before a piece of work that cannot be divided.
+fn stage_pace<'a>(
+    progress: &'a crate::jobs::Progress,
+    out_of_time: &'a dyn Fn() -> bool,
+    last: &'a mut String,
+) -> impl FnMut(&str, usize, usize) -> stamp_core::stats::results::Control + 'a {
+    use stamp_core::stats::results::Control;
+    move |stage, done, total| {
+        if !progress.report_stage(stage, done, total) {
+            Control::Cancel
+        } else if last != stage {
+            last.clear();
+            last.push_str(stage);
+            Control::Pause
+        } else if out_of_time() {
+            Control::Pause
+        } else {
+            Control::Continue
+        }
+    }
+}
+
+impl OrdinationCache {
+    /// The slow part for `key`, if kept. Otherwise it is computed now by
+    /// `work`, if the cache is synchronous, or else asked for (see
+    /// [`take_request`](Self::take_request)) and `None` returned.
+    fn get_or_request(&self, key: OrdinationKey, work: impl FnOnce() -> Work) -> Option<Cached> {
+        if let Some(value) = self.get(&key) {
+            return Some(value);
+        }
+        let mut work = work();
+        if self.synchronous.load(std::sync::atomic::Ordering::Relaxed) {
+            let progress = crate::jobs::Progress::default();
+            let value = loop {
+                if let Some(value) = work(&progress, &|| false) {
+                    break value?;
+                }
+            };
+            self.insert(key, value.clone());
+            return Some(value);
+        }
+        *self.request.lock().unwrap_or_else(|e| e.into_inner()) = Some(PlotRequest { key, work });
+        None
+    }
+
+    /// The slow part for `key`, if kept, which makes it the most recently
+    /// used.
+    fn get(&self, key: &OrdinationKey) -> Option<Cached> {
+        let mut entries = self.entries();
+        let index = entries.iter().position(|(k, _)| k == key)?;
+        let entry = entries.remove(index);
+        let value = entry.1.clone();
+        entries.push(entry);
+        Some(value)
+    }
+
+    fn insert(&self, key: OrdinationKey, value: Cached) {
+        self.computed
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let mut entries = self.entries();
+        entries.retain(|(k, _)| *k != key);
+        if entries.len() >= ORDINATION_CACHE_SIZE {
+            entries.remove(0);
+        }
+        entries.push((key, value));
+    }
+
+    fn entries(&self) -> std::sync::MutexGuard<'_, Vec<(OrdinationKey, Cached)>> {
+        self.entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The number of layouts computed so far, not counting those reused.
+    pub fn computed(&self) -> usize {
+        self.computed.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// What the plot built last needs computed, if anything; asked for
+    /// once.
+    pub fn take_request(&self) -> Option<PlotRequest> {
+        self.request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+    }
+
+    /// Compute slow parts while plots are built rather than asking for them.
+    pub fn set_synchronous(&self, synchronous: bool) {
+        self.synchronous
+            .store(synchronous, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// A key from the hash of some numbers.
+fn hash_of_values<'a>(values: impl Iterator<Item = &'a [f64]>) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for row in values {
+        row.len().hash(&mut hasher);
+        for value in row {
+            value.to_bits().hash(&mut hasher);
+        }
+    }
+    hasher.finish()
+}
+
+/// The PCA plot of `data`, its principal components computed only if not
+/// already kept for the same values.
+fn pca_figure(session: &Session, data: &pca_plot::Data, options: &pca_plot::Options) -> Figure {
+    let hash = hash_of_values(data.samples.iter().map(|s| s.proportions.as_slice()));
+    let key = OrdinationKey {
+        tree: None,
+        inputs: format!("PCA|{}|{hash:016x}", data.samples.len()),
+    };
+    let work = || {
+        let data = data.clone();
+        work_in_one_piece("Computing principal components", move || {
+            Cached::Pca(pca_plot::layout(&data))
+        })
+    };
+    match session.ordinations.get_or_request(key, work) {
+        Some(Cached::Pca(layout)) => pca_plot::draw(data, layout.as_ref(), options),
+        Some(_) => Figure::message("Degenerate PCA plot"),
+        None => Figure::message(COMPUTING),
+    }
+}
 
 /// The plots, each available in one or more modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +338,10 @@ pub enum PlotKind {
     RankAbundance,
     Ancom,
     Mantel,
+    GroupHeatmap,
+    CoOccurrence,
+    PrevalenceAbundance,
+    Map,
 }
 
 impl PlotKind {
@@ -71,6 +370,10 @@ impl PlotKind {
             PlotKind::RankAbundance => "Rank-abundance curves",
             PlotKind::Ancom => "ANCOM plot",
             PlotKind::Mantel => "Mantel test plot",
+            PlotKind::GroupHeatmap => "Group heatmap",
+            PlotKind::CoOccurrence => "Co-occurrence heatmap",
+            PlotKind::PrevalenceAbundance => "Prevalence-abundance plot",
+            PlotKind::Map => "Map of sample locations",
         }
     }
 
@@ -82,11 +385,13 @@ impl PlotKind {
                 PlotGroup::Differences
             }
             Bar | Box | PostHoc | CorrelationScatter => PlotGroup::OneFeature,
-            Composition | ProfileBar | Heatmap | Scatter | SharedFeatures | SequenceHistogram => {
+            Composition | ProfileBar | Heatmap | GroupHeatmap | CoOccurrence
+            | PrevalenceAbundance | Scatter | SharedFeatures | SequenceHistogram => {
                 PlotGroup::Composition
             }
             Rarefaction | RankAbundance | AlphaDiversity => PlotGroup::Diversity,
             Pca | Pcoa | Nmds | DistanceBox | Mantel => PlotGroup::Similarity,
+            Map => PlotGroup::Samples,
         }
     }
 
@@ -142,6 +447,9 @@ impl PlotKind {
                 PlotKind::Scatter,
                 PlotKind::Pca,
                 PlotKind::Heatmap,
+                PlotKind::GroupHeatmap,
+                PlotKind::CoOccurrence,
+                PlotKind::PrevalenceAbundance,
                 PlotKind::Rarefaction,
                 PlotKind::Volcano,
                 PlotKind::Composition,
@@ -152,16 +460,22 @@ impl PlotKind {
                 PlotKind::Ancom,
                 PlotKind::SharedFeatures,
                 PlotKind::RankAbundance,
+                PlotKind::Map,
             ],
             Mode::Correlation => &[
                 PlotKind::CorrelationScatter,
                 PlotKind::Volcano,
                 PlotKind::PValueHistogram,
                 PlotKind::Mantel,
+                PlotKind::CoOccurrence,
+                PlotKind::Map,
             ],
             Mode::MultipleGroups => &[
                 PlotKind::Pca,
                 PlotKind::Heatmap,
+                PlotKind::GroupHeatmap,
+                PlotKind::CoOccurrence,
+                PlotKind::PrevalenceAbundance,
                 PlotKind::Bar,
                 PlotKind::Box,
                 PlotKind::PostHoc,
@@ -175,6 +489,7 @@ impl PlotKind {
                 PlotKind::Ancom,
                 PlotKind::SharedFeatures,
                 PlotKind::RankAbundance,
+                PlotKind::Map,
             ],
         }
     }
@@ -217,15 +532,18 @@ pub enum PlotGroup {
     /// How alike are the samples, and does it follow the groups or a
     /// variable?
     Similarity,
+    /// Where were the samples taken?
+    Samples,
 }
 
 impl PlotGroup {
-    pub const ALL: [PlotGroup; 5] = [
+    pub const ALL: [PlotGroup; 6] = [
         PlotGroup::Differences,
         PlotGroup::OneFeature,
         PlotGroup::Composition,
         PlotGroup::Diversity,
         PlotGroup::Similarity,
+        PlotGroup::Samples,
     ];
 
     pub fn name(self) -> &'static str {
@@ -235,8 +553,21 @@ impl PlotGroup {
             PlotGroup::Composition => "Composition",
             PlotGroup::Diversity => "Diversity",
             PlotGroup::Similarity => "Similarity between samples",
+            PlotGroup::Samples => "Where the samples are from",
         }
     }
+}
+
+/// Which features the box plot shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum BoxFeatures {
+    /// The feature selected in the feature table.
+    Selected,
+    /// The most significant features that pass the filters.
+    MostSignificant,
+    /// The features typed in the settings (or Ctrl+clicked in the feature
+    /// table).
+    Listed,
 }
 
 /// The settings of every plot, as set in the "Configure plot" window.
@@ -268,6 +599,14 @@ pub struct PlotSettings {
     /// The bar plot of one feature across groups.
     pub bar: feature_plots::BarOptions,
     pub box_plot: feature_plots::BoxOptions,
+    /// Which features the box plot shows: the selected one, the most
+    /// significant `box_feature_count`, or those listed in
+    /// `box_feature_list` (one per line); and the metadata field whose
+    /// categories may order its groups.
+    pub box_features: BoxFeatures,
+    pub box_feature_count: usize,
+    pub box_feature_list: String,
+    pub box_category_field: Option<String>,
     /// What the group bar and box plots show for each sample.
     pub feature_field: feature_plots::Field,
     pub pca: pca_plot::Options,
@@ -302,6 +641,35 @@ pub struct PlotSettings {
     pub heatmap_only_active: bool,
     /// Show sequence counts instead of proportions in the heatmap.
     pub heatmap_sequence_counts: bool,
+    /// The heatmap of groups: its appearance, what it summarises, whether
+    /// only the features that pass the filters are drawn, and the metadata
+    /// field whose categories label (and may order) the groups.
+    pub group_heatmap: group_heatmap::Options,
+    pub group_heatmap_summary: group_heatmap::Summary,
+    pub group_heatmap_only_active: bool,
+    pub group_heatmap_category_field: Option<String>,
+    /// The co-occurrence heatmap: what is correlated, its appearance, the
+    /// features always included (one per line, as typed), and the group to
+    /// correlate within (`None`: every sample of the analysis).
+    pub co_occurrence: co_occurrence_plot::Settings,
+    pub co_occurrence_options: co_occurrence_plot::Options,
+    pub co_occurrence_features: String,
+    pub co_occurrence_group: Option<String>,
+    /// The prevalence-abundance plot: its appearance and view, the
+    /// smallest proportion (%) at which a feature counts as present,
+    /// whether only active features are drawn, whether the selected
+    /// feature is highlighted, and other features to highlight (one per
+    /// line).
+    pub prevalence: prevalence_plot::Options,
+    pub prevalence_min_abundance: f64,
+    pub prevalence_only_active: bool,
+    pub prevalence_highlight_selected: bool,
+    pub prevalence_highlight: String,
+    /// The map of sample locations, and the metadata fields holding the
+    /// latitudes and longitudes (`None`: a field named like one).
+    pub map: map_plot::Options,
+    pub map_lat_field: Option<String>,
+    pub map_lon_field: Option<String>,
     /// Features drawn in red by the plots that support highlighting.
     #[serde(skip)]
     pub highlighted: Vec<String>,
@@ -314,6 +682,25 @@ pub struct PlotSettings {
     /// Font sizes of the tick labels, axis labels and legends of every
     /// plot, set in the preferences.
     pub fonts: stamp_plot::axes::Fonts,
+}
+
+impl PlotSettings {
+    /// True if the plot `kind` colours samples by the abundance of the
+    /// selected feature, so that it changes with the selection.
+    pub fn colors_by_selected_feature(&self, kind: PlotKind) -> bool {
+        use stamp_plot::ordination_style::ColorSource;
+        let options = match kind {
+            PlotKind::Pca => &self.pca,
+            PlotKind::Pcoa => &self.pcoa,
+            PlotKind::Nmds => &self.nmds,
+            PlotKind::Map => {
+                return self.map.color_by == ColorSource::SelectedFeature
+                    || self.map.size_by == map_plot::SizeSource::SelectedFeature
+            }
+            _ => return false,
+        };
+        options.color_by == stamp_plot::ordination_style::ColorSource::SelectedFeature
+    }
 }
 
 impl Default for PlotSettings {
@@ -362,6 +749,10 @@ impl Default for PlotSettings {
                 height: 6.0,
                 ..Default::default()
             },
+            box_features: BoxFeatures::Selected,
+            box_feature_count: 4,
+            box_feature_list: String::new(),
+            box_category_field: None,
             feature_field: feature_plots::Field::Proportion,
             pca: pca_plot::Options {
                 legend,
@@ -411,6 +802,22 @@ impl Default for PlotSettings {
             ancom_alpha: 0.05,
             heatmap_only_active: false,
             heatmap_sequence_counts: false,
+            group_heatmap: group_heatmap::Options::default(),
+            group_heatmap_summary: group_heatmap::Summary::default(),
+            group_heatmap_only_active: false,
+            group_heatmap_category_field: None,
+            co_occurrence: co_occurrence_plot::Settings::default(),
+            co_occurrence_options: co_occurrence_plot::Options::default(),
+            co_occurrence_features: String::new(),
+            co_occurrence_group: None,
+            prevalence: prevalence_plot::Options::default(),
+            prevalence_min_abundance: 0.0,
+            prevalence_only_active: false,
+            prevalence_highlight_selected: true,
+            prevalence_highlight: String::new(),
+            map: map_plot::Options::default(),
+            map_lat_field: None,
+            map_lon_field: None,
             highlighted: Vec::new(),
             min_p_exponent: -15,
             axes_color: AXES_COLOR,
@@ -441,6 +848,10 @@ impl PlotSettings {
             PlotKind::Box => {
                 self.box_plot = defaults.box_plot;
                 self.feature_field = defaults.feature_field;
+                self.box_features = defaults.box_features;
+                self.box_feature_count = defaults.box_feature_count;
+                self.box_feature_list = defaults.box_feature_list;
+                self.box_category_field = defaults.box_category_field;
             }
             PlotKind::ProfileBar => {
                 self.profile_bar = defaults.profile_bar;
@@ -496,8 +907,228 @@ impl PlotSettings {
                 self.heatmap_only_active = defaults.heatmap_only_active;
                 self.heatmap_sequence_counts = defaults.heatmap_sequence_counts;
             }
+            PlotKind::GroupHeatmap => {
+                self.group_heatmap = defaults.group_heatmap;
+                self.group_heatmap_summary = defaults.group_heatmap_summary;
+                self.group_heatmap_only_active = defaults.group_heatmap_only_active;
+                self.group_heatmap_category_field = defaults.group_heatmap_category_field;
+            }
+            PlotKind::PrevalenceAbundance => {
+                self.prevalence = defaults.prevalence;
+                self.prevalence_min_abundance = defaults.prevalence_min_abundance;
+                self.prevalence_only_active = defaults.prevalence_only_active;
+                self.prevalence_highlight_selected = defaults.prevalence_highlight_selected;
+                self.prevalence_highlight = defaults.prevalence_highlight;
+            }
+            PlotKind::Map => {
+                self.map = defaults.map;
+                self.map_lat_field = defaults.map_lat_field;
+                self.map_lon_field = defaults.map_lon_field;
+            }
+            PlotKind::CoOccurrence => {
+                self.co_occurrence = defaults.co_occurrence;
+                self.co_occurrence_options = defaults.co_occurrence_options;
+                self.co_occurrence_features = defaults.co_occurrence_features;
+                self.co_occurrence_group = defaults.co_occurrence_group;
+            }
         }
     }
+}
+
+/// The group heatmap of a profile whose sample `i` is in group
+/// `sample_groups[i]`; `active` are the features that pass the filters.
+fn group_heatmap_figure(
+    session: &Session,
+    profile: &stamp_core::Profile,
+    sample_groups: &[usize],
+    groups: &[String],
+    active: &[String],
+    settings: &PlotSettings,
+) -> Figure {
+    let mut data = group_heatmap::Data::from_profile(
+        profile,
+        sample_groups,
+        groups,
+        settings.group_heatmap_only_active.then_some(active),
+        &settings.group_heatmap_summary,
+    );
+    let mut options = settings.group_heatmap.clone();
+    let field = settings
+        .group_heatmap_category_field
+        .as_ref()
+        .and_then(|field| {
+            let metadata = session.metadata.as_ref()?;
+            metadata
+                .fields()
+                .iter()
+                .any(|f| f == field)
+                .then_some((metadata, field))
+        });
+    match field {
+        Some((metadata, field)) => {
+            let members = |group: &str| -> Vec<String> {
+                profile
+                    .sample_names
+                    .iter()
+                    .zip(sample_groups)
+                    .filter(|(_, &g)| groups.get(g).is_some_and(|name| name == group))
+                    .map(|(sample, _)| sample.clone())
+                    .collect()
+            };
+            data.set_categories(metadata, field, &members);
+        }
+        None => {
+            // Without a field there is nothing to order the groups by.
+            if options.column_order == group_heatmap::ColumnOrder::Category {
+                options.column_order = group_heatmap::ColumnOrder::Alphabetical;
+            }
+        }
+    }
+    group_heatmap::plot(&data, &options)
+}
+
+/// The features typed in the co-occurrence settings, one per line.
+pub fn typed_features(text: &str) -> Vec<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// The co-occurrence heatmap (or the correlations of the selected feature)
+/// of a profile, within one group if the settings name one of `groups`.
+fn co_occurrence_figure(
+    session: &Session,
+    profile: &stamp_core::Profile,
+    sample_groups: &[usize],
+    groups: &[String],
+    settings: &PlotSettings,
+) -> Figure {
+    let columns: Option<Vec<usize>> = settings
+        .co_occurrence_group
+        .as_ref()
+        .and_then(|name| groups.iter().position(|g| g == name))
+        .map(|group| {
+            (0..sample_groups.len())
+                .filter(|&i| sample_groups[i] == group)
+                .collect()
+        });
+    let co = co_occurrence_plot::Settings {
+        forced: typed_features(&settings.co_occurrence_features),
+        ..settings.co_occurrence.clone()
+    };
+    let options = &settings.co_occurrence_options;
+    let samples = columns
+        .as_ref()
+        .map_or(profile.sample_names.len(), Vec::len);
+    match co.view {
+        co_occurrence_plot::View::Matrix => {
+            match co_occurrence_plot::Data::compute(profile, columns.as_deref(), &co) {
+                Ok(data) => co_occurrence_plot::matrix_plot(&data, &co, options),
+                Err(message) => Figure::message(&message),
+            }
+        }
+        co_occurrence_plot::View::OneFeature => {
+            let Some(feature) = &session.selected_feature else {
+                return Figure::message(NO_FEATURE);
+            };
+            match co_occurrence_plot::compute_partners(profile, columns.as_deref(), feature, &co) {
+                Ok(found) => {
+                    co_occurrence_plot::partner_plot(feature, &found, samples, co.clr, &co, options)
+                }
+                Err(message) => Figure::message(&message),
+            }
+        }
+    }
+}
+
+/// The features of the box plot: the selected one, the most significant of
+/// `ranked` (features that pass the filters, most significant first), or
+/// those listed in the settings.
+pub fn box_feature_names(
+    settings: &PlotSettings,
+    selected: Option<&str>,
+    ranked: &[String],
+) -> Vec<String> {
+    match settings.box_features {
+        BoxFeatures::Selected => selected.map(str::to_string).into_iter().collect(),
+        BoxFeatures::MostSignificant => ranked
+            .iter()
+            .take(settings.box_feature_count.max(1))
+            .cloned()
+            .collect(),
+        BoxFeatures::Listed => typed_features(&settings.box_feature_list),
+    }
+}
+
+/// The box plot of the features chosen in the settings; `data_of` gives a
+/// feature's values in each group (`None` for an unknown feature), and
+/// `group_samples` the samples of each group, by name.
+fn box_figure(
+    session: &Session,
+    settings: &PlotSettings,
+    ranked: &[String],
+    data_of: &dyn Fn(&str) -> Option<feature_plots::FeatureData>,
+    group_samples: &dyn Fn(&str) -> Vec<String>,
+) -> Figure {
+    let names = box_feature_names(settings, session.selected_feature.as_deref(), ranked);
+    let data: Vec<feature_plots::FeatureData> = names.iter().filter_map(|n| data_of(n)).collect();
+    if data.is_empty() {
+        return Figure::message(match settings.box_features {
+            BoxFeatures::Selected => NO_FEATURE,
+            BoxFeatures::MostSignificant => "No feature passes the filters",
+            BoxFeatures::Listed => {
+                "List features in Configure plot, or Ctrl+click them in the feature table"
+            }
+        });
+    }
+    let categories = settings.box_category_field.as_ref().and_then(|field| {
+        let metadata = session.metadata.as_ref()?;
+        if !metadata.fields().iter().any(|f| f == field) {
+            return None;
+        }
+        let lists: Vec<Vec<String>> = data[0]
+            .groups
+            .iter()
+            .map(|g| group_samples(&g.name))
+            .collect();
+        let slices: Vec<&[String]> = lists.iter().map(Vec::as_slice).collect();
+        Some(stamp_core::stats::group_summary::majority_values(
+            metadata, &slices, field,
+        ))
+    });
+    multi_box::plot(&data, categories.as_deref(), &settings.box_plot)
+}
+
+/// The prevalence-abundance plot of a profile whose sample `i` is in group
+/// `sample_groups[i]`; `active` are the features that pass the filters.
+fn prevalence_figure(
+    session: &Session,
+    profile: &stamp_core::Profile,
+    sample_groups: &[usize],
+    groups: &[String],
+    colors: Vec<Color>,
+    active: &[String],
+    settings: &PlotSettings,
+) -> Figure {
+    let mut data = prevalence_plot::Data::from_profile(
+        profile,
+        sample_groups,
+        groups,
+        settings.prevalence_only_active.then_some(active),
+        settings.prevalence_min_abundance,
+    );
+    data.group_colors = colors;
+    let mut highlighted = typed_features(&settings.prevalence_highlight);
+    highlighted.extend(settings.highlighted.iter().cloned());
+    if settings.prevalence_highlight_selected {
+        highlighted.extend(session.selected_feature.iter().cloned());
+    }
+    highlighted.sort();
+    highlighted.dedup();
+    data.highlighted = highlighted;
+    prevalence_plot::plot(&data, &settings.prevalence)
 }
 
 const NO_RESULTS: &str = "Load a profile to begin";
@@ -530,7 +1161,104 @@ pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSetti
     figure
 }
 
+/// The map of where the samples of `profile` were taken, sample `i` being
+/// in group `sample_groups[i]` of `groups`, drawn in `colors`.
+fn map_figure(
+    session: &Session,
+    profile: &stamp_core::Profile,
+    sample_groups: &[usize],
+    groups: Vec<String>,
+    colors: Vec<Color>,
+    settings: &PlotSettings,
+) -> Figure {
+    let Some(metadata) = session.metadata.as_ref() else {
+        return Figure::message(NO_METADATA);
+    };
+    let (lat, lon) = map_fields(metadata, settings);
+    let (Some(lat), Some(lon)) = (lat, lon) else {
+        return Figure::message(
+            "No metadata field looks like a latitude or longitude; choose them in Configure plot",
+        );
+    };
+    let options = &settings.map;
+    let styling = match stamp_plot::ordination_style::resolve(
+        &options.color_by,
+        options.shape_by.as_deref(),
+        Some(metadata),
+        Some(profile),
+        session.selected_feature.as_deref(),
+        session.group_field.as_deref(),
+    ) {
+        Ok(styling) => styling,
+        Err(message) => return Figure::message(&message),
+    };
+    let sizes = match options.size_by.resolve(
+        Some(metadata),
+        Some(profile),
+        session.selected_feature.as_deref(),
+    ) {
+        Ok(sizes) => sizes,
+        Err(message) => return Figure::message(&message),
+    };
+    match map_plot::Data::new(
+        &profile.sample_names,
+        sample_groups,
+        groups,
+        metadata,
+        &lat,
+        &lon,
+    ) {
+        Ok(data) => map_plot::plot(
+            &map_plot::Data {
+                group_colors: colors,
+                styling,
+                sizes,
+                ..data
+            },
+            options,
+        ),
+        Err(message) => Figure::message(&message),
+    }
+}
+
+/// The latitude and longitude fields of the map: those chosen, or else
+/// fields named like them.
+pub fn map_fields(
+    metadata: &stamp_core::Metadata,
+    settings: &PlotSettings,
+) -> (Option<String>, Option<String>) {
+    let (lat, lon) = map_plot::coordinate_fields(metadata);
+    let chosen = |field: &Option<String>| {
+        field
+            .clone()
+            .filter(|f| metadata.fields().iter().any(|m| m == f))
+    };
+    (
+        chosen(&settings.map_lat_field).or(lat),
+        chosen(&settings.map_lon_field).or(lon),
+    )
+}
+
+/// What colours and shapes the samples of an ordination plot, as its
+/// options ask, from the session's metadata and `profile` (the analysis
+/// profile, for a feature's relative abundance).
+fn ordination_styling(
+    session: &Session,
+    options: &pca_plot::Options,
+    profile: &stamp_core::Profile,
+) -> Result<stamp_plot::ordination_style::Styling, String> {
+    stamp_plot::ordination_style::resolve(
+        &options.color_by,
+        options.shape_by.as_deref(),
+        session.metadata.as_ref(),
+        Some(profile),
+        session.selected_feature.as_deref(),
+        session.group_field.as_deref(),
+    )
+}
+
 /// One of the plots of whole communities, for some samples and their groups.
+#[allow(clippy::too_many_arguments)]
 fn community_plot(
     session: &Session,
     kind: PlotKind,
@@ -538,13 +1266,96 @@ fn community_plot(
     sample_groups: Vec<usize>,
     groups: Vec<String>,
     colors: Vec<Color>,
+    profile: &stamp_core::Profile,
     settings: &PlotSettings,
 ) -> Figure {
     let Some(tree) = &session.tree else {
         return Figure::message(NO_RESULTS);
     };
-    // The same seed as the tests, so that the same samples are drawn and
-    // the same permutations made every time.
+    // What colours and shapes the samples of the ordinations, found first
+    // so that a mistake (a feature name being typed) is reported at once.
+    let ordination = match kind {
+        PlotKind::Pcoa => Some(&settings.pcoa),
+        PlotKind::Nmds => Some(&settings.nmds),
+        _ => None,
+    };
+    let styling = match ordination.map(|options| ordination_styling(session, options, profile)) {
+        Some(Ok(styling)) => styling,
+        Some(Err(message)) => return Figure::message(&message),
+        None => Default::default(),
+    };
+    let distance = settings.community_distance;
+    // The slow plots (ordinations, distances) are kept by what they are
+    // computed from, so that a change of colours, shapes or sizes does not
+    // compute them again, and computed in a job.
+    if matches!(
+        kind,
+        PlotKind::Pcoa | PlotKind::Nmds | PlotKind::DistanceBox
+    ) {
+        let tests = (kind == PlotKind::Pcoa && settings.pcoa_show_tests)
+            .then_some(settings.community_permutations);
+        let job = match kind {
+            PlotKind::Pcoa => community_plots::CommunityJob::Pcoa { tests },
+            PlotKind::Nmds => community_plots::CommunityJob::Nmds,
+            _ => community_plots::CommunityJob::Distances,
+        };
+        let key = OrdinationKey {
+            tree: Some(tree.clone()),
+            inputs: format!(
+                "{kind:?}|{}|{:?}|{}|{distance:?}|{tests:?}|{samples:?}|{sample_groups:?}",
+                session.profile_level, settings.community_normalisation, session.seed,
+            ),
+        };
+        let work = || {
+            community_work(
+                session,
+                tree,
+                samples,
+                sample_groups.clone(),
+                groups.clone(),
+                settings,
+                job,
+            )
+        };
+        let cached = match session.ordinations.get_or_request(key, work) {
+            Some(cached) => cached,
+            None => return Figure::message(COMPUTING),
+        };
+        // What drawing needs of the community: its samples, groups and how
+        // they look, not their abundances.
+        let mut community = Community {
+            samples: samples.to_vec(),
+            sample_groups,
+            groups,
+            group_colors: colors,
+            styling,
+            table: stamp_core::stats::diversity::CommunityTable {
+                abundances: Vec::new(),
+                depth: None,
+            },
+        };
+        return match (kind, cached) {
+            (PlotKind::Pcoa, Cached::Community(Ok(layout))) => {
+                community_plots::draw_pcoa(&community, &layout, &settings.pcoa)
+            }
+            (PlotKind::Nmds, Cached::Community(Ok(layout))) => {
+                community_plots::draw_nmds(&community, &layout, &settings.nmds)
+            }
+            (_, Cached::Distances(matrix, depth)) => {
+                community.table.depth = depth;
+                community_plots::draw_distance_box(
+                    &community,
+                    distance,
+                    &matrix,
+                    &settings.distance_box,
+                )
+            }
+            (_, Cached::Community(Err(message)) | Cached::Unavailable(message)) => {
+                Figure::message(&message)
+            }
+            _ => Figure::message(NO_RESULTS),
+        };
+    }
     let mut rng = rng_from_seed(session.seed);
     let community = Community::from_tree(
         tree,
@@ -560,22 +1371,90 @@ fn community_plot(
         Err(message) => return Figure::message(&message),
     };
     community.group_colors = colors;
-    let distance = settings.community_distance;
-    match kind {
-        PlotKind::AlphaDiversity => {
-            community_plots::alpha_plot(&community, settings.alpha_metric, &settings.alpha_box)
+    community_plots::alpha_plot(&community, settings.alpha_metric, &settings.alpha_box)
+}
+
+/// The work of computing `job` for some samples of the session's profiles,
+/// in pieces: first the community table (with the session's seed, so that
+/// the same samples are drawn when rarefying and the same permutations
+/// made every time), then what the job needs.
+fn community_work(
+    session: &Session,
+    tree: &std::sync::Arc<stamp_core::ProfileTree>,
+    samples: &[String],
+    sample_groups: Vec<usize>,
+    groups: Vec<String>,
+    settings: &PlotSettings,
+    job: community_plots::CommunityJob,
+) -> Work {
+    use stamp_core::stats::results::Step;
+    let tree = tree.clone();
+    let samples = samples.to_vec();
+    let level = session.profile_level.clone();
+    let (normalisation, distance, seed) = (
+        settings.community_normalisation,
+        settings.community_distance,
+        session.seed,
+    );
+    let mut job = Some(job);
+    let mut run: Option<community_plots::CommunityRun> = None;
+    let mut last = String::new();
+    Box::new(move |progress, out_of_time| {
+        if run.is_none() {
+            let stage = "Reading the samples";
+            if !progress.report_stage(stage, 0, 0) {
+                return Some(None);
+            }
+            if last != stage {
+                // Said first, so that the page shows it.
+                last = stage.to_string();
+                return None;
+            }
+            let mut rng = rng_from_seed(seed);
+            match Community::from_tree(
+                &tree,
+                &samples,
+                &level,
+                sample_groups.clone(),
+                groups.clone(),
+                normalisation,
+                &mut rng,
+            ) {
+                Ok(community) => {
+                    let job = job.take()?;
+                    run = Some(community_plots::CommunityRun::new(
+                        community, distance, job, rng,
+                    ));
+                }
+                Err(message) => return Some(Some(Cached::Unavailable(message))),
+            }
         }
-        PlotKind::Pcoa => community_plots::pcoa_plot(
-            &community,
-            distance,
-            settings
-                .pcoa_show_tests
-                .then_some((settings.community_permutations, &mut rng)),
-            &settings.pcoa,
-        ),
-        PlotKind::Nmds => community_plots::nmds_plot(&community, distance, &settings.nmds),
-        _ => community_plots::distance_box_plot(&community, distance, &settings.distance_box),
-    }
+        let current = run.as_mut()?;
+        let depth = current.depth();
+        match current.advance(&mut stage_pace(progress, out_of_time, &mut last)) {
+            Step::Done(output) => Some(Some(match output {
+                community_plots::CommunityOutput::Layout(layout) => Cached::Community(layout),
+                community_plots::CommunityOutput::Distances(matrix) => {
+                    Cached::Distances(std::sync::Arc::new(matrix), depth)
+                }
+                community_plots::CommunityOutput::Mantel {
+                    matrix,
+                    differences,
+                    test,
+                } => Cached::Mantel {
+                    matrix: std::sync::Arc::new(matrix),
+                    differences: std::sync::Arc::new(differences),
+                    test,
+                    depth,
+                },
+                community_plots::CommunityOutput::Unavailable(message) => {
+                    Cached::Unavailable(message)
+                }
+            })),
+            Step::Paused => None,
+            Step::Cancelled => Some(None),
+        }
+    })
 }
 
 /// The plots drawn from the proportions of every feature in some samples
@@ -594,19 +1473,60 @@ fn proportion_plot(kind: PlotKind, data: &composition::Data, settings: &PlotSett
 }
 
 /// The ANCOM plot of a profile whose sample `i` is in group
-/// `sample_groups[i]`.
+/// `sample_groups[i]`; ANCOM itself is computed in a job, a feature at a
+/// time.
 fn ancom_figure(
+    session: &Session,
     profile: &stamp_core::Profile,
     sample_groups: &[usize],
     groups: &[String],
     settings: &PlotSettings,
 ) -> Figure {
+    use stamp_core::stats::ancom::AncomRun;
+    use stamp_core::stats::results::Step;
     let features = profile.features();
     let samples: Vec<Vec<f64>> = (0..profile.sample_names.len())
         .map(|s| features.iter().map(|f| f.counts[s]).collect())
         .collect();
-    match ancom(&samples, sample_groups, settings.ancom_test, settings.ancom_alpha) {
-        Some(result) => {
+    let (test, alpha) = (settings.ancom_test, settings.ancom_alpha);
+    let hash = hash_of_values(samples.iter().map(Vec::as_slice));
+    let key = OrdinationKey {
+        tree: None,
+        inputs: format!("ANCOM|{test:?}|{alpha}|{sample_groups:?}|{hash:016x}"),
+    };
+    let work = || -> Work {
+        let sample_groups = sample_groups.to_vec();
+        let mut samples = Some(samples);
+        let mut run: Option<AncomRun> = None;
+        let mut last = String::new();
+        Box::new(move |progress, out_of_time| {
+            if run.is_none() {
+                let stage = "Preparing ANCOM";
+                if !progress.report_stage(stage, 0, 0) {
+                    return Some(None);
+                }
+                if last != stage {
+                    last = stage.to_string();
+                    return None;
+                }
+                match AncomRun::new(&samples.take()?, &sample_groups, test, alpha) {
+                    Some(new) => run = Some(new),
+                    None => return Some(Some(Cached::Ancom(None))),
+                }
+            }
+            let current = run.as_mut()?;
+            let mut pace = stage_pace(progress, out_of_time, &mut last);
+            match current
+                .advance(&mut |done, total| pace("ANCOM: log ratios of feature", done, total))
+            {
+                Step::Done(result) => Some(Some(Cached::Ancom(Some(std::sync::Arc::new(result))))),
+                Step::Paused => None,
+                Step::Cancelled => Some(None),
+            }
+        })
+    };
+    match session.ordinations.get_or_request(key, work) {
+        Some(Cached::Ancom(Some(result))) => {
             let names: Vec<String> = features.iter().map(|f| f.name.clone()).collect();
             let options = ancom_plot::Options {
                 highlighted: settings.highlighted.clone(),
@@ -614,9 +1534,86 @@ fn ancom_figure(
             };
             ancom_plot::plot(&result, &names, groups, &options)
         }
-        None => Figure::message(
+        Some(_) => Figure::message(
             "ANCOM needs two groups with samples, a group of more than one sample, and two features",
         ),
+        None => Figure::message(COMPUTING),
+    }
+}
+
+/// The Mantel plot of a correlation analysis: the test computed in a job.
+fn mantel_figure(
+    session: &Session,
+    profile: &stamp_core::CorrelationProfile,
+    results: &stamp_core::stats::results::CorrelationResults,
+    settings: &PlotSettings,
+) -> Figure {
+    let Some(tree) = &session.tree else {
+        return Figure::message(NO_RESULTS);
+    };
+    let samples = &profile.profile.sample_names;
+    let (distance, method, permutations) = (
+        settings.community_distance,
+        results.analysis.method,
+        settings.community_permutations,
+    );
+    let key = OrdinationKey {
+        tree: Some(tree.clone()),
+        inputs: format!(
+            "Mantel|{}|{:?}|{}|{distance:?}|{method:?}|{permutations}|{samples:?}|{:x}",
+            session.profile_level,
+            settings.community_normalisation,
+            session.seed,
+            hash_of_values(std::iter::once(profile.values.as_slice())),
+        ),
+    };
+    let work = || {
+        community_work(
+            session,
+            tree,
+            samples,
+            vec![0; samples.len()],
+            vec![String::new()],
+            settings,
+            community_plots::CommunityJob::Mantel {
+                values: profile.values.clone(),
+                method,
+                permutations,
+            },
+        )
+    };
+    match session.ordinations.get_or_request(key, work) {
+        Some(Cached::Mantel {
+            matrix,
+            differences,
+            test,
+            depth,
+        }) => {
+            let community = Community {
+                samples: samples.clone(),
+                sample_groups: vec![0; samples.len()],
+                groups: vec![String::new()],
+                group_colors: Vec::new(),
+                styling: Default::default(),
+                table: stamp_core::stats::diversity::CommunityTable {
+                    abundances: Vec::new(),
+                    depth,
+                },
+            };
+            community_plots::draw_mantel(
+                &community,
+                &profile.field,
+                distance,
+                method,
+                &matrix,
+                &differences,
+                &test,
+                &settings.mantel,
+            )
+        }
+        Some(Cached::Unavailable(message)) => Figure::message(&message),
+        Some(_) => Figure::message(NO_RESULTS),
+        None => Figure::message(COMPUTING),
     }
 }
 
@@ -801,8 +1798,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
             let rows = session.group_rows();
             let color1 = session.group_color(&profile.group_name1);
             let color2 = session.group_color(&profile.group_name2);
-            let feature_data = || {
-                let name = feature?;
+            let data_of = |name: &str| {
                 let mut data =
                     feature_plots::FeatureData::from_group_profile(profile, name, field)?;
                 data.groups[0].color = color1;
@@ -814,6 +1810,12 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     .map(|r| format_p_value(r.p_value_corrected, settings.min_p_exponent));
                 Some(data)
             };
+            let feature_data = || data_of(feature?);
+            let ranked: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
+            let first = profile.samples_in_group1().len();
+            let two_sample_groups: Vec<usize> = (0..profile.profile.sample_names.len())
+                .map(|i| usize::from(i >= first))
+                .collect();
             match kind {
                 PlotKind::ExtendedErrorBar => {
                     let mut data =
@@ -825,10 +1827,22 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     Some(data) => feature_plots::bar_plot(&data, &settings.bar),
                     None => Figure::message(NO_FEATURE),
                 },
-                PlotKind::Box => match feature_data() {
-                    Some(data) => feature_plots::box_plot(&data, &settings.box_plot),
-                    None => Figure::message(NO_FEATURE),
-                },
+                PlotKind::Box => box_figure(session, settings, &ranked, &data_of, &|group| {
+                    if group == profile.group_name1 {
+                        profile.samples_in_group1().to_vec()
+                    } else {
+                        profile.samples_in_group2().to_vec()
+                    }
+                }),
+                PlotKind::PrevalenceAbundance => prevalence_figure(
+                    session,
+                    &profile.profile,
+                    &two_sample_groups,
+                    &[profile.group_name1.clone(), profile.group_name2.clone()],
+                    vec![color1, color2],
+                    &ranked,
+                    settings,
+                ),
                 PlotKind::Scatter => {
                     let mut data = scatter::Data {
                         x_color: color1,
@@ -841,13 +1855,27 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     });
                     scatter::plot(&data, &scatter_options)
                 }
-                PlotKind::Pca => pca_plot::plot(
-                    &pca_plot::Data {
-                        group_colors: vec![color1, color2],
-                        ..pca_plot::Data::from_group_profile(profile)
-                    },
-                    &settings.pca,
+                PlotKind::Map => map_figure(
+                    session,
+                    &profile.profile,
+                    &two_sample_groups,
+                    vec![profile.group_name1.clone(), profile.group_name2.clone()],
+                    vec![color1, color2],
+                    settings,
                 ),
+                PlotKind::Pca => match ordination_styling(session, &settings.pca, &profile.profile)
+                {
+                    Ok(styling) => pca_figure(
+                        session,
+                        &pca_plot::Data {
+                            group_colors: vec![color1, color2],
+                            styling,
+                            ..pca_plot::Data::from_group_profile(profile)
+                        },
+                        &settings.pca,
+                    ),
+                    Err(message) => Figure::message(&message),
+                },
                 PlotKind::Heatmap => {
                     let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
                     heatmap::plot(
@@ -861,6 +1889,32 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         },
                         &settings.heatmap,
                     )
+                }
+                PlotKind::GroupHeatmap | PlotKind::CoOccurrence => {
+                    let first = profile.samples_in_group1().len();
+                    let sample_groups: Vec<usize> = (0..profile.profile.sample_names.len())
+                        .map(|i| usize::from(i >= first))
+                        .collect();
+                    let groups = [profile.group_name1.clone(), profile.group_name2.clone()];
+                    if kind == PlotKind::GroupHeatmap {
+                        let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
+                        group_heatmap_figure(
+                            session,
+                            &profile.profile,
+                            &sample_groups,
+                            &groups,
+                            &names,
+                            settings,
+                        )
+                    } else {
+                        co_occurrence_figure(
+                            session,
+                            &profile.profile,
+                            &sample_groups,
+                            &groups,
+                            settings,
+                        )
+                    }
                 }
                 PlotKind::Rarefaction => {
                     let first = profile.samples_in_group1().len();
@@ -905,6 +1959,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         .map(|i| usize::from(i >= first))
                         .collect();
                     ancom_figure(
+                        session,
                         &profile.profile,
                         &groups,
                         &[profile.group_name1.clone(), profile.group_name2.clone()],
@@ -926,6 +1981,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                             .collect(),
                         vec![profile.group_name1.clone(), profile.group_name2.clone()],
                         vec![color1, color2],
+                        &profile.profile,
                         settings,
                     )
                 }
@@ -1009,34 +2065,56 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         },
                     )
                 }
-                PlotKind::Mantel => {
-                    let Some(tree) = &session.tree else {
-                        return Figure::message(NO_RESULTS);
-                    };
+                PlotKind::Mantel => mantel_figure(session, profile, results, settings),
+                PlotKind::Map => {
+                    // By the groups of the group field, if any.
                     let samples = &profile.profile.sample_names;
-                    let mut rng = rng_from_seed(session.seed);
-                    match Community::from_tree(
-                        tree,
-                        samples,
-                        &session.profile_level,
-                        vec![0; samples.len()],
-                        vec![String::new()],
-                        settings.community_normalisation,
-                        &mut rng,
-                    ) {
-                        Ok(community) => community_plots::mantel_plot(
-                            &community,
-                            &profile.values,
-                            &profile.field,
-                            settings.community_distance,
-                            results.analysis.method,
-                            settings.community_permutations,
-                            &mut rng,
-                            &settings.mantel,
-                        ),
-                        Err(message) => Figure::message(&message),
-                    }
+                    let (sample_groups, groups) = match session.grouping() {
+                        Some(grouping) => {
+                            let mut names: Vec<String> =
+                                grouping.names().map(str::to_string).collect();
+                            let mut sample_groups: Vec<usize> = samples
+                                .iter()
+                                .map(|sample| {
+                                    names
+                                        .iter()
+                                        .position(|g| {
+                                            grouping
+                                                .samples(g)
+                                                .is_some_and(|members| members.contains(sample))
+                                        })
+                                        .unwrap_or(usize::MAX)
+                                })
+                                .collect();
+                            if sample_groups.contains(&usize::MAX) {
+                                names.push("No group".to_string());
+                                for g in &mut sample_groups {
+                                    if *g == usize::MAX {
+                                        *g = names.len() - 1;
+                                    }
+                                }
+                            }
+                            (sample_groups, names)
+                        }
+                        None => (vec![0; samples.len()], vec!["Samples".to_string()]),
+                    };
+                    let colors = groups.iter().map(|g| session.group_color(g)).collect();
+                    map_figure(
+                        session,
+                        &profile.profile,
+                        &sample_groups,
+                        groups,
+                        colors,
+                        settings,
+                    )
                 }
+                PlotKind::CoOccurrence => co_occurrence_figure(
+                    session,
+                    &profile.profile,
+                    &vec![0; profile.profile.sample_names.len()],
+                    &[],
+                    settings,
+                ),
                 _ => Figure::message("This plot is not available for correlations"),
             }
         }
@@ -1058,8 +2136,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                 .iter()
                 .map(|g| session.group_color(g))
                 .collect();
-            let feature_data = || {
-                let name = feature?;
+            let data_of = |name: &str| {
                 let mut data =
                     feature_plots::FeatureData::from_multi_group_profile(profile, name, field)?;
                 for (group, color) in data.groups.iter_mut().zip(&colors) {
@@ -1072,14 +2149,38 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     .map(|r| format_p_value(r.p_value_corrected, settings.min_p_exponent));
                 Some(data)
             };
+            let feature_data = || data_of(feature?);
+            let ranked: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
             match kind {
-                PlotKind::Pca => pca_plot::plot(
-                    &pca_plot::Data {
-                        group_colors: colors.clone(),
-                        ..pca_plot::Data::from_multi_group_profile(profile)
-                    },
-                    &settings.pca,
-                ),
+                PlotKind::Map => {
+                    let sample_groups: Vec<usize> = profile
+                        .samples_in_groups()
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                        .collect();
+                    map_figure(
+                        session,
+                        &profile.profile,
+                        &sample_groups,
+                        profile.group_names.clone(),
+                        colors.clone(),
+                        settings,
+                    )
+                }
+                PlotKind::Pca => match ordination_styling(session, &settings.pca, &profile.profile)
+                {
+                    Ok(styling) => pca_figure(
+                        session,
+                        &pca_plot::Data {
+                            group_colors: colors.clone(),
+                            styling,
+                            ..pca_plot::Data::from_multi_group_profile(profile)
+                        },
+                        &settings.pca,
+                    ),
+                    Err(message) => Figure::message(&message),
+                },
                 PlotKind::Heatmap => {
                     let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
                     heatmap::plot(
@@ -1094,14 +2195,62 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         &settings.heatmap,
                     )
                 }
+                PlotKind::GroupHeatmap | PlotKind::CoOccurrence => {
+                    let sample_groups: Vec<usize> = profile
+                        .samples_in_groups()
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                        .collect();
+                    if kind == PlotKind::GroupHeatmap {
+                        let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
+                        group_heatmap_figure(
+                            session,
+                            &profile.profile,
+                            &sample_groups,
+                            &profile.group_names,
+                            &names,
+                            settings,
+                        )
+                    } else {
+                        co_occurrence_figure(
+                            session,
+                            &profile.profile,
+                            &sample_groups,
+                            &profile.group_names,
+                            settings,
+                        )
+                    }
+                }
                 PlotKind::Bar => match feature_data() {
                     Some(data) => feature_plots::bar_plot(&data, &settings.bar),
                     None => Figure::message(NO_FEATURE),
                 },
-                PlotKind::Box => match feature_data() {
-                    Some(data) => feature_plots::box_plot(&data, &settings.box_plot),
-                    None => Figure::message(NO_FEATURE),
-                },
+                PlotKind::Box => box_figure(session, settings, &ranked, &data_of, &|group| {
+                    profile
+                        .group_names
+                        .iter()
+                        .position(|g| g == group)
+                        .map(|i| profile.samples_in_groups()[i].to_vec())
+                        .unwrap_or_default()
+                }),
+                PlotKind::PrevalenceAbundance => {
+                    let sample_groups: Vec<usize> = profile
+                        .samples_in_groups()
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                        .collect();
+                    prevalence_figure(
+                        session,
+                        &profile.profile,
+                        &sample_groups,
+                        &profile.group_names,
+                        colors.clone(),
+                        &ranked,
+                        settings,
+                    )
+                }
                 PlotKind::PostHoc => match (feature, session.post_hoc()) {
                     (Some(name), Some(Ok(result))) => post_hoc::plot_with_colors(
                         profile,
@@ -1157,7 +2306,13 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         .enumerate()
                         .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
                         .collect();
-                    ancom_figure(&profile.profile, &groups, &profile.group_names, settings)
+                    ancom_figure(
+                        session,
+                        &profile.profile,
+                        &groups,
+                        &profile.group_names,
+                        settings,
+                    )
                 }
                 PlotKind::AlphaDiversity
                 | PlotKind::Pcoa
@@ -1174,6 +2329,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         .collect(),
                     profile.group_names.clone(),
                     colors.clone(),
+                    &profile.profile,
                     settings,
                 ),
                 _ => Figure::message("This plot is not available for multiple groups"),
@@ -1200,7 +2356,47 @@ mod tests {
         for mode in Mode::ALL {
             session.run_to_completion(mode);
         }
+        // The slow parts of plots computed as they are built.
+        session.ordinations.set_synchronous(true);
         session
+    }
+
+    /// A slow plot asks for its slow part to be computed and is drawn as a
+    /// placeholder until it has been.
+    #[test]
+    fn slow_plots_are_computed_in_a_job() {
+        let session = session();
+        session.ordinations.set_synchronous(false);
+        let settings = PlotSettings::default();
+        for kind in [
+            PlotKind::Pcoa,
+            PlotKind::Nmds,
+            PlotKind::DistanceBox,
+            PlotKind::Pca,
+            PlotKind::Ancom,
+        ] {
+            let figure = build(&session, Mode::MultipleGroups, kind, &settings);
+            assert_eq!(figure.shapes.len(), 1, "{kind:?}");
+            let request = session.ordinations.take_request().expect("a request");
+            assert!(session.ordinations.take_request().is_none());
+            let running = request.start();
+            let mut stages = Vec::new();
+            loop {
+                let stage = running.progress().stage();
+                if stages.last() != Some(&stage) {
+                    stages.push(stage);
+                }
+                match running.poll(&session.ordinations) {
+                    PlotPoll::Finished => break,
+                    PlotPoll::Running => std::thread::sleep(std::time::Duration::from_millis(1)),
+                    _ => panic!("{kind:?}: the calculation failed"),
+                }
+            }
+            assert!(stages.iter().any(|s| !s.is_empty()), "{kind:?}: {stages:?}");
+            let figure = build(&session, Mode::MultipleGroups, kind, &settings);
+            assert!(!figure.regions.is_empty(), "{kind:?}");
+            assert!(session.ordinations.take_request().is_none(), "{kind:?}");
+        }
     }
 
     #[test]
@@ -1209,6 +2405,15 @@ mod tests {
         for mode in Mode::ALL {
             for &kind in PlotKind::available(mode) {
                 let figure = build(&session, mode, kind, &PlotSettings::default());
+                if kind == PlotKind::Map {
+                    // The test metadata has no coordinates; the map is
+                    // tested with data that has them in tests/ui.rs.
+                    assert!(
+                        matches!(&figure.shapes[..], [stamp_plot::Shape::Text { text, .. }]
+                        if text.contains("latitude or longitude"))
+                    );
+                    continue;
+                }
                 assert!(
                     figure.shapes.len() > 5,
                     "{mode:?} {kind:?} drew {} shapes",

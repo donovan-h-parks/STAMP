@@ -86,8 +86,13 @@ pub const AXES_COLOR: Color = Color::rgb(0x7f, 0x7f, 0x7f);
 pub const TICK_LENGTH: f64 = 4.0;
 pub const TICK_PAD: f64 = 4.0;
 
-/// Colours given to groups, in order; further groups are black.
-pub const GROUP_COLORS: [Color; 10] = [
+/// Colours given to groups, in order. The first ten are STAMP v2's (which
+/// drew every further group black); the next ten are the strong colours of
+/// Tableau 10 without its grey, which the first ten already have, and a
+/// yellow from ColorBrewer's Set3, so that twenty groups are told apart.
+/// Groups beyond the twentieth take the colours again from the start
+/// ([`group_color`]); plots with markers also give them other shapes.
+pub const GROUP_COLORS: [Color; 20] = [
     Color::rgb(128, 177, 211),
     Color::rgb(253, 180, 98),
     Color::rgb(179, 222, 105),
@@ -98,11 +103,34 @@ pub const GROUP_COLORS: [Color; 10] = [
     Color::rgb(127, 127, 127),
     Color::rgb(188, 128, 189),
     Color::rgb(204, 235, 197),
+    Color::rgb(31, 119, 180),
+    Color::rgb(255, 127, 14),
+    Color::rgb(44, 160, 44),
+    Color::rgb(214, 39, 40),
+    Color::rgb(148, 103, 189),
+    Color::rgb(140, 86, 75),
+    Color::rgb(227, 119, 194),
+    Color::rgb(188, 189, 34),
+    Color::rgb(23, 190, 207),
+    Color::rgb(255, 237, 111),
 ];
 
-/// Colour of the group at `index`.
+/// Colour of the group at `index`: the palette's colours in order, again
+/// from the start after the twentieth.
 pub fn group_color(index: usize) -> Color {
-    GROUP_COLORS.get(index).copied().unwrap_or(Color::BLACK)
+    GROUP_COLORS[index % GROUP_COLORS.len()]
+}
+
+/// A note for a plot whose groups (or categories) outnumber the palette,
+/// so that some share a colour; `None` if every one has its own.
+pub fn repeated_colors_note(count: usize) -> Option<String> {
+    (count > GROUP_COLORS.len()).then(|| {
+        format!(
+            "{count} groups but {} colours: colours repeat after the {}th",
+            GROUP_COLORS.len(),
+            GROUP_COLORS.len()
+        )
+    })
 }
 
 /// The rectangle a plot's data is drawn in, in points.
@@ -473,6 +501,10 @@ fn clutter(figure: &Figure, frame: &Frame, x: f64, y: f64, width: f64, height: f
                 );
                 overlaps(l, t, r, b) && !fills_frame(l, t, r, b)
             }
+            Shape::Area { rings, .. } => rings
+                .iter()
+                .flatten()
+                .any(|&(x, y)| x > left && x < right && y > top && y < bottom),
             Shape::Text { .. } => false,
         })
         .count()
@@ -487,36 +519,81 @@ pub enum Marker {
     TriangleDown,
     Diamond,
     Hexagon,
+    Star,
+    Cross,
+    Plus,
+    Pentagon,
 }
 
 impl Marker {
+    /// Every shape, in the order they are given to categories: the six of
+    /// [`Marker::for_group`] first.
+    pub const ALL: [Marker; 10] = [
+        Marker::Circle,
+        Marker::Square,
+        Marker::TriangleUp,
+        Marker::Diamond,
+        Marker::Hexagon,
+        Marker::TriangleDown,
+        Marker::Star,
+        Marker::Cross,
+        Marker::Plus,
+        Marker::Pentagon,
+    ];
+
     /// A distinct marker for each group, cycling after six.
     pub fn for_group(index: usize) -> Marker {
-        [
-            Marker::Circle,
-            Marker::Square,
-            Marker::TriangleUp,
-            Marker::Diamond,
-            Marker::Hexagon,
-            Marker::TriangleDown,
-        ][index % 6]
+        Marker::ALL[index % 6]
     }
 }
 
 /// Draw a marker of the given area (in square points) with a black edge.
 pub fn marker(figure: &mut Figure, kind: Marker, x: f64, y: f64, area: f64, fill: Color) {
-    let edge = Some(Stroke::solid(Color::BLACK, 0.75));
+    marker_styled(
+        figure,
+        kind,
+        x,
+        y,
+        area,
+        Some(fill),
+        Stroke::solid(Color::BLACK, 0.75),
+    );
+}
+
+/// Draw a marker of the given area (in square points), filled or hollow,
+/// with an edge.
+pub fn marker_styled(
+    figure: &mut Figure,
+    kind: Marker,
+    x: f64,
+    y: f64,
+    area: f64,
+    fill: Option<Color>,
+    edge: Stroke,
+) {
+    let edge = Some(edge);
     let r = area.max(0.0).sqrt() / 2.0;
     let polygon = |figure: &mut Figure, points: Vec<(f64, f64)>| {
         figure.shapes.push(crate::figure::Shape::Polygon {
             points,
-            fill: Some(fill),
+            fill,
             stroke: edge,
         });
     };
+    // Points around the centre at radii `radii` in turn, starting straight
+    // up, `count` in all.
+    let around = |count: usize, radii: &[f64], turn: f64| -> Vec<(f64, f64)> {
+        (0..count)
+            .map(|i| {
+                let angle = turn + std::f64::consts::TAU * i as f64 / count as f64;
+                let radius = radii[i % radii.len()];
+                (x + radius * angle.sin(), y - radius * angle.cos())
+            })
+            .collect()
+    };
     match kind {
-        Marker::Circle => figure.circle(x, y, r, Some(fill), edge),
-        Marker::Square => figure.rect(x - r, y - r, 2.0 * r, 2.0 * r, Some(fill), edge),
+        Marker::Circle => figure.circle(x, y, r, fill, edge),
+        Marker::Square => figure.rect(x - r, y - r, 2.0 * r, 2.0 * r, fill, edge),
         Marker::TriangleUp => polygon(figure, vec![(x, y - r), (x + r, y + r), (x - r, y + r)]),
         Marker::TriangleDown => polygon(figure, vec![(x, y + r), (x + r, y - r), (x - r, y - r)]),
         Marker::Diamond => polygon(
@@ -535,6 +612,37 @@ pub fn marker(figure: &mut Figure, kind: Marker, x: f64, y: f64, area: f64, fill
                         std::f64::consts::FRAC_PI_3 * i as f64 + std::f64::consts::FRAC_PI_6;
                     (x + 1.1 * r * angle.cos(), y + 1.1 * r * angle.sin())
                 })
+                .collect();
+            polygon(figure, points);
+        }
+        Marker::Star => polygon(figure, around(10, &[1.35 * r, 0.55 * r], 0.0)),
+        Marker::Pentagon => polygon(figure, around(5, &[1.15 * r], 0.0)),
+        Marker::Plus | Marker::Cross => {
+            // A thick plus sign, turned by 45 degrees for the cross.
+            let (a, b) = (1.25 * r, 0.42 * r);
+            let arms = [
+                (b, a),
+                (b, b),
+                (a, b),
+                (a, -b),
+                (b, -b),
+                (b, -a),
+                (-b, -a),
+                (-b, -b),
+                (-a, -b),
+                (-a, b),
+                (-b, b),
+                (-b, a),
+            ];
+            let turn: f64 = if kind == Marker::Cross {
+                std::f64::consts::FRAC_PI_4
+            } else {
+                0.0
+            };
+            let (sin, cos) = turn.sin_cos();
+            let points = arms
+                .iter()
+                .map(|&(dx, dy)| (x + dx * cos - dy * sin, y + dx * sin + dy * cos))
                 .collect();
             polygon(figure, points);
         }
@@ -670,7 +778,33 @@ mod tests {
         assert_eq!(figure.shapes.len(), 7);
         assert_eq!(Marker::for_group(6), Marker::Circle);
         assert_eq!(group_color(0), Color::rgb(128, 177, 211));
-        assert_eq!(group_color(99), Color::BLACK);
+        // Twenty colours, the first ten STAMP v2's, then again from the
+        // start.
+        assert_eq!(group_color(9), Color::rgb(204, 235, 197));
+        assert_eq!(group_color(10), Color::rgb(31, 119, 180));
+        assert_eq!(group_color(20), group_color(0));
+        assert_eq!(group_color(99), group_color(19));
+        let mut distinct = GROUP_COLORS.to_vec();
+        distinct.sort_by_key(|c| (c.r, c.g, c.b));
+        distinct.dedup();
+        assert_eq!(distinct.len(), 20);
+        assert!(GROUP_COLORS.iter().all(|&c| c != Color::BLACK));
+        assert_eq!(repeated_colors_note(20), None);
+        assert!(repeated_colors_note(21).unwrap().contains("21 groups"));
+        // Every shape draws one shape.
+        let mut figure = Figure::new(50.0, 50.0);
+        for kind in Marker::ALL {
+            marker_styled(
+                &mut figure,
+                kind,
+                25.0,
+                25.0,
+                30.0,
+                None,
+                Stroke::solid(Color::BLACK, 1.0),
+            );
+        }
+        assert_eq!(figure.shapes.len(), Marker::ALL.len());
     }
 
     #[test]

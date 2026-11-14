@@ -14,6 +14,7 @@ use super::dist::f_sf;
 use super::diversity::centred_log_ratio;
 use super::effect_size::eta_squared;
 use super::multi_group::MultiGroupTest;
+use super::results::{Control, Pace, Step};
 use super::rng_from_seed;
 
 /// Lower bound, as a share of the features, on the largest W for any
@@ -81,105 +82,186 @@ pub fn ancom(
     test: MultiGroupTest,
     alpha: f64,
 ) -> Option<AncomResult> {
-    let features = samples.first().map_or(0, Vec::len);
-    let group_count = groups.iter().copied().max().map_or(0, |g| g + 1);
-    let used = (0..group_count).filter(|g| groups.contains(g)).count();
-    if features < 2 || used < 2 || used == samples.len() || samples.len() != groups.len() {
-        return None;
+    let mut run = AncomRun::new(samples, groups, test, alpha)?;
+    match run.advance(&mut |_, _| Control::Continue) {
+        Step::Done(result) => Some(result),
+        Step::Paused | Step::Cancelled => unreachable!("never paused or cancelled"),
     }
-    // The log ratio of two features is the difference of their centred
-    // log ratios: the sample's mean logarithm cancels.
-    let clr: Vec<Vec<f64>> = samples.iter().map(|s| centred_log_ratio(s)).collect();
-    let members: Vec<Vec<usize>> = (0..group_count)
-        .map(|g| (0..samples.len()).filter(|&s| groups[s] == g).collect())
-        .filter(|m: &Vec<usize>| !m.is_empty())
-        .collect();
-
-    // ANOVA on groups of two or more samples has a shortcut; any other
-    // test goes through the p-value of every pair.
-    let w = if test == MultiGroupTest::Anova && members.iter().all(|m| m.len() >= 2) {
-        w_by_anova(&clr, &members, features, alpha)
-    } else {
-        w_by_test(&clr, &members, features, test, alpha)
-    };
-
-    let n = features as f64;
-    let start = w.iter().copied().max().unwrap_or(0) as f64 / n;
-    let cutoff = (start >= THETA).then(|| {
-        let cuts: Vec<f64> = (0..5).map(|k| start - (0.05 + 0.05 * k as f64)).collect();
-        let shares: Vec<f64> = cuts
-            .iter()
-            .map(|cut| w.iter().filter(|&&x| x as f64 > n * cut).count() as f64 / n)
-            .collect();
-        let mut changes: Vec<f64> = (0..5)
-            .map(|k| (shares[k] - shares[(k + 1) % 5]).abs())
-            .collect();
-        changes[4] = 0.0;
-        let nu = if changes[0] < TAU && changes[1] < TAU && changes[2] < TAU {
-            cuts[1]
-        } else if changes[0] >= TAU && changes[1] < TAU && changes[2] < TAU {
-            cuts[2]
-        } else if changes[1] >= TAU && changes[2] < TAU && changes[3] < TAU {
-            cuts[3]
-        } else {
-            cuts[4]
-        };
-        nu * n
-    });
-
-    let rows = (0..features)
-        .map(|f| {
-            let values: Vec<Vec<f64>> = members
-                .iter()
-                .map(|m| m.iter().map(|&s| clr[s][f]).collect())
-                .collect();
-            let clr_effect = if values.len() == 2 {
-                mean(&values[0]) - mean(&values[1])
-            } else {
-                let slices: Vec<&[f64]> = values.iter().map(Vec::as_slice).collect();
-                eta_squared(&slices)
-            };
-            AncomRow {
-                w: w[f],
-                reject: cutoff.is_some_and(|c| w[f] as f64 >= c),
-                clr_effect,
-            }
-        })
-        .collect();
-    Some(AncomResult {
-        rows,
-        cutoff,
-        test,
-        alpha,
-    })
 }
 
-/// W of every feature: the number of other features whose log ratio with
-/// it differs between the groups by `test`, after the Holm-Bonferroni
-/// adjustment of the feature's p-values. Each feature's p-values are
-/// adjusted together with its comparison with itself (zero), as scikit-bio
-/// does; that one never counts.
-fn w_by_test(
-    clr: &[Vec<f64>],
-    members: &[Vec<usize>],
+/// [`ancom`] carried out a feature at a time (each feature's log ratios with
+/// the others), so that whatever runs it can show its progress, attend to
+/// other things in between, or give up. The outcome does not depend on
+/// where it pauses.
+#[derive(Debug, Clone)]
+pub struct AncomRun {
     features: usize,
+    /// Centred log ratios, `clr[sample][feature]`.
+    clr: Vec<Vec<f64>>,
+    /// The samples of each group that has any.
+    members: Vec<Vec<usize>>,
     test: MultiGroupTest,
     alpha: f64,
-) -> Vec<usize> {
-    let mut p = vec![vec![0.0; features]; features];
-    let mut buffers: Vec<Vec<f64>> = vec![Vec::new(); members.len()];
-    for i in 0..features {
-        for j in i + 1..features {
-            for (buffer, member) in buffers.iter_mut().zip(members) {
-                buffer.clear();
-                buffer.extend(member.iter().map(|&s| clr[s][i] - clr[s][j]));
+    method: Method,
+    /// The next feature to work on.
+    next: usize,
+}
+
+#[derive(Debug, Clone)]
+enum Method {
+    /// ANOVA on groups of two or more samples, which has a shortcut; W of
+    /// the features done so far.
+    Anova(AnovaSums, Vec<usize>),
+    /// Any other test goes through the p-value of every pair: `p[i][j]`,
+    /// filled for `j > i` (and mirrored) row by row.
+    Test(Vec<Vec<f64>>),
+}
+
+impl AncomRun {
+    /// Arguments as for [`ancom`]; `None` in the same cases.
+    pub fn new(
+        samples: &[Vec<f64>],
+        groups: &[usize],
+        test: MultiGroupTest,
+        alpha: f64,
+    ) -> Option<AncomRun> {
+        let features = samples.first().map_or(0, Vec::len);
+        let group_count = groups.iter().copied().max().map_or(0, |g| g + 1);
+        let used = (0..group_count).filter(|g| groups.contains(g)).count();
+        if features < 2 || used < 2 || used == samples.len() || samples.len() != groups.len() {
+            return None;
+        }
+        // The log ratio of two features is the difference of their centred
+        // log ratios: the sample's mean logarithm cancels.
+        let clr: Vec<Vec<f64>> = samples.iter().map(|s| centred_log_ratio(s)).collect();
+        let members: Vec<Vec<usize>> = (0..group_count)
+            .map(|g| (0..samples.len()).filter(|&s| groups[s] == g).collect())
+            .filter(|m: &Vec<usize>| !m.is_empty())
+            .collect();
+        let method = if test == MultiGroupTest::Anova && members.iter().all(|m| m.len() >= 2) {
+            Method::Anova(
+                AnovaSums::new(&clr, &members, features, alpha),
+                Vec::with_capacity(features),
+            )
+        } else {
+            Method::Test(vec![vec![0.0; features]; features])
+        };
+        Some(AncomRun {
+            features,
+            clr,
+            members,
+            test,
+            alpha,
+            method,
+            next: 0,
+        })
+    }
+
+    /// The number of features, each a piece of work.
+    pub fn features(&self) -> usize {
+        self.features
+    }
+
+    /// Work on further features; `pace` is asked before each, with the
+    /// number done and the number of features.
+    #[allow(clippy::needless_range_loop)] // p[i][j] and p[j][i] are set together
+    pub fn advance(&mut self, pace: Pace<'_>) -> Step<AncomResult> {
+        let features = self.features;
+        let mut buffers: Vec<Vec<f64>> = vec![Vec::new(); self.members.len()];
+        let mut f_values = Vec::new();
+        while self.next < features {
+            match pace(self.next, features) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
             }
-            let slices: Vec<&[f64]> = buffers.iter().map(Vec::as_slice).collect();
-            let (value, _) = test.run(&slices);
-            p[i][j] = value;
-            p[j][i] = value;
+            let i = self.next;
+            match &mut self.method {
+                Method::Anova(sums, w) => w.push(sums.w(i, &mut f_values)),
+                Method::Test(p) => {
+                    for j in i + 1..features {
+                        for (buffer, member) in buffers.iter_mut().zip(&self.members) {
+                            buffer.clear();
+                            buffer.extend(member.iter().map(|&s| self.clr[s][i] - self.clr[s][j]));
+                        }
+                        let slices: Vec<&[f64]> = buffers.iter().map(Vec::as_slice).collect();
+                        let (value, _) = self.test.run(&slices);
+                        p[i][j] = value;
+                        p[j][i] = value;
+                    }
+                }
+            }
+            self.next += 1;
+        }
+        let w = match &mut self.method {
+            Method::Anova(_, w) => std::mem::take(w),
+            Method::Test(p) => w_of_p_values(p, self.alpha),
+        };
+        Step::Done(self.finish(w))
+    }
+
+    /// The outcome from W of every feature.
+    fn finish(&self, w: Vec<usize>) -> AncomResult {
+        let (features, alpha) = (self.features, self.alpha);
+        let (clr, members) = (&self.clr, &self.members);
+        let n = features as f64;
+        let start = w.iter().copied().max().unwrap_or(0) as f64 / n;
+        let cutoff = (start >= THETA).then(|| {
+            let cuts: Vec<f64> = (0..5).map(|k| start - (0.05 + 0.05 * k as f64)).collect();
+            let shares: Vec<f64> = cuts
+                .iter()
+                .map(|cut| w.iter().filter(|&&x| x as f64 > n * cut).count() as f64 / n)
+                .collect();
+            let mut changes: Vec<f64> = (0..5)
+                .map(|k| (shares[k] - shares[(k + 1) % 5]).abs())
+                .collect();
+            changes[4] = 0.0;
+            let nu = if changes[0] < TAU && changes[1] < TAU && changes[2] < TAU {
+                cuts[1]
+            } else if changes[0] >= TAU && changes[1] < TAU && changes[2] < TAU {
+                cuts[2]
+            } else if changes[1] >= TAU && changes[2] < TAU && changes[3] < TAU {
+                cuts[3]
+            } else {
+                cuts[4]
+            };
+            nu * n
+        });
+
+        let rows = (0..features)
+            .map(|f| {
+                let values: Vec<Vec<f64>> = members
+                    .iter()
+                    .map(|m| m.iter().map(|&s| clr[s][f]).collect())
+                    .collect();
+                let clr_effect = if values.len() == 2 {
+                    mean(&values[0]) - mean(&values[1])
+                } else {
+                    let slices: Vec<&[f64]> = values.iter().map(Vec::as_slice).collect();
+                    eta_squared(&slices)
+                };
+                AncomRow {
+                    w: w[f],
+                    reject: cutoff.is_some_and(|c| w[f] as f64 >= c),
+                    clr_effect,
+                }
+            })
+            .collect();
+        AncomResult {
+            rows,
+            cutoff,
+            test: self.test,
+            alpha,
         }
     }
+}
+
+/// W of every feature from the p-values of every pair of features: the
+/// number of other features whose log ratio with it differs between the
+/// groups, after the Holm-Bonferroni adjustment of the feature's p-values.
+/// Each feature's p-values are adjusted together with its comparison with
+/// itself (zero), as scikit-bio does; that one never counts.
+fn w_of_p_values(p: &[Vec<f64>], alpha: f64) -> Vec<usize> {
     let mut rng = rng_from_seed(0);
     p.iter()
         .enumerate()
@@ -196,98 +278,136 @@ fn w_by_test(
         .collect()
 }
 
-/// W by one-way ANOVA, as [`w_by_test`] gives it, but faster. Every pair
-/// has the same degrees of freedom, so a p-value passes the Holm threshold
-/// for its rank exactly when the F statistic exceeds a critical value that
-/// can be found once for each rank; the F statistics come from sums kept
-/// for each feature and group, without the p-values themselves. Every group
-/// must have at least two samples.
-fn w_by_anova(clr: &[Vec<f64>], members: &[Vec<usize>], features: usize, alpha: f64) -> Vec<usize> {
-    let sizes: Vec<f64> = members.iter().map(|m| m.len() as f64).collect();
-    let total: f64 = sizes.iter().sum();
-    let (dfn, dfd) = (sizes.len() as f64 - 1.0, total - sizes.len() as f64);
-    // Each feature's values, group after group, with each group's sum and
-    // sum of squares.
-    let order: Vec<usize> = members.iter().flatten().copied().collect();
-    let values: Vec<Vec<f64>> = (0..features)
-        .map(|f| order.iter().map(|&s| clr[s][f]).collect())
-        .collect();
-    let mut ranges = Vec::with_capacity(members.len());
-    let mut begin = 0;
-    for m in members {
-        ranges.push(begin..begin + m.len());
-        begin += m.len();
+/// W by one-way ANOVA, as the p-values of every pair give it, but faster.
+/// Every pair has the same degrees of freedom, so a p-value passes the Holm
+/// threshold for its rank exactly when the F statistic exceeds a critical
+/// value that can be found once for each rank; the F statistics come from
+/// sums kept for each feature and group, without the p-values themselves.
+/// Every group must have at least two samples.
+#[derive(Debug, Clone)]
+struct AnovaSums {
+    sizes: Vec<f64>,
+    total: f64,
+    dfn: f64,
+    dfd: f64,
+    /// Each feature's values, group after group.
+    values: Vec<Vec<f64>>,
+    ranges: Vec<std::ops::Range<usize>>,
+    /// Each feature's sum and sum of squares in each group.
+    sums: Vec<Vec<f64>>,
+    squares: Vec<Vec<f64>>,
+    /// The F statistic above which a p-value passes the Holm threshold, by
+    /// rank.
+    critical: Vec<f64>,
+}
+
+impl AnovaSums {
+    fn new(clr: &[Vec<f64>], members: &[Vec<usize>], features: usize, alpha: f64) -> AnovaSums {
+        let sizes: Vec<f64> = members.iter().map(|m| m.len() as f64).collect();
+        let total: f64 = sizes.iter().sum();
+        let (dfn, dfd) = (sizes.len() as f64 - 1.0, total - sizes.len() as f64);
+        let order: Vec<usize> = members.iter().flatten().copied().collect();
+        let values: Vec<Vec<f64>> = (0..features)
+            .map(|f| order.iter().map(|&s| clr[s][f]).collect())
+            .collect();
+        let mut ranges = Vec::with_capacity(members.len());
+        let mut begin = 0;
+        for m in members {
+            ranges.push(begin..begin + m.len());
+            begin += m.len();
+        }
+        let sums: Vec<Vec<f64>> = values
+            .iter()
+            .map(|v| ranges.iter().map(|r| v[r.clone()].iter().sum()).collect())
+            .collect();
+        let squares: Vec<Vec<f64>> = values
+            .iter()
+            .map(|v| {
+                ranges
+                    .iter()
+                    .map(|r| v[r.clone()].iter().map(|x| x * x).sum())
+                    .collect()
+            })
+            .collect();
+        // The Holm threshold at rank r of the m p-values of a feature (its
+        // own, zero, first) is alpha / (m - r + 1); the F statistic above
+        // which the p-value is smaller, found by bisection on the F
+        // distribution.
+        let m = features;
+        let critical: Vec<f64> = (1..=m)
+            .map(|rank| f_above(alpha / (m - rank + 1) as f64, dfn, dfd))
+            .collect();
+        AnovaSums {
+            sizes,
+            total,
+            dfn,
+            dfd,
+            values,
+            ranges,
+            sums,
+            squares,
+            critical,
+        }
     }
-    let sums: Vec<Vec<f64>> = values
-        .iter()
-        .map(|v| ranges.iter().map(|r| v[r.clone()].iter().sum()).collect())
-        .collect();
-    let squares: Vec<Vec<f64>> = values
-        .iter()
-        .map(|v| {
-            ranges
-                .iter()
-                .map(|r| v[r.clone()].iter().map(|x| x * x).sum())
-                .collect()
-        })
-        .collect();
 
-    // The Holm threshold at rank r of the m p-values of a feature (its own,
-    // zero, first) is alpha / (m - r + 1); the F statistic above which the
-    // p-value is smaller, found by bisection on the F distribution.
-    let m = features;
-    let critical: Vec<f64> = (1..=m)
-        .map(|rank| f_above(alpha / (m - rank + 1) as f64, dfn, dfd))
-        .collect();
-
-    let mut f_values = Vec::with_capacity(features);
-    (0..features)
-        .map(|i| {
-            f_values.clear();
-            for j in (0..features).filter(|&j| j != i) {
-                let (mut sum, mut square, mut between) = (0.0, 0.0, 0.0);
-                for (g, range) in ranges.iter().enumerate() {
-                    let dot: f64 = values[i][range.clone()]
-                        .iter()
-                        .zip(&values[j][range.clone()])
-                        .map(|(a, b)| a * b)
-                        .sum();
-                    let group_sum = sums[i][g] - sums[j][g];
-                    sum += group_sum;
-                    square += squares[i][g] + squares[j][g] - 2.0 * dot;
-                    between += group_sum * group_sum / sizes[g];
-                }
-                let correction = sum * sum / total;
-                let spread = square - correction;
-                let between = between - correction;
-                let within = spread - between;
-                // A log ratio that is the same in every sample tells nothing
-                // (ANOVA gives no p-value there).
-                let f = if spread <= 1e-12 * square.max(f64::MIN_POSITIVE) {
-                    f64::NAN
-                } else if within <= 0.0 {
-                    f64::INFINITY
-                } else {
-                    (between / dfn) / (within / dfd)
-                };
-                f_values.push(f);
+    /// W of feature `i`; `f_values` is room to work in.
+    fn w(&self, i: usize, f_values: &mut Vec<f64>) -> usize {
+        let AnovaSums {
+            sizes,
+            total,
+            dfn,
+            dfd,
+            values,
+            ranges,
+            sums,
+            squares,
+            critical,
+        } = self;
+        let (total, dfn, dfd) = (*total, *dfn, *dfd);
+        f_values.clear();
+        for j in (0..values.len()).filter(|&j| j != i) {
+            let (mut sum, mut square, mut between) = (0.0, 0.0, 0.0);
+            for (g, range) in ranges.iter().enumerate() {
+                let dot: f64 = values[i][range.clone()]
+                    .iter()
+                    .zip(&values[j][range.clone()])
+                    .map(|(a, b)| a * b)
+                    .sum();
+                let group_sum = sums[i][g] - sums[j][g];
+                sum += group_sum;
+                square += squares[i][g] + squares[j][g] - 2.0 * dot;
+                between += group_sum * group_sum / sizes[g];
             }
-            // Largest F (smallest p-value) first; no value at all last.
-            f_values.sort_by(|a, b| match (a.is_nan(), b.is_nan()) {
-                (false, false) => b.total_cmp(a),
-                (true, true) => std::cmp::Ordering::Equal,
-                (true, false) => std::cmp::Ordering::Greater,
-                (false, true) => std::cmp::Ordering::Less,
-            });
-            // The step-down procedure rejects a run of the smallest
-            // p-values; the feature's own comparison takes rank one.
-            f_values
-                .iter()
-                .zip(&critical[1..])
-                .take_while(|(f, c)| **f > **c)
-                .count()
-        })
-        .collect()
+            let correction = sum * sum / total;
+            let spread = square - correction;
+            let between = between - correction;
+            let within = spread - between;
+            // A log ratio that is the same in every sample tells nothing
+            // (ANOVA gives no p-value there).
+            let f = if spread <= 1e-12 * square.max(f64::MIN_POSITIVE) {
+                f64::NAN
+            } else if within <= 0.0 {
+                f64::INFINITY
+            } else {
+                (between / dfn) / (within / dfd)
+            };
+            f_values.push(f);
+        }
+        // Largest F (smallest p-value) first; no value at all last.
+        f_values.sort_by(|a, b| match (a.is_nan(), b.is_nan()) {
+            (false, false) => b.total_cmp(a),
+            (true, true) => std::cmp::Ordering::Equal,
+            (true, false) => std::cmp::Ordering::Greater,
+            (false, true) => std::cmp::Ordering::Less,
+        });
+        // The step-down procedure rejects a run of the smallest p-values;
+        // the feature's own comparison takes rank one.
+        f_values
+            .iter()
+            .zip(&critical[1..])
+            .take_while(|(f, c)| **f > **c)
+            .count()
+    }
 }
 
 /// The value of an F(dfn, dfd) statistic above which the upper-tail
@@ -418,6 +538,40 @@ mod tests {
 
     /// The ANOVA shortcut gives the W of the general path, on data with
     /// zeros, ties and a feature constant in every sample.
+    fn w_by_anova(
+        clr: &[Vec<f64>],
+        members: &[Vec<usize>],
+        features: usize,
+        alpha: f64,
+    ) -> Vec<usize> {
+        let sums = AnovaSums::new(clr, members, features, alpha);
+        let mut room = Vec::new();
+        (0..features).map(|i| sums.w(i, &mut room)).collect()
+    }
+
+    /// W through the p-value of every pair, whatever the test.
+    fn w_by_test(
+        clr: &[Vec<f64>],
+        members: &[Vec<usize>],
+        features: usize,
+        test: MultiGroupTest,
+        alpha: f64,
+    ) -> Vec<usize> {
+        let mut run = AncomRun {
+            features,
+            clr: clr.to_vec(),
+            members: members.to_vec(),
+            test,
+            alpha,
+            method: Method::Test(vec![vec![0.0; features]; features]),
+            next: 0,
+        };
+        match run.advance(&mut |_, _| Control::Continue) {
+            Step::Done(result) => result.rows.iter().map(|r| r.w).collect(),
+            _ => unreachable!(),
+        }
+    }
+
     #[test]
     fn the_anova_shortcut_agrees_with_the_general_path() {
         let mut state: u64 = 7;

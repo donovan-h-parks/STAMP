@@ -5,7 +5,7 @@ use super::dist::t_cdf;
 use super::mean;
 
 /// Measures of correlation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CorrelationMethod {
     /// Pearson's r: how close the points are to a straight line.
     Pearson,

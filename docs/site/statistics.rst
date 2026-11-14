@@ -456,6 +456,40 @@ whether the coefficient differs from zero.
    * Because proportions add up to 100%, a feature that rises strongly with
      a variable makes the others appear to fall; see :ref:`clr`.
 
+.. _co-occurrence:
+
+Correlations between features (co-occurrence)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :ref:`co-occurrence heatmap <plot-co-occurrence>` and ``stamp-cli
+co-occurrence`` correlate features with each other across samples, with the
+same Pearson and Spearman coefficients and p-values as above (computed as in
+SciPy's ``pearsonr`` and ``spearmanr``, against which they are tested). The
+q-values are Benjamini-Hochberg over the n(n − 1)/2 pairs of the n features
+shown (or over the correlations of one feature with all others).
+
+.. warning::
+
+   Correlations between **proportions** are compositionally biased. Since
+   the proportions of a sample add up to 100%, a rise in one feature forces
+   the others down, so that unrelated features appear negatively correlated
+   and the correlations of a dominant feature say little about it. The bias
+   is worst with few features or a few dominant ones. Correlating **centred
+   log ratios** (see :ref:`clr`) removes the constraint; the CLR is taken
+   over all the features of the profile level in each sample, zeros
+   replaced by a small value as described there, before the chosen features
+   are correlated (a parent level does not change it). Even so:
+
+   * many zeros make correlations unreliable: a feature absent from most
+     samples correlates with others mostly through being absent together
+     (leave out rare features with a minimum prevalence);
+   * samples from different environments create correlations between the
+     features typical of each environment; correlate within one group to
+     look for associations within an environment;
+   * with many samples, even very weak correlations are significant: judge
+     the coefficient, not only the q-value;
+   * a correlation is not an interaction between the features.
+
 Whole communities
 -----------------
 

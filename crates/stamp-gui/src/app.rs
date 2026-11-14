@@ -27,6 +27,7 @@ use stamp_plot::Figure;
 
 use crate::figure_painter;
 use crate::icons;
+use crate::jobs::Job;
 use crate::platform::{self, Auxiliary, Event, OpenedFile, Platform, Request};
 use crate::plot_config;
 use crate::plots::{self, PlotKind, PlotSettings};
@@ -42,6 +43,11 @@ const FIGURE_CACHE_SIZE: usize = 6;
 /// Plots with more shapes than this (large heatmaps) are not kept.
 const FIGURE_CACHE_SHAPES: usize = 200_000;
 const DEFAULT_ZOOM: f32 = 1.15;
+/// Seconds a slow plot computes before its progress is shown, so that
+/// quick ones do not make the window flicker.
+const PROGRESS_DELAY: f64 = 0.3;
+/// What the plot area says after the user cancelled the calculation of a plot.
+const PLOT_CANCELLED: &str = "The calculation of this plot was cancelled";
 
 /// Example data built into the application: gut enterotypes from Arumugam et
 /// al. (2011).
@@ -800,8 +806,26 @@ pub struct StampApp {
     figure_cache: Vec<(String, Figure)>,
     /// Number of plots drawn, as opposed to taken from the cache.
     figures_built: usize,
+    /// The slow part of the current plot, while it is computed, and when
+    /// that started (in the time of the user interface, once known).
+    plot_job: Option<(plots::RunningPlot, Option<f64>)>,
+    /// The plot shown before, drawn greyed out while the current one is
+    /// computed.
+    stale_figure: Option<Figure>,
+    /// The calculation the user cancelled, not to be started again until
+    /// asked.
+    cancelled_plot: Option<String>,
+    /// A profile being read (and converted) from files, with what is said
+    /// meanwhile and when that started.
+    loading: Option<Loading>,
     table: Table,
     table_features: Vec<String>,
+    /// What the results table was last built from (see `refresh_view`).
+    table_key: String,
+    /// A large results table still being built.
+    table_pending: Option<TablePending>,
+    /// For saving the results table once built.
+    table_context: Option<egui::Context>,
     /// Every feature of the current analysis, in alphabetical order.
     feature_rows: Vec<FeatureRow>,
     /// Heading of the effect-size column of the feature table.
@@ -911,11 +935,18 @@ impl StampApp {
             figure: Figure::message("Load a profile to begin"),
             figure_cache: Vec::new(),
             figures_built: 0,
+            plot_job: None,
+            stale_figure: None,
+            cancelled_plot: None,
+            loading: None,
             table: Table {
                 headings: Vec::new(),
                 rows: Vec::new(),
             },
             table_features: Vec::new(),
+            table_key: String::new(),
+            table_pending: None,
+            table_context: None,
             feature_rows: Vec::new(),
             effect_heading: "Effect size",
             view_dirty: true,
@@ -995,6 +1026,125 @@ impl StampApp {
         self.figures_built
     }
 
+    /// Number of ordination layouts (PCA, PCoA with its tests, NMDS)
+    /// computed so far, not counting those reused when only the look of the
+    /// plot changed.
+    pub fn ordinations_computed(&self) -> usize {
+        self.session.ordinations.computed()
+    }
+
+    /// While the slow part of the current plot is computed: what it is
+    /// doing, and the fraction done (`None` when that cannot be told).
+    pub fn plot_progress(&self) -> Option<(String, Option<f32>)> {
+        let (job, _) = self.plot_job.as_ref()?;
+        let progress = job.progress();
+        let (_, total) = progress.counts();
+        Some((progress.stage(), (total > 0).then(|| progress.fraction())))
+    }
+
+    /// True while a profile is read, or an analysis or the slow part of
+    /// the plot is computed.
+    pub fn is_busy(&self) -> bool {
+        self.session.is_running(self.mode) || self.plot_job.is_some() || self.loading.is_some()
+    }
+
+    /// What is said while a profile is read from files.
+    pub fn loading(&self) -> Option<&str> {
+        self.loading.as_ref().map(|loading| loading.label.as_str())
+    }
+
+    /// Stop reading a profile, as the Cancel button beside its progress
+    /// does: the profile loaded before stays.
+    pub fn cancel_loading(&mut self) {
+        self.loading = None;
+    }
+
+    /// Read (and convert) files that make a profile without asking
+    /// anything, in a job: large ones take a while, in the browser most of
+    /// all. Files that first need choices (BIOM, mothur) are opened at once.
+    fn start_loading(&mut self, files: Vec<OpenedFile>) {
+        use stamp_core::import::biom;
+        let needs_choices = matches!(files.as_slice(), [file]
+            if biom::looks_like_biom(&file.bytes)
+                && !stamp_core::import::sandpiper::looks_like_sandpiper(&file.bytes)
+            || file.name.to_lowercase().ends_with(".taxonomy"));
+        if files.is_empty() || needs_choices {
+            self.open_profile_files(files);
+            return;
+        }
+        self.pending_profile = None;
+        let label = match files.as_slice() {
+            [file] => format!("Reading {}", file.name),
+            _ => format!("Reading {} files", files.len()),
+        };
+        self.loading = Some(Loading::start(label, move || {
+            let (name, spf, hint) = profile_text(&files).ok_or("no profile")??;
+            match stamp_core::ProfileTree::read(&spf) {
+                Ok(tree) => Ok((name, tree)),
+                Err(error) => {
+                    let mut notice = Some(format!("Could not load {name}:\n{error}"));
+                    add_hint(&mut notice, hint);
+                    Err(notice.unwrap_or_default())
+                }
+            }
+        }));
+    }
+
+    /// Read a profile already converted, in a job.
+    fn start_loading_text(&mut self, name: String, spf: String) {
+        self.loading = Some(Loading::start(format!("Reading {name}"), move || {
+            stamp_core::ProfileTree::read(&spf)
+                .map(|tree| (name.clone(), tree))
+                .map_err(|error| format!("Could not load {name}:\n{error}"))
+        }));
+    }
+
+    /// Use the profile once read.
+    fn poll_loading(&mut self, ctx: &egui::Context) {
+        let Some(loading) = &mut self.loading else {
+            return;
+        };
+        match loading.job.poll() {
+            Err(true) => {
+                if loading.started.is_none() {
+                    loading.started = Some(ctx.input(|i| i.time));
+                }
+                let wait = if cfg!(target_arch = "wasm32") { 0 } else { 50 };
+                ctx.request_repaint_after(std::time::Duration::from_millis(wait));
+            }
+            outcome => {
+                self.loading = None;
+                match outcome {
+                    Ok(Ok((name, tree))) => {
+                        self.notice = None;
+                        self.use_profile(&name, Ok(tree));
+                    }
+                    Ok(Err(notice)) => self.notice = Some(notice),
+                    _ => {
+                        self.notice = Some("Reading the profile stopped unexpectedly.".to_string())
+                    }
+                }
+                ctx.request_repaint();
+            }
+        }
+    }
+
+    /// Stop computing the current plot, as its Cancel button does.
+    pub fn cancel_plot(&mut self) {
+        if let Some((job, _)) = self.plot_job.take() {
+            job.cancel();
+            self.cancelled_plot = Some(job.id());
+            self.figure = Figure::message(PLOT_CANCELLED);
+            self.stale_figure = None;
+        }
+    }
+
+    /// Compute a cancelled plot after all, as its Compute button does.
+    pub fn compute_plot(&mut self) {
+        self.cancelled_plot = None;
+        self.view_dirty = true;
+    }
+
     /// Open or close the Preferences window, as Settings > Preferences does.
     pub fn show_preferences(&mut self, show: bool) {
         self.show_preferences = show;
@@ -1017,13 +1167,47 @@ impl StampApp {
         }
     }
 
-    /// Open a profile in any of the formats that are read: a STAMP profile
-    /// is loaded at once; a BIOM table (JSON or HDF5) or a mothur taxonomy
-    /// file first asks for what it needs.
+    /// Open the files chosen with File > Load profile: one profile in any
+    /// format that is read, or several Sandpiper profiles (one per sample),
+    /// which are combined.
+    pub fn open_profile_files(&mut self, mut files: Vec<OpenedFile>) {
+        if files.len() == 1 {
+            let file = files.pop().expect("one file");
+            self.open_profile_file(file);
+            return;
+        }
+        if files.is_empty() {
+            return;
+        }
+        self.pending_profile = None;
+        match profile_text(&files) {
+            Some(Ok((name, spf, hint))) => {
+                self.notice = None;
+                self.load_profile(&name, &spf);
+                add_hint(&mut self.notice, hint);
+            }
+            Some(Err(notice)) => self.notice = Some(notice),
+            None => {}
+        }
+    }
+
+    /// Open a profile in any of the formats that are read: a STAMP profile,
+    /// a SingleM condensed profile or a Sandpiper profile is loaded at once;
+    /// a BIOM table (JSON or HDF5) or a mothur taxonomy file first asks for
+    /// what it needs.
     pub fn open_profile_file(&mut self, file: OpenedFile) {
         use stamp_core::import::biom;
         self.pending_profile = None;
-        if biom::looks_like_biom(&file.bytes) {
+        if let Some(converted) = profile_text(std::slice::from_ref(&file)) {
+            match converted {
+                Ok((name, spf, hint)) => {
+                    self.notice = None;
+                    self.load_profile(&name, &spf);
+                    add_hint(&mut self.notice, hint);
+                }
+                Err(notice) => self.notice = Some(notice),
+            }
+        } else if biom::looks_like_biom(&file.bytes) {
             match biom::metadata_fields(&file.bytes) {
                 // Without metadata there is nothing to choose.
                 Ok(fields) if fields.is_empty() => {
@@ -1056,8 +1240,6 @@ impl StampApp {
                 groups: None,
                 names: None,
             });
-        } else {
-            self.load_profile(&file.name, &file.text());
         }
     }
 
@@ -1384,8 +1566,126 @@ impl StampApp {
     }
 
     /// The results table as shown: the rows that pass the filters.
-    pub fn results_table(&self) -> &Table {
+    pub fn results_table(&mut self) -> &Table {
+        while self.table_pending.is_some() {
+            self.continue_table(f64::INFINITY);
+        }
         &self.table
+    }
+
+    /// While a large results table is built: rows built, and rows.
+    pub fn results_table_progress(&self) -> Option<(usize, usize)> {
+        self.table_pending
+            .as_ref()
+            .map(|pending| (pending.next, pending.total))
+    }
+
+    /// Build more of a large results table, for up to `milliseconds`, then
+    /// download it if that was asked for.
+    fn continue_table(&mut self, milliseconds: f64) {
+        let Some(pending) = &self.table_pending else {
+            return;
+        };
+        let deadline = crate::jobs::now_ms() + milliseconds;
+        let (mut next, total) = (pending.next, pending.total);
+        let shown = match &pending.shown {
+            Some(shown) => shown.clone(),
+            None => std::rc::Rc::new(self.shown_rows()),
+        };
+        let mut built: Vec<Table> = Vec::new();
+        // Rows at a time: enough to take a moment, few enough to stop soon.
+        const STEP: usize = 16;
+        while next < total {
+            let end = (next + STEP).min(total).min(shown.len());
+            let part = self.results_table_part(&shown[next.min(end)..end]);
+            next = (next + STEP).min(total);
+            built.push(part);
+            if crate::jobs::now_ms() >= deadline {
+                break;
+            }
+        }
+        let Some(pending) = &mut self.table_pending else {
+            return;
+        };
+        let first = pending.next == 0;
+        pending.next = next;
+        pending.shown = Some(shown);
+        for part in built {
+            if first && self.table.headings.is_empty() {
+                // A different analysis has different columns.
+                if part.headings != pending.headings {
+                    self.table_sort = SortState::default();
+                }
+                self.table.headings = part.headings;
+            }
+            self.table.rows.extend(part.rows);
+        }
+        if next >= total {
+            let download = pending.download;
+            self.table_pending = None;
+            if download {
+                self.save_table();
+            }
+        }
+    }
+
+    /// The rows of the results table of the current analysis, as
+    /// `refresh_view` chooses them: indices into the rows of its results.
+    fn shown_rows(&self) -> Vec<usize> {
+        let s = &self.session;
+        macro_rules! shown {
+            ($output:expr, $active:expr) => {
+                match &$output {
+                    Some((_, results)) if self.results_only_active => {
+                        let index: std::collections::HashMap<&str, usize> = results
+                            .rows
+                            .iter()
+                            .enumerate()
+                            .map(|(i, r)| (r.feature.as_str(), i))
+                            .collect();
+                        $active
+                            .iter()
+                            .filter_map(|r| index.get(r.feature.as_str()).copied())
+                            .collect()
+                    }
+                    Some((_, results)) => (0..results.rows.len()).collect(),
+                    None => Vec::new(),
+                }
+            };
+        }
+        match self.mode {
+            Mode::TwoSamples => shown!(s.samples.output, s.sample_rows()),
+            Mode::TwoGroups => shown!(s.groups.output, s.group_rows()),
+            Mode::MultipleGroups => shown!(s.multi.output, s.multi_rows()),
+            Mode::Correlation => shown!(s.correlation.output, s.correlation_rows()),
+        }
+    }
+
+    /// Some rows of the results table of the current analysis, given as
+    /// indices into the rows of its results.
+    fn results_table_part(&self, shown: &[usize]) -> Table {
+        let s = &self.session;
+        macro_rules! part {
+            ($output:expr, $table:path) => {
+                match &$output {
+                    Some((profile, results)) => $table(
+                        profile,
+                        results,
+                        shown.iter().filter_map(|&i| results.rows.get(i)),
+                    ),
+                    None => Table {
+                        headings: Vec::new(),
+                        rows: Vec::new(),
+                    },
+                }
+            };
+        }
+        match self.mode {
+            Mode::TwoSamples => part!(s.samples.output, sample_table),
+            Mode::TwoGroups => part!(s.groups.output, group_table),
+            Mode::MultipleGroups => part!(s.multi.output, multi_group_table),
+            Mode::Correlation => part!(s.correlation.output, correlation_table),
+        }
     }
 
     /// The features listed beside single-feature plots, honouring the "show
@@ -1426,6 +1726,22 @@ impl StampApp {
         self.show_only_active_features = only_active;
     }
 
+    /// Add a feature to the features listed for the box plot, or remove it
+    /// if listed, as Ctrl+click in the feature table does; the box plot
+    /// then shows the listed features.
+    pub fn toggle_box_feature(&mut self, feature: &str) {
+        let mut listed = plots::typed_features(&self.plot_settings.box_feature_list);
+        match listed.iter().position(|f| f == feature) {
+            Some(index) => {
+                listed.remove(index);
+            }
+            None => listed.push(feature.to_string()),
+        }
+        self.plot_settings.box_feature_list = listed.join("\n");
+        self.plot_settings.box_features = plots::BoxFeatures::Listed;
+        self.view_dirty = true;
+    }
+
     /// Select the feature shown by the single-feature plots.
     pub fn select_feature(&mut self, feature: &str) {
         self.session.selected_feature = Some(feature.to_string());
@@ -1453,7 +1769,13 @@ impl StampApp {
 
     /// Load a profile from the text of a file.
     pub fn load_profile(&mut self, name: &str, text: &str) {
-        match self.session.load_profile(name, text) {
+        let tree = stamp_core::ProfileTree::read(text).map_err(|e| e.to_string());
+        self.use_profile(name, tree);
+    }
+
+    /// Use a profile read from a file, or say why it could not be read.
+    fn use_profile(&mut self, name: &str, tree: Result<stamp_core::ProfileTree, String>) {
+        match tree.map(|tree| self.session.load_tree(name, tree)) {
             Ok(()) => {
                 self.filters = starting_filters();
                 self.selections = Default::default();
@@ -1520,7 +1842,22 @@ impl StampApp {
 
     /// Save the results table as it is shown, through the platform's save
     /// dialog or as a browser download.
-    pub fn download_table(&self, ctx: &egui::Context) {
+    pub fn download_table(&mut self, ctx: &egui::Context) {
+        self.table_context = Some(ctx.clone());
+        match &mut self.table_pending {
+            // Saved once built; the results table shows how far it has got.
+            Some(pending) => {
+                pending.download = true;
+                self.show_table = true;
+            }
+            None => self.save_table(),
+        }
+    }
+
+    fn save_table(&self) {
+        let Some(ctx) = &self.table_context else {
+            return;
+        };
         let bytes = self.table.to_tsv().into_bytes();
         self.platform.request(
             Request::Save {
@@ -1550,7 +1887,7 @@ impl StampApp {
     fn handle_file_events(&mut self) {
         for event in self.platform.poll() {
             match event {
-                Event::Profile(file) => self.open_profile_file(file),
+                Event::Profile(files) => self.start_loading(files),
                 Event::Auxiliary(which, file) => {
                     if let Some(PendingProfile::Mothur { groups, names, .. }) =
                         &mut self.pending_profile
@@ -1562,7 +1899,7 @@ impl StampApp {
                     }
                 }
                 Event::Metadata(file) => self.load_metadata(&file.name, &file.text()),
-                Event::Converted { name, spf } => self.load_profile(&name, &spf),
+                Event::Converted { name, spf } => self.start_loading_text(name, spf),
                 Event::Failed(message) => self.notice = Some(message),
             }
         }
@@ -1616,6 +1953,44 @@ impl StampApp {
         self.view_dirty = true;
     }
 
+    /// The metadata fields and the groups of the current analysis, offered
+    /// by the settings of some plots.
+    fn plot_config_context(&self) -> plot_config::Context {
+        let groups = match self.mode {
+            Mode::TwoGroups => self
+                .session
+                .groups
+                .output
+                .as_ref()
+                .map(|(profile, _)| vec![profile.group_name1.clone(), profile.group_name2.clone()])
+                .unwrap_or_default(),
+            Mode::MultipleGroups => self
+                .session
+                .multi
+                .output
+                .as_ref()
+                .map(|(profile, _)| profile.group_names.clone())
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        let metadata = self.session.metadata.as_ref();
+        plot_config::Context {
+            fields: metadata.map(|m| m.fields().to_vec()).unwrap_or_default(),
+            numeric_fields: metadata
+                .map(|m| {
+                    m.fields()
+                        .iter()
+                        .filter(|f| stamp_plot::ordination_style::is_numeric_field(m, f))
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default(),
+            groups,
+            lat_field: metadata.and_then(|m| stamp_plot::map_plot::coordinate_fields(m).0),
+            lon_field: metadata.and_then(|m| stamp_plot::map_plot::coordinate_fields(m).1),
+        }
+    }
+
     /// Rebuild the plot and the tables from the session.
     fn refresh_view(&mut self) {
         self.plot_settings.highlighted = self.highlighted_features();
@@ -1623,12 +1998,16 @@ impl StampApp {
         // some plots (ANCOM, the community tests, NMDS, rarefaction) take a
         // while to compute, and the view is refreshed for many reasons.
         let kind = self.plot_kind();
-        let feature =
-            if kind.uses_selected_feature(self.mode) || kind == PlotKind::CorrelationScatter {
-                self.session.selected_feature.clone()
-            } else {
-                None
-            };
+        let feature = if kind.uses_selected_feature(self.mode)
+            || kind == PlotKind::CorrelationScatter
+            || kind == PlotKind::CoOccurrence
+            || kind == PlotKind::PrevalenceAbundance
+            || self.plot_settings.colors_by_selected_feature(kind)
+        {
+            self.session.selected_feature.clone()
+        } else {
+            None
+        };
         let key = format!(
             "{:?}|{:?}|{feature:?}|{}|{:?}",
             self.mode,
@@ -1640,16 +2019,51 @@ impl StampApp {
             let (key, figure) = self.figure_cache.remove(index);
             self.figure = figure.clone();
             self.figure_cache.push((key, figure));
+            self.plot_job = None;
+            self.stale_figure = None;
+            self.cancelled_plot = None;
         } else {
-            self.figure = plots::build(&self.session, self.mode, kind, &self.plot_settings);
+            let figure = plots::build(&self.session, self.mode, kind, &self.plot_settings);
             self.figures_built += 1;
-            // Very large figures (big heatmaps) are not kept, to bound the
-            // memory used.
-            if self.figure.shapes.len() <= FIGURE_CACHE_SHAPES {
-                if self.figure_cache.len() >= FIGURE_CACHE_SIZE {
-                    self.figure_cache.remove(0);
+            match self.session.ordinations.take_request() {
+                // The plot needs something slow computed first: in a job,
+                // showing the plot before greyed out with the progress.
+                Some(request) => {
+                    if self.cancelled_plot.as_deref() == Some(request.id().as_str()) {
+                        self.plot_job = None;
+                        self.stale_figure = None;
+                        self.figure = Figure::message(PLOT_CANCELLED);
+                    } else {
+                        let running = self
+                            .plot_job
+                            .as_ref()
+                            .is_some_and(|(job, _)| request.is_running_in(job));
+                        if !running {
+                            // A job computing something else is cancelled
+                            // as it is dropped.
+                            self.plot_job = Some((request.start(), None));
+                            self.cancelled_plot = None;
+                        }
+                        let shown = std::mem::replace(&mut self.figure, figure);
+                        if !is_placeholder(&shown) {
+                            self.stale_figure = Some(shown);
+                        }
+                    }
                 }
-                self.figure_cache.push((key, self.figure.clone()));
+                None => {
+                    self.plot_job = None;
+                    self.stale_figure = None;
+                    self.cancelled_plot = None;
+                    self.figure = figure;
+                    // Very large figures (big heatmaps) are not kept, to
+                    // bound the memory used.
+                    if self.figure.shapes.len() <= FIGURE_CACHE_SHAPES {
+                        if self.figure_cache.len() >= FIGURE_CACHE_SIZE {
+                            self.figure_cache.remove(0);
+                        }
+                        self.figure_cache.push((key, self.figure.clone()));
+                    }
+                }
             }
         }
         let s = &self.session;
@@ -1664,10 +2078,30 @@ impl StampApp {
                 active: false,
             };
 
+        // The results table holds every value of every sample, which takes
+        // a while for large profiles: it is built again only when the
+        // results, their filters or the choice of rows change, not when
+        // only the plot does.
+        let table_key = format!(
+            "{:?}|{}|{}",
+            self.mode,
+            s.plot_fingerprint(),
+            self.results_only_active
+        );
+        let rebuild_table = table_key != self.table_key;
+        // A stand-in for the table when it is kept as it is.
+        let unchanged_table = || Table {
+            headings: Vec::new(),
+            rows: Vec::new(),
+        };
+
         // The features that pass the filters.
         let mut active: Vec<String> = Vec::new();
         let mut feature_rows = Vec::new();
         let mut effect_heading = "Effect size";
+        // A table too large to build at once is built a few rows at a time
+        // while the results table is open (see `continue_table`).
+        let mut deferred = None;
         let (table, features): (Table, Vec<String>) = match self.mode {
             Mode::TwoSamples => match &s.samples.output {
                 Some((profile, results)) => {
@@ -1692,7 +2126,12 @@ impl StampApp {
                         results.rows.iter().collect()
                     };
                     let features = shown.iter().map(|r| r.feature.clone()).collect();
-                    (sample_table(profile, results, shown), features)
+                    let table = if rebuild_table {
+                        sample_table(profile, results, shown)
+                    } else {
+                        unchanged_table()
+                    };
+                    (table, features)
                 }
                 None => empty_table(),
             },
@@ -1720,7 +2159,15 @@ impl StampApp {
                         results.rows.iter().collect()
                     };
                     let features = shown.iter().map(|r| r.feature.clone()).collect();
-                    (group_table(profile, results, shown), features)
+                    let table = if !rebuild_table {
+                        unchanged_table()
+                    } else if is_large(shown.len(), profile.profile.sample_names.len()) {
+                        deferred = Some(shown.len());
+                        unchanged_table()
+                    } else {
+                        group_table(profile, results, shown)
+                    };
+                    (table, features)
                 }
                 None => empty_table(),
             },
@@ -1748,7 +2195,15 @@ impl StampApp {
                         results.rows.iter().collect()
                     };
                     let features = shown.iter().map(|r| r.feature.clone()).collect();
-                    (multi_group_table(profile, results, shown), features)
+                    let table = if !rebuild_table {
+                        unchanged_table()
+                    } else if is_large(shown.len(), profile.profile.sample_names.len()) {
+                        deferred = Some(shown.len());
+                        unchanged_table()
+                    } else {
+                        multi_group_table(profile, results, shown)
+                    };
+                    (table, features)
                 }
                 None => empty_table(),
             },
@@ -1776,23 +2231,46 @@ impl StampApp {
                         results.rows.iter().collect()
                     };
                     let features = shown.iter().map(|r| r.feature.clone()).collect();
-                    (correlation_table(profile, results, shown), features)
+                    let table = if !rebuild_table {
+                        unchanged_table()
+                    } else if is_large(shown.len(), profile.profile.sample_names.len()) {
+                        deferred = Some(shown.len());
+                        unchanged_table()
+                    } else {
+                        correlation_table(profile, results, shown)
+                    };
+                    (table, features)
                 }
                 None => empty_table(),
             },
         };
+        let active: std::collections::HashSet<String> = active.into_iter().collect();
         for row in feature_rows.iter_mut() {
             row.active = active.contains(&row.feature);
         }
         // The feature table starts in alphabetical order, as in STAMP v2.
         feature_rows.sort_by(|a, b| a.feature.cmp(&b.feature));
 
-        // A different analysis has different columns.
-        if table.headings != self.table.headings {
-            self.table_sort = SortState::default();
+        if rebuild_table {
+            self.table_pending = deferred.map(|total| TablePending {
+                next: 0,
+                total,
+                headings: std::mem::take(&mut self.table.headings),
+                download: false,
+                shown: None,
+            });
+            if deferred.is_none() {
+                // A different analysis has different columns.
+                if table.headings != self.table.headings {
+                    self.table_sort = SortState::default();
+                }
+                self.table = table;
+            } else {
+                self.table.rows.clear();
+            }
+            self.table_features = features;
+            self.table_key = table_key;
         }
-        self.table = table;
-        self.table_features = features;
         self.feature_rows = feature_rows;
         self.effect_heading = effect_heading;
         self.view_dirty = false;
@@ -1813,6 +2291,14 @@ impl StampApp {
         if self.session.generation != self.seen_generation {
             self.seen_generation = self.session.generation;
             self.view_dirty = true;
+        }
+        self.poll_plot_job(ui.ctx());
+        self.poll_loading(ui.ctx());
+        let download = self.table_pending.as_ref().is_some_and(|p| p.download);
+        if self.table_pending.is_some() && (self.show_table || download) {
+            // A slice of each frame, so that the window stays responsive.
+            self.continue_table(30.0);
+            ui.ctx().request_repaint();
         }
 
         egui::Panel::top("menu").show(ui, |ui| self.menu(ui));
@@ -1906,7 +2392,10 @@ impl StampApp {
                 });
                 let save_table = item(icons::DOWNLOAD, "Save results table...", None);
                 if ui
-                    .add_enabled(!self.table.rows.is_empty(), save_table)
+                    .add_enabled(
+                        !self.table.rows.is_empty() || self.table_pending.is_some(),
+                        save_table,
+                    )
                     .clicked()
                 {
                     self.download_table(&ctx);
@@ -2006,6 +2495,14 @@ impl StampApp {
 
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
+            if let Some(label) = self.loading().map(str::to_string) {
+                ui.add(egui::Spinner::new());
+                ui.label(format!("{label}..."));
+                if ui.small_button("Cancel").clicked() {
+                    self.cancel_loading();
+                }
+                ui.separator();
+            }
             if self.session.tree.is_none() {
                 ui.label("No profile loaded");
                 return;
@@ -2020,6 +2517,18 @@ impl StampApp {
                 );
                 if ui.small_button("Cancel").clicked() {
                     self.session.cancel(self.mode);
+                }
+            }
+            if let Some((stage, fraction)) = self.plot_progress() {
+                ui.separator();
+                let text = format!("Plot: {}", progress_text(&stage, self.plot_job_counts()));
+                let bar = match fraction {
+                    Some(fraction) => egui::ProgressBar::new(fraction),
+                    None => egui::ProgressBar::new(0.0).animate(true),
+                };
+                ui.add(bar.desired_width(260.0).text(text));
+                if ui.small_button("Cancel").clicked() {
+                    self.cancel_plot();
                 }
             }
             if let Some(error) = &self.session.error {
@@ -2127,6 +2636,7 @@ impl StampApp {
                 self.session.set_group_field(&field);
             }
         });
+        self.sample_filter_section(ui);
         let Some(groups) = self.session.grouping() else {
             return;
         };
@@ -2168,6 +2678,111 @@ impl StampApp {
                 }
             });
         }
+    }
+
+    /// The Sample filter: a metadata field and the values whose samples
+    /// every analysis and plot uses.
+    fn sample_filter_section(&mut self, ui: &mut egui::Ui) {
+        let Some(metadata) = &self.session.metadata else {
+            return;
+        };
+        let current = self.session.sample_filter();
+        let mut options = vec![(None, "None".to_string())];
+        options.extend(
+            metadata
+                .fields()
+                .iter()
+                .map(|f| (Some(f.clone()), f.clone())),
+        );
+        // Each value of the chosen field with its number of samples.
+        let values: Vec<(String, usize)> = current
+            .as_ref()
+            .map(|(field, _)| {
+                metadata
+                    .unique_values(field)
+                    .into_iter()
+                    .map(|value| {
+                        let count = metadata
+                            .samples()
+                            .iter()
+                            .filter(|s| metadata.value(s, field) == Some(value))
+                            .count();
+                        (value.to_string(), count)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let (kept, total) = (metadata.num_selected(), metadata.samples().len());
+
+        let mut field = current.as_ref().map(|(f, _)| f.clone());
+        let mut change: Option<Option<(String, Vec<String>)>> = None;
+        ui.horizontal(|ui| {
+            ui.label("Sample filter:").on_hover_text(
+                "Use only the samples with the values ticked below in every analysis and plot",
+            );
+            if choose(ui, "sample-filter-field", &mut field, &options) {
+                // A new field starts with every value ticked.
+                change = Some(field.clone().map(|f| {
+                    let all = self.session.metadata.as_ref().map_or(Vec::new(), |m| {
+                        m.unique_values(&f)
+                            .into_iter()
+                            .map(str::to_string)
+                            .collect()
+                    });
+                    (f, all)
+                }));
+            }
+        });
+        if let Some((field, chosen)) = &current {
+            ui.indent("sample-filter-values", |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt("sample-filter-values")
+                    .max_height(140.0)
+                    .show(ui, |ui| {
+                        for (value, count) in &values {
+                            let mut on = chosen.contains(value);
+                            let label = if value.trim().is_empty() {
+                                "(empty)"
+                            } else {
+                                value.as_str()
+                            };
+                            if ui.checkbox(&mut on, format!("{label} ({count})")).changed() {
+                                let mut next: Vec<String> = values
+                                    .iter()
+                                    .map(|(v, _)| v)
+                                    .filter(|v| if *v == value { on } else { chosen.contains(v) })
+                                    .cloned()
+                                    .collect();
+                                next.dedup();
+                                change = Some(Some((field.clone(), next)));
+                            }
+                        }
+                    });
+                ui.horizontal(|ui| {
+                    if ui.small_button("All").clicked() {
+                        let all = values.iter().map(|(v, _)| v.clone()).collect();
+                        change = Some(Some((field.clone(), all)));
+                    }
+                    if ui.small_button("None").clicked() {
+                        change = Some(Some((field.clone(), Vec::new())));
+                    }
+                    ui.label(format!("{kept} of {total} samples kept"));
+                });
+            });
+            ui.separator();
+        }
+        if let Some(filter) = change {
+            self.set_sample_filter(filter.as_ref().map(|(f, v)| (f.as_str(), v.as_slice())));
+        }
+    }
+
+    /// Keep only the samples whose value of a metadata field is one of
+    /// `values`, as the Sample filter does; `None` keeps every sample.
+    pub fn set_sample_filter(&mut self, filter: Option<(&str, &[String])>) {
+        if let Err(message) = self.session.set_sample_filter(filter) {
+            self.notice = Some(message);
+        }
+        self.view_dirty = true;
     }
 
     fn properties_panel(&mut self, ui: &mut egui::Ui) {
@@ -2602,6 +3217,126 @@ impl StampApp {
         }
     }
 
+    /// Collect the slow part of the plot once computed, and draw the plot.
+    fn poll_plot_job(&mut self, ctx: &egui::Context) {
+        let Some((job, started)) = &mut self.plot_job else {
+            return;
+        };
+        match job.poll(&self.session.ordinations) {
+            plots::PlotPoll::Running => {
+                if started.is_none() {
+                    *started = Some(ctx.input(|i| i.time));
+                }
+                // As for the analyses: in the browser each frame does a
+                // slice of the work.
+                let wait = if cfg!(target_arch = "wasm32") { 0 } else { 50 };
+                ctx.request_repaint_after(std::time::Duration::from_millis(wait));
+            }
+            plots::PlotPoll::Finished => {
+                self.plot_job = None;
+                self.view_dirty = true;
+                ctx.request_repaint();
+            }
+            plots::PlotPoll::Cancelled => self.plot_job = None,
+            plots::PlotPoll::Failed => {
+                self.plot_job = None;
+                self.stale_figure = None;
+                self.figure = Figure::message("The calculation of the plot stopped unexpectedly");
+            }
+        }
+    }
+
+    /// Over the plot area while the plot is computed (after a moment, so
+    /// that quick plots do not flicker): the plot before greyed out, and in
+    /// the middle what is being done, how far it has got, and a button to
+    /// cancel it; or, once cancelled, a button to compute it after all.
+    fn plot_overlay(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
+        let now = ui.input(|i| i.time);
+        if let Some(Loading {
+            label,
+            started: Some(started),
+            ..
+        }) = &self.loading
+        {
+            if now - started >= PROGRESS_DELAY {
+                let label = label.clone();
+                let mut cancel = false;
+                egui::Area::new(egui::Id::unique("loading-progress"))
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(rect.center())
+                    .pivot(egui::Align2::CENTER_CENTER)
+                    .show(ui.ctx(), |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.add(egui::Spinner::new());
+                                ui.label(format!("{label}..."));
+                                cancel = ui.button("Cancel").clicked();
+                            });
+                        });
+                    });
+                if cancel {
+                    self.cancel_loading();
+                }
+                return;
+            }
+        }
+        let computing = match &self.plot_job {
+            Some((_, Some(started))) => now - started >= PROGRESS_DELAY,
+            _ => false,
+        };
+        let cancelled = self.plot_job.is_none() && self.cancelled_plot.is_some();
+        if !computing && !cancelled {
+            return;
+        }
+        if computing {
+            let veil = ui.visuals().panel_fill.gamma_multiply(0.75);
+            ui.painter().rect_filled(rect, 0.0, veil);
+        }
+        let mut cancel = false;
+        let mut compute = false;
+        egui::Area::new(egui::Id::unique("plot-progress"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(rect.center())
+            .pivot(egui::Align2::CENTER_CENTER)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.set_width(300.0);
+                    ui.vertical_centered(|ui| {
+                        if let Some((stage, fraction)) = self.plot_progress() {
+                            ui.horizontal(|ui| {
+                                ui.add(egui::Spinner::new());
+                                ui.label(progress_text(&stage, self.plot_job_counts()));
+                            });
+                            let bar = match fraction {
+                                Some(fraction) => {
+                                    egui::ProgressBar::new(fraction).show_percentage()
+                                }
+                                None => egui::ProgressBar::new(0.0).animate(true),
+                            };
+                            ui.add(bar.desired_width(280.0));
+                            cancel = ui.button("Cancel").clicked();
+                        } else {
+                            ui.label(PLOT_CANCELLED);
+                            compute = ui.button("Compute again").clicked();
+                        }
+                    });
+                });
+            });
+        if cancel {
+            self.cancel_plot();
+        }
+        if compute {
+            self.compute_plot();
+        }
+    }
+
+    /// `(done, total)` of what the plot's job is doing.
+    fn plot_job_counts(&self) -> (usize, usize) {
+        self.plot_job
+            .as_ref()
+            .map_or((0, 0), |(job, _)| job.progress().counts())
+    }
+
     /// The middle of the window: the plot, the choice of plot beneath it,
     /// and the table of features beside it for plots of a single feature.
     fn plot_panel(&mut self, ui: &mut egui::Ui) {
@@ -2618,19 +3353,26 @@ impl StampApp {
         egui::CentralPanel::default().show(ui, |ui| {
             // The plot is centred in the room left for it.
             let space = ui.available_size();
-            egui::ScrollArea::both()
+            let rect = ui.max_rect();
+            // While the plot is computed, the one shown before.
+            let figure = match (&self.plot_job, &self.stale_figure) {
+                (Some(_), Some(stale)) => stale,
+                _ => &self.figure,
+            };
+            let zoom = self.zoom;
+            let response = egui::ScrollArea::both()
                 .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    let response = figure_painter::show(ui, &self.figure, self.zoom, space);
-                    self.hovered = response.hovered;
-                    self.plot_placement = response.placement;
-                    if let Some(item) = response.clicked {
-                        // Clicking a feature selects it for the single-feature plots.
-                        if self.feature_rows.iter().any(|row| row.feature == item) {
-                            self.select_feature(&item);
-                        }
-                    }
-                });
+                .show(ui, |ui| figure_painter::show(ui, figure, zoom, space))
+                .inner;
+            self.hovered = response.hovered;
+            self.plot_placement = response.placement;
+            if let Some(item) = response.clicked {
+                // Clicking a feature selects it for the single-feature plots.
+                if self.feature_rows.iter().any(|row| row.feature == item) {
+                    self.select_feature(&item);
+                }
+            }
+            self.plot_overlay(ui, rect);
         });
     }
 
@@ -2797,6 +3539,12 @@ impl StampApp {
                 metadata.active_samples().len(),
                 samples.len()
             ));
+            if !metadata.selection().is_empty() {
+                ui.label(format!(
+                    "(Sample filter: {})",
+                    metadata.selection().describe()
+                ));
+            }
         });
         ui.separator();
 
@@ -2826,7 +3574,11 @@ impl StampApp {
                         let sample = &samples[order[table_row.index()]];
                         table_row.col(|ui| {
                             let mut active = metadata.is_active(sample);
-                            if ui.checkbox(&mut active, sample).changed() {
+                            let checkbox = egui::Checkbox::new(&mut active, sample.as_str());
+                            let response = ui
+                                .add_enabled(metadata.is_selected(sample), checkbox)
+                                .on_disabled_hover_text("Left out by the Sample filter");
+                            if response.changed() {
                                 switch = Some((vec![sample.clone()], active));
                             }
                         });
@@ -2861,6 +3613,16 @@ impl StampApp {
             return;
         }
         let selected = self.session.selected_feature.clone();
+        // With the box plot showing listed features, those are marked too,
+        // and Ctrl+click adds or removes one.
+        let is_box = self.plot_kind() == PlotKind::Box;
+        let listing = is_box && self.plot_settings.box_features == plots::BoxFeatures::Listed;
+        let listed = if listing {
+            plots::typed_features(&self.plot_settings.box_feature_list)
+        } else {
+            Vec::new()
+        };
+        let mut toggle = None;
         let headings = [
             "Feature",
             self.effect_heading,
@@ -2885,8 +3647,10 @@ impl StampApp {
                 .body(|body| {
                     body.rows(18.0, rows.len(), |mut table_row| {
                         let feature = rows[table_row.index()];
-                        table_row
-                            .set_selected(selected.as_deref() == Some(feature.feature.as_str()));
+                        table_row.set_selected(
+                            selected.as_deref() == Some(feature.feature.as_str())
+                                || listed.contains(&feature.feature),
+                        );
                         for cell in feature.cells() {
                             table_row.col(|ui| {
                                 plain_label(ui, cell);
@@ -2896,7 +3660,11 @@ impl StampApp {
                             .response()
                             .on_hover_cursor(egui::CursorIcon::PointingHand);
                         if response.clicked() {
-                            select = Some(feature.feature.clone());
+                            if is_box && response.ctx.input(|i| i.modifiers.command) {
+                                toggle = Some(feature.feature.clone());
+                            } else {
+                                select = Some(feature.feature.clone());
+                            }
                         }
                     });
                 });
@@ -2904,6 +3672,9 @@ impl StampApp {
         self.feature_sort = sort;
         if let Some(feature) = select {
             self.select_feature(&feature);
+        }
+        if let Some(feature) = toggle {
+            self.toggle_box_feature(&feature);
         }
     }
 
@@ -3009,8 +3780,23 @@ impl StampApp {
                         .changed();
                     ui.label(format!("{} features", self.table.rows.len()));
                 });
+                if let Some(pending) = &self.table_pending {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::Spinner::new());
+                        ui.label(format!(
+                            "Building the table: {} of {} rows",
+                            pending.next, pending.total
+                        ));
+                    });
+                    ui.add(
+                        egui::ProgressBar::new(pending.next as f32 / pending.total.max(1) as f32)
+                            .desired_width(300.0),
+                    );
+                }
                 if self.table.rows.is_empty() {
-                    ui.label("No features pass the filters.");
+                    if self.table_pending.is_none() {
+                        ui.label("No features pass the filters.");
+                    }
                     return;
                 }
                 ui.separator();
@@ -3127,6 +3913,8 @@ impl StampApp {
         }
 
         let (mode, kind) = (self.mode, self.plot_kind());
+        let context = self.plot_config_context();
+        let max_height = (ctx.content_rect().height() - 160.0).max(200.0);
         let mut open = self.show_plot_config;
         let (mut changed, mut reset, mut close) = (false, false, false);
         egui::Window::new("Configure plot")
@@ -3136,7 +3924,12 @@ impl StampApp {
             .show(ctx, |ui| {
                 ui.strong(kind.name());
                 ui.separator();
-                changed = plot_config::show(ui, mode, kind, &mut self.plot_settings);
+                egui::ScrollArea::vertical()
+                    .max_height(max_height)
+                    .show(ui, |ui| {
+                        changed =
+                            plot_config::show(ui, mode, kind, &mut self.plot_settings, &context);
+                    });
                 ui.separator();
                 ui.horizontal(|ui| {
                     reset = ui.button("Restore defaults").clicked();
@@ -3295,6 +4088,7 @@ impl StampApp {
                 ui.label("Statistical analysis of taxonomic and functional profiles.");
                 ui.label("Donovan Parks and Rob Beiko");
                 ui.label("Released under the GNU General Public License v3.");
+                ui.label("Maps made with Natural Earth (public domain).");
             });
 
         let mut dismiss = false;
@@ -3343,6 +4137,152 @@ impl eframe::App for StampApp {
         saved.dark_mode = self.saved_theme_is_dark;
         eframe::set_value(storage, STORAGE_KEY, &saved);
     }
+}
+
+/// Whether a figure is the placeholder drawn while a plot is computed or
+/// after its calculation was cancelled.
+fn is_placeholder(figure: &Figure) -> bool {
+    figure.regions.is_empty()
+        && figure.shapes.len() == 1
+        && matches!(&figure.shapes[0], stamp_plot::Shape::Text { text, .. }
+            if text == plots::COMPUTING || text == PLOT_CANCELLED)
+}
+
+/// What a job is doing, with its count when it has one:
+/// "PERMANOVA 412/999".
+fn progress_text(stage: &str, (done, total): (usize, usize)) -> String {
+    let stage = if stage.is_empty() { "Computing" } else { stage };
+    if total > 0 {
+        format!("{stage} {}/{total}", done.min(total))
+    } else {
+        format!("{stage}...")
+    }
+}
+
+/// A STAMP profile from files that can be loaded at once (a STAMP profile,
+/// a SingleM condensed profile, one or more Sandpiper profiles): its name,
+/// its text, and a hint to add should loading it fail. `None` for a single
+/// file that first needs choices (BIOM, mothur); `Err` holds the message
+/// for the user.
+type ProfileText = Result<(String, String, Option<&'static str>), String>;
+
+fn profile_text(files: &[OpenedFile]) -> Option<ProfileText> {
+    use stamp_core::import::{biom, sandpiper, singlem, NamedText};
+    if let [file] = files {
+        let text = file.text();
+        let failed = |error: String| Err(format!("Could not load {}:\n{error}", file.name));
+        let named = [NamedText {
+            name: &file.name,
+            text: &text,
+        }];
+        // Checked before BIOM, which takes any JSON object for a table.
+        return if sandpiper::looks_like_sandpiper(&file.bytes) {
+            Some(match sandpiper::to_spf(&named) {
+                Ok(spf) => Ok((
+                    file.name.clone(),
+                    spf,
+                    Some(
+                        "A Sandpiper file holds one sample: choose the files of all samples \
+                         together.",
+                    ),
+                )),
+                Err(error) => failed(error.to_string()),
+            })
+        } else if singlem::looks_like_singlem(&text) {
+            Some(match singlem::to_spf(&named) {
+                Ok(spf) => Ok((file.name.clone(), spf, None)),
+                Err(error) => failed(error.to_string()),
+            })
+        } else if biom::looks_like_biom(&file.bytes)
+            || file.name.to_lowercase().ends_with(".taxonomy")
+        {
+            None
+        } else {
+            Some(Ok((file.name.clone(), text, None)))
+        };
+    }
+    if !files
+        .iter()
+        .all(|f| sandpiper::looks_like_sandpiper(&f.bytes))
+    {
+        return Some(Err(
+            "Several files can be loaded together only if they are Sandpiper profiles, \
+             one per sample. Choose a single file for other formats."
+                .to_string(),
+        ));
+    }
+    let texts: Vec<String> = files.iter().map(OpenedFile::text).collect();
+    let named: Vec<NamedText<'_>> = files
+        .iter()
+        .zip(&texts)
+        .map(|(file, text)| NamedText {
+            name: &file.name,
+            text,
+        })
+        .collect();
+    let name = format!("{} Sandpiper profiles", files.len());
+    Some(match sandpiper::to_spf(&named) {
+        Ok(spf) => Ok((name, spf, None)),
+        Err(error) => Err(format!("Could not load {name}:\n{error}")),
+    })
+}
+
+/// Add `hint` to the message shown after a profile failed to load.
+fn add_hint(notice: &mut Option<String>, hint: Option<&str>) {
+    if let (Some(notice), Some(hint)) = (notice, hint) {
+        notice.push('\n');
+        notice.push_str(hint);
+    }
+}
+
+/// A profile being read from files in a job.
+struct Loading {
+    label: String,
+    job: Job<Result<(String, stamp_core::ProfileTree), String>>,
+    /// When the job started, in the time of the user interface, once known.
+    started: Option<f64>,
+}
+
+impl Loading {
+    /// Do `read` in a job, saying `label` meanwhile (first, in the browser,
+    /// so that the page shows it before the work begins).
+    fn start(
+        label: String,
+        read: impl FnOnce() -> Result<(String, stamp_core::ProfileTree), String> + Send + 'static,
+    ) -> Loading {
+        let mut read = Some(read);
+        let mut announced = false;
+        let job = Job::spawn_steps(move |_, _| {
+            if !std::mem::replace(&mut announced, true) {
+                return None;
+            }
+            read.take().map(|read| read())
+        });
+        Loading {
+            label,
+            job,
+            started: None,
+        }
+    }
+}
+
+/// A large results table being built a few rows at a time.
+struct TablePending {
+    /// Rows built so far, and rows.
+    next: usize,
+    total: usize,
+    /// Headings of the table before, to tell whether the columns changed.
+    headings: Vec<String>,
+    /// Save the table once built.
+    download: bool,
+    /// The rows of the results shown, once found.
+    shown: Option<std::rc::Rc<Vec<usize>>>,
+}
+
+/// Whether a results table of `rows` rows with columns for `samples`
+/// samples takes long enough to build to be built a few rows at a time.
+fn is_large(rows: usize, samples: usize) -> bool {
+    rows * (3 * samples + 20) > 400_000
 }
 
 #[cfg(test)]

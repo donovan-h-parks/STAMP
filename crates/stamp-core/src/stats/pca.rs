@@ -3,7 +3,8 @@
 /// Result of a principal component analysis.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pca {
-    /// Coordinates of each sample: `positions[sample][component]`.
+    /// Coordinates of each sample: `positions[sample][component]`, for
+    /// every component or, from [`pca_leading`], the first few.
     pub positions: Vec<Vec<f64>>,
     /// Fraction of the total variance captured by each component, largest
     /// first.
@@ -17,6 +18,13 @@ pub struct Pca {
 /// The sign of each component is arbitrary; it is fixed so that the sample
 /// furthest from the origin has a positive coordinate.
 pub fn pca(data: &[Vec<f64>]) -> Option<Pca> {
+    pca_leading(data, usize::MAX)
+}
+
+/// [`pca`] with the coordinates of only the first `components` components
+/// (all of their shares of the variance are still given), which is much
+/// faster for many samples: a plot needs two or three.
+pub fn pca_leading(data: &[Vec<f64>], components: usize) -> Option<Pca> {
     let n = data.len();
     let m = data.first()?.len();
     if n < 2
@@ -28,60 +36,98 @@ pub fn pca(data: &[Vec<f64>]) -> Option<Pca> {
         return None;
     }
 
-    // Centre each feature.
-    let mut centred = data.to_vec();
-    for feature in 0..m {
-        let mean = data.iter().map(|row| row[feature]).sum::<f64>() / n as f64;
-        for row in centred.iter_mut() {
-            row[feature] -= mean;
-        }
-    }
-
     // The eigenvectors of the samples' Gram matrix give the sample
     // coordinates directly, and the matrix is only as large as the number of
-    // samples.
-    let mut gram = vec![vec![0.0; n]; n];
+    // samples. It is the Gram matrix of the raw values, centred on both
+    // sides (the same as that of the centred features), so that features a
+    // pair of samples lacks cost nothing: profiles are mostly zeros.
+    let present: Vec<Vec<usize>> = data
+        .iter()
+        .map(|row| (0..m).filter(|&f| row[f] != 0.0).collect())
+        .collect();
+    let mut gram = vec![0.0; n * n];
     for i in 0..n {
         for j in i..n {
-            let dot: f64 = centred[i].iter().zip(&centred[j]).map(|(a, b)| a * b).sum();
-            gram[i][j] = dot;
-            gram[j][i] = dot;
+            let (sparse, dense) = if present[i].len() <= present[j].len() {
+                (i, j)
+            } else {
+                (j, i)
+            };
+            let dot: f64 = present[sparse]
+                .iter()
+                .map(|&f| data[sparse][f] * data[dense][f])
+                .sum();
+            gram[i * n + j] = dot;
+            gram[j * n + i] = dot;
         }
     }
-    let (values, vectors) = symmetric_eigen(gram);
-
-    let mut order: Vec<usize> = (0..n).collect();
-    order.sort_by(|&a, &b| values[b].total_cmp(&values[a]));
-    let total: f64 = values.iter().map(|v| v.max(0.0)).sum();
-    if total <= 0.0 {
-        return None;
-    }
-
-    // Keep the components that carry variance (at most n - 1 after centring).
-    let tolerance = total * 1e-12;
-    let kept: Vec<usize> = order
-        .into_iter()
-        .filter(|&k| values[k] > tolerance)
-        .collect();
-    let mut positions = vec![Vec::with_capacity(kept.len()); n];
-    let mut variance_fractions = Vec::with_capacity(kept.len());
-    for &k in &kept {
-        let scale = values[k].sqrt();
-        let column: Vec<f64> = (0..n).map(|i| vectors[i][k] * scale).collect();
-        let extreme = column
-            .iter()
-            .copied()
-            .fold(0.0f64, |a, b| if b.abs() > a.abs() { b } else { a });
-        let sign = if extreme < 0.0 { -1.0 } else { 1.0 };
-        for (row, value) in positions.iter_mut().zip(column) {
-            row.push(sign * value);
-        }
-        variance_fractions.push(values[k] / total);
-    }
+    double_centre(&mut gram, n);
+    let (positions, variance_fractions) = coordinates(&gram, n, components)?;
     Some(Pca {
         positions,
         variance_fractions,
     })
+}
+
+/// Subtract the mean of each row and of each column of a symmetric matrix
+/// and add back the overall mean.
+pub(crate) fn double_centre(a: &mut [f64], n: usize) {
+    let rows: Vec<f64> = a
+        .chunks_exact(n)
+        .map(|row| row.iter().sum::<f64>() / n as f64)
+        .collect();
+    let mean = rows.iter().sum::<f64>() / n as f64;
+    for (row, &row_mean) in a.chunks_exact_mut(n).zip(&rows) {
+        for (value, &column_mean) in row.iter_mut().zip(&rows) {
+            *value = *value - row_mean - column_mean + mean;
+        }
+    }
+}
+
+/// The coordinates of samples on the axes of a centred inner-product
+/// matrix (`b`, `n` by `n`, row by row): the axes with positive eigenvalues
+/// (above a tolerance for rounding), largest first, with their shares of
+/// the sum of the positive eigenvalues. Coordinates are given for the first
+/// `axes` axes (`usize::MAX` for all), each scaled by the square root of its
+/// eigenvalue and with its largest coordinate positive. `None` if no
+/// eigenvalue is positive.
+pub(crate) fn coordinates(b: &[f64], n: usize, axes: usize) -> Option<(Vec<Vec<f64>>, Vec<f64>)> {
+    let (mut values, pairs) = if axes >= n {
+        let (values, vectors) = super::eigen::full(b, n);
+        let pairs: Vec<(f64, Vec<f64>)> = values.iter().copied().zip(vectors).collect();
+        (values, pairs)
+    } else {
+        let values = super::eigen::eigenvalues(b, n);
+        let pairs = super::eigen::leading(b, n, axes, &values);
+        (values, pairs)
+    };
+    values.sort_by(|a, b| b.total_cmp(a));
+    let total: f64 = values.iter().map(|v| v.max(0.0)).sum();
+    if total <= 0.0 {
+        return None;
+    }
+    // Keep the axes that carry variation (at most n - 1 after centring).
+    let tolerance = total * 1e-12;
+    let variance_fractions: Vec<f64> = values
+        .iter()
+        .take_while(|&&v| v > tolerance)
+        .map(|v| v / total)
+        .collect();
+    let mut pairs = pairs;
+    pairs.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut positions = vec![Vec::new(); n];
+    for (value, vector) in pairs.iter().take(variance_fractions.len().min(axes)) {
+        let scale = value.sqrt();
+        let extreme = vector
+            .iter()
+            .copied()
+            .fold(0.0f64, |a, b| if b.abs() > a.abs() { b } else { a });
+        let sign = if extreme < 0.0 { -scale } else { scale };
+        for (row, v) in positions.iter_mut().zip(vector) {
+            row.push(sign * v);
+        }
+    }
+    Some((positions, variance_fractions))
 }
 
 /// Eigenvalues and eigenvectors (as columns) of a symmetric matrix, by the

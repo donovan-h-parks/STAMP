@@ -136,6 +136,47 @@ pub fn format_tick(value: f64, decimals: usize) -> String {
     }
 }
 
+/// `mantissa` times ten to the power `k`, written as a plain decimal with
+/// just enough decimals: `format_power(1.0, -3)` is "0.001",
+/// `format_power(5.0, 1)` is "50".
+pub fn format_power(mantissa: f64, k: i32) -> String {
+    let value = mantissa * 10f64.powi(k);
+    if k >= 0 {
+        format!("{value:.0}")
+    } else {
+        format!("{value:.*}", (-k) as usize)
+    }
+}
+
+/// Ticks of a logarithmic axis from ten to the power `low` to ten to the
+/// power `high`, as pairs of the logarithm (base 10) and the label of the
+/// value: 0.001, 0.01, 0.1, 1, 10. At most nine powers are labelled (every
+/// second or third over a wide range); a range of one power of ten also
+/// gets ticks at 2 and 5 times the lower power.
+pub fn log_ticks(low: i32, high: i32) -> Vec<(f64, String)> {
+    log_ticks_at_most(low, high, 9)
+}
+
+/// [`log_ticks`] with at most `labels` labelled ticks (at least two).
+pub fn log_ticks_at_most(low: i32, high: i32, labels: usize) -> Vec<(f64, String)> {
+    let high = high.max(low + 1);
+    let span = high - low;
+    let intervals = labels.max(2) as i32 - 1;
+    let step = (span + intervals - 1) / intervals;
+    let mut ticks: Vec<(f64, String)> = (low..=high)
+        .filter(|k| (k - low) % step == 0)
+        .map(|k| (k as f64, format_power(1.0, k)))
+        .collect();
+    if span == 1 && labels >= 4 {
+        for mantissa in [2.0, 5.0] {
+            let value = mantissa * 10f64.powi(low);
+            ticks.push((value.log10(), format_power(mantissa, low)));
+        }
+        ticks.sort_by(|a, b| a.0.total_cmp(&b.0));
+    }
+    ticks
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,6 +244,24 @@ mod tests {
         assert_eq!((t.min, t.max), (-3.0, 7.5));
         assert_eq!(t.positions.first(), Some(&-2.0));
         assert_eq!(t.positions.last(), Some(&6.0));
+    }
+
+    #[test]
+    fn logarithmic_ticks() {
+        let ticks = log_ticks(-3, 1);
+        let labels: Vec<&str> = ticks.iter().map(|t| t.1.as_str()).collect();
+        assert_eq!(labels, ["0.001", "0.01", "0.1", "1", "10"]);
+        assert_eq!(ticks[0].0, -3.0);
+        let narrow = log_ticks(-2, -1);
+        let labels: Vec<&str> = narrow.iter().map(|t| t.1.as_str()).collect();
+        assert_eq!(labels, ["0.01", "0.02", "0.05", "0.1"]);
+        assert!((narrow[1].0 - 0.02f64.log10()).abs() < 1e-12);
+        // A wide range labels every second power.
+        assert_eq!(log_ticks(-8, 4).len(), 7);
+        assert_eq!(log_ticks(2, 2).len(), 4);
+        assert_eq!(format_power(5.0, 1), "50");
+        let few: Vec<f64> = log_ticks_at_most(-6, 2, 4).iter().map(|t| t.0).collect();
+        assert_eq!(few, [-6.0, -3.0, 0.0]);
     }
 
     #[test]

@@ -17,6 +17,16 @@ Profile and groups (left)
   out of every analysis; groups with a single sample start unticked, since
   they cannot be tested. Click a group's colour to change it; the colour is
   used in every plot.
+* **Sample filter** chooses the samples of every analysis by a metadata
+  field: pick a field, then untick the values whose samples should be left
+  out (each value is listed with its number of samples; *All* and *None*
+  tick or untick them all). Samples left out take no part in any analysis
+  or plot, including group statistics, distances and ordinations, and are
+  not offered in the two-sample lists; groups left without samples
+  disappear from the list of groups. The number of samples kept is shown
+  beneath the values. Choose *None* as the field to keep every sample again.
+  Loading other metadata or another profile clears the filter. The command
+  line does the same with ``--where`` (see :ref:`cli-sample-filter`).
 
 Plot (centre)
 -------------
@@ -24,7 +34,7 @@ Plot (centre)
 Beneath the plot are:
 
 * the **plot selector**, listing the plots available for the current kind of
-  analysis under five headings, by the question they answer (see
+  analysis under six headings, by the question they answer (see
   :doc:`plots`);
 * **Configure plot**, which opens the options of the current plot: its size,
   what it shows, its legend and the font sizes of its own text;
@@ -48,8 +58,11 @@ Feature table (centre right)
 The feature table lists every feature with its effect size and p-value.
 Tick *Show only active features* to hide those removed by the filters.
 Click a feature to show it in the plots of a single feature (bar, box and
-post-hoc plots). Click a heading to sort by that column; click again to
-reverse the order.
+post-hoc plots) and to highlight it in the prevalence-abundance plot. While
+the box plot is shown, Ctrl+click (Cmd+click on a Mac) adds a feature to the
+box plot's list of features, or removes it, and the plot then shows the list
+(see :ref:`box plots of several features <plot-box-features>`).
+Click a heading to sort by that column; click again to reverse the order.
 
 Properties (right)
 ------------------
@@ -66,6 +79,44 @@ them:
   sequences and effect size, or chosen by hand with *Select specific
   features*.
 
+Progress and cancelling
+-----------------------
+
+Work that can take more than a moment is done in the background, so the
+window keeps answering while it runs (on the desktop it runs alongside the
+window; in the browser it is done in short pieces between redraws, which is
+slower). Its progress is shown in the status bar at the bottom of the window,
+with a **Cancel** button:
+
+* **Analyses.** While the test of every feature runs, the status bar shows
+  *Running test...* with a progress bar.
+* **Slow plots.** The PCA, PCoA (with its community tests), NMDS, distance
+  box, Mantel and ANCOM plots compute distances, ordinations and
+  permutation tests that take several seconds for hundreds of samples (NMDS
+  of 1,300 samples takes about ten seconds on the desktop). If the plot is
+  still being computed after a moment, the plot shown before is greyed out
+  and a panel in the middle of the plot area says what is being done, with
+  a progress bar where the work can be counted (for example *PERMANOVA
+  412/999* or *NMDS iterations 120/500*; steps that cannot be counted, such
+  as finding the principal coordinates, show a moving bar). **Cancel**
+  stops the calculation; the plot area then offers **Compute again**.
+  Everything else in the window can be used meanwhile, and once computed a
+  plot is kept, so changing its colours, shapes or sizes redraws it at
+  once.
+* **Large profiles.** Reading a large profile, or many Sandpiper files
+  together, shows *Reading ...* in the status bar and the plot area.
+* **The results table** of a large analysis (a column for every sample of
+  a thousand samples or more) is built a few rows at a time while
+  **View > Results table** is open, which shows how far it has got; saving
+  it before it is complete saves it once it is.
+
+.. figure:: images/gui_plot_progress.png
+   :width: 100%
+
+   A PCoA of the large example dataset (600 samples) being computed: the
+   plot before is greyed out, and the panel says which community test is
+   running and how far it has got (permutations done of 999).
+
 Tables
 ------
 
@@ -76,7 +127,8 @@ Tables
 * **View > Metadata table** shows the metadata along the bottom of the
   window. Untick a sample to leave it out of every analysis, or use the
   filter to tick or untick all samples matching a condition (for example,
-  *Remove all samples where Nationality = american*).
+  *Remove all samples where Nationality = american*). Samples left out by
+  the *Sample filter* are greyed out here.
 
 .. figure:: images/gui_metadata_table.png
    :width: 100%

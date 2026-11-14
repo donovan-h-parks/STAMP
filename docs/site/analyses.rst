@@ -28,6 +28,12 @@ lets you filter the results and explore them in plots.
 The :doc:`statistics` explains each test, and :doc:`choosing_a_test`
 suggests which to use.
 
+Every analysis uses the samples kept by the **Sample filter** on the left
+of the window (or ``--where`` and ``--where-not`` on the command line, see
+:ref:`cli-sample-filter`): to compare host groups within one host order,
+say, choose the order's field and tick only that order. Samples can also be
+left out one by one in the metadata table.
+
 Two samples
 -----------
 

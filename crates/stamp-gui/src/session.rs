@@ -19,8 +19,8 @@ use stamp_core::stats::two_group::GroupTest;
 use stamp_core::stats::two_sample::SampleTest;
 use stamp_core::stats::{rng_from_seed, StatsSettings, TestType};
 use stamp_core::{
-    CorrelationProfile, GroupProfile, Groups, Metadata, MultiGroupProfile, ProfileTree,
-    SampleProfile, SecondGroup, Unclassified,
+    Condition, CorrelationProfile, GroupProfile, Groups, Metadata, MultiGroupProfile, ProfileTree,
+    SampleProfile, SampleSelection, SecondGroup, Unclassified,
 };
 
 use crate::jobs::Job;
@@ -168,6 +168,9 @@ pub struct Session {
     jobs: [Option<Job<Outcome>>; 4],
     /// Increases whenever results change, so that views know to refresh.
     pub generation: u64,
+    /// Ordination layouts already computed, reused while only how the
+    /// plot looks changes.
+    pub ordinations: crate::plots::OrdinationCache,
 }
 
 /// How a run paces itself inside a job: it reports its progress, stops
@@ -284,6 +287,7 @@ impl Default for Session {
             dirty: [false; 4],
             jobs: [None, None, None, None],
             generation: 0,
+            ordinations: Default::default(),
         }
     }
 }
@@ -292,10 +296,19 @@ impl Session {
     /// Load a profile, replacing any current data.
     pub fn load_profile(&mut self, name: &str, text: &str) -> Result<(), String> {
         let tree = ProfileTree::read(text).map_err(|e| e.to_string())?;
+        self.load_tree(name, tree);
+        Ok(())
+    }
+
+    /// Use a profile already read (see [`load_profile`](Self::load_profile)).
+    pub fn load_tree(&mut self, name: &str, tree: ProfileTree) {
         *self = Session {
             stats: self.stats,
             seed: self.seed,
             other_samples_color: self.other_samples_color,
+            // Never the same number as for earlier data, so that plots and
+            // tables kept by the window for it are not taken for this.
+            generation: self.generation + 1,
             ..Session::default()
         };
         self.profile_name = name.to_string();
@@ -307,7 +320,6 @@ impl Session {
         self.samples.sample2 = samples[1].clone();
         self.tree = Some(Arc::new(tree));
         self.invalidate_all();
-        Ok(())
     }
 
     /// Load metadata for the current profile.
@@ -402,6 +414,83 @@ impl Session {
         self.multi.active_groups = names;
         self.invalidate(Mode::TwoGroups);
         self.invalidate(Mode::MultipleGroups);
+    }
+
+    /// Choose the samples of every analysis by their metadata values, as the
+    /// Sample filter does; an empty selection keeps every sample. Samples
+    /// left out take no part in any analysis or plot, and groups left
+    /// without samples disappear. Returns how many samples are kept.
+    pub fn set_sample_selection(&mut self, selection: SampleSelection) -> Result<usize, String> {
+        let metadata = self
+            .metadata
+            .as_mut()
+            .ok_or("Load metadata before choosing samples by it.")?;
+        if metadata.selection() == &selection {
+            return Ok(metadata.num_selected());
+        }
+        let kept = metadata
+            .set_selection(selection)
+            .map_err(|e| e.to_string())?;
+        self.refresh_groups();
+        self.invalidate(Mode::TwoGroups);
+        self.invalidate(Mode::MultipleGroups);
+        self.invalidate(Mode::Correlation);
+        self.generation += 1;
+        Ok(kept)
+    }
+
+    /// Keep the samples whose value of `field` is one of `values` (`None`
+    /// keeps every sample): the window's Sample filter.
+    pub fn set_sample_filter(
+        &mut self,
+        filter: Option<(&str, &[String])>,
+    ) -> Result<usize, String> {
+        let selection = match filter {
+            Some((field, values)) => SampleSelection {
+                conditions: vec![Condition::OneOf {
+                    field: field.to_string(),
+                    values: values.to_vec(),
+                }],
+            },
+            None => SampleSelection::default(),
+        };
+        self.set_sample_selection(selection)
+    }
+
+    /// The field and values of the Sample filter, if one is set.
+    pub fn sample_filter(&self) -> Option<(String, Vec<String>)> {
+        match self.metadata.as_ref()?.selection().conditions.as_slice() {
+            [Condition::OneOf { field, values }] => Some((field.clone(), values.clone())),
+            _ => None,
+        }
+    }
+
+    /// After the sample filter changes: the groups that analyses include
+    /// are those with at least two samples, and the two groups compared
+    /// stay as they were if they still have samples.
+    fn refresh_groups(&mut self) {
+        let Some(groups) = self.grouping() else {
+            return;
+        };
+        let has_samples = |g: &str| groups.samples(g).is_some_and(|s| !s.is_empty());
+        let names: Vec<String> = groups
+            .names()
+            .filter(|g| groups.samples(g).is_some_and(|s| s.len() >= 2))
+            .map(str::to_string)
+            .collect();
+        if !has_samples(&self.groups.group1) {
+            self.groups.group1 = names.first().cloned().unwrap_or_default();
+        }
+        if self
+            .groups
+            .group2
+            .as_deref()
+            .is_some_and(|g| !has_samples(g))
+            || self.groups.group2.as_ref() == Some(&self.groups.group1)
+        {
+            self.groups.group2 = names.iter().find(|g| **g != self.groups.group1).cloned();
+        }
+        self.multi.active_groups = names;
     }
 
     /// The metadata fields a correlation can be made with: those that hold
@@ -971,6 +1060,59 @@ mod tests {
         session.run_to_completion(Mode::TwoGroups);
         let (profile, _) = session.groups.output.as_ref().unwrap();
         assert_eq!(profile.samples_in_group1().len(), 3);
+    }
+
+    #[test]
+    fn the_sample_filter_restricts_every_analysis() {
+        let mut session = loaded();
+        let gut = ["gut".to_string()];
+        assert_eq!(session.set_sample_filter(Some(("Site", &gut))), Ok(5));
+        assert_eq!(
+            session.sample_filter(),
+            Some(("Site".to_string(), gut.to_vec()))
+        );
+        // B keeps one sample, too few to take part in the multiple-group
+        // analysis; the two groups compared stay as they were.
+        assert_eq!(session.multi.active_groups, ["A", "C"]);
+        assert_eq!(
+            (
+                session.groups.group1.as_str(),
+                session.groups.group2.as_deref()
+            ),
+            ("A", Some("B"))
+        );
+        session.run_to_completion(Mode::MultipleGroups);
+        let (profile, _) = session.multi.output.as_ref().unwrap();
+        assert_eq!(profile.group_names, ["A", "C"]);
+        assert_eq!(profile.profile.sample_names, ["A1", "A2", "C1", "C2"]);
+        session.run_to_completion(Mode::Correlation);
+        let (profile, _) = session.correlation.output.as_ref().unwrap();
+        assert_eq!(profile.values.len(), 5);
+
+        // Values of a field that leave a group empty make it disappear.
+        let skin = ["skin".to_string()];
+        assert_eq!(session.set_sample_filter(Some(("Site", &skin))), Ok(4));
+        let groups = session.grouping().unwrap();
+        assert_eq!(groups.samples("B").unwrap(), ["B2", "B3"]);
+        assert!(session.set_sample_filter(Some(("Nope", &skin))).is_err());
+        assert_eq!(
+            session.set_sample_filter(Some(("Group", &["C".to_string()]))),
+            Ok(3)
+        );
+        assert_eq!(
+            session.grouping().unwrap().names().collect::<Vec<_>>(),
+            ["C"]
+        );
+        assert_eq!(session.groups.group1, "C");
+
+        // Clearing the filter keeps every sample again; new metadata starts
+        // without a filter.
+        assert_eq!(session.set_sample_filter(None), Ok(9));
+        assert_eq!(session.sample_filter(), None);
+        session.set_sample_filter(Some(("Site", &gut))).unwrap();
+        session.load_metadata("test.tsv", META).unwrap();
+        assert_eq!(session.sample_filter(), None);
+        assert_eq!(session.metadata.as_ref().unwrap().active_samples().len(), 9);
     }
 
     #[test]

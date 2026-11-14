@@ -4,8 +4,8 @@
 use stamp_core::{GroupProfile, MultiGroupProfile};
 
 use crate::axes::{
-    self, corner_note, fonts, group_color, legend, scaled_ticks, x_axis, y_axis, y_axis_width,
-    Frame, LabelRotation, LegendPosition, AXES_COLOR, INCH, TITLE_SIZE,
+    self, corner_note, fonts, group_color, legend, x_axis, y_axis, Frame, LabelRotation,
+    LegendPosition, AXES_COLOR, INCH, TITLE_SIZE,
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, Stroke};
@@ -50,7 +50,7 @@ pub struct FeatureData {
 }
 
 impl FeatureData {
-    fn axis_label(&self) -> &str {
+    pub(crate) fn axis_label(&self) -> &str {
         self.value_label.as_deref().unwrap_or(self.field.label())
     }
 }
@@ -131,7 +131,7 @@ impl FeatureData {
         })
     }
 
-    fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.groups.is_empty() || self.groups.iter().any(|g| g.values.is_empty())
     }
 
@@ -157,6 +157,9 @@ pub struct BarOptions {
     pub truncate_labels: Option<usize>,
     /// Size of the title (the feature's name) and the p-value, in points.
     pub title_font_size: f64,
+    /// Logarithmic (base 10) value axis; samples without the feature get no
+    /// bar and the axis is labelled 0 below a break.
+    pub log_scale: bool,
 }
 
 impl Default for BarOptions {
@@ -169,18 +172,19 @@ impl Default for BarOptions {
             legend: LegendPosition::None,
             truncate_labels: Some(50),
             title_font_size: TITLE_SIZE,
+            log_scale: false,
         }
     }
 }
 
-fn shorten(text_: &str, limit: Option<usize>) -> String {
+pub(crate) fn shorten(text_: &str, limit: Option<usize>) -> String {
     match limit {
         Some(length) => text::truncate(text_, length),
         None => text_.to_string(),
     }
 }
 
-const NOTHING: &str = "No active features or degenerate plot";
+pub(crate) const NOTHING: &str = "No active features or degenerate plot";
 
 /// Bar plot: one bar per sample, grouped and coloured by group.
 pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
@@ -198,14 +202,38 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         .collect();
     let num_samples = sample_labels.len() as f64;
 
-    let ticks = Ticks::covering(0.0, data.max_value().max(f64::MIN_POSITIVE));
+    let axis = if options.log_scale {
+        crate::multi_box::ValueAxis::new(
+            data.groups.iter().flat_map(|g| g.values.iter().copied()),
+            true,
+        )
+    } else {
+        None
+    };
+    let axis = axis.unwrap_or_else(|| {
+        let ticks = Ticks::covering(0.0, data.max_value().max(f64::MIN_POSITIVE));
+        crate::multi_box::ValueAxis {
+            min: ticks.min,
+            max: ticks.max,
+            log: false,
+            zero: None,
+            break_at: None,
+            ticks: ticks
+                .positions
+                .iter()
+                .copied()
+                .zip(ticks.labels())
+                .collect(),
+        }
+    });
     let padding = 0.25 * INCH;
     let longest_label = sample_labels
         .iter()
         .map(|l| text::width(l, fonts().tick))
         .fold(0.0, f64::max);
     let column = options.column_width * INCH;
-    let left = padding + y_axis_width(&ticks, true);
+    let left =
+        padding + axes::TICK_PAD + axis.label_width() + 4.0 + axes::line_height(fonts().axis_label);
     let frame = Frame {
         left,
         top: padding + options.title_font_size,
@@ -217,7 +245,7 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
     }
     let mut figure = Figure::new(frame.right + padding, options.height * INCH);
 
-    let y = frame.y_scale(ticks.min, ticks.max);
+    let y = frame.y_scale(axis.min, axis.max);
     let bar_width = column * 0.9 / 2.0;
     let outline = Stroke::solid(Color::BLACK, 1.0);
     let mut x_ticks = Vec::new();
@@ -227,22 +255,26 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         if options.show_averages {
             let mean = group.values.iter().sum::<f64>() / group.values.len() as f64;
             let right = group_left + column * group.values.len() as f64;
+            let at = y.map(axis.coord(mean));
             figure.line(
-                &[(group_left, y.map(mean)), (right, y.map(mean))],
+                &[(group_left, at), (right, at)],
                 Stroke::solid(group.color, 1.0),
             );
         }
         for (sample, &value) in group.samples.iter().zip(&group.values) {
             let x = frame.left + column * (column_index as f64 + 0.25);
-            let top = y.map(value.max(0.0));
-            figure.rect(
-                x,
-                top,
-                bar_width,
-                frame.bottom - top,
-                Some(group.color),
-                Some(outline),
-            );
+            // On a logarithmic axis a sample without the feature has no bar.
+            if !(axis.log && value <= 0.0) {
+                let top = y.map(axis.coord(value.max(0.0)));
+                figure.rect(
+                    x,
+                    top,
+                    bar_width,
+                    frame.bottom - top,
+                    Some(group.color),
+                    Some(outline),
+                );
+            }
             let centre = x + bar_width / 2.0;
             x_ticks.push((centre, sample_labels[column_index].clone()));
             figure.region(
@@ -272,10 +304,11 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
     y_axis(
         &mut figure,
         &frame,
-        &scaled_ticks(&ticks, &y),
+        &axis.scaled(&y),
         Some(data.axis_label()),
         AXES_COLOR,
     );
+    axis.draw_break(&mut figure, &frame, &y, false);
     axes::title(
         &mut figure,
         &frame,
@@ -286,7 +319,7 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         corner_note(
             &mut figure,
             &frame,
-            &format!("p = {p}"),
+            &crate::multi_box::p_text(p),
             options.title_font_size,
         );
     }
@@ -297,6 +330,30 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         .collect();
     legend(&mut figure, &frame, &entries, options.legend);
     figure
+}
+
+/// How a box plot of several features is laid out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum BoxLayout {
+    /// The features along the category axis, with a box per group side by
+    /// side at each, coloured by group.
+    Grouped,
+    /// One panel per feature (small multiples), with the groups along the
+    /// category axis of each.
+    Panels,
+}
+
+/// The order of the groups in a box plot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum GroupOrder {
+    /// As given (the order of the analysis's groups).
+    AsGiven,
+    Alphabetical,
+    /// Highest median of the first feature first (ties by mean, then name).
+    Median,
+    /// By the category of each group in another metadata field (the most
+    /// common value among its samples), then by name.
+    Category,
 }
 
 /// Appearance of the box plot. Lengths are in inches.
@@ -311,6 +368,24 @@ pub struct BoxOptions {
     pub truncate_labels: Option<usize>,
     /// Size of the title (the feature's name) and the p-value, in points.
     pub title_font_size: f64,
+    /// Logarithmic (base 10) value axis. The quartiles and whiskers are
+    /// those of the values themselves; zeros are drawn on a line labelled 0
+    /// below a break in the axis.
+    pub log_scale: bool,
+    /// Draw every sample as a small, semi-transparent point spread across
+    /// its box (which replaces the crosses of samples beyond the whiskers).
+    pub show_points: bool,
+    /// Diameter of those points, in points.
+    pub point_size: f64,
+    /// Write the number of samples of each group after its name.
+    pub show_counts: bool,
+    /// Boxes lying along a horizontal value axis.
+    pub horizontal: bool,
+    /// Layout of several features.
+    pub layout: BoxLayout,
+    /// With one panel per feature, the same value axis in every panel.
+    pub shared_axis: bool,
+    pub group_order: GroupOrder,
 }
 
 impl Default for BoxOptions {
@@ -322,6 +397,14 @@ impl Default for BoxOptions {
             show_p_value: true,
             truncate_labels: Some(50),
             title_font_size: TITLE_SIZE,
+            log_scale: false,
+            show_points: false,
+            point_size: 2.5,
+            show_counts: false,
+            horizontal: false,
+            layout: BoxLayout::Grouped,
+            shared_axis: true,
+            group_order: GroupOrder::AsGiven,
         }
     }
 }
@@ -382,7 +465,7 @@ pub fn box_stats(values: &[f64]) -> Option<BoxStats> {
 }
 
 /// A five-pointed star, for marking means.
-fn star(figure: &mut Figure, x: f64, y: f64, radius: f64) {
+pub(crate) fn star(figure: &mut Figure, x: f64, y: f64, radius: f64) {
     let points = (0..10)
         .map(|i| {
             let r = if i % 2 == 0 { radius } else { radius * 0.4 };
@@ -397,131 +480,10 @@ fn star(figure: &mut Figure, x: f64, y: f64, radius: f64) {
     });
 }
 
-/// Box plot: the distribution of a feature in each group.
+/// Box plot: the distribution of a feature in each group. See
+/// [`crate::multi_box::plot`] for several features.
 pub fn box_plot(data: &FeatureData, options: &BoxOptions) -> Figure {
-    if data.is_empty() {
-        return Figure::message(NOTHING);
-    }
-    let stats: Vec<Option<BoxStats>> = data.groups.iter().map(|g| box_stats(&g.values)).collect();
-    let (low, high) = data
-        .groups
-        .iter()
-        .flat_map(|g| g.values.iter().copied())
-        .filter(|v| v.is_finite())
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| {
-            (lo.min(v), hi.max(v))
-        });
-    if !low.is_finite() {
-        return Figure::message(NOTHING);
-    }
-    let ticks = Ticks::covering(low, high);
-
-    let padding = 0.25 * INCH;
-    let mut figure = Figure::with_size_inches(options.width, options.height);
-    let frame = Frame {
-        left: padding + y_axis_width(&ticks, true),
-        top: 2.0 * padding,
-        right: figure.width - 2.0 * padding,
-        bottom: figure.height - padding - 0.3 * INCH,
-    };
-    if frame.width() < INCH || frame.height() < INCH {
-        return Figure::message("The figure is too small for a box plot");
-    }
-
-    let n = data.groups.len() as f64;
-    let x = frame.x_scale(0.5, n + 0.5);
-    let y = frame.y_scale(ticks.min, ticks.max);
-    let black = Stroke::solid(Color::BLACK, 1.0);
-    let half_box = (x.map(1.0) - x.map(0.0)) * 0.25;
-    let mut x_ticks = Vec::new();
-
-    for (index, (group, stats)) in data.groups.iter().zip(&stats).enumerate() {
-        let centre = x.map(index as f64 + 1.0);
-        x_ticks.push((centre, shorten(&group.name, options.truncate_labels)));
-        let Some(s) = stats else { continue };
-
-        // Whiskers with caps, then the box and its median.
-        for (from, to) in [(s.q1, s.whisker_low), (s.q3, s.whisker_high)] {
-            figure.line(&[(centre, y.map(from)), (centre, y.map(to))], black);
-            figure.line(
-                &[
-                    (centre - half_box / 2.0, y.map(to)),
-                    (centre + half_box / 2.0, y.map(to)),
-                ],
-                black,
-            );
-        }
-        figure.rect(
-            centre - half_box,
-            y.map(s.q3),
-            2.0 * half_box,
-            y.map(s.q1) - y.map(s.q3),
-            Some(group.color),
-            Some(black),
-        );
-        figure.line(
-            &[
-                (centre - half_box, y.map(s.median)),
-                (centre + half_box, y.map(s.median)),
-            ],
-            black,
-        );
-        for &outlier in &s.outliers {
-            let (px, py, arm) = (centre, y.map(outlier), 3.0);
-            figure.line(&[(px - arm, py), (px + arm, py)], black);
-            figure.line(&[(px, py - arm), (px, py + arm)], black);
-        }
-        let mean = group.values.iter().sum::<f64>() / group.values.len() as f64;
-        if options.show_averages {
-            star(&mut figure, centre, y.map(mean), 4.5);
-        }
-        figure.region(
-            centre - half_box,
-            frame.top,
-            2.0 * half_box,
-            frame.height(),
-            &group.name,
-            format!(
-                "{}\nMedian: {:.3}\nMean: {mean:.3}\nQuartiles: {:.3} to {:.3}\nSamples: {}",
-                group.name,
-                s.median,
-                s.q1,
-                s.q3,
-                group.values.len()
-            ),
-        );
-    }
-
-    x_axis(
-        &mut figure,
-        &frame,
-        &x_ticks,
-        None,
-        LabelRotation::Horizontal,
-        AXES_COLOR,
-    );
-    y_axis(
-        &mut figure,
-        &frame,
-        &scaled_ticks(&ticks, &y),
-        Some(data.axis_label()),
-        AXES_COLOR,
-    );
-    axes::title(
-        &mut figure,
-        &frame,
-        &shorten(&data.feature, options.truncate_labels),
-        options.title_font_size,
-    );
-    if let (true, Some(p)) = (options.show_p_value, &data.p_value) {
-        corner_note(
-            &mut figure,
-            &frame,
-            &format!("p = {p}"),
-            options.title_font_size,
-        );
-    }
-    figure
+    crate::multi_box::plot(std::slice::from_ref(data), None, options)
 }
 
 #[cfg(test)]
@@ -620,6 +582,29 @@ mod tests {
             bar_plot(&data(), &BarOptions::default()).shapes.len(),
             figure.shapes.len() + 3
         );
+    }
+
+    #[test]
+    fn bar_plot_on_a_logarithmic_axis() {
+        let mut data = data();
+        data.groups[0].values = vec![0.0, 0.02, 3.0];
+        let figure = bar_plot(
+            &data,
+            &BarOptions {
+                log_scale: true,
+                ..BarOptions::default()
+            },
+        );
+        // No bar for the sample without the feature.
+        assert_eq!(rect_count(&figure, group_color(0)), 2);
+        assert_eq!(figure.regions.len(), 5);
+        let texts = texts(&figure);
+        for expected in ["0", "0.01", "1", "100"] {
+            assert!(
+                texts.iter().any(|t| t == expected),
+                "missing {expected} in {texts:?}"
+            );
+        }
     }
 
     #[test]

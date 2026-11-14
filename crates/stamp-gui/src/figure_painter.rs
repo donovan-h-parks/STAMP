@@ -169,6 +169,21 @@ pub fn paint(painter: &egui::Painter, origin: Pos2, scale: f32, figure: &Figure)
                     painter.add(epaint::Shape::closed_line(points, stroke(outline)));
                 }
             }
+            Shape::Area {
+                rings,
+                triangles,
+                fill,
+            } => {
+                let fill = color32(*fill);
+                let mut mesh = epaint::Mesh::default();
+                for &(x, y) in rings.iter().flatten() {
+                    mesh.colored_vertex(at(x, y), fill);
+                }
+                for &[a, b, c] in triangles.as_chunks::<3>().0 {
+                    mesh.add_triangle(a, b, c);
+                }
+                painter.add(epaint::Shape::mesh(mesh));
+            }
             Shape::Text {
                 x,
                 y,

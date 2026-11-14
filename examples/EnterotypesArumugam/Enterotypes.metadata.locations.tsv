@@ -1,0 +1,40 @@
+Sample Id	Enterotype	Nationality	Clinical Status	Gender	Project	Clinical Status [filtered]	Nationality [filtered]	Gender [filtered]	Latitude	Longitude
+AM-AD-1	Unclassified	american	healthy	F	gill06	na	na	na	37.43	-122.17
+AM-AD-2	Unclassified	american	healthy	M	gill06	na	na	na	37.43	-122.17
+AM-F10-T1	Enterotype 3 - twin	american	obese	F	turnbaugh09	na	na	na	38.63	-90.2
+AM-F10-T2	Enterotype 3	american	obese	F	turnbaugh09	obese	na	F	38.63	-90.2
+DA-AD-1	Enterotype 2	danish	healthy	F	MetaHIT	healthy	danish	F	55.68	12.57
+DA-AD-2	Enterotype 3	danish	healthy	M	MetaHIT	healthy	danish	M	55.68	12.57
+DA-AD-3	Enterotype 3	danish	obese	F	MetaHIT	obese	danish	F	55.68	12.57
+DA-AD-4	Enterotype 2	danish	obese	M	MetaHIT	obese	danish	M	55.68	12.57
+ES-AD-1	Enterotype 1	spanish	CD	F	MetaHIT	CD	spanish	F	41.39	2.17
+ES-AD-2	Enterotype 2	spanish	healthy	M	MetaHIT	healthy	spanish	M	41.39	2.17
+ES-AD-3	Enterotype 2	spanish	UC	F	MetaHIT	UC	spanish	F	41.39	2.17
+ES-AD-4	Enterotype 3	spanish	healthy	F	MetaHIT	healthy	spanish	F	41.39	2.17
+FR-AD-1	Enterotype 3	french	healthy	M	MicroObes	healthy	french	M	48.86	2.35
+FR-AD-2	Enterotype 3	french	healthy	M	MicroObes	healthy	french	M	48.86	2.35
+FR-AD-3	Enterotype 1	french	healthy	M	MicroObes	healthy	french	M	48.86	2.35
+FR-AD-4	Enterotype 3	french	healthy	M	MicroObes	healthy	french	M	48.86	2.35
+FR-AD-5	Enterotype 3	french	obese	M	MicroObes	obese	french	M	48.86	2.35
+FR-AD-6	Enterotype 2	french	obese	M	MicroObes	obese	french	M	48.86	2.35
+FR-AD-7	Enterotype 3	french	obese	M	MicroObes	obese	french	M	48.86	2.35
+FR-AD-8	Enterotype 3	french	obese	M	MicroObes	obese	french	M	48.86	2.35
+IT-AD-1	Enterotype 3	italian	elderly	F	MicroAge	elderly	italian	F	44.49	11.34
+IT-AD-2	Enterotype 3	italian	elderly	M	MicroAge	elderly	italian	M	44.49	11.34
+IT-AD-3	Enterotype 3	italian	elderly	F	MicroAge	elderly	italian	F	44.49	11.34
+IT-AD-4	Enterotype 2	italian	elderly	M	MicroAge	elderly	italian	M	44.49	11.34
+IT-AD-5	Enterotype 3	italian	elderly	M	MicroAge	elderly	italian	M	44.49	11.34
+IT-AD-6	Enterotype 3	italian	elderly	F	MicroAge	elderly	italian	F	44.49	11.34
+JP-AD-1	Enterotype 1	japanese	healthy	M	kurokawa07	healthy	japanese	M	35.68	139.69
+JP-AD-2	Enterotype 3	japanese	healthy	F	kurokawa07	healthy	japanese	F	35.68	139.69
+JP-AD-3	Enterotype 3	japanese	healthy	M	kurokawa07	healthy	japanese	M	35.68	139.69
+JP-AD-4	Enterotype 1	japanese	healthy	F	kurokawa07	healthy	japanese	F	35.68	139.69
+JP-AD-5	Enterotype 3	japanese	healthy	M	kurokawa07	healthy	japanese	M	35.68	139.69
+JP-AD-6	Enterotype 1	japanese	healthy	F	kurokawa07	healthy	japanese	F	35.68	139.69
+JP-AD-7	Enterotype 1	japanese	healthy	M	kurokawa07	healthy	japanese	M	35.68	139.69
+JP-AD-8	Enterotype 1	japanese	healthy	M	kurokawa07	healthy	japanese	M	35.68	139.69
+JP-AD-9	Enterotype 1	japanese	healthy	F	kurokawa07	healthy	japanese	F	35.68	139.69
+JP-IN-1	Infant	japanese	healthy	F	kurokawa07	na	na	na	35.68	139.69
+JP-IN-2	Infant	japanese	healthy	M	kurokawa07	na	na	na	35.68	139.69
+JP-IN-3	Infant	japanese	healthy	M	kurokawa07	na	na	na	35.68	139.69
+JP-IN-4	Infant	japanese	healthy	F	kurokawa07	na	na	na	35.68	139.69

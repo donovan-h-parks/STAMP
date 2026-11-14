@@ -2,8 +2,9 @@
 //! made of? All work on the distances between samples and get their
 //! p-values by permuting which group each sample belongs to.
 
-use super::correlation::CorrelationMethod;
-use super::diversity::{pcoa, DistanceMatrix};
+use super::correlation::{pearson, ranks, CorrelationMethod};
+use super::diversity::{pcoa, DistanceMatrix, Ordination};
+use super::results::{Control, Pace, Step};
 use super::two_sample::random_index;
 use super::StampRng;
 
@@ -38,7 +39,7 @@ pub enum CommunityTest {
 }
 
 /// A test statistic as a function of the group of each sample.
-type Statistic<'a> = Box<dyn Fn(&[usize]) -> f64 + 'a>;
+type Statistic = Box<dyn Fn(&[usize]) -> f64 + Send>;
 
 impl CommunityTest {
     pub const ALL: [CommunityTest; 3] = [
@@ -75,6 +76,38 @@ impl CommunityTest {
         permutations: usize,
         rng: &mut StampRng,
     ) -> PermutationTest {
+        self.run_with(distances, groups, permutations, rng, None)
+    }
+
+    /// [`run`](Self::run), given the principal coordinates of the
+    /// distances on every axis ([`pcoa`]) if they have already been found,
+    /// for PERMDISP, so that they are not found again.
+    pub fn run_with(
+        self,
+        distances: &DistanceMatrix,
+        groups: &[usize],
+        permutations: usize,
+        rng: &mut StampRng,
+        ordination: Option<&Ordination>,
+    ) -> PermutationTest {
+        let mut run = self.start(distances, groups, permutations, ordination);
+        match run.advance(rng, &mut |_, _| Control::Continue) {
+            Step::Done(result) => result,
+            Step::Paused | Step::Cancelled => unreachable!("never paused or cancelled"),
+        }
+    }
+
+    /// The test as a [`PermutationRun`], to be carried out a permutation at
+    /// a time with [`PermutationRun::advance`]; what does not change from
+    /// one permutation to the next (and the observed statistic) is worked
+    /// out here. Arguments as for [`run_with`](Self::run_with).
+    pub fn start(
+        self,
+        distances: &DistanceMatrix,
+        groups: &[usize],
+        permutations: usize,
+        ordination: Option<&Ordination>,
+    ) -> PermutationRun {
         let n = distances.size();
         let group_count = groups.iter().copied().max().map_or(0, |g| g + 1);
         let undefined = PermutationTest {
@@ -83,27 +116,32 @@ impl CommunityTest {
             permutations,
         };
         if groups.len() != n || group_count < 2 || n <= group_count {
-            return undefined;
+            return PermutationRun::finished(undefined);
         }
+        // The principal coordinates found here for PERMDISP, if not given.
+        let found: Vec<Vec<f64>>;
         // What does not change when samples are moved between groups.
         let statistic: Statistic = match self {
             CommunityTest::Permanova => {
-                let total: f64 = (0..n)
+                // Squared distances of the pairs, in the order visited.
+                let squared: Vec<f64> = (0..n)
                     .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
                     .map(|(i, j)| distances.get(i, j) * distances.get(i, j))
-                    .sum::<f64>()
-                    / n as f64;
+                    .collect();
+                let total: f64 = squared.iter().sum::<f64>() / n as f64;
+                // Permutations keep the size of every group.
+                let mut sizes = vec![0.0; group_count];
+                for &g in groups {
+                    sizes[g] += 1.0;
+                }
                 Box::new(move |groups: &[usize]| {
-                    let mut sizes = vec![0.0; group_count];
-                    for &g in groups {
-                        sizes[g] += 1.0;
-                    }
                     let mut within = 0.0;
+                    let mut pairs = squared.iter();
                     for i in 0..n {
-                        for j in i + 1..n {
-                            if groups[i] == groups[j] {
-                                within +=
-                                    distances.get(i, j) * distances.get(i, j) / sizes[groups[i]];
+                        let (gi, size) = (groups[i], sizes[groups[i]]);
+                        for (&gj, &d2) in groups[i + 1..].iter().zip(pairs.by_ref()) {
+                            if gi == gj {
+                                within += d2 / size;
                             }
                         }
                     }
@@ -112,13 +150,15 @@ impl CommunityTest {
                 })
             }
             CommunityTest::Anosim => {
-                // Ranks of the distances, ties sharing their average.
-                let mut pairs: Vec<(f64, usize, usize)> = (0..n)
+                // Ranks of the distances, ties sharing their average, in the
+                // order the pairs are visited.
+                let mut pairs: Vec<(f64, usize)> = (0..n)
                     .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
-                    .map(|(i, j)| (distances.get(i, j), i, j))
+                    .enumerate()
+                    .map(|(k, (i, j))| (distances.get(i, j), k))
                     .collect();
                 pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
-                let mut ranks = vec![0.0; n * n];
+                let mut ranks = vec![0.0; pairs.len()];
                 let mut start = 0;
                 while start < pairs.len() {
                     let mut end = start + 1;
@@ -126,59 +166,82 @@ impl CommunityTest {
                         end += 1;
                     }
                     let rank = (start + 1 + end) as f64 / 2.0;
-                    for &(_, i, j) in &pairs[start..end] {
-                        ranks[i * n + j] = rank;
+                    for &(_, k) in &pairs[start..end] {
+                        ranks[k] = rank;
                     }
                     start = end;
                 }
                 let pair_count = pairs.len() as f64;
+                // Ranks are whole or half numbers, so their sums are exact
+                // in any order, and the sum between groups is the total less
+                // the sum within. Permutations keep the size of every group,
+                // and with it the number of pairs within groups.
+                let rank_total: f64 = ranks.iter().sum();
+                let mut sizes = vec![0usize; group_count];
+                for &g in groups {
+                    sizes[g] += 1;
+                }
+                let within_count = sizes
+                    .iter()
+                    .map(|&s| (s * s.saturating_sub(1) / 2) as f64)
+                    .sum::<f64>();
+                let between_count = pair_count - within_count;
                 Box::new(move |groups: &[usize]| {
-                    let (mut within, mut within_count) = (0.0, 0.0);
-                    let (mut between, mut between_count) = (0.0, 0.0);
+                    let mut within = 0.0;
+                    let mut pairs = ranks.iter();
                     for i in 0..n {
-                        for j in i + 1..n {
-                            if groups[i] == groups[j] {
-                                within += ranks[i * n + j];
-                                within_count += 1.0;
-                            } else {
-                                between += ranks[i * n + j];
-                                between_count += 1.0;
+                        let gi = groups[i];
+                        for (&gj, &rank) in groups[i + 1..].iter().zip(pairs.by_ref()) {
+                            if gi == gj {
+                                within += rank;
                             }
                         }
                     }
+                    let between = rank_total - within;
                     (between / between_count - within / within_count) / (pair_count / 2.0)
                 })
             }
             CommunityTest::Permdisp => {
                 // The samples as points, so that centroids can be taken.
-                let Some(ordination) = pcoa(distances) else {
-                    return undefined;
+                let points: &[Vec<f64>] = match ordination {
+                    Some(ordination) => &ordination.positions,
+                    None => {
+                        let Some(ordination) = pcoa(distances) else {
+                            return PermutationRun::finished(undefined);
+                        };
+                        found = ordination.positions;
+                        &found
+                    }
                 };
-                let points = ordination.positions;
                 let axes = points.first().map_or(0, Vec::len);
+                // The points one after another, for speed.
+                let flat: Vec<f64> = points.iter().flatten().copied().collect();
+                let mut sizes = vec![0.0; group_count];
+                for &g in groups {
+                    sizes[g] += 1.0;
+                }
                 Box::new(move |groups: &[usize]| {
-                    let mut sizes = vec![0.0; group_count];
-                    let mut centroids = vec![vec![0.0; axes]; group_count];
-                    for (point, &g) in points.iter().zip(groups) {
-                        sizes[g] += 1.0;
-                        for (sum, value) in centroids[g].iter_mut().zip(point) {
+                    let mut centroids = vec![0.0; axes * group_count];
+                    for (point, &g) in flat.chunks_exact(axes.max(1)).zip(groups) {
+                        let centroid = &mut centroids[g * axes..(g + 1) * axes];
+                        for (sum, value) in centroid.iter_mut().zip(point) {
                             *sum += value;
                         }
                     }
-                    for (centroid, size) in centroids.iter_mut().zip(&sizes) {
+                    for (centroid, size) in centroids.chunks_exact_mut(axes.max(1)).zip(&sizes) {
                         for value in centroid.iter_mut() {
                             *value /= size;
                         }
                     }
                     // One-way analysis of variance of the distances of the
                     // samples to the centroid of their group.
-                    let spread: Vec<f64> = points
-                        .iter()
+                    let spread: Vec<f64> = flat
+                        .chunks_exact(axes.max(1))
                         .zip(groups)
                         .map(|(point, &g)| {
                             point
                                 .iter()
-                                .zip(&centroids[g])
+                                .zip(&centroids[g * axes..(g + 1) * axes])
                                 .map(|(a, b)| (a - b) * (a - b))
                                 .sum::<f64>()
                                 .sqrt()
@@ -206,30 +269,93 @@ impl CommunityTest {
 
         let observed = statistic(groups);
         if observed.is_nan() || permutations == 0 {
-            return PermutationTest {
+            return PermutationRun::finished(PermutationTest {
                 statistic: observed,
                 p_value: f64::NAN,
                 permutations,
-            };
+            });
         }
-        // A permutation that only swaps samples within their groups gives
-        // the observed statistic again, up to rounding; it must count.
-        let threshold = observed - 1e-9 * observed.abs().max(1e-300);
-        let mut shuffled = groups.to_vec();
-        let mut as_extreme = 1;
-        for _ in 0..permutations {
-            for i in (1..shuffled.len()).rev() {
-                shuffled.swap(i, random_index(rng, i + 1));
-            }
-            if statistic(&shuffled) >= threshold {
-                as_extreme += 1;
-            }
-        }
-        PermutationTest {
-            statistic: observed,
-            p_value: as_extreme as f64 / (permutations + 1) as f64,
+        PermutationRun {
+            statistic: Some(statistic),
+            observed,
+            // A permutation that only swaps samples within their groups
+            // gives the observed statistic again, up to rounding; it must
+            // count.
+            threshold: observed - 1e-9 * observed.abs().max(1e-300),
+            shuffled: groups.to_vec(),
+            as_extreme: 1,
+            done: 0,
             permutations,
+            result: None,
         }
+    }
+}
+
+/// A community test carried out a permutation at a time (from
+/// [`CommunityTest::start`]), so that whatever runs it can show its
+/// progress, attend to other things in between, or give up. The outcome
+/// does not depend on where it pauses: the permutations draw the same
+/// random numbers in the same order.
+pub struct PermutationRun {
+    /// The statistic of a grouping; `None` once the outcome is known.
+    statistic: Option<Statistic>,
+    observed: f64,
+    threshold: f64,
+    /// The grouping, shuffled once per permutation.
+    shuffled: Vec<usize>,
+    /// Groupings with a statistic at least as large, the real one included.
+    as_extreme: usize,
+    done: usize,
+    permutations: usize,
+    /// The outcome, when known without permutations.
+    result: Option<PermutationTest>,
+}
+
+impl PermutationRun {
+    fn finished(result: PermutationTest) -> PermutationRun {
+        PermutationRun {
+            statistic: None,
+            observed: result.statistic,
+            threshold: 0.0,
+            shuffled: Vec::new(),
+            as_extreme: 0,
+            done: 0,
+            permutations: result.permutations,
+            result: Some(result),
+        }
+    }
+
+    /// Make further permutations, drawing on `rng`, which must be the same
+    /// on every call. `pace` is asked before each, with the number made
+    /// and the number to make.
+    pub fn advance(&mut self, rng: &mut StampRng, pace: Pace<'_>) -> Step<PermutationTest> {
+        if let Some(result) = self.result {
+            return Step::Done(result);
+        }
+        let Some(statistic) = &self.statistic else {
+            unreachable!("a run without an outcome has a statistic");
+        };
+        while self.done < self.permutations {
+            match pace(self.done, self.permutations) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
+            }
+            for i in (1..self.shuffled.len()).rev() {
+                self.shuffled.swap(i, random_index(rng, i + 1));
+            }
+            if statistic(&self.shuffled) >= self.threshold {
+                self.as_extreme += 1;
+            }
+            self.done += 1;
+        }
+        let result = PermutationTest {
+            statistic: self.observed,
+            p_value: self.as_extreme as f64 / (self.permutations + 1) as f64,
+            permutations: self.permutations,
+        };
+        self.result = Some(result);
+        Step::Done(result)
     }
 }
 
@@ -247,49 +373,152 @@ pub fn mantel(
     permutations: usize,
     rng: &mut StampRng,
 ) -> PermutationTest {
-    let n = x.size();
-    let undefined = PermutationTest {
-        statistic: f64::NAN,
-        p_value: f64::NAN,
-        permutations,
-    };
-    if n < 3 || y.size() != n {
-        return undefined;
+    match MantelRun::new(x, y, method, permutations).advance(rng, &mut |_, _| Control::Continue) {
+        Step::Done(result) => result,
+        Step::Paused | Step::Cancelled => unreachable!("never paused or cancelled"),
     }
-    let pairs = |m: &DistanceMatrix, order: &[usize]| -> Vec<f64> {
-        (0..n)
-            .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
-            .map(|(i, j)| m.get(order[i], order[j]))
-            .collect()
-    };
-    let identity: Vec<usize> = (0..n).collect();
-    let fixed = pairs(y, &identity);
-    let Some(observed) = method.coefficient(&pairs(x, &identity), &fixed) else {
-        return undefined;
-    };
-    if permutations == 0 {
-        return PermutationTest {
-            statistic: observed,
-            ..undefined
+}
+
+/// The [`mantel`] test carried out a permutation at a time, so that whatever
+/// runs it can show its progress, attend to other things in between, or
+/// give up. The outcome does not depend on where it pauses.
+#[derive(Debug, Clone)]
+pub struct MantelRun {
+    n: usize,
+    /// The first matrix, or for Spearman's rho the ranks of its distances:
+    /// permuting the samples only reorders the pairs, and with them their
+    /// ranks, so the distances are ranked once rather than once per
+    /// permutation (the coefficient is exactly the same).
+    x: DistanceMatrix,
+    /// The pairs of the second matrix, or their ranks.
+    fixed: Vec<f64>,
+    observed: f64,
+    threshold: f64,
+    order: Vec<usize>,
+    /// The pairs of the permuted first matrix, kept to save allocating.
+    buffer: Vec<f64>,
+    as_extreme: usize,
+    done: usize,
+    permutations: usize,
+    result: Option<PermutationTest>,
+}
+
+impl MantelRun {
+    /// Arguments as for [`mantel`]; the observed statistic is found here.
+    pub fn new(
+        x: &DistanceMatrix,
+        y: &DistanceMatrix,
+        method: CorrelationMethod,
+        permutations: usize,
+    ) -> MantelRun {
+        let n = x.size();
+        let undefined = PermutationTest {
+            statistic: f64::NAN,
+            p_value: f64::NAN,
+            permutations,
         };
-    }
-    let threshold = observed.abs() - 1e-9;
-    let mut order = identity;
-    let mut as_extreme = 1;
-    for _ in 0..permutations {
-        for i in (1..n).rev() {
-            order.swap(i, random_index(rng, i + 1));
+        let finished = |result: PermutationTest| MantelRun {
+            n,
+            x: DistanceMatrix::from_fn(0, |_, _| 0.0),
+            fixed: Vec::new(),
+            observed: result.statistic,
+            threshold: 0.0,
+            order: Vec::new(),
+            buffer: Vec::new(),
+            as_extreme: 0,
+            done: 0,
+            permutations,
+            result: Some(result),
+        };
+        if n < 3 || y.size() != n {
+            return finished(undefined);
         }
-        let r = method.coefficient(&pairs(x, &order), &fixed).unwrap_or(0.0);
-        if r.abs() >= threshold {
-            as_extreme += 1;
+        let identity: Vec<usize> = (0..n).collect();
+        let fixed = pairs_of(y, &identity);
+        let first = pairs_of(x, &identity);
+        let Some(observed) = method.coefficient(&first, &fixed) else {
+            return finished(undefined);
+        };
+        if permutations == 0 {
+            return finished(PermutationTest {
+                statistic: observed,
+                ..undefined
+            });
+        }
+        let (x, fixed) = match method {
+            CorrelationMethod::Pearson => (x.clone(), fixed),
+            CorrelationMethod::Spearman => {
+                let ranked = ranks(&first);
+                // Where pair (i, j), i < j, is in the order of the pairs.
+                let index = |i: usize, j: usize| i * n - i * (i + 1) / 2 + (j - i - 1);
+                (
+                    DistanceMatrix::from_fn(n, |i, j| ranked[index(i, j)]),
+                    ranks(&fixed),
+                )
+            }
+        };
+        MantelRun {
+            n,
+            x,
+            fixed,
+            observed,
+            threshold: observed.abs() - 1e-9,
+            order: identity,
+            buffer: Vec::with_capacity(first.len()),
+            as_extreme: 1,
+            done: 0,
+            permutations,
+            result: None,
         }
     }
-    PermutationTest {
-        statistic: observed,
-        p_value: as_extreme as f64 / (permutations + 1) as f64,
-        permutations,
+
+    /// Make further permutations, drawing on `rng`, which must be the same
+    /// on every call. `pace` is asked before each, with the number made
+    /// and the number to make.
+    pub fn advance(&mut self, rng: &mut StampRng, pace: Pace<'_>) -> Step<PermutationTest> {
+        if let Some(result) = self.result {
+            return Step::Done(result);
+        }
+        let n = self.n;
+        while self.done < self.permutations {
+            match pace(self.done, self.permutations) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
+            }
+            for i in (1..n).rev() {
+                self.order.swap(i, random_index(rng, i + 1));
+            }
+            self.buffer.clear();
+            for i in 0..n {
+                for j in i + 1..n {
+                    self.buffer.push(self.x.get(self.order[i], self.order[j]));
+                }
+            }
+            let r = pearson(&self.buffer, &self.fixed).unwrap_or(0.0);
+            if r.abs() >= self.threshold {
+                self.as_extreme += 1;
+            }
+            self.done += 1;
+        }
+        let result = PermutationTest {
+            statistic: self.observed,
+            p_value: self.as_extreme as f64 / (self.permutations + 1) as f64,
+            permutations: self.permutations,
+        };
+        self.result = Some(result);
+        Step::Done(result)
     }
+}
+
+/// The distances between every pair of samples, `order[i]` taking the place
+/// of sample `i`.
+fn pairs_of(m: &DistanceMatrix, order: &[usize]) -> Vec<f64> {
+    let n = m.size();
+    (0..n)
+        .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
+        .map(|(i, j)| m.get(order[i], order[j]))
+        .collect()
 }
 
 #[cfg(test)]
@@ -450,5 +679,45 @@ mod tests {
                 .statistic
                 .is_nan()
         );
+    }
+
+    /// Spearman's Mantel test ranks the distances once; ranking them again
+    /// for every permutation, as it first did, gives exactly the same.
+    #[test]
+    fn mantel_ranks_once_without_changing_the_result() {
+        let x = distances(&table(), Distance::BrayCurtis);
+        let y = distances(&table(), Distance::Aitchison);
+        let n = x.size();
+        let naive = |rng: &mut StampRng| {
+            let identity: Vec<usize> = (0..n).collect();
+            let fixed = pairs_of(&y, &identity);
+            let method = CorrelationMethod::Spearman;
+            let observed = method
+                .coefficient(&pairs_of(&x, &identity), &fixed)
+                .unwrap();
+            let mut order = identity;
+            let mut as_extreme = 1;
+            for _ in 0..199 {
+                for i in (1..n).rev() {
+                    order.swap(i, random_index(rng, i + 1));
+                }
+                let r = method
+                    .coefficient(&pairs_of(&x, &order), &fixed)
+                    .unwrap_or(0.0);
+                if r.abs() >= observed.abs() - 1e-9 {
+                    as_extreme += 1;
+                }
+            }
+            (observed, as_extreme as f64 / 200.0)
+        };
+        let (statistic, p_value) = naive(&mut rng_from_seed(4));
+        let test = mantel(
+            &x,
+            &y,
+            CorrelationMethod::Spearman,
+            199,
+            &mut rng_from_seed(4),
+        );
+        assert_eq!((test.statistic, test.p_value), (statistic, p_value));
     }
 }

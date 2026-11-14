@@ -19,6 +19,7 @@ pub mod import;
 pub mod metadata;
 pub mod profile;
 pub mod profile_tree;
+pub mod selection;
 pub mod stats;
 pub mod text;
 
@@ -29,6 +30,7 @@ pub use profile::{
     SecondGroup, Unclassified, ALL_OTHER_SAMPLES,
 };
 pub use profile_tree::{ProfileTree, ENTIRE_SAMPLE};
+pub use selection::{Comparison, Condition, SampleSelection};
 
 /// Version of the STAMP port.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

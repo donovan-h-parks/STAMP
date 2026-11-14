@@ -8,7 +8,7 @@
 //! told its time is up.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Shared progress of a running job.
 #[derive(Debug, Default)]
@@ -16,6 +16,8 @@ pub struct Progress {
     done: AtomicUsize,
     total: AtomicUsize,
     cancelled: AtomicBool,
+    /// What the job is doing, for a label beside the progress bar.
+    stage: Mutex<String>,
 }
 
 impl Progress {
@@ -25,6 +27,33 @@ impl Progress {
         self.done.store(done, Ordering::Relaxed);
         self.total.store(total, Ordering::Relaxed);
         !self.cancelled.load(Ordering::Relaxed)
+    }
+
+    /// Report what the job is doing and how far it has got with that (a
+    /// total of zero when that cannot be told). Returns `false` once the
+    /// job has been cancelled.
+    pub fn report_stage(&self, stage: &str, done: usize, total: usize) -> bool {
+        {
+            let mut current = self.stage.lock().unwrap_or_else(|e| e.into_inner());
+            if *current != stage {
+                current.clear();
+                current.push_str(stage);
+            }
+        }
+        self.report(done, total)
+    }
+
+    /// What the job said it is doing, if anything.
+    pub fn stage(&self) -> String {
+        self.stage.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// `(done, total)` of the current stage.
+    pub fn counts(&self) -> (usize, usize) {
+        (
+            self.done.load(Ordering::Relaxed),
+            self.total.load(Ordering::Relaxed),
+        )
     }
 
     /// True once the job has been asked to stop.
@@ -43,6 +72,25 @@ impl Progress {
     }
 }
 
+/// The time in milliseconds, from some fixed moment: for working in slices
+/// of a frame.
+pub fn now_ms() -> f64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::sync::OnceLock;
+        static START: OnceLock<std::time::Instant> = OnceLock::new();
+        START
+            .get_or_init(std::time::Instant::now)
+            .elapsed()
+            .as_secs_f64()
+            * 1000.0
+    }
+}
+
 /// A computation whose result arrives later.
 pub struct Job<T> {
     inner: imp::Inner<T>,
@@ -52,6 +100,11 @@ pub struct Job<T> {
 impl<T> Job<T> {
     pub fn fraction(&self) -> f32 {
         self.progress.fraction()
+    }
+
+    /// The job's progress, with what it is doing.
+    pub fn progress(&self) -> &Progress {
+        &self.progress
     }
 
     /// Ask the job to stop. Its result, if any, is discarded when the job is

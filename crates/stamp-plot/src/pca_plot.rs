@@ -1,14 +1,19 @@
 //! PCA plot: samples projected onto their first three principal components.
 
-use stamp_core::stats::pca::pca;
+use stamp_core::stats::pca::{pca_leading, Pca};
 use stamp_core::{GroupProfile, MultiGroupProfile, Profile};
 
 use crate::axes::{
-    group_color, legend, marker, scaled_ticks, x_axis, y_axis, y_axis_width, Frame, LabelRotation,
-    LegendPosition, Marker, AXES_COLOR, INCH,
+    group_color, legend, marker_styled, repeated_colors_note, scaled_ticks, x_axis, y_axis,
+    y_axis_width, Frame, LabelRotation, LegendPosition, Marker, AXES_COLOR, INCH,
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, Stroke};
+use crate::heatmap::ColorMap;
+use crate::ordination_style::{
+    category_counts, draw_legend, legend_size, short_number, ColorScale, ColorSource, DrawOrder,
+    LegendItem, SampleColors, ShapePlan, Styling, ValueScale, NO_VALUE_COLOR,
+};
 
 /// A sample with its group.
 #[derive(Debug, Clone, PartialEq)]
@@ -26,6 +31,8 @@ pub struct Data {
     pub groups: Vec<String>,
     /// Colour of each group; groups beyond the list use the default palette.
     pub group_colors: Vec<Color>,
+    /// What colours and shapes the samples, if not only their groups.
+    pub styling: Styling,
 }
 
 impl Data {
@@ -71,6 +78,7 @@ impl Data {
             samples,
             groups: vec![profile.group_name1.clone(), profile.group_name2.clone()],
             group_colors: Vec::new(),
+            styling: Styling::default(),
         }
     }
 
@@ -91,6 +99,7 @@ impl Data {
             samples,
             groups: profile.group_names.clone(),
             group_colors: Vec::new(),
+            styling: Styling::default(),
         }
     }
 }
@@ -120,6 +129,21 @@ pub struct Options {
     /// Size of the notes above the plot (the distance and the community
     /// tests, for PCoA and NMDS), in points.
     pub note_font_size: f64,
+    /// What colours the samples: their group (the default), a metadata
+    /// field, or a feature's relative abundance. Resolved into
+    /// [`Data::styling`] by [`crate::ordination_style::resolve`].
+    pub color_by: ColorSource,
+    /// A categorical metadata field that gives the samples their marker
+    /// shapes (`None`: by group if `unique_shapes`, else circles).
+    pub shape_by: Option<String>,
+    /// The colour scale and how numbers are placed on it, when the samples
+    /// are coloured by a number.
+    pub color_map: ColorMap,
+    pub color_scale: ColorScale,
+    /// Which samples are drawn on top when coloured by a number.
+    pub draw_order: DrawOrder,
+    /// Opacity of the markers, from 0 (invisible) to 1.
+    pub opacity: f64,
 }
 
 impl Default for Options {
@@ -135,13 +159,32 @@ impl Default for Options {
             unique_shapes: true,
             legend: LegendPosition::None,
             note_font_size: crate::axes::NOTE_SIZE,
+            color_by: ColorSource::Group,
+            shape_by: None,
+            color_map: ColorMap::Viridis,
+            color_scale: ColorScale::Linear,
+            draw_order: DrawOrder::HighOnTop,
+            opacity: 1.0,
         }
     }
 }
 
 pub fn plot(data: &Data, options: &Options) -> Figure {
+    draw(data, layout(data).as_ref(), options)
+}
+
+/// The principal components a PCA plot of `data` shows, on its first three
+/// axes: the slow part of drawing it, which the window keeps so that
+/// changing how the plot looks does not compute it again. `None` if the
+/// samples do not vary.
+pub fn layout(data: &Data) -> Option<Pca> {
     let matrix: Vec<Vec<f64>> = data.samples.iter().map(|s| s.proportions.clone()).collect();
-    let Some(result) = pca(&matrix) else {
+    pca_leading(&matrix, 3)
+}
+
+/// The PCA plot of `data` from its [`layout`].
+pub fn draw(data: &Data, layout: Option<&Pca>, options: &Options) -> Figure {
+    let Some(result) = layout else {
         return Figure::message(
             "Degenerate PCA plot. Try plotting at a different level in the hierarchy.",
         );
@@ -154,6 +197,209 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         &[],
         options,
     )
+}
+
+/// How one sample is drawn.
+struct Look {
+    shape: Marker,
+    fill: Option<Color>,
+    edge: Stroke,
+    area: f64,
+    tooltip: String,
+}
+
+/// The colours, shapes and tooltips of the samples, the order to draw them
+/// in, and the legend beside the plot (empty for a plot coloured and shaped
+/// only by group, whose legend goes inside the frame).
+fn looks(data: &Data, options: &Options) -> (Vec<Look>, Vec<usize>, Vec<LegendItem>) {
+    let styling = &data.styling;
+    let alpha = (options.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let with_alpha = |c: Color| Color { a: alpha, ..c };
+    let edge = Stroke::solid(with_alpha(Color::BLACK), 0.75);
+    let names = || data.samples.iter().map(|s| s.name.as_str());
+    let group_name = |group: usize| data.groups.get(group).map(String::as_str).unwrap_or("");
+    let mut items = Vec::new();
+    let no_value_entry = |count: usize, shape: Marker| LegendItem::Entry {
+        shape,
+        fill: None,
+        edge: NO_VALUE_COLOR,
+        label: format!("No value ({count})"),
+    };
+
+    // Colours: a colour per sample, or `None` for a sample without a value.
+    let mut fills: Vec<Option<Color>> = Vec::new();
+    let mut color_text: Vec<Option<String>> = vec![None; data.samples.len()];
+    let mut sort_keys: Option<Vec<f64>> = None;
+    let mut color_items = Vec::new();
+    match &styling.color {
+        SampleColors::Group => {
+            fills = data
+                .samples
+                .iter()
+                .map(|s| Some(data.group_color(s.group)))
+                .collect();
+            color_items.push(LegendItem::Title(styling.group_label().to_string()));
+            for (i, group) in data.groups.iter().enumerate() {
+                color_items.push(LegendItem::Entry {
+                    shape: Marker::Circle,
+                    fill: Some(data.group_color(i)),
+                    edge: Color::BLACK,
+                    label: group.clone(),
+                });
+            }
+        }
+        SampleColors::Categories { label, values } => {
+            let counts = category_counts(names(), values);
+            let categories: Vec<&String> = counts.keys().collect();
+            for sample in &data.samples {
+                let category = values.get(&sample.name);
+                fills
+                    .push(category.map(|c| {
+                        group_color(categories.iter().position(|k| *k == c).unwrap_or(0))
+                    }));
+            }
+            for (i, sample) in data.samples.iter().enumerate() {
+                color_text[i] = Some(format!(
+                    "{label}: {}",
+                    values.get(&sample.name).map_or("no value", String::as_str)
+                ));
+            }
+            color_items.push(LegendItem::Title(label.clone()));
+            for (i, (category, count)) in counts.iter().enumerate() {
+                color_items.push(LegendItem::Entry {
+                    shape: Marker::Circle,
+                    fill: Some(group_color(i)),
+                    edge: Color::BLACK,
+                    label: format!("{category} ({count})"),
+                });
+            }
+            let missing = fills.iter().filter(|f| f.is_none()).count();
+            if missing > 0 {
+                color_items.push(no_value_entry(missing, Marker::Circle));
+            }
+            if let Some(note) = repeated_colors_note(counts.len()) {
+                color_items.push(LegendItem::Note(note.replace("groups", "values")));
+            }
+        }
+        SampleColors::Values { label, values } => {
+            let raw: Vec<Option<f64>> = names().map(|n| values.get(n).copied()).collect();
+            let present: Vec<f64> = raw.iter().flatten().copied().collect();
+            let scale = ValueScale::new(&present, options.color_scale);
+            fills = raw
+                .iter()
+                .map(|v| v.map(|v| options.color_map.color(scale.fraction(v))))
+                .collect();
+            for (i, v) in raw.iter().enumerate() {
+                color_text[i] = Some(format!(
+                    "{label}: {}",
+                    v.map_or("no value".to_string(), short_number)
+                ));
+            }
+            sort_keys = Some(raw.iter().map(|v| v.unwrap_or(f64::NAN)).collect());
+            color_items.extend(scale.legend(label, options.color_map));
+            let missing = raw.iter().filter(|v| v.is_none()).count();
+            if missing > 0 {
+                color_items.push(no_value_entry(missing, Marker::Circle));
+            }
+        }
+    }
+
+    // Shapes: from the field asked for, else by group if wanted.
+    let mut shapes = vec![Marker::Circle; data.samples.len()];
+    let mut shape_text: Vec<Option<String>> = vec![None; data.samples.len()];
+    let mut shape_items = Vec::new();
+    // Coloured by something else, the groups keep their own shapes (if
+    // wanted), treated like a shape field.
+    let group_shapes =
+        (styling.shape.is_none() && options.unique_shapes && styling.color != SampleColors::Group)
+            .then(|| crate::ordination_style::SampleShapes {
+                label: styling.group_label().to_string(),
+                values: data
+                    .samples
+                    .iter()
+                    .map(|s| (s.name.clone(), group_name(s.group).to_string()))
+                    .collect(),
+            });
+    if let Some(field) = styling.shape.as_ref().or(group_shapes.as_ref()) {
+        let counts = category_counts(names(), &field.values);
+        let missing = names().filter(|n| !field.values.contains_key(*n)).count();
+        let plan = ShapePlan::new(&counts, missing);
+        for (i, sample) in data.samples.iter().enumerate() {
+            let value = field.values.get(&sample.name);
+            shapes[i] = plan.shape(value);
+            if group_shapes.is_none() {
+                shape_text[i] = Some(format!(
+                    "{}: {}",
+                    field.label,
+                    value.map_or("no value", String::as_str)
+                ));
+            }
+        }
+        shape_items = plan.legend(&field.label, &counts, missing);
+    } else if options.unique_shapes {
+        for (i, sample) in data.samples.iter().enumerate() {
+            shapes[i] = Marker::for_group(sample.group);
+        }
+    }
+    let looks = data
+        .samples
+        .iter()
+        .enumerate()
+        .map(|(i, sample)| {
+            let mut tooltip = format!("{}\n{}", sample.name, group_name(sample.group));
+            for extra in [&color_text[i], &shape_text[i]].into_iter().flatten() {
+                tooltip.push('\n');
+                tooltip.push_str(extra);
+            }
+            match fills[i] {
+                Some(fill) => Look {
+                    shape: shapes[i],
+                    fill: Some(with_alpha(fill)),
+                    edge,
+                    area: options.marker_size,
+                    tooltip,
+                },
+                // Without a value: small, hollow and grey.
+                None => Look {
+                    shape: shapes[i],
+                    fill: None,
+                    edge: Stroke::solid(with_alpha(NO_VALUE_COLOR), 0.75),
+                    area: options.marker_size * 0.5,
+                    tooltip,
+                },
+            }
+        })
+        .collect();
+
+    // Samples without a value first, then by value as asked.
+    let mut order: Vec<usize> = (0..data.samples.len()).collect();
+    order.sort_by_key(|&i| fills[i].is_some());
+    if let Some(keys) = &sort_keys {
+        match options.draw_order {
+            DrawOrder::HighOnTop => order.sort_by(|&a, &b| {
+                fills[a]
+                    .is_some()
+                    .cmp(&fills[b].is_some())
+                    .then(keys[a].total_cmp(&keys[b]))
+            }),
+            DrawOrder::LowOnTop => order.sort_by(|&a, &b| {
+                fills[a]
+                    .is_some()
+                    .cmp(&fills[b].is_some())
+                    .then(keys[b].total_cmp(&keys[a]))
+            }),
+            DrawOrder::AsGiven => {}
+        }
+    }
+
+    if styling.is_extended() {
+        items.extend(color_items);
+        if !shape_items.is_empty() {
+            items.push(LegendItem::Gap);
+            items.extend(shape_items);
+        }
+    }
+    (looks, order, items)
 }
 
 /// Draw samples at positions found by any ordination: `positions[sample]`
@@ -175,6 +421,10 @@ pub fn plot_ordination(
     let components = variance_fractions.len();
     if components < 2 {
         return Figure::message("Degenerate plot: the samples vary along a single direction.");
+    }
+    let (looks, order, mut items) = looks(data, options);
+    if options.legend == LegendPosition::None {
+        items.clear();
     }
     let beside = options.show_pc3_vs_pc2 && components >= 3;
     let beneath = options.show_pc1_vs_pc3 && components >= 3;
@@ -202,15 +452,22 @@ pub fn plot_ordination(
 
     let width = options.width * INCH;
     let padding = 0.25 * INCH;
+    // The legend beside the plot, on the right.
+    let (legend_width, legend_height) = legend_size(&items);
+    let legend_room = if items.is_empty() {
+        0.0
+    } else {
+        legend_width + 0.2 * INCH
+    };
     // Room above the plot for the notes.
     let note_line = options.note_font_size + 3.0;
     let top = padding + note_line * notes.len() as f64;
     let left = padding + y_axis_width(&ticks[1], true);
     let bottom_labels = crate::axes::x_axis_room();
     let gap = 0.35 * INCH;
-    let inner_width = width - left - padding;
+    let inner_width = width - left - padding - legend_room;
     // Width and height of the main panel, and the sizes of the others.
-    let (main_w, main_h, beside_w, beneath_h, height);
+    let (main_w, main_h, beside_w, beneath_h, mut height);
     if options.fixed_scale {
         // One length per unit of distance, set by what must fit across.
         let across = span(0) + if beside { span(2) } else { 0.0 };
@@ -250,6 +507,8 @@ pub fn plot_ordination(
     if main_w < 0.75 * INCH || main_h < 0.75 * INCH {
         return Figure::message("The figure is too small for a PCA plot");
     }
+    // A tall legend makes the figure taller.
+    height = height.max(top + legend_height + padding);
     let mut figure = Figure::with_size_inches(options.width, height / INCH);
     let main = Frame {
         left,
@@ -291,34 +550,22 @@ pub fn plot_ordination(
                 dashed,
             );
         }
+        for &index in &order {
+            let look = &looks[index];
+            let (px, py) = (x.map(coordinate(index, cx)), y.map(coordinate(index, cy)));
+            marker_styled(figure, look.shape, px, py, look.area, look.fill, look.edge);
+        }
+        // Tooltips in the order of the samples.
         for (index, sample) in data.samples.iter().enumerate() {
             let (px, py) = (x.map(coordinate(index, cx)), y.map(coordinate(index, cy)));
-            let shape = if options.unique_shapes {
-                Marker::for_group(sample.group)
-            } else {
-                Marker::Circle
-            };
-            marker(
-                figure,
-                shape,
-                px,
-                py,
-                options.marker_size,
-                data.group_color(sample.group),
-            );
             let r = options.marker_size.max(0.0).sqrt() / 2.0 + 1.0;
-            let group = data
-                .groups
-                .get(sample.group)
-                .map(String::as_str)
-                .unwrap_or("");
             figure.region(
                 px - r,
                 py - r,
                 2.0 * r,
                 2.0 * r,
                 &sample.name,
-                format!("{}\n{group}", sample.name),
+                looks[index].tooltip.clone(),
             );
         }
         let x_ticks = if x_label {
@@ -398,13 +645,18 @@ pub fn plot_ordination(
         panel(&mut figure, frame, 0, 2, true, true, false);
     }
 
-    let entries: Vec<(String, Color)> = data
-        .groups
-        .iter()
-        .enumerate()
-        .map(|(i, g)| (g.clone(), data.group_color(i)))
-        .collect();
-    legend(&mut figure, &main, &entries, options.legend);
+    if data.styling.is_extended() {
+        let x = width - padding - legend_width;
+        draw_legend(&mut figure, &items, x, top, options.marker_size);
+    } else {
+        let entries: Vec<(String, Color)> = data
+            .groups
+            .iter()
+            .enumerate()
+            .map(|(i, g)| (g.clone(), data.group_color(i)))
+            .collect();
+        legend(&mut figure, &main, &entries, options.legend);
+    }
     figure
 }
 
@@ -434,6 +686,7 @@ mod tests {
             ],
             groups: vec!["A".to_string(), "B".to_string()],
             group_colors: Vec::new(),
+            styling: Styling::default(),
         }
     }
 
@@ -542,7 +795,7 @@ mod tests {
             .iter()
             .map(|s| s.proportions.clone())
             .collect();
-        let result = pca(&matrix).unwrap();
+        let result = stamp_core::stats::pca::pca(&matrix).unwrap();
         let (a, b) = (&result.positions[0], &result.positions[3]);
         let (ra, rb) = (&fixed.regions[0], &fixed.regions[3]);
         let per_unit_x = (rb.x - ra.x) / (b[0] - a[0]);
@@ -586,6 +839,216 @@ mod tests {
                 .count(),
             5
         );
+    }
+
+    fn two_panels() -> Options {
+        Options {
+            show_pc3_vs_pc2: false,
+            show_pc1_vs_pc3: false,
+            legend: LegendPosition::Best,
+            ..Options::default()
+        }
+    }
+
+    fn styled(color: SampleColors, shape: Option<&[(&str, &str)]>) -> Data {
+        Data {
+            styling: Styling {
+                color,
+                shape: shape.map(|pairs| crate::ordination_style::SampleShapes {
+                    label: "Site".to_string(),
+                    values: pairs
+                        .iter()
+                        .map(|(s, v)| (s.to_string(), v.to_string()))
+                        .collect(),
+                }),
+                group_label: Some("Diet".to_string()),
+            },
+            ..data(6)
+        }
+    }
+
+    /// The fill colour of the marker drawn for each sample, in drawing
+    /// order (circles only).
+    fn circle_fills(figure: &Figure) -> Vec<Option<Color>> {
+        figure
+            .shapes
+            .iter()
+            .filter_map(|s| match s {
+                Shape::Circle { fill, .. } => Some(*fill),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn samples_are_coloured_by_a_number() {
+        let values = [("a1", 1.0), ("a2", 5.0), ("a3", 3.0), ("b1", 0.0)]
+            .iter()
+            .map(|(s, v)| (s.to_string(), *v))
+            .collect();
+        let data = styled(
+            SampleColors::Values {
+                label: "Depth".to_string(),
+                values,
+            },
+            None,
+        );
+        let options = Options {
+            unique_shapes: false,
+            ..two_panels()
+        };
+        let figure = plot(&data, &options);
+        let texts = texts(&figure);
+        assert!(texts.contains(&"Depth".to_string()));
+        // b2 has no value: a hollow point, listed in the legend.
+        assert!(texts.contains(&"No value (1)".to_string()));
+        assert!(figure.regions[4].tooltip.contains("Depth: no value"));
+        assert!(figure.regions[1].tooltip.ends_with("Depth: 5"));
+        assert!(figure.regions[1].tooltip.starts_with("a2\nA\n"));
+        // The first five circles are the samples: without a value first,
+        // then from low to high, the highest drawn last in the brightest
+        // colour of viridis.
+        let fills = circle_fills(&figure);
+        assert_eq!(fills[0], None);
+        assert_eq!(fills[1], Some(ColorMap::Viridis.color(0.0)));
+        assert_eq!(fills[4], Some(ColorMap::Viridis.color(1.0)));
+        let low_on_top = plot(
+            &data,
+            &Options {
+                draw_order: DrawOrder::LowOnTop,
+                ..options.clone()
+            },
+        );
+        assert_eq!(
+            circle_fills(&low_on_top)[4],
+            Some(ColorMap::Viridis.color(0.0))
+        );
+
+        // On a log scale the zero is drawn at a floor of half the smallest
+        // positive value, and said so.
+        let log = plot(
+            &data,
+            &Options {
+                color_scale: ColorScale::Log10,
+                ..options.clone()
+            },
+        );
+        let texts = self::texts(&log);
+        assert!(texts.contains(&"Logarithmic scale".to_string()));
+        assert!(texts.iter().any(|t| t == "1 zero drawn at 0.5"));
+        assert!(texts.contains(&"0".to_string()));
+        // The legend is beside the plot, to the right of the main panel.
+        let legend_x = log
+            .shapes
+            .iter()
+            .find_map(|s| match s {
+                Shape::Text { x, text, .. } if text == "Logarithmic scale" => Some(*x),
+                _ => None,
+            })
+            .unwrap();
+        let rightmost_region = log
+            .regions
+            .iter()
+            .map(|r| r.x + r.width)
+            .fold(0.0, f64::max);
+        assert!(legend_x > rightmost_region);
+
+        // Opacity applies to the markers.
+        let faint = plot(
+            &data,
+            &Options {
+                opacity: 0.5,
+                ..options
+            },
+        );
+        assert_eq!(circle_fills(&faint)[4].unwrap().a, 128);
+    }
+
+    #[test]
+    fn samples_are_coloured_by_category_and_shaped_by_another_field() {
+        let categories = [("a1", "x"), ("a2", "y"), ("b1", "y"), ("b2", "z")]
+            .iter()
+            .map(|(s, v)| (s.to_string(), v.to_string()))
+            .collect();
+        let data = styled(
+            SampleColors::Categories {
+                label: "Host".to_string(),
+                values: categories,
+            },
+            Some(&[("a1", "North"), ("a2", "South"), ("a3", "North")]),
+        );
+        let figure = plot(&data, &two_panels());
+        let texts = texts(&figure);
+        for wanted in [
+            "Host",
+            "x (1)",
+            "y (2)",
+            "z (1)",
+            "No value (1)",
+            "Site",
+            "North (2)",
+            "South (1)",
+            "No value (2)",
+        ] {
+            assert!(texts.contains(&wanted.to_string()), "missing {wanted}");
+        }
+        assert!(figure.regions[0].tooltip.ends_with("Host: x\nSite: North"));
+        // Shapes by Site: circles for North, squares for South and
+        // triangles for no value.
+        let squares = figure
+            .shapes
+            .iter()
+            .filter(|s| matches!(s, Shape::Rect { fill: Some(c), .. } if *c == group_color(1)))
+            .count();
+        assert_eq!(squares, 1);
+
+        // Too many values for the shapes: the commonest keep theirs.
+        let many: Vec<(String, String)> = ["a1", "a2", "a3", "b1", "b2"]
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.to_string(), format!("v{i}")))
+            .collect();
+        let pairs: Vec<(&str, &str)> = many.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
+        let mut data = styled(SampleColors::Group, Some(&pairs));
+        data.styling.shape.as_mut().unwrap().values.clear();
+        for i in 0..12 {
+            data.samples.push(Sample {
+                name: format!("c{i}"),
+                ..data.samples[i % 5].clone()
+            });
+            data.styling
+                .shape
+                .as_mut()
+                .unwrap()
+                .values
+                .insert(format!("c{i}"), format!("w{i:02}"));
+        }
+        let texts = self::texts(&plot(&data, &two_panels()));
+        assert!(texts.iter().any(|t| t.starts_with("Other: ")), "{texts:?}");
+        assert!(texts.iter().any(|t| t == "12 values but 10 shapes"));
+        // Coloured by group with a shape field, the groups are listed under
+        // the name of their field.
+        assert!(texts.contains(&"Diet".to_string()));
+    }
+
+    #[test]
+    fn categories_beyond_the_palette_are_noted() {
+        let mut data = data(6);
+        let mut values = std::collections::HashMap::new();
+        for i in 0..22 {
+            let name = format!("s{i}");
+            data.samples.push(Sample {
+                name: name.clone(),
+                ..data.samples[i % 5].clone()
+            });
+            values.insert(name, format!("c{i:02}"));
+        }
+        data.styling.color = SampleColors::Categories {
+            label: "Country".to_string(),
+            values,
+        };
+        let texts = texts(&plot(&data, &two_panels()));
+        assert!(texts.iter().any(|t| t.contains("22 values but 20 colours")));
     }
 
     #[test]

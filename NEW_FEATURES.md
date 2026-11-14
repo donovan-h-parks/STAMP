@@ -27,6 +27,17 @@ Add an entry here whenever a feature is added that v2 did not have.
   the example data, every control of the window and command, and pages
   that explain each test, post-hoc test, correction and plot for
   biologists, with worked examples and what to look for.
+- **Progress of slow work, and cancelling it.** Analyses, plots that
+  take a while to compute (PCA, PCoA with its community tests, NMDS, the
+  distance box and Mantel plots, ANCOM), reading large profiles and building
+  large results tables run in the background (on another thread on the
+  desktop, in time slices in the browser) and show what they are doing with
+  a progress bar ("PERMANOVA 412/999") or a spinner, in the status bar and,
+  for plots and loading, over the plot area, with a Cancel button; the
+  window stays usable meanwhile. `stamp-cli` shows progress bars and
+  spinners on standard error when it is a terminal (`--quiet` turns them
+  off), and writes results tables row by row instead of building them in
+  memory.
 - **Repeatable resampling.** Bootstrap and permutation tests use a seed that
   can be set in the preferences, so results can be reproduced exactly.
 
@@ -38,6 +49,19 @@ Add an entry here whenever a feature is added that v2 did not have.
   are loaded from File > Load profile without first being converted and
   saved [48].
 - **PDF export** of plots, alongside PNG and SVG.
+- **SingleM and Sandpiper profiles.** SingleM condensed taxonomic profiles
+  (`singlem pipe -p`, `singlem summarise`, also the variant with extras;
+  many samples per file) and Sandpiper condensed profiles (the JSON of
+  `sandpiper.qut.edu.au/api/condensed/<run>`, GTDB or GlobDB, one sample
+  per file) become profiles of seven ranks, Domain to Species, with
+  coverages as values. A taxon's own coverage (SingleM's coverage does not
+  include descendants) that stops above species goes into a row padded with
+  `unclassified <prefixed taxon>` (`unclassified f__Oscillospiraceae`);
+  named taxa lose their rank prefixes; a name with two parents at one rank
+  becomes `name (parent)`. Opened from File > Load profile (choose all
+  Sandpiper files together), File > Convert, and `stamp-cli convert
+  singlem|sandpiper`. 1,307 Sandpiper runs (12,276 features) convert in
+  about two seconds.
 
 ## Statistics
 
@@ -132,6 +156,15 @@ Add an entry here whenever a feature is added that v2 did not have.
 
 ## Window
 
+- **Sample filter.** Below the group field, a metadata field and the values
+  whose samples every analysis and plot uses (tick or untick each value);
+  samples left out are excluded from everything, groups left empty
+  disappear, and the number of samples kept is shown. The command line has
+  the same choice for every command that reads metadata: `--where
+  FIELD=VALUE` (repeat for alternatives of one field; different fields must
+  all match), numeric `--where "FIELD>=X"` (`<`, `<=`, `>`, `>=`), and
+  `--where-not FIELD=VALUE`. Both use `SampleSelection` in
+  `stamp-core/src/selection.rs`.
 - **Light and dark themes** [27].
 - **A colour for each group**, kept across every plot and chosen with a
   colour picker in the group list [27, 28].
@@ -177,6 +210,107 @@ Add an entry here whenever a feature is added that v2 did not have.
 
 ## Plots
 
+- **Map of sample locations** (two groups, multiple groups, correlation;
+  plot group "Where the samples are from"). Samples placed by latitude and
+  longitude metadata fields (found by name or chosen) on a map of the
+  world, a continent, the area around the samples (the default) or a box of
+  longitudes and latitudes, in the Equal Earth (default), Robinson,
+  equirectangular or Mercator projection; countries, coasts and large
+  lakes from Natural Earth (public domain; 1:110m for wide maps, 1:50m
+  for regions, compiled in: about 170 KB), with optional sea colour,
+  country outlines and labelled lines of longitude and latitude. Samples at
+  one site (within a grid cell sized to the map, or set in degrees) share a
+  marker per colour, sized by the number of samples, a numeric field or a
+  feature's abundance (or fixed; linear or log, with a size legend) and
+  coloured and shaped as in the ordination plots (a site takes the mean or
+  maximum of a number); or one marker per sample, optionally spread around
+  the site. Tooltips list the samples, groups and values; samples without
+  coordinates or outside the area are counted above the map. Follows the
+  sample filter. Command line `--plot-type map` with `--map-lat-field`,
+  `--map-lon-field`, `--map-extent`, `--map-projection`,
+  `--map-resolution`, `--map-size-by`, `--map-aggregate`/
+  `--no-map-aggregate`, `--map-site-precision`, `--map-jitter`,
+  `--map-graticule`/`--no-map-graticule`, `--no-map-ocean`,
+  `--no-map-borders`, and the ordination plots' `--color-by`, `--shape-by`,
+  `--color-scale`, `--color-map` (also offered by the correlation command
+  for the map). The data are converted by
+  `scripts/naturalearth/convert.py`.
+- **Ordination plots coloured and shaped by any field** (PCA, PCoA, NMDS, in
+  every analysis that has them). Colour by the groups (as before), another
+  categorical metadata field, a numeric field on a continuous colour scale
+  (viridis by default, plasma, magma, cividis or any heatmap colour map;
+  linear or log10 with zeros at a floor of half the smallest positive
+  value; a colour bar beside the plot), or the relative abundance of a
+  feature (the selected one, following the selection, or one named). A
+  second categorical field gives the marker shapes (ten shapes; beyond
+  them the rarest values share an "Other" shape, with a note); without
+  one, samples coloured by anything else keep a shape per group. Samples
+  without a value are small grey hollow markers, counted in the legend.
+  The legend goes beside the plot with a section for colours and one for
+  shapes, each with sample counts; tooltips give the sample, its group and
+  both values; high values are drawn on top by default (or low, or in
+  sample order); opacity is adjustable. The PCoA community tests still
+  compare the analysis groups, and the plot says so. Command line:
+  `--color-by group|field:NAME|category:NAME|feature:NAME`, `--shape-by`,
+  `--color-scale`, `--color-map`, `--draw-order`, `--marker-size`,
+  `--opacity`. Viridis, plasma, magma and cividis are also offered for the
+  heatmaps.
+- **Twenty group colours.** The palette continues after v2's ten with ten
+  stronger colours (Tableau 10 without its grey, and a yellow), so up to
+  twenty groups are distinct; beyond twenty the colours repeat (with a
+  warning on the command line) [60].
+
+- **Box plot of several features, on a logarithmic axis.** The box plot
+  (two groups, multiple groups) can show several features at once: side by
+  side with a box per group (coloured, with a legend) at each feature, or
+  one panel per feature with the same or independent value axes. The
+  features are the selected one, the N most significant that pass the
+  filters, or a list (typed in Configure plot, or Ctrl+click in the feature
+  table). Options: a log10 value axis (labelled 0.001, 0.01, 0.1, 1, 10;
+  zeros on a line labelled 0 below a break in the axis; quartiles and
+  whiskers are those of the values themselves), every sample drawn as a
+  jittered semi-transparent point, the number of samples after each group's
+  name, horizontal boxes, and the order of the groups (as given,
+  alphabetical, highest median first, or by a coarser metadata field such
+  as host order, with dashed lines between its categories). The bar plot of
+  one feature in every sample has the log10 axis too. Command line:
+  repeatable `--plot-feature`, `--box-top`, `--box-layout`,
+  `--box-independent-axes`, `--box-log`, `--box-points`, `--box-counts`,
+  `--box-horizontal`, `--box-group-order`, `--box-order-field`, `--bar-log`.
+- **Prevalence-abundance plot** (occupancy-abundance), for two groups and
+  multiple groups: every feature placed by its mean relative abundance (log
+  axis; over all samples of the group or only those where it is present)
+  and the percentage of samples in which it is present (above zero, or at
+  least a chosen proportion). One panel per group on shared axes; all
+  groups in one panel coloured by group (or one chosen group); or a
+  specificity view with each feature once, at the group where it is most
+  prevalent, coloured by that group when its prevalence there exceeds that
+  in every other group by a chosen number of percentage points and grey
+  when shared. Highlighted features (the selected feature, a typed list or
+  the highlight control; `--highlight` on the command line) are drawn in
+  red and named; tooltips give the numbers. Command line: `--plot-type
+  prevalence-abundance` with the `--prevalence-*` options, and
+  `--prevalence-table` for the prevalence and mean abundance of every
+  feature in every group.
+- **Group heatmap**, for two groups and multiple groups: features against
+  groups rather than samples, each cell the feature's mean, median or
+  largest proportion in the group, or its prevalence (the percentage of the
+  group's samples in which it is present, optionally above a minimum
+  proportion). Linear or log10 colours with zeros in grey, values written in
+  the cells, the most abundant features (50 by default), clustering of rows
+  and columns, or groups ordered and labelled by a coarser metadata field
+  (host species by host order, say). It has no limit on the number of
+  samples, unlike the heatmap of samples. Command line: `--plot-type
+  group-heatmap` with the `--heatmap-*` options, and `--heatmap-table` for
+  the values.
+- **Co-occurrence heatmap**, for two groups, multiple groups and
+  correlation: Spearman or Pearson correlations between every pair of the
+  most abundant (or prevalent) features, plus any named, of proportions or
+  centred log ratios, clustered, with Benjamini-Hochberg-significant cells
+  marked; or the strongest correlations of the selected feature with every
+  other, as bars. Within all samples of the analysis or one group. Command
+  line: `stamp-cli co-occurrence`, which writes the pairs (coefficient,
+  p-value, q-value) as a table.
 - **Volcano plot**, in all three analysis types: the effect size of every
   feature against -log10 of its p-value. Features past the chosen
   significance level (and, optionally, a minimum effect size) are coloured

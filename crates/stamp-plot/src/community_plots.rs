@@ -2,13 +2,17 @@
 //! placed by the distances between them, and those distances within and
 //! between groups.
 
-use stamp_core::stats::community::{mantel, CommunityTest};
+use stamp_core::stats::community::{
+    mantel, CommunityTest, MantelRun, PermutationRun, PermutationTest,
+};
 use stamp_core::stats::correlation::CorrelationMethod;
 use stamp_core::stats::diversity::{
-    distances, nmds, pcoa, AlphaMetric, CommunityTable, Distance, DistanceMatrix, Normalisation,
+    distances, nmds, pcoa, pcoa_leading, AlphaMetric, CommunityTable, Distance, DistanceMatrix,
+    DistanceRun, NmdsRun, Normalisation, Ordination,
 };
 use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::results::format_p_value;
+use stamp_core::stats::results::{Control, Step};
 use stamp_core::stats::StampRng;
 use stamp_core::{ProfileTree, Unclassified};
 
@@ -26,6 +30,9 @@ pub struct Community {
     pub groups: Vec<String>,
     /// Colour of each group; groups beyond the list use the default palette.
     pub group_colors: Vec<Color>,
+    /// What colours and shapes the samples of the ordination plots, if not
+    /// only their groups. The community tests always compare the groups.
+    pub styling: crate::ordination_style::Styling,
     pub table: CommunityTable,
 }
 
@@ -51,6 +58,7 @@ impl Community {
             sample_groups,
             groups,
             group_colors: Vec::new(),
+            styling: Default::default(),
             table: CommunityTable::new(&profile, normalisation, rng)?,
         })
     }
@@ -158,28 +166,97 @@ pub fn test_notes(
     rng: &mut StampRng,
 ) -> Vec<String> {
     let matrix = distances(&community.table.abundances, distance);
+    test_lines(community, &matrix, permutations, rng, None)
+}
+
+/// The community tests on a distance matrix, given its principal
+/// coordinates on every axis if they are already known.
+fn test_lines(
+    community: &Community,
+    matrix: &DistanceMatrix,
+    permutations: usize,
+    rng: &mut StampRng,
+    ordination: Option<&Ordination>,
+) -> Vec<String> {
     let groups = community.dense_groups();
     CommunityTest::ALL
         .iter()
         .map(|test| {
-            let result = test.run(&matrix, &groups, permutations, rng);
-            if result.statistic.is_nan() {
-                format!(
-                    "{}: needs at least two groups, and more samples than groups",
-                    test.name()
-                )
-            } else {
-                format!(
-                    "{}: {} = {:.3}, p = {} ({} permutations)",
-                    test.name(),
-                    test.statistic_name(),
-                    result.statistic,
-                    format_p_value(result.p_value, -15),
-                    result.permutations
-                )
-            }
+            let result = test.run_with(matrix, &groups, permutations, rng, ordination);
+            test_line(*test, &result)
         })
         .collect()
+}
+
+/// The outcome of a community test as a line of text.
+fn test_line(test: CommunityTest, result: &PermutationTest) -> String {
+    if result.statistic.is_nan() {
+        format!(
+            "{}: needs at least two groups, and more samples than groups",
+            test.name()
+        )
+    } else {
+        format!(
+            "{}: {} = {:.3}, p = {} ({} permutations)",
+            test.name(),
+            test.statistic_name(),
+            result.statistic,
+            format_p_value(result.p_value, -15),
+            result.permutations
+        )
+    }
+}
+
+/// Axes of an ordination kept for its plot.
+const PLOTTED_AXES: usize = 3;
+
+/// What an ordination plot of a community shows, apart from how it looks:
+/// the slow part of drawing it, kept by the window so that changing the
+/// colours, shapes or sizes does not compute it again.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Layout {
+    /// Coordinates of each sample on the first (up to three) axes.
+    pub positions: Vec<Vec<f64>>,
+    /// Share of the variation of every axis (`NaN` for NMDS, two axes).
+    pub variance_fractions: Vec<f64>,
+    /// Notes above the plot: the distance, rarefying, and the NMDS stress.
+    pub notes: Vec<String>,
+    /// The outcome of each community test, if they were run (PCoA).
+    pub tests: Option<Vec<String>>,
+}
+
+/// The note on the distance and on rarefying.
+fn distance_note(community: &Community, distance: Distance) -> String {
+    match community.depth_note() {
+        Some(note) => format!("{} distance. {note}.", distance.name()),
+        None => format!("{} distance", distance.name()),
+    }
+}
+
+/// The principal coordinates of a community by a distance, and the
+/// community tests if `tests` gives the number of permutations and the
+/// random numbers for them. `Err` holds a message for the plot.
+pub fn pcoa_layout(
+    community: &Community,
+    distance: Distance,
+    tests: Option<(usize, &mut StampRng)>,
+) -> Result<Layout, String> {
+    let matrix = distances(&community.table.abundances, distance);
+    let (permutations, rng) = match tests {
+        Some((permutations, rng)) => (Some(permutations), Some(rng)),
+        None => (None, None),
+    };
+    let mut spare = stamp_core::stats::rng_from_seed(0);
+    let rng = rng.unwrap_or(&mut spare);
+    let mut stage = PcoaStage::Start {
+        matrix,
+        permutations,
+    };
+    match stage.advance(community, distance, rng, &mut |_, _, _| Control::Continue) {
+        Step::Done(CommunityOutput::Layout(layout)) => layout,
+        Step::Done(_) => unreachable!("a PCoA gives a layout"),
+        Step::Paused | Step::Cancelled => unreachable!("never paused or cancelled"),
+    }
 }
 
 /// Principal coordinates plot of the samples by a distance, with the
@@ -191,51 +268,83 @@ pub fn pcoa_plot(
     tests: Option<(usize, &mut StampRng)>,
     options: &pca_plot::Options,
 ) -> Figure {
-    let matrix = distances(&community.table.abundances, distance);
-    let Some(ordination) = pcoa(&matrix) else {
-        return Figure::message(
-            "Degenerate PCoA plot: the samples are all the same by this distance",
-        );
-    };
+    match pcoa_layout(community, distance, tests) {
+        Ok(layout) => draw_pcoa(community, &layout, options),
+        Err(message) => Figure::message(&message),
+    }
+}
+
+/// The PCoA plot of a community from its [`pcoa_layout`].
+pub fn draw_pcoa(community: &Community, layout: &Layout, options: &pca_plot::Options) -> Figure {
     let data = ordination_data(community);
-    let mut notes = vec![match community.depth_note() {
-        Some(note) => format!("{} distance. {note}.", distance.name()),
-        None => format!("{} distance", distance.name()),
-    }];
-    if let Some((permutations, rng)) = tests {
-        notes.extend(test_notes(community, distance, permutations, rng));
+    let mut notes = layout.notes.clone();
+    if let Some(tests) = &layout.tests {
+        notes.extend(tests.iter().cloned());
+        // The tests compare the groups whatever colours the samples.
+        if community.styling.color != crate::ordination_style::SampleColors::Group {
+            notes.push(format!(
+                "The tests compare the groups of {}, not the colours",
+                community.styling.group_label()
+            ));
+        }
     }
     pca_plot::plot_ordination(
         &data,
-        &ordination.positions,
-        &ordination.variance_fractions,
+        &layout.positions,
+        &layout.variance_fractions,
         "PCo",
         &notes,
         options,
     )
 }
 
-/// Non-metric multidimensional scaling plot of the samples by a distance,
-/// in two dimensions, with its stress.
-pub fn nmds_plot(community: &Community, distance: Distance, options: &pca_plot::Options) -> Figure {
+/// The NMDS layout of a community by a distance, in two dimensions, with
+/// its stress. `Err` holds a message for the plot.
+pub fn nmds_layout(community: &Community, distance: Distance) -> Result<Layout, String> {
     let matrix = distances(&community.table.abundances, distance);
-    let Some(layout) = nmds(&matrix, 2) else {
-        return Figure::message(
-            "Degenerate NMDS plot: it needs three samples that are not all the same",
+    nmds_result(community, distance, nmds(&matrix, 2))
+}
+
+/// The layout from an NMDS, or the message if there is none.
+fn nmds_result(
+    community: &Community,
+    distance: Distance,
+    layout: Option<stamp_core::stats::diversity::Nmds>,
+) -> Result<Layout, String> {
+    let Some(layout) = layout else {
+        return Err(
+            "Degenerate NMDS plot: it needs three samples that are not all the same".to_string(),
         );
     };
-    let data = ordination_data(community);
-    let mut notes = vec![match community.depth_note() {
-        Some(note) => format!("{} distance. {note}.", distance.name()),
-        None => format!("{} distance", distance.name()),
-    }];
     let quality = match layout.stress {
         s if s < 0.05 => "excellent",
         s if s < 0.1 => "good",
         s if s < 0.2 => "fair",
         _ => "poor",
     };
-    notes.push(format!("Stress = {:.3} ({quality})", layout.stress));
+    Ok(Layout {
+        positions: layout.positions,
+        variance_fractions: vec![f64::NAN, f64::NAN],
+        notes: vec![
+            distance_note(community, distance),
+            format!("Stress = {:.3} ({quality})", layout.stress),
+        ],
+        tests: None,
+    })
+}
+
+/// Non-metric multidimensional scaling plot of the samples by a distance,
+/// in two dimensions, with its stress.
+pub fn nmds_plot(community: &Community, distance: Distance, options: &pca_plot::Options) -> Figure {
+    match nmds_layout(community, distance) {
+        Ok(layout) => draw_nmds(community, &layout, options),
+        Err(message) => Figure::message(&message),
+    }
+}
+
+/// The NMDS plot of a community from its [`nmds_layout`].
+pub fn draw_nmds(community: &Community, layout: &Layout, options: &pca_plot::Options) -> Figure {
+    let data = ordination_data(community);
     let options = pca_plot::Options {
         show_pc3_vs_pc2: false,
         show_pc1_vs_pc3: false,
@@ -244,9 +353,9 @@ pub fn nmds_plot(community: &Community, distance: Distance, options: &pca_plot::
     pca_plot::plot_ordination(
         &data,
         &layout.positions,
-        &[f64::NAN, f64::NAN],
+        &layout.variance_fractions,
         "NMDS",
-        &notes,
+        &layout.notes,
         &options,
     )
 }
@@ -266,6 +375,7 @@ fn ordination_data(community: &Community) -> pca_plot::Data {
             .collect(),
         groups: community.groups.clone(),
         group_colors: community.group_colors.clone(),
+        styling: community.styling.clone(),
     }
 }
 
@@ -288,8 +398,45 @@ pub fn mantel_plot(
         return Figure::message("The Mantel test needs at least three samples");
     }
     let matrix = distances(&community.table.abundances, distance);
-    let differences = DistanceMatrix::from_fn(n, |i, j| (values[i] - values[j]).abs());
+    let differences = differences_of(values);
     let test = mantel(&differences, &matrix, method, permutations, rng);
+    draw_mantel(
+        community,
+        field,
+        distance,
+        method,
+        &matrix,
+        &differences,
+        &test,
+        options,
+    )
+}
+
+/// The differences between the values of every pair of samples, as a
+/// matrix of distances.
+fn differences_of(values: &[f64]) -> DistanceMatrix {
+    DistanceMatrix::from_fn(values.len(), |i, j| (values[i] - values[j]).abs())
+}
+
+/// The Mantel plot of a community from its distances (`matrix`), the
+/// differences of the numeric field and the outcome of the test, as a
+/// [`CommunityRun`] finds them. Only the samples and the rarefying depth of
+/// the community's table are used.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_mantel(
+    community: &Community,
+    field: &str,
+    distance: Distance,
+    method: CorrelationMethod,
+    matrix: &DistanceMatrix,
+    differences: &DistanceMatrix,
+    test: &PermutationTest,
+    options: &correlation_plot::Options,
+) -> Figure {
+    let n = community.samples.len();
+    if matrix.size() != n || n < 3 {
+        return Figure::message("The Mantel test needs at least three samples");
+    }
     let label = format!("{} distance", distance.name());
     let mut statistics = if test.statistic.is_nan() {
         "Mantel test: undefined, the distances do not vary".to_string()
@@ -336,6 +483,21 @@ pub fn distance_box_plot(
     options: &BoxOptions,
 ) -> Figure {
     let matrix = distances(&community.table.abundances, distance);
+    draw_distance_box(community, distance, &matrix, options)
+}
+
+/// The distance box plot of a community from its distances, as a
+/// [`CommunityRun`] finds them. Only the samples, groups and rarefying depth
+/// of the community's table are used.
+pub fn draw_distance_box(
+    community: &Community,
+    distance: Distance,
+    matrix: &DistanceMatrix,
+    options: &BoxOptions,
+) -> Figure {
+    if matrix.size() != community.samples.len() {
+        return Figure::message("Distances need at least two samples");
+    }
     let pair = |a: usize, b: usize| format!("{} : {}", community.samples[a], community.samples[b]);
     let members = community.members();
     let mut groups: Vec<Group> = members
@@ -386,6 +548,306 @@ pub fn distance_box_plot(
         value_label: Some(label),
     };
     feature_plots::box_plot(&data, options)
+}
+
+/// What a slow community calculation reports before each piece of work:
+/// what it is doing (for example "PERMANOVA"), and how many of how many
+/// pieces of that are done (a total of zero when it cannot be told).
+pub type StagePace<'a> = &'a mut dyn FnMut(&str, usize, usize) -> Control;
+
+/// The slow part of a community plot, computed by a [`CommunityRun`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum CommunityJob {
+    /// The PCoA layout, with the community tests if this gives their
+    /// number of permutations.
+    Pcoa { tests: Option<usize> },
+    /// The NMDS layout.
+    Nmds,
+    /// The distances alone (the distance box plot).
+    Distances,
+    /// The Mantel test against the differences of a number known for each
+    /// sample.
+    Mantel {
+        values: Vec<f64>,
+        method: CorrelationMethod,
+        permutations: usize,
+    },
+}
+
+/// What a [`CommunityRun`] finds.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CommunityOutput {
+    Layout(Result<Layout, String>),
+    Distances(DistanceMatrix),
+    Mantel {
+        matrix: DistanceMatrix,
+        differences: DistanceMatrix,
+        test: PermutationTest,
+    },
+    /// Nothing could be computed, for the reason given.
+    Unavailable(String),
+}
+
+/// The slow part of a community plot (distances, ordination, permutation
+/// tests), carried out a piece at a time, so that whatever runs it can show
+/// what it is doing, attend to other things in between, or give up. The
+/// outcome does not depend on where it pauses. The PCoA itself, and the
+/// PCoA that NMDS starts from, are one piece each.
+pub struct CommunityRun {
+    community: Community,
+    distance: Distance,
+    rng: StampRng,
+    job: CommunityJob,
+    distances: DistanceRun,
+    stage: Option<Stage>,
+}
+
+enum Stage {
+    Pcoa(PcoaStage),
+    Nmds(DistanceMatrix, NmdsRun),
+    Mantel {
+        matrix: DistanceMatrix,
+        differences: DistanceMatrix,
+        run: MantelRun,
+    },
+}
+
+/// The PCoA and the community tests that follow it.
+enum PcoaStage {
+    /// Waiting to find the principal coordinates.
+    Start {
+        matrix: DistanceMatrix,
+        permutations: Option<usize>,
+    },
+    Tests {
+        matrix: DistanceMatrix,
+        ordination: Ordination,
+        permutations: usize,
+        lines: Vec<String>,
+        run: Option<PermutationRun>,
+    },
+}
+
+impl CommunityRun {
+    /// The `job` for `community` by `distance`, drawing random numbers
+    /// (for the permutations) from `rng`.
+    pub fn new(
+        community: Community,
+        distance: Distance,
+        job: CommunityJob,
+        rng: StampRng,
+    ) -> CommunityRun {
+        let distances = DistanceRun::new(&community.table.abundances, distance);
+        CommunityRun {
+            community,
+            distance,
+            rng,
+            job,
+            distances,
+            stage: None,
+        }
+    }
+
+    /// The community the run is for.
+    pub fn community(&self) -> &Community {
+        &self.community
+    }
+
+    /// The depth the samples were rarefied to, if they were.
+    pub fn depth(&self) -> Option<u64> {
+        self.community.table.depth
+    }
+
+    /// Carry the work further. `pace` is asked before each piece.
+    pub fn advance(&mut self, pace: StagePace<'_>) -> Step<CommunityOutput> {
+        let (community, distance) = (&self.community, self.distance);
+        if self.stage.is_none() {
+            if let CommunityJob::Mantel { values, .. } = &self.job {
+                if values.len() != community.samples.len() || values.len() < 3 {
+                    return Step::Done(CommunityOutput::Unavailable(
+                        "The Mantel test needs at least three samples".to_string(),
+                    ));
+                }
+            }
+            let label = format!("Computing {} distances", distance.name());
+            let matrix = match self
+                .distances
+                .advance(&mut |done, total| pace(&label, done, total))
+            {
+                Step::Done(matrix) => matrix,
+                Step::Paused => return Step::Paused,
+                Step::Cancelled => return Step::Cancelled,
+            };
+            self.stage = Some(match &self.job {
+                CommunityJob::Pcoa { tests } => Stage::Pcoa(PcoaStage::Start {
+                    matrix,
+                    permutations: *tests,
+                }),
+                CommunityJob::Nmds => Stage::Nmds(matrix, NmdsRun::new(2)),
+                CommunityJob::Distances => return Step::Done(CommunityOutput::Distances(matrix)),
+                CommunityJob::Mantel {
+                    values,
+                    method,
+                    permutations,
+                } => {
+                    let differences = differences_of(values);
+                    let run = MantelRun::new(&differences, &matrix, *method, *permutations);
+                    Stage::Mantel {
+                        matrix,
+                        differences,
+                        run,
+                    }
+                }
+            });
+        }
+        let Some(stage) = self.stage.as_mut() else {
+            unreachable!("the stage was set above");
+        };
+        match stage {
+            Stage::Pcoa(stage) => stage.advance(community, distance, &mut self.rng, pace),
+            Stage::Nmds(matrix, run) => {
+                match run.advance(matrix, &mut |done, total| {
+                    if done == 0 {
+                        pace("Arranging the samples by NMDS", 0, 0)
+                    } else {
+                        pace("NMDS iterations", done, total)
+                    }
+                }) {
+                    Step::Done(layout) => Step::Done(CommunityOutput::Layout(nmds_result(
+                        community, distance, layout,
+                    ))),
+                    Step::Paused => Step::Paused,
+                    Step::Cancelled => Step::Cancelled,
+                }
+            }
+            Stage::Mantel {
+                matrix,
+                differences,
+                run,
+            } => match run.advance(&mut self.rng, &mut |done, total| {
+                pace("Mantel test", done, total)
+            }) {
+                Step::Done(test) => Step::Done(CommunityOutput::Mantel {
+                    matrix: std::mem::replace(matrix, DistanceMatrix::from_fn(0, |_, _| 0.0)),
+                    differences: std::mem::replace(
+                        differences,
+                        DistanceMatrix::from_fn(0, |_, _| 0.0),
+                    ),
+                    test,
+                }),
+                Step::Paused => Step::Paused,
+                Step::Cancelled => Step::Cancelled,
+            },
+        }
+    }
+}
+
+impl PcoaStage {
+    fn advance(
+        &mut self,
+        community: &Community,
+        distance: Distance,
+        rng: &mut StampRng,
+        pace: StagePace<'_>,
+    ) -> Step<CommunityOutput> {
+        if let PcoaStage::Start {
+            matrix,
+            permutations,
+        } = self
+        {
+            match pace("Finding the principal coordinates", 0, 0) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
+            }
+            // PERMDISP needs every axis; the plot alone, only the first few.
+            let ordination = if permutations.is_some() {
+                pcoa(matrix)
+            } else {
+                pcoa_leading(matrix, PLOTTED_AXES)
+            };
+            let Some(ordination) = ordination else {
+                return Step::Done(CommunityOutput::Layout(Err(
+                    "Degenerate PCoA plot: the samples are all the same by this distance"
+                        .to_string(),
+                )));
+            };
+            let Some(permutations) = *permutations else {
+                return Step::Done(CommunityOutput::Layout(Ok(pcoa_result(
+                    community, distance, ordination, None,
+                ))));
+            };
+            let matrix = std::mem::replace(matrix, DistanceMatrix::from_fn(0, |_, _| 0.0));
+            *self = PcoaStage::Tests {
+                matrix,
+                ordination,
+                permutations,
+                lines: Vec::new(),
+                run: None,
+            };
+        }
+        let PcoaStage::Tests {
+            matrix,
+            ordination,
+            permutations,
+            lines,
+            run,
+        } = self
+        else {
+            unreachable!("the PCoA was found above");
+        };
+        let groups = community.dense_groups();
+        while lines.len() < CommunityTest::ALL.len() {
+            let test = CommunityTest::ALL[lines.len()];
+            let current = run.get_or_insert_with(|| {
+                test.start(matrix, &groups, *permutations, Some(&*ordination))
+            });
+            let result =
+                match current.advance(rng, &mut |done, total| pace(test.name(), done, total)) {
+                    Step::Done(result) => result,
+                    Step::Paused => return Step::Paused,
+                    Step::Cancelled => return Step::Cancelled,
+                };
+            lines.push(test_line(test, &result));
+            *run = None;
+        }
+        let ordination = std::mem::replace(
+            ordination,
+            Ordination {
+                positions: Vec::new(),
+                variance_fractions: Vec::new(),
+            },
+        );
+        Step::Done(CommunityOutput::Layout(Ok(pcoa_result(
+            community,
+            distance,
+            ordination,
+            Some(std::mem::take(lines)),
+        ))))
+    }
+}
+
+/// The PCoA layout from the principal coordinates and the outcome of the
+/// tests.
+fn pcoa_result(
+    community: &Community,
+    distance: Distance,
+    ordination: Ordination,
+    tests: Option<Vec<String>>,
+) -> Layout {
+    Layout {
+        positions: ordination
+            .positions
+            .into_iter()
+            .map(|mut row| {
+                row.truncate(PLOTTED_AXES);
+                row
+            })
+            .collect(),
+        variance_fractions: ordination.variance_fractions,
+        notes: vec![distance_note(community, distance)],
+        tests,
+    }
 }
 
 #[cfg(test)]
@@ -583,5 +1045,93 @@ mod tests {
             &correlation_plot::Options::default(),
         );
         assert!(short.regions.is_empty());
+    }
+
+    /// The slow part of the community plots, carried out a piece at a time
+    /// and paused often, gives what the plots compute in one go, and says
+    /// what it is doing as it goes.
+    #[test]
+    fn community_runs_give_the_same_wherever_they_pause() {
+        let community = community(Normalisation::Proportions);
+        let run_paused = |job: CommunityJob| {
+            let mut run = CommunityRun::new(
+                community.clone(),
+                Distance::BrayCurtis,
+                job,
+                rng_from_seed(9),
+            );
+            let mut stages: Vec<String> = Vec::new();
+            let mut calls = 0;
+            loop {
+                let step = run.advance(&mut |stage, done, total| {
+                    assert!(total == 0 || done <= total);
+                    if stages.last().map(String::as_str) != Some(stage) {
+                        stages.push(stage.to_string());
+                    }
+                    calls += 1;
+                    if calls % 2 == 0 {
+                        Control::Pause
+                    } else {
+                        Control::Continue
+                    }
+                });
+                match step {
+                    Step::Done(output) => return (output, stages),
+                    Step::Paused => {}
+                    Step::Cancelled => panic!("cancelled"),
+                }
+            }
+        };
+        let (output, stages) = run_paused(CommunityJob::Pcoa { tests: Some(99) });
+        let mut rng = rng_from_seed(9);
+        let whole = pcoa_layout(&community, Distance::BrayCurtis, Some((99, &mut rng)));
+        assert_eq!(output, CommunityOutput::Layout(whole));
+        assert_eq!(
+            stages,
+            [
+                "Computing Bray-Curtis distances",
+                "Finding the principal coordinates",
+                "PERMANOVA",
+                "ANOSIM",
+                "PERMDISP"
+            ]
+        );
+
+        let (output, stages) = run_paused(CommunityJob::Nmds);
+        let whole = nmds_layout(&community, Distance::BrayCurtis);
+        // Compared as text: the variance fractions of NMDS are NaN.
+        assert_eq!(
+            format!("{output:?}"),
+            format!("{:?}", CommunityOutput::Layout(whole))
+        );
+        assert_eq!(stages[1], "Arranging the samples by NMDS");
+
+        let (output, _) = run_paused(CommunityJob::Distances);
+        let matrix = distances(&community.table.abundances, Distance::BrayCurtis);
+        assert_eq!(output, CommunityOutput::Distances(matrix.clone()));
+
+        let values = vec![1.0, 2.0, 4.0, 8.0, 9.0, 3.0];
+        let (output, stages) = run_paused(CommunityJob::Mantel {
+            values: values.clone(),
+            method: CorrelationMethod::Spearman,
+            permutations: 99,
+        });
+        let differences = differences_of(&values);
+        let test = mantel(
+            &differences,
+            &matrix,
+            CorrelationMethod::Spearman,
+            99,
+            &mut rng_from_seed(9),
+        );
+        assert_eq!(
+            output,
+            CommunityOutput::Mantel {
+                matrix,
+                differences,
+                test
+            }
+        );
+        assert_eq!(stages.last().map(String::as_str), Some("Mantel test"));
     }
 }

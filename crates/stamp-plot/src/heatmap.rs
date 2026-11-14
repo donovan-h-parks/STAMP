@@ -11,40 +11,49 @@ use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::text;
 
 /// Colour scales for the cells, from low to high values: the fourteen of
-/// STAMP v2, under the same names.
+/// STAMP v2, under the same names, and four perceptually uniform maps
+/// (viridis, plasma, magma and cividis) for continuous values elsewhere.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ColorMap {
     Blues,
     BlueToRedToGreen,
     BlueToWhiteToRed,
+    Cividis,
     CoolToWarm,
     Grayscale,
     Jet,
+    Magma,
     OrangeToRed,
     Paired,
+    Plasma,
     PurpleToGreen,
     Reds,
     RedToBlue,
     RedToYellowToBlue,
     Spectral,
+    Viridis,
     YellowToOrangeToRed,
 }
 
 impl ColorMap {
-    pub const ALL: [ColorMap; 14] = [
+    pub const ALL: [ColorMap; 18] = [
         ColorMap::Blues,
         ColorMap::BlueToRedToGreen,
         ColorMap::BlueToWhiteToRed,
+        ColorMap::Cividis,
         ColorMap::CoolToWarm,
         ColorMap::Grayscale,
         ColorMap::Jet,
+        ColorMap::Magma,
         ColorMap::OrangeToRed,
         ColorMap::Paired,
+        ColorMap::Plasma,
         ColorMap::PurpleToGreen,
         ColorMap::Reds,
         ColorMap::RedToBlue,
         ColorMap::RedToYellowToBlue,
         ColorMap::Spectral,
+        ColorMap::Viridis,
         ColorMap::YellowToOrangeToRed,
     ];
 
@@ -64,6 +73,10 @@ impl ColorMap {
             ColorMap::RedToYellowToBlue => "Red to yellow to blue",
             ColorMap::Spectral => "Spectral",
             ColorMap::YellowToOrangeToRed => "Yellow to orange to red",
+            ColorMap::Viridis => "Viridis",
+            ColorMap::Plasma => "Plasma",
+            ColorMap::Magma => "Magma",
+            ColorMap::Cividis => "Cividis",
         }
     }
 
@@ -191,6 +204,52 @@ impl ColorMap {
                 (221, 0, 0),
                 (204, 0, 0),
                 (204, 204, 204),
+            ],
+            // matplotlib's perceptually uniform maps, sampled at nine
+            // evenly spaced points.
+            ColorMap::Viridis => &[
+                (68, 1, 84),
+                (71, 45, 123),
+                (59, 82, 139),
+                (44, 114, 142),
+                (33, 145, 140),
+                (40, 174, 128),
+                (94, 201, 98),
+                (173, 220, 48),
+                (253, 231, 37),
+            ],
+            ColorMap::Plasma => &[
+                (13, 8, 135),
+                (76, 2, 161),
+                (126, 3, 168),
+                (169, 35, 149),
+                (204, 71, 120),
+                (229, 107, 93),
+                (248, 149, 64),
+                (253, 197, 39),
+                (240, 249, 33),
+            ],
+            ColorMap::Magma => &[
+                (0, 0, 4),
+                (28, 16, 68),
+                (79, 18, 123),
+                (129, 37, 129),
+                (181, 54, 122),
+                (229, 80, 100),
+                (251, 135, 97),
+                (254, 194, 135),
+                (252, 253, 191),
+            ],
+            ColorMap::Cividis => &[
+                (0, 34, 78),
+                (18, 53, 112),
+                (59, 73, 108),
+                (87, 93, 109),
+                (112, 113, 115),
+                (138, 135, 121),
+                (166, 157, 117),
+                (196, 181, 108),
+                (254, 232, 56),
             ],
         }
     }
@@ -451,7 +510,11 @@ pub fn flat_clusters(tree: &Dendrogram, cutoff: f64) -> Vec<usize> {
 pub const MAX_ITEMS: usize = 1000;
 
 /// Order of items (each a vector of values) and, if clustered, their tree.
-fn arrange(items: &[Vec<f64>], names: &[String], order: Order) -> (Vec<usize>, Option<Dendrogram>) {
+pub(crate) fn arrange(
+    items: &[Vec<f64>],
+    names: &[String],
+    order: Order,
+) -> (Vec<usize>, Option<Dendrogram>) {
     let identity: Vec<usize> = (0..items.len()).collect();
     match order {
         Order::Original => (identity, None),
@@ -480,7 +543,7 @@ fn arrange(items: &[Vec<f64>], names: &[String], order: Order) -> (Vec<usize>, O
 /// Draw a dendrogram. `leaf` gives the position of each leaf along the items;
 /// `height` maps a merge height to a position across them. With `vertical`,
 /// leaves run along x and heights along y; otherwise the reverse.
-fn dendrogram(
+pub(crate) fn dendrogram(
     figure: &mut Figure,
     tree: &Dendrogram,
     leaf: &dyn Fn(usize) -> f64,
@@ -932,7 +995,7 @@ mod tests {
         let mut names: Vec<&str> = ColorMap::ALL.iter().map(|m| m.name()).collect();
         names.sort_unstable();
         names.dedup();
-        assert_eq!(names.len(), 14);
+        assert_eq!(names.len(), 18);
         for map in ColorMap::ALL {
             // The two ends differ, and nothing goes wrong in between.
             assert_ne!(map.color(0.0), map.color(1.0), "{}", map.name());
@@ -945,6 +1008,9 @@ mod tests {
         assert_eq!(ColorMap::BlueToRedToGreen.color(0.5), Color::rgb(255, 0, 0));
         assert_eq!(ColorMap::RedToBlue.color(0.5), Color::rgb(247, 247, 247));
         assert_eq!(ColorMap::Spectral.color(1.0), Color::rgb(204, 204, 204));
+        // matplotlib's viridis runs from dark purple to yellow.
+        assert_eq!(ColorMap::Viridis.color(0.0), Color::rgb(68, 1, 84));
+        assert_eq!(ColorMap::Viridis.color(1.0), Color::rgb(253, 231, 37));
     }
 
     #[test]

@@ -10,6 +10,172 @@ Idle.
 
 ## Last completed
 
+- **Map of sample locations (Natural Earth)** (2026-11-15), on top of the
+  other uncommitted work. Data: `scripts/naturalearth/convert.py` + README
+  (Natural Earth v5.1.2 GeoJSON, SHA-256 pinned, stdlib Python, varint
+  delta format), blobs `crates/stamp-plot/data/ne_{110m,50m}_{countries,
+  lakes}.bin` (170 KB, 151 KB gzipped). stamp-plot: `geo.rs` (decoder,
+  Equal Earth / Robinson / equirectangular / Mercator, Sutherland-Hodgman
+  ring clipping with undrawn seam/clip edges, Liang-Barsky lines),
+  `map_plot.rs` (auto/world/region/custom extents, auto resolution, site
+  aggregation on a grid sized to the map, jitter, size by count/field/
+  feature, legends, tooltips, notes), `Shape::Area` (earcut 0.4 triangles,
+  new pure-Rust dependency; SVG path, egui mesh), legend/value scale/shape
+  plan moved from pca_plot into `ordination_style.rs` (`LegendItem`,
+  `ValueScale`, `ShapePlan`). CLI `--plot-type map` + `MapArgs` (two-groups,
+  multi-groups, correlation; correlation also got `OrdinationArgs`). GUI
+  `PlotKind::Map` in new plot group "Where the samples are from",
+  `PlotSettings::{map, map_lat_field, map_lon_field}` (new fields only, so
+  DEFAULTS_VERSION stays 2), dialog (`Dialog::map`, shared `Dialog::styles`),
+  About credit. Tests: geo, map_plot, CLI `samples_are_drawn_on_a_map`, GUI
+  `samples_are_placed_on_a_map`, `map_settings_dialog`,
+  `a_plot_part_way_through_its_community_tests` (regenerates
+  docs/site/images/gui_plot_progress.png: PERMANOVA 408/999, 40%, on
+  LargeDataset). Docs: plots.rst section + mg_map.png (from new
+  examples/EnterotypesArumugam/Enterotypes.metadata.locations.tsv,
+  illustrative cohort cities), command_line.rst, citing.rst, main_window.rst,
+  NEW_FEATURES, README. Web wasm 14.71 MB (5.56 MB gzipped). Not done: a
+  single "lat_lon" field, central meridians other than 0, country
+  tooltips. **Not committed** (instructed to leave changes uncommitted).
+
+- **Progress bars, spinners and cancelling for slow work** (2026-11-15), on
+  top of the other uncommitted work. stamp-core: resumable `DistanceRun`,
+  `NmdsRun`, `PermutationRun` (`CommunityTest::start`), `MantelRun` (ranks
+  Spearman distances once: CLI Mantel at 927 samples 94 s -> 6.3 s, also run
+  once instead of twice), `AncomRun`; `table::write_{group,multi_group,
+  correlation}_table` (row by row, byte-identical; CLI `-o` at 1,307
+  samples 4.7 s / 1.67 GB -> 2.9 s / 204 MB). Tests `tests/resumable.rs`,
+  Mantel naive-vs-fast, tables streamed = to_tsv. stamp-plot:
+  `community_plots::{CommunityRun, CommunityJob, CommunityOutput,
+  StagePace, draw_mantel, draw_distance_box}`. GUI: `jobs::Progress` stage
+  labels, `jobs::now_ms`; `plots::OrdinationCache` requests
+  (`take_request`, `PlotRequest`, `RunningPlot`, `set_synchronous`) for
+  PCA, PCoA+tests, NMDS, distance box, Mantel, ANCOM; app.rs plot overlay
+  (greyed previous plot, label + bar, Cancel / Compute again, 0.3 s delay),
+  status bar, `StampApp::{plot_progress, is_busy, cancel_plot,
+  compute_plot, loading, cancel_loading, results_table_progress}`; profile
+  loading from file events in a job (`Loading`, `profile_text`); large
+  results tables built in 30 ms slices while the window is open. GUI test
+  `a_slow_plot_shows_its_progress_and_can_be_cancelled`, plots test
+  `slow_plots_are_computed_in_a_job`. CLI: `progress.rs` (stderr, TTY only,
+  0.5 s delay, `STAMP_FORCE_PROGRESS` for tests), global `--quiet`; test
+  `progress_is_shown_only_on_a_terminal`. Docs: main_window.rst (Progress
+  and cancelling, figure gui_plot_progress.png), command_line.rst
+  (Progress), faq.rst, NEW_FEATURES. Not done: eigen decompositions are one
+  indivisible piece (browser freezes for them with the label shown); File >
+  Convert in the browser converts without an indicator. **Not committed**
+  (instructed to leave changes uncommitted).
+
+- **Ordination performance** (2026-11-15), on top of the other uncommitted
+  work. 619 samples x ~6,000 genera (CLI, SVG): PCoA+tests 35.1 -> 3.6 s,
+  PCA 15.6 -> 2.5 s, NMDS 17.0 -> 4.5 s; 1,307 samples: 651 -> 10.4 s,
+  409 -> 4.6 s, 241 -> 14.0 s. Plots byte-identical and test lines
+  identical to before. stamp-core: `stats/eigen.rs` (nalgebra 0.35, pure
+  Rust, new dependency: full decomposition and eigenvalues; Lanczos for
+  the leading pairs, checked against the eigenvalues, falls back on the
+  full decomposition), `pca::{pca_leading, coordinates, double_centre}`
+  (sparse Gram matrix), `diversity::pcoa_leading`, sparse Bray-Curtis /
+  Jaccard (bit-identical), Aitchison in four sums, `CommunityTest::run_with`
+  (precomputed squared distances / ranks / group sizes, flat PERMDISP
+  points; RNG draws unchanged), NMDS Guttman transform pair by pair and a
+  division- and branch-free monotone regression; `table::num` writes whole
+  numbers as integers. stamp-plot: `community_plots::{Layout, pcoa_layout,
+  draw_pcoa, nmds_layout, draw_nmds}`, `pca_plot::{layout, draw}`. CLI:
+  community tests run once. GUI: `plots::OrdinationCache`
+  (`Session::ordinations`, `StampApp::ordinations_computed`), results table
+  rebuilt only when results/filters change (`table_key`), generation kept
+  increasing across profile loads (the figure cache could otherwise show a
+  plot of the previous data). Tests: eigen fast paths vs Jacobi, distances
+  / PCoA / NMDS vs first implementations, GUI
+  `styling_an_ordination_does_not_compute_it_again`. FAQ entry on timings.
+  Still slow (>2 s): NMDS at 1,307 (~9 s), PCoA at 1,307 (distances 1.8 s,
+  full eigen 1.8 s, tests 2.9 s), results table output (~1.1 s / 600 MB at
+  619, ~2.2 s / 1.3 GB at 1,307). **Not committed** (instructed to leave
+  changes uncommitted).
+
+- **Ordination colours and shapes, and a 20-colour palette** (2026-11-15),
+  on top of the other uncommitted work. stamp-plot:
+  `ordination_style.rs` (`ColorSource`, `ColorScale`, `DrawOrder`,
+  `Styling`, `resolve`, `is_numeric_field`, `is_missing`), `pca_plot.rs`
+  (`Options::{color_by, shape_by, color_map, color_scale, draw_order,
+  opacity}`, `Data::styling`, legend beside the plot with colour bar and
+  shape section, hollow grey "No value" points, draw order, tooltips),
+  `community_plots::Community::styling` (PCoA note that the tests compare
+  the groups), `axes::{GROUP_COLORS (20), group_color cycles,
+  repeated_colors_note, Marker::ALL (10 shapes), marker_styled}`,
+  `heatmap::ColorMap::{Viridis, Plasma, Magma, Cividis}`. CLI:
+  `OrdinationArgs` (`--color-by`, `--shape-by`, `--color-scale`,
+  `--color-map`, `--draw-order`, `--marker-size`, `--opacity`), warning
+  beyond 20 groups. GUI: "Colours and shapes" group in the PCA/PCoA/NMDS
+  dialogs (`plot_config::Context::numeric_fields`), styling resolved in
+  `plots.rs` (`ordination_styling`), figure cache keyed on the selected
+  feature when colouring by it. Tests (plot, CLI, GUI incl.
+  `ordination_settings_dialogs`), docs (plots.rst section and figure
+  `mg_pcoa_coloured.png`, command_line.rst), NEW_FEATURES,
+  CHANGES_FROM_PYTHON 60. No existing default changed, so DEFAULTS_VERSION
+  stays 2. **Not committed** (instructed to leave changes uncommitted).
+
+- **Multi-feature box plot with a log axis, and the prevalence-abundance
+  plot** (2026-11-15), on top of the (also uncommitted) SingleM/sample
+  filter/group heatmap/co-occurrence work. stamp-plot: `multi_box.rs`
+  (`feature_plots::box_plot` now delegates to it; grouped boxes or one
+  panel per feature, shared/independent axes, log10 axis with a 0 line
+  below a break, jittered points, n per group, horizontal, group order
+  given/alphabetical/median/metadata field with dashed category lines),
+  `BoxOptions` fields, `BarOptions::log_scale`, `axis::log_ticks*`,
+  `prevalence_plot.rs` (panels, combined, specificity views; highlighted
+  features). stamp-core: `stats/prevalence.rs` (`occupancy`,
+  `profile_occupancy`, `FeatureOccupancy::{home_group, specificity}`),
+  `table::prevalence_table`. CLI: repeatable `--plot-feature`, `BoxArgs`
+  (`--box-*`, `--bar-log`), `PrevalenceArgs` (`--prevalence-*`,
+  `--highlight`), plot type `prevalence-abundance`. GUI:
+  `PlotKind::PrevalenceAbundance`, `BoxFeatures` (selected / most
+  significant N / listed; Ctrl+click in the feature table,
+  `StampApp::toggle_box_feature`), dialogs. Tests (core, plot, CLI, GUI incl.
+  `box_and_prevalence_settings_dialogs`), docs (plots.rst three new figures,
+  command_line.rst, main_window.rst), NEW_FEATURES, README. No existing
+  default changed, so DEFAULTS_VERSION stays 2. **Not committed**
+  (instructed to leave changes uncommitted). Sphinx not installed; RST
+  checked by eye.
+
+- **Group heatmap and co-occurrence heatmap** (2026-11-15), on top of the
+  (also uncommitted) SingleM/Sandpiper + sample filter work. stamp-core:
+  `stats/group_summary.rs` (`GroupStatistic`, `summarise`,
+  `majority_values`), `stats/co_occurrence.rs` (`co_occurrence`,
+  `partners`, `top_features`; reference values from SciPy 1.16.0),
+  `co_occurrence_table`, `partner_table`, `group_summary_table` in
+  `stats/table.rs`; serde on `CorrelationMethod`. stamp-plot:
+  `group_heatmap.rs` (separate plot type; reuses `heatmap::{arrange,
+  dendrogram, ColorMap, Order}`), `co_occurrence_plot.rs` (matrix and
+  one-feature views). CLI: `--plot-type group-heatmap` with `HeatmapArgs`
+  (`--heatmap-*`, flattened into two-groups and multi-groups; colour map,
+  order, linkage and dendrograms also apply to the sample heatmap);
+  `stamp-cli co-occurrence`. GUI: `PlotKind::GroupHeatmap`,
+  `PlotKind::CoOccurrence`, their dialogs (`plot_config::show` now takes a
+  `Context` of metadata fields and groups; the Configure plot window
+  scrolls). Tests (core, plot, CLI, GUI incl. `heatmap_settings_dialogs`),
+  docs (plots.rst with three new figures, statistics.rst caveat,
+  command_line.rst), NEW_FEATURES, README. No default of existing plots
+  changed, so DEFAULTS_VERSION stays 2. **Not committed** (instructed to
+  leave changes uncommitted). Sphinx not installed; RST checked by eye.
+
+- **SingleM/Sandpiper importers and the sample filter** (2026-11-15):
+  `stamp-core/src/import/{lineage,singlem,sandpiper}.rs` (seven ranks,
+  `unclassified <prefixed taxon>` padding, prefixes stripped from named
+  taxa, `name (parent)` for a name with two parents at one rank, values to
+  six significant digits; fixtures in `crates/stamp-core/tests/data/singlem`
+  with a reference from the Python script); `stamp-cli convert
+  singlem|sandpiper`; File > Load profile detects both (several files at
+  once for Sandpiper) and File > Convert offers them.
+  `stamp-core/src/selection.rs` (`SampleSelection`, `Condition`) with
+  `Metadata::set_selection`; `--where`/`--where-not` on every command that
+  reads metadata (and `info`); the window's Sample filter in the groups
+  section (`Session::set_sample_filter`, `StampApp::set_sample_filter`).
+  Tests, docs (input_files, command_line, analyses, main_window),
+  NEW_FEATURES, CHANGES_FROM_PYTHON (59), README. **Not committed**
+  (instructed to leave changes uncommitted). Sphinx was not installed, so
+  the docs build was not checked.
+
 - **User documentation** (2026-11-15): a Sphinx site in the style of
   CheckM's (Read the Docs theme) in `docs/site/`: installing, quick start,
   FAQ, input files, the main window, analyses, command line, a statistics
@@ -137,6 +303,8 @@ Idle.
 
 ## Next
 
-Nothing queued. What v2 has that the port still lacks is listed under "Not
+Nothing queued. A plan for an assistant built on Claude Code (local MCP
+server in the desktop app, launching Claude Code) is in
+`docs/ASSISTANT_PLAN.md`, saved but not started. What v2 has that the port still lacks is listed under "Not
 yet ported" in `docs/CHANGES_FROM_PYTHON.md`; `docs/ROADMAP.md` lists what
 was considered and left out.

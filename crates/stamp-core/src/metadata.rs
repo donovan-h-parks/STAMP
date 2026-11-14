@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::error::{Result, StampError};
 use crate::profile_tree::ProfileTree;
+use crate::selection::SampleSelection;
 use crate::text;
 
 /// Metadata for the samples of a profile: one value per sample and field.
@@ -14,7 +15,11 @@ pub struct Metadata {
     /// `values[sample][field]`
     values: Vec<Vec<String>>,
     sample_index: HashMap<String, usize>,
+    /// Samples switched on or off one by one.
     active: Vec<bool>,
+    /// The sample filter, and which samples it keeps.
+    selection: SampleSelection,
+    selected: Vec<bool>,
 }
 
 /// Samples grouped by the value of one metadata field. Group names and the
@@ -44,6 +49,8 @@ impl Metadata {
             values: Vec::new(),
             sample_index: HashMap::new(),
             active: Vec::new(),
+            selection: SampleSelection::default(),
+            selected: Vec::new(),
         };
 
         let mut unknown = Vec::new();
@@ -73,6 +80,7 @@ impl Metadata {
             metadata.samples.push(sample.to_string());
             metadata.values.push(row);
             metadata.active.push(true);
+            metadata.selected.push(true);
         }
 
         let mut warnings = Vec::new();
@@ -142,10 +150,46 @@ impl Metadata {
         }
     }
 
+    /// True if a sample takes part in group analyses: it is switched on
+    /// and the sample filter keeps it.
     pub fn is_active(&self, sample: &str) -> bool {
         self.sample_index
             .get(sample)
-            .is_some_and(|&i| self.active[i])
+            .is_some_and(|&i| self.active[i] && self.selected[i])
+    }
+
+    /// True if the sample filter keeps a sample (whether or not it is
+    /// switched on).
+    pub fn is_selected(&self, sample: &str) -> bool {
+        self.sample_index
+            .get(sample)
+            .is_some_and(|&i| self.selected[i])
+    }
+
+    /// Choose the samples of the analyses by their metadata values. Samples
+    /// the selection does not keep are left out of everything, and groups
+    /// none of whose samples it keeps disappear. Returns how many samples
+    /// it keeps. An empty selection keeps every sample.
+    pub fn set_selection(&mut self, selection: SampleSelection) -> Result<usize> {
+        selection.check(self)?;
+        let selected: Vec<bool> = self
+            .samples
+            .iter()
+            .map(|sample| selection.accepts(self, sample))
+            .collect();
+        self.selected = selected;
+        self.selection = selection;
+        Ok(self.num_selected())
+    }
+
+    /// The sample filter (empty if every sample is kept).
+    pub fn selection(&self) -> &SampleSelection {
+        &self.selection
+    }
+
+    /// Number of samples the sample filter keeps.
+    pub fn num_selected(&self) -> usize {
+        self.selected.iter().filter(|&&s| s).count()
     }
 
     /// Include or exclude a sample from group analyses.
@@ -158,14 +202,15 @@ impl Metadata {
     pub fn active_samples(&self) -> Vec<&str> {
         self.samples
             .iter()
-            .zip(&self.active)
-            .filter(|(_, &active)| active)
-            .map(|(s, _)| s.as_str())
+            .enumerate()
+            .filter(|(i, _)| self.active[*i] && self.selected[*i])
+            .map(|(_, s)| s.as_str())
             .collect()
     }
 
     /// Group the active samples by the value of a field. A group whose
-    /// samples are all inactive is kept, with no samples.
+    /// samples are all switched off is kept, with no samples; one whose
+    /// samples the sample filter leaves out is not.
     pub fn groups(&self, field: &str) -> Result<Groups> {
         let f = self
             .field_index(field)
@@ -173,6 +218,9 @@ impl Metadata {
 
         let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for (i, sample) in self.samples.iter().enumerate() {
+            if !self.selected[i] {
+                continue;
+            }
             let members = groups.entry(self.values[i][f].clone()).or_default();
             if self.active[i] {
                 members.push(sample.clone());
@@ -196,7 +244,7 @@ impl Metadata {
         self.samples
             .iter()
             .enumerate()
-            .filter(|(i, _)| self.active[*i])
+            .filter(|(i, _)| self.active[*i] && self.selected[*i])
             .filter_map(|(i, sample)| {
                 text::parse_float(&self.values[i][f])
                     .filter(|value| value.is_finite())
@@ -380,6 +428,30 @@ mod tests {
         assert!(groups.samples("B").unwrap().is_empty());
         assert_eq!(meta.active_samples(), ["S1", "S2"]);
         assert!(meta.groups("Nope").is_err());
+    }
+
+    #[test]
+    fn the_sample_filter_leaves_samples_and_groups_out() {
+        let (mut meta, _) = Metadata::read(META, &tree()).unwrap();
+        let only_a = SampleSelection::parse(&["Group=A".to_string()], &[]).unwrap();
+        assert_eq!(meta.set_selection(only_a.clone()).unwrap(), 2);
+        assert_eq!(meta.selection(), &only_a);
+        assert_eq!(meta.active_samples(), ["S1", "S2"]);
+        assert!(!meta.is_active("S3") && !meta.is_selected("S3"));
+        // The group with no kept sample disappears.
+        let groups = meta.groups("Group").unwrap();
+        assert_eq!(groups.names().collect::<Vec<_>>(), ["A"]);
+        assert_eq!(meta.numeric_values("Age"), [("S1", 10.0), ("S2", 20.0)]);
+        // Switching a sample off works within the filter.
+        meta.set_active("S1", false);
+        assert_eq!(meta.active_samples(), ["S2"]);
+        assert!(meta.is_selected("S1"));
+        // A bad selection changes nothing; an empty one keeps everything.
+        let bad = SampleSelection::parse(&["Group=Q".to_string()], &[]).unwrap();
+        assert!(meta.set_selection(bad).is_err());
+        assert_eq!(meta.num_selected(), 2);
+        assert_eq!(meta.set_selection(SampleSelection::default()).unwrap(), 3);
+        assert_eq!(meta.active_samples(), ["S3", "S2"]);
     }
 
     #[test]

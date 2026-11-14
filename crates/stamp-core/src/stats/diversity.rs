@@ -4,6 +4,7 @@
 
 use super::pca::symmetric_eigen;
 use super::rarefaction::{chao1, whole_counts};
+use super::results::{Control, Pace, Step};
 use super::two_sample::random_index;
 use super::StampRng;
 use crate::profile::Profile;
@@ -295,55 +296,156 @@ pub fn centred_log_ratio(abundances: &[f64]) -> Vec<f64> {
 /// (in the same order). Bray-Curtis is computed on proportions, so that it
 /// does not depend on how deeply each sample was sequenced.
 pub fn distances(samples: &[Vec<f64>], metric: Distance) -> DistanceMatrix {
-    let prepared: Vec<Vec<f64>> = samples
-        .iter()
-        .map(|sample| match metric {
-            Distance::BrayCurtis => {
-                let total: f64 = sample.iter().filter(|a| **a > 0.0).sum();
-                sample
+    match DistanceRun::new(samples, metric).advance(&mut |_, _| Control::Continue) {
+        Step::Done(matrix) => matrix,
+        Step::Paused | Step::Cancelled => unreachable!("never paused or cancelled"),
+    }
+}
+
+/// [`distances`], computed a row of the matrix at a time, so that whatever
+/// runs it can show its progress, attend to other things in between, or
+/// give up. The matrix does not depend on where it pauses.
+#[derive(Debug, Clone)]
+pub struct DistanceRun {
+    metric: Distance,
+    /// Each sample as the distance uses it: proportions, presence or
+    /// centred log ratios.
+    prepared: Vec<Vec<f64>>,
+    /// The features present in each sample (Bray-Curtis and Jaccard).
+    present: Vec<Vec<usize>>,
+    values: Vec<f64>,
+    /// The next row to compute.
+    row: usize,
+}
+
+impl DistanceRun {
+    pub fn new(samples: &[Vec<f64>], metric: Distance) -> DistanceRun {
+        let prepared: Vec<Vec<f64>> = samples
+            .iter()
+            .map(|sample| match metric {
+                Distance::BrayCurtis => {
+                    let total: f64 = sample.iter().filter(|a| **a > 0.0).sum();
+                    sample
+                        .iter()
+                        .map(|&a| if total > 0.0 { a.max(0.0) / total } else { 0.0 })
+                        .collect()
+                }
+                Distance::Jaccard => sample
                     .iter()
-                    .map(|&a| if total > 0.0 { a.max(0.0) / total } else { 0.0 })
-                    .collect()
-            }
-            Distance::Jaccard => sample
+                    .map(|&a| if a > 0.0 { 1.0 } else { 0.0 })
+                    .collect(),
+                Distance::Aitchison => centred_log_ratio(sample),
+            })
+            .collect();
+        // Profiles are mostly zeros, and a feature neither sample has adds
+        // nothing to either sum of Bray-Curtis or Jaccard, so only the
+        // features present in one or the other are visited, in the same
+        // order as all of them would be: the result is exactly the same.
+        let present = match metric {
+            Distance::BrayCurtis | Distance::Jaccard => prepared
                 .iter()
-                .map(|&a| if a > 0.0 { 1.0 } else { 0.0 })
+                .map(|sample| (0..sample.len()).filter(|&f| sample[f] != 0.0).collect())
                 .collect(),
-            Distance::Aitchison => centred_log_ratio(sample),
-        })
-        .collect();
-    DistanceMatrix::from_fn(samples.len(), |i, j| {
-        let pairs = prepared[i].iter().zip(&prepared[j]);
-        match metric {
-            Distance::BrayCurtis => {
-                let (difference, sum) =
-                    pairs.fold((0.0, 0.0), |(d, s), (a, b)| (d + (a - b).abs(), s + a + b));
-                if sum > 0.0 {
-                    difference / sum
-                } else {
-                    0.0
-                }
-            }
-            Distance::Jaccard => {
-                let (either, both) = pairs.fold((0.0, 0.0), |(e, b), (x, y)| {
-                    (e + f64::max(*x, *y), b + x * y)
-                });
-                if either > 0.0 {
-                    1.0 - both / either
-                } else {
-                    0.0
-                }
-            }
-            Distance::Aitchison => pairs.map(|(a, b)| (a - b) * (a - b)).sum::<f64>().sqrt(),
+            Distance::Aitchison => Vec::new(),
+        };
+        let n = samples.len();
+        DistanceRun {
+            metric,
+            prepared,
+            present,
+            values: vec![0.0; n * n],
+            row: 0,
         }
-    })
+    }
+
+    /// The number of rows, each a piece of work.
+    pub fn rows(&self) -> usize {
+        self.prepared.len()
+    }
+
+    /// Compute further rows; `pace` is asked before each, with the number
+    /// of rows done and the number of rows.
+    pub fn advance(&mut self, pace: Pace<'_>) -> Step<DistanceMatrix> {
+        let n = self.prepared.len();
+        while self.row < n {
+            match pace(self.row, n) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
+            }
+            let i = self.row;
+            for j in i + 1..n {
+                let d = self.distance(i, j);
+                self.values[i * n + j] = d;
+                self.values[j * n + i] = d;
+            }
+            self.row += 1;
+        }
+        Step::Done(DistanceMatrix {
+            size: n,
+            values: std::mem::take(&mut self.values),
+        })
+    }
+
+    fn distance(&self, i: usize, j: usize) -> f64 {
+        let (a, b) = (&self.prepared[i], &self.prepared[j]);
+        let metric = self.metric;
+        if metric == Distance::Aitchison {
+            return squared_difference(a, b).sqrt();
+        }
+        let (fa, fb) = (&self.present[i], &self.present[j]);
+        let (mut p, mut q) = (0, 0);
+        let (mut first, mut second) = (0.0, 0.0);
+        while p < fa.len() || q < fb.len() {
+            let x = fa.get(p).copied().unwrap_or(usize::MAX);
+            let y = fb.get(q).copied().unwrap_or(usize::MAX);
+            let f = x.min(y);
+            let (u, v) = (a[f], b[f]);
+            if metric == Distance::BrayCurtis {
+                first += (u - v).abs();
+                // In this order, as rounding depends on it.
+                second = second + u + v;
+            } else {
+                first += f64::max(u, v);
+                second += u * v;
+            }
+            p += usize::from(x == f);
+            q += usize::from(y == f);
+        }
+        match metric {
+            // first: difference, second: sum
+            Distance::BrayCurtis if second > 0.0 => first / second,
+            // first: in either, second: in both
+            Distance::Jaccard if first > 0.0 => 1.0 - second / first,
+            _ => 0.0,
+        }
+    }
+}
+
+/// The sum of squared differences of two vectors, in four running sums,
+/// which lets the compiler use vector instructions.
+fn squared_difference(a: &[f64], b: &[f64]) -> f64 {
+    let mut sums = [0.0; 4];
+    let ((a4, a_rest), (b4, b_rest)) = (a.as_chunks::<4>(), b.as_chunks::<4>());
+    for (x, y) in a4.iter().zip(b4) {
+        for lane in 0..4 {
+            let d = x[lane] - y[lane];
+            sums[lane] += d * d;
+        }
+    }
+    let mut total = (sums[0] + sums[1]) + (sums[2] + sums[3]);
+    for (x, y) in a_rest.iter().zip(b_rest) {
+        total += (x - y) * (x - y);
+    }
+    total
 }
 
 /// Samples placed in space so that the distances between them are kept as
 /// well as possible.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ordination {
-    /// Coordinates of each sample: `positions[sample][axis]`.
+    /// Coordinates of each sample: `positions[sample][axis]`, on every axis
+    /// or, from [`pcoa_leading`], the first few.
     pub positions: Vec<Vec<f64>>,
     /// Share of the variation each axis accounts for, largest first.
     pub variance_fractions: Vec<f64>,
@@ -356,53 +458,22 @@ pub struct Ordination {
 ///
 /// Returns `None` for fewer than two samples or if all distances are zero.
 pub fn pcoa(distances: &DistanceMatrix) -> Option<Ordination> {
+    pcoa_leading(distances, usize::MAX)
+}
+
+/// [`pcoa`] with the coordinates of only the first `axes` axes (the shares
+/// of the variation of all of them are still given), which is much faster
+/// for many samples: a plot needs two or three.
+pub fn pcoa_leading(distances: &DistanceMatrix, axes: usize) -> Option<Ordination> {
     let n = distances.size();
     if n < 2 {
         return None;
     }
     // Gower's centring of -d^2 / 2: subtract row and column means, add the
     // overall mean.
-    let squared = |i: usize, j: usize| -0.5 * distances.get(i, j) * distances.get(i, j);
-    let row_means: Vec<f64> = (0..n)
-        .map(|i| (0..n).map(|j| squared(i, j)).sum::<f64>() / n as f64)
-        .collect();
-    let mean = row_means.iter().sum::<f64>() / n as f64;
-    let centred: Vec<Vec<f64>> = (0..n)
-        .map(|i| {
-            (0..n)
-                .map(|j| squared(i, j) - row_means[i] - row_means[j] + mean)
-                .collect()
-        })
-        .collect();
-    let (values, vectors) = symmetric_eigen(centred);
-
-    let mut order: Vec<usize> = (0..n).collect();
-    order.sort_by(|&a, &b| values[b].total_cmp(&values[a]));
-    let total: f64 = values.iter().map(|v| v.max(0.0)).sum();
-    if total <= 0.0 {
-        return None;
-    }
-    let tolerance = total * 1e-12;
-    let kept: Vec<usize> = order
-        .into_iter()
-        .filter(|&k| values[k] > tolerance)
-        .collect();
-    let mut positions = vec![Vec::with_capacity(kept.len()); n];
-    let mut variance_fractions = Vec::with_capacity(kept.len());
-    for &k in &kept {
-        let scale = values[k].sqrt();
-        let column: Vec<f64> = (0..n).map(|i| vectors[i][k] * scale).collect();
-        // The sign of an axis is arbitrary; fix it so results are stable.
-        let extreme = column
-            .iter()
-            .copied()
-            .fold(0.0f64, |a, b| if b.abs() > a.abs() { b } else { a });
-        let sign = if extreme < 0.0 { -1.0 } else { 1.0 };
-        for (row, value) in positions.iter_mut().zip(column) {
-            row.push(sign * value);
-        }
-        variance_fractions.push(values[k] / total);
-    }
+    let mut centred: Vec<f64> = distances.values.iter().map(|d| -0.5 * d * d).collect();
+    super::pca::double_centre(&mut centred, n);
+    let (positions, variance_fractions) = super::pca::coordinates(&centred, n, axes)?;
     Some(Ordination {
         positions,
         variance_fractions,
@@ -435,12 +506,167 @@ const NMDS_ITERATIONS: usize = 500;
 ///
 /// `None` for fewer than three samples or if all distances are zero.
 pub fn nmds(distances: &DistanceMatrix, dimensions: usize) -> Option<Nmds> {
+    match NmdsRun::new(dimensions).advance(distances, &mut |_, _| Control::Continue) {
+        Step::Done(result) => result,
+        Step::Paused | Step::Cancelled => unreachable!("never paused or cancelled"),
+    }
+}
+
+/// [`nmds`], carried out an iteration at a time, so that whatever runs it
+/// can show its progress, attend to other things in between, or give up.
+/// The layout does not depend on where it pauses.
+#[derive(Debug, Clone)]
+pub struct NmdsRun {
+    dimensions: usize,
+    /// Everything kept between iterations, from the first piece of work.
+    state: Option<NmdsState>,
+}
+
+#[derive(Debug, Clone)]
+struct NmdsState {
+    n: usize,
+    /// Where each pair's samples start in the layout, in the order of
+    /// their given distance, in four bytes each, as the pairs are visited
+    /// many times.
+    pairs: Vec<[u32; 2]>,
+    /// Blocks of pairs of equal given distance, each given by where it
+    /// ends.
+    block_ends: Vec<usize>,
+    /// The layout, one sample after another.
+    layout: Vec<f64>,
+    /// The layout distances in pair order.
+    d: Vec<f64>,
+    /// The pools of the monotone regression, kept between iterations to
+    /// save allocating them.
+    pools: Vec<Pool>,
+    moved: Vec<f64>,
+    weights: Vec<f64>,
+    target: f64,
+    previous: f64,
+    iteration: usize,
+}
+
+impl NmdsRun {
+    pub fn new(dimensions: usize) -> NmdsRun {
+        NmdsRun {
+            dimensions,
+            state: None,
+        }
+    }
+
+    /// The most iterations a layout takes, each a piece of work (it
+    /// usually stops sooner, once the stress no longer falls).
+    pub fn iterations() -> usize {
+        NMDS_ITERATIONS
+    }
+
+    /// Carry the layout further, from `distances`, which must be the same
+    /// on every call. `pace` is asked before each iteration, with the
+    /// number of iterations done and the most there can be; before the
+    /// first, the starting layout is found by PCoA in one piece. The
+    /// result is `None` for fewer than three samples or if all distances
+    /// are zero.
+    pub fn advance(&mut self, distances: &DistanceMatrix, pace: Pace<'_>) -> Step<Option<Nmds>> {
+        let dims = self.dimensions;
+        if self.state.is_none() {
+            match pace(0, NMDS_ITERATIONS) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
+            }
+            match nmds_start(distances, dims) {
+                Some(state) => self.state = Some(state),
+                None => return Step::Done(None),
+            }
+        }
+        let Some(state) = self.state.as_mut() else {
+            return Step::Done(None);
+        };
+        let NmdsState {
+            n,
+            pairs,
+            block_ends,
+            layout,
+            d,
+            pools,
+            moved,
+            weights,
+            target,
+            previous,
+            iteration,
+        } = state;
+        let n = *n;
+        loop {
+            match pace(*iteration, NMDS_ITERATIONS) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
+            }
+            // Distances in the layout, and the sum of their squares; the
+            // passes over the pairs are compiled separately for two
+            // dimensions, the usual case, to save the loops over the axes.
+            let total = if dims == 2 {
+                layout_distances(layout, pairs, d, 2)
+            } else {
+                layout_distances(layout, pairs, d, dims)
+            };
+            let pool_count = monotone_fit(d, block_ends, pools);
+            let pools = &pools[..pool_count];
+            // Kruskal's stress against the fit (the disparities), the sum
+            // of squares of the disparities and, for the Guttman transform
+            // below, X <- B X / n with B[i][j] = -f/d for i != j (zero
+            // where d is zero) and each row of B summing to zero: row i of
+            // B X is the sum over j of (f/d)(X_i - X_j). Taken pair by
+            // pair, without forming B, and before the disparities are
+            // scaled.
+            let (raw, sum_sq) = if dims == 2 {
+                guttman_sums(layout, pairs, d, pools, moved, weights, 2)
+            } else {
+                guttman_sums(layout, pairs, d, pools, moved, weights, dims)
+            };
+            let current = if total > 0.0 {
+                (raw / total).sqrt()
+            } else {
+                0.0
+            };
+            let finished = *iteration == NMDS_ITERATIONS
+                || current < 1e-12
+                || *previous - current < 1e-9 * previous.min(1.0);
+            // Disparities are scaled to a fixed total below, so the layout
+            // cannot shrink to nothing; that needs some.
+            if finished || sum_sq <= 0.0 {
+                let positions = layout.chunks_exact(dims).map(<[f64]>::to_vec).collect();
+                pace(NMDS_ITERATIONS, NMDS_ITERATIONS);
+                return Step::Done(Some(Nmds {
+                    positions: principal_axes(positions, dims),
+                    stress: current,
+                }));
+            }
+            *iteration += 1;
+            *previous = current;
+            let scale = (*target / sum_sq).sqrt() / n as f64;
+            for ((point, shift), weight) in layout
+                .chunks_exact_mut(dims)
+                .zip(moved.chunks_exact(dims))
+                .zip(weights.iter())
+            {
+                for (x, m) in point.iter_mut().zip(shift) {
+                    *x = scale * (weight * *x + m);
+                }
+            }
+        }
+    }
+}
+
+/// The starting point of an NMDS layout: the PCoA layout, and the pairs of
+/// samples in order of their given distance.
+fn nmds_start(distances: &DistanceMatrix, dimensions: usize) -> Option<NmdsState> {
     let n = distances.size();
     if n < 3 || dimensions == 0 {
         return None;
     }
-    let start = pcoa(distances)?;
-    let mut positions: Vec<Vec<f64>> = start
+    let start = pcoa_leading(distances, dimensions)?;
+    let positions: Vec<Vec<f64>> = start
         .positions
         .iter()
         .enumerate()
@@ -456,119 +682,177 @@ pub fn nmds(distances: &DistanceMatrix, dimensions: usize) -> Option<Nmds> {
         .collect();
 
     // Pairs of samples in order of their given distance, in blocks of
-    // equal distances.
+    // equal distances (each block given by where it ends).
     let mut pairs: Vec<(usize, usize)> = (0..n)
         .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
         .collect();
     pairs.sort_by(|a, b| distances.get(a.0, a.1).total_cmp(&distances.get(b.0, b.1)));
-    let mut blocks: Vec<std::ops::Range<usize>> = Vec::new();
-    let mut begin = 0;
+    let mut block_ends: Vec<usize> = Vec::new();
     for k in 1..=pairs.len() {
         let same = k < pairs.len()
             && distances.get(pairs[k].0, pairs[k].1)
-                == distances.get(pairs[begin].0, pairs[begin].1);
+                == distances.get(pairs[k - 1].0, pairs[k - 1].1);
         if !same {
-            blocks.push(begin..k);
-            begin = k;
+            block_ends.push(k);
         }
     }
-
-    let layout_distances = |positions: &[Vec<f64>]| -> Vec<f64> {
-        pairs
-            .iter()
-            .map(|&(i, j)| {
-                positions[i]
-                    .iter()
-                    .zip(&positions[j])
-                    .map(|(a, b)| (a - b) * (a - b))
-                    .sum::<f64>()
-                    .sqrt()
-            })
-            .collect()
-    };
-    // The monotone (non-decreasing) fit to layout distances, in pair order.
-    let disparities = |d: &[f64]| -> Vec<f64> {
-        // Pool adjacent violators over the blocks, each weighted by its size.
-        let mut pools: Vec<(f64, f64, usize)> = Vec::new(); // (mean, weight, blocks)
-        for block in &blocks {
-            let weight = block.len() as f64;
-            let mut mean = d[block.clone()].iter().sum::<f64>() / weight;
-            let (mut total, mut count) = (weight, 1);
-            while let Some(&(last, last_weight, last_count)) = pools.last() {
-                if last <= mean {
-                    break;
-                }
-                mean = (mean * total + last * last_weight) / (total + last_weight);
-                total += last_weight;
-                count += last_count;
-                pools.pop();
-            }
-            pools.push((mean, total, count));
-        }
-        let mut fitted = Vec::with_capacity(d.len());
-        let mut block = 0;
-        for (mean, _, count) in pools {
-            for _ in 0..count {
-                fitted.extend(std::iter::repeat_n(mean, blocks[block].len()));
-                block += 1;
-            }
-        }
-        fitted
-    };
-    let stress = |d: &[f64], fitted: &[f64]| -> f64 {
-        let raw: f64 = d.iter().zip(fitted).map(|(a, b)| (a - b) * (a - b)).sum();
-        let total: f64 = d.iter().map(|a| a * a).sum();
-        if total > 0.0 {
-            (raw / total).sqrt()
-        } else {
-            0.0
-        }
-    };
-
-    let target = (n * (n - 1) / 2) as f64;
-    let mut previous = f64::INFINITY;
-    for _ in 0..NMDS_ITERATIONS {
-        let d = layout_distances(&positions);
-        let mut fitted = disparities(&d);
-        let current = stress(&d, &fitted);
-        if current < 1e-12 || previous - current < 1e-9 * previous.min(1.0) {
-            break;
-        }
-        previous = current;
-        // Disparities scaled to a fixed total, so the layout cannot shrink
-        // to nothing.
-        let sum_sq: f64 = fitted.iter().map(|f| f * f).sum();
-        if sum_sq <= 0.0 {
-            break;
-        }
-        let scale = (target / sum_sq).sqrt();
-        fitted.iter_mut().for_each(|f| *f *= scale);
-        // The Guttman transform.
-        let mut b = vec![vec![0.0; n]; n];
-        for (k, &(i, j)) in pairs.iter().enumerate() {
-            if d[k] > 0.0 {
-                let value = -fitted[k] / d[k];
-                b[i][j] = value;
-                b[j][i] = value;
-            }
-        }
-        for (i, row) in b.iter_mut().enumerate() {
-            row[i] = -row.iter().sum::<f64>();
-        }
-        positions = (0..n)
-            .map(|i| {
-                (0..dimensions)
-                    .map(|k| (0..n).map(|j| b[i][j] * positions[j][k]).sum::<f64>() / n as f64)
-                    .collect()
-            })
-            .collect();
-    }
-    let d = layout_distances(&positions);
-    let final_stress = stress(&d, &disparities(&d));
-    Some(Nmds {
-        positions: principal_axes(positions, dimensions),
-        stress: final_stress,
+    let pairs: Vec<[u32; 2]> = pairs
+        .iter()
+        .map(|&(i, j)| [(i * dimensions) as u32, (j * dimensions) as u32])
+        .collect();
+    let pair_count = pairs.len();
+    Some(NmdsState {
+        n,
+        pairs,
+        pools: vec![
+            Pool {
+                sum: 0.0,
+                weight: 0.0,
+                end: 0,
+            };
+            block_ends.len()
+        ],
+        block_ends,
+        layout: positions.iter().flatten().copied().collect(),
+        d: vec![0.0; pair_count],
+        moved: vec![0.0; n * dimensions],
+        weights: vec![0.0; n],
+        target: (n * (n - 1) / 2) as f64,
+        previous: f64::INFINITY,
+        iteration: 0,
     })
+}
+
+/// The distances between the pairs of samples of a layout (`dims`
+/// coordinates per sample; `pairs` holds where each pair's samples start),
+/// into `d`, returning the sum of their squares.
+#[inline(always)]
+fn layout_distances(layout: &[f64], pairs: &[[u32; 2]], d: &mut [f64], dims: usize) -> f64 {
+    let mut total = 0.0;
+    for (out, &[i, j]) in d.iter_mut().zip(pairs) {
+        let (a, b) = (&layout[i as usize..][..dims], &layout[j as usize..][..dims]);
+        let mut squares = 0.0;
+        for c in 0..dims {
+            squares += (a[c] - b[c]) * (a[c] - b[c]);
+        }
+        let distance = f64::sqrt(squares);
+        *out = distance;
+        total += distance * distance;
+    }
+    total
+}
+
+/// Kruskal's raw stress of layout distances `d` against their monotone fit
+/// (the disparities, from `pools`) and the sum of squares of the
+/// disparities; and, for the Guttman transform X <- B X / n, with B[i][j] =
+/// -f/d for i != j (zero where d is zero) and each row of B summing to
+/// zero, so that row i of B X is the sum over j of (f/d)(X_i - X_j): the
+/// sums of f/d for each sample (`weights`) and of -(f/d) X_j (`moved`).
+/// Taken pair by pair, without forming B, and before the disparities are
+/// scaled.
+#[inline(always)]
+fn guttman_sums(
+    layout: &[f64],
+    pairs: &[[u32; 2]],
+    d: &[f64],
+    pools: &[Pool],
+    moved: &mut [f64],
+    weights: &mut [f64],
+    dims: usize,
+) -> (f64, f64) {
+    let (mut raw, mut sum_sq) = (0.0, 0.0);
+    moved.fill(0.0);
+    weights.fill(0.0);
+    let mut begin = 0;
+    for pool in pools {
+        let f = pool.mean();
+        for (&dk, &[i, j]) in d[begin..pool.end].iter().zip(&pairs[begin..pool.end]) {
+            raw += (dk - f) * (dk - f);
+            sum_sq += f * f;
+            if dk > 0.0 {
+                let w = f / dk;
+                let (i, j) = (i as usize, j as usize);
+                weights[i / dims] += w;
+                weights[j / dims] += w;
+                for c in 0..dims {
+                    moved[i + c] -= w * layout[j + c];
+                    moved[j + c] -= w * layout[i + c];
+                }
+            }
+        }
+        begin = pool.end;
+    }
+    (raw, sum_sq)
+}
+
+/// A pool of the monotone regression: blocks of pairs fitted by one value,
+/// their mean.
+#[derive(Debug, Clone, Copy)]
+struct Pool {
+    /// The sum of the layout distances of its pairs.
+    sum: f64,
+    /// The number of its pairs.
+    weight: f64,
+    /// Where its last block ends.
+    end: usize,
+}
+
+impl Pool {
+    fn mean(&self) -> f64 {
+        self.sum / self.weight
+    }
+}
+
+/// The monotone (non-decreasing) fit to the layout distances `d`, in pair
+/// order, as pools of adjacent blocks of equal given distances, by pooling
+/// adjacent violators. Writes the pools to the start of `pools` (as long
+/// as there are blocks) and returns how many there are.
+///
+/// Written for speed, as it runs on every pair at every iteration: pools
+/// are kept as sums and compared without dividing, the last pool is kept
+/// apart in registers, and whether a block starts a new pool or joins the
+/// last is worked out by arithmetic rather than a branch, which the
+/// processor could not predict.
+fn monotone_fit(d: &[f64], block_ends: &[usize], pools: &mut [Pool]) -> usize {
+    debug_assert!(pools.len() >= block_ends.len());
+    let Some(&first_end) = block_ends.first() else {
+        return 0;
+    };
+    let block = |begin: usize, end: usize| -> (f64, f64) {
+        if end - begin == 1 {
+            (d[begin], 1.0)
+        } else {
+            (d[begin..end].iter().sum::<f64>(), (end - begin) as f64)
+        }
+    };
+    // The last pool, and how many come before it.
+    let (mut sum, mut weight) = block(0, first_end);
+    let mut end = first_end;
+    let mut before = 0;
+    for &next_end in &block_ends[1..] {
+        let (block_sum, block_weight) = block(end, next_end);
+        // In order (the last pool's mean at most the block's): the block
+        // starts a new pool; otherwise it joins the last one.
+        let in_order = sum * block_weight <= block_sum * weight;
+        pools[before] = Pool { sum, weight, end };
+        before += usize::from(in_order);
+        let joins = f64::from(u8::from(!in_order));
+        sum = block_sum + joins * sum;
+        weight = block_weight + joins * weight;
+        end = next_end;
+        // The last pool may now have to join those before it.
+        while before > 0 {
+            let previous = &pools[before - 1];
+            if previous.sum * weight <= sum * previous.weight {
+                break;
+            }
+            sum += previous.sum;
+            weight += previous.weight;
+            before -= 1;
+        }
+    }
+    pools[before] = Pool { sum, weight, end };
+    before + 1
 }
 
 /// A layout centred and rotated to its principal axes, largest spread
@@ -848,6 +1132,342 @@ pub(crate) mod tests {
         [4.0, 3.0],
         [0.5, 6.0],
     ];
+
+    use crate::stats::pca::symmetric_eigen;
+
+    fn pcoa_reference(distances: &DistanceMatrix) -> Option<Ordination> {
+        let n = distances.size();
+        if n < 2 {
+            return None;
+        }
+        // Gower's centring of -d^2 / 2: subtract row and column means, add the
+        // overall mean.
+        let squared = |i: usize, j: usize| -0.5 * distances.get(i, j) * distances.get(i, j);
+        let row_means: Vec<f64> = (0..n)
+            .map(|i| (0..n).map(|j| squared(i, j)).sum::<f64>() / n as f64)
+            .collect();
+        let mean = row_means.iter().sum::<f64>() / n as f64;
+        let centred: Vec<Vec<f64>> = (0..n)
+            .map(|i| {
+                (0..n)
+                    .map(|j| squared(i, j) - row_means[i] - row_means[j] + mean)
+                    .collect()
+            })
+            .collect();
+        let (values, vectors) = symmetric_eigen(centred);
+
+        let mut order: Vec<usize> = (0..n).collect();
+        order.sort_by(|&a, &b| values[b].total_cmp(&values[a]));
+        let total: f64 = values.iter().map(|v| v.max(0.0)).sum();
+        if total <= 0.0 {
+            return None;
+        }
+        let tolerance = total * 1e-12;
+        let kept: Vec<usize> = order
+            .into_iter()
+            .filter(|&k| values[k] > tolerance)
+            .collect();
+        let mut positions = vec![Vec::with_capacity(kept.len()); n];
+        let mut variance_fractions = Vec::with_capacity(kept.len());
+        for &k in &kept {
+            let scale = values[k].sqrt();
+            let column: Vec<f64> = (0..n).map(|i| vectors[i][k] * scale).collect();
+            // The sign of an axis is arbitrary; fix it so results are stable.
+            let extreme =
+                column
+                    .iter()
+                    .copied()
+                    .fold(0.0f64, |a, b| if b.abs() > a.abs() { b } else { a });
+            let sign = if extreme < 0.0 { -1.0 } else { 1.0 };
+            for (row, value) in positions.iter_mut().zip(column) {
+                row.push(sign * value);
+            }
+            variance_fractions.push(values[k] / total);
+        }
+        Some(Ordination {
+            positions,
+            variance_fractions,
+        })
+    }
+
+    fn nmds_reference(distances: &DistanceMatrix, dimensions: usize) -> Option<Nmds> {
+        let n = distances.size();
+        if n < 3 || dimensions == 0 {
+            return None;
+        }
+        let start = pcoa_reference(distances)?;
+        let mut positions: Vec<Vec<f64>> = start
+            .positions
+            .iter()
+            .enumerate()
+            .map(|(i, row)| {
+                (0..dimensions)
+                    .map(|k| match row.get(k) {
+                        Some(value) => *value,
+                        // A deterministic nudge where the PCoA has no axis.
+                        None => 1e-3 * (((i * 7919 + k * 104_729) % 97) as f64 / 97.0 - 0.5),
+                    })
+                    .collect()
+            })
+            .collect();
+
+        // Pairs of samples in order of their given distance, in blocks of
+        // equal distances.
+        let mut pairs: Vec<(usize, usize)> = (0..n)
+            .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
+            .collect();
+        pairs.sort_by(|a, b| distances.get(a.0, a.1).total_cmp(&distances.get(b.0, b.1)));
+        let mut blocks: Vec<std::ops::Range<usize>> = Vec::new();
+        let mut begin = 0;
+        for k in 1..=pairs.len() {
+            let same = k < pairs.len()
+                && distances.get(pairs[k].0, pairs[k].1)
+                    == distances.get(pairs[begin].0, pairs[begin].1);
+            if !same {
+                blocks.push(begin..k);
+                begin = k;
+            }
+        }
+
+        let layout_distances = |positions: &[Vec<f64>]| -> Vec<f64> {
+            pairs
+                .iter()
+                .map(|&(i, j)| {
+                    positions[i]
+                        .iter()
+                        .zip(&positions[j])
+                        .map(|(a, b)| (a - b) * (a - b))
+                        .sum::<f64>()
+                        .sqrt()
+                })
+                .collect()
+        };
+        // The monotone (non-decreasing) fit to layout distances, in pair order.
+        let disparities = |d: &[f64]| -> Vec<f64> {
+            // Pool adjacent violators over the blocks, each weighted by its size.
+            let mut pools: Vec<(f64, f64, usize)> = Vec::new(); // (mean, weight, blocks)
+            for block in &blocks {
+                let weight = block.len() as f64;
+                let mut mean = d[block.clone()].iter().sum::<f64>() / weight;
+                let (mut total, mut count) = (weight, 1);
+                while let Some(&(last, last_weight, last_count)) = pools.last() {
+                    if last <= mean {
+                        break;
+                    }
+                    mean = (mean * total + last * last_weight) / (total + last_weight);
+                    total += last_weight;
+                    count += last_count;
+                    pools.pop();
+                }
+                pools.push((mean, total, count));
+            }
+            let mut fitted = Vec::with_capacity(d.len());
+            let mut block = 0;
+            for (mean, _, count) in pools {
+                for _ in 0..count {
+                    fitted.extend(std::iter::repeat_n(mean, blocks[block].len()));
+                    block += 1;
+                }
+            }
+            fitted
+        };
+        let stress = |d: &[f64], fitted: &[f64]| -> f64 {
+            let raw: f64 = d.iter().zip(fitted).map(|(a, b)| (a - b) * (a - b)).sum();
+            let total: f64 = d.iter().map(|a| a * a).sum();
+            if total > 0.0 {
+                (raw / total).sqrt()
+            } else {
+                0.0
+            }
+        };
+
+        let target = (n * (n - 1) / 2) as f64;
+        let mut previous = f64::INFINITY;
+        for _ in 0..NMDS_ITERATIONS {
+            let d = layout_distances(&positions);
+            let mut fitted = disparities(&d);
+            let current = stress(&d, &fitted);
+            if current < 1e-12 || previous - current < 1e-9 * previous.min(1.0) {
+                break;
+            }
+            previous = current;
+            // Disparities scaled to a fixed total, so the layout cannot shrink
+            // to nothing.
+            let sum_sq: f64 = fitted.iter().map(|f| f * f).sum();
+            if sum_sq <= 0.0 {
+                break;
+            }
+            let scale = (target / sum_sq).sqrt();
+            fitted.iter_mut().for_each(|f| *f *= scale);
+            // The Guttman transform.
+            let mut b = vec![vec![0.0; n]; n];
+            for (k, &(i, j)) in pairs.iter().enumerate() {
+                if d[k] > 0.0 {
+                    let value = -fitted[k] / d[k];
+                    b[i][j] = value;
+                    b[j][i] = value;
+                }
+            }
+            for (i, row) in b.iter_mut().enumerate() {
+                row[i] = -row.iter().sum::<f64>();
+            }
+            positions = (0..n)
+                .map(|i| {
+                    (0..dimensions)
+                        .map(|k| (0..n).map(|j| b[i][j] * positions[j][k]).sum::<f64>() / n as f64)
+                        .collect()
+                })
+                .collect();
+        }
+        let d = layout_distances(&positions);
+        let final_stress = stress(&d, &disparities(&d));
+        Some(Nmds {
+            positions: principal_axes(positions, dimensions),
+            stress: final_stress,
+        })
+    }
+
+    /// The distances as first written: every feature of every pair.
+    fn distances_reference(samples: &[Vec<f64>], metric: Distance) -> DistanceMatrix {
+        let prepared: Vec<Vec<f64>> = samples
+            .iter()
+            .map(|sample| match metric {
+                Distance::BrayCurtis => {
+                    let total: f64 = sample.iter().filter(|a| **a > 0.0).sum();
+                    sample
+                        .iter()
+                        .map(|&a| if total > 0.0 { a.max(0.0) / total } else { 0.0 })
+                        .collect()
+                }
+                Distance::Jaccard => sample
+                    .iter()
+                    .map(|&a| if a > 0.0 { 1.0 } else { 0.0 })
+                    .collect(),
+                Distance::Aitchison => centred_log_ratio(sample),
+            })
+            .collect();
+        DistanceMatrix::from_fn(samples.len(), |i, j| {
+            let pairs = prepared[i].iter().zip(&prepared[j]);
+            match metric {
+                Distance::BrayCurtis => {
+                    let (difference, sum) =
+                        pairs.fold((0.0, 0.0), |(d, s), (a, b)| (d + (a - b).abs(), s + a + b));
+                    if sum > 0.0 {
+                        difference / sum
+                    } else {
+                        0.0
+                    }
+                }
+                Distance::Jaccard => {
+                    let (either, both) = pairs.fold((0.0, 0.0), |(e, b), (x, y)| {
+                        (e + f64::max(*x, *y), b + x * y)
+                    });
+                    if either > 0.0 {
+                        1.0 - both / either
+                    } else {
+                        0.0
+                    }
+                }
+                Distance::Aitchison => pairs.map(|(a, b)| (a - b) * (a - b)).sum::<f64>().sqrt(),
+            }
+        })
+    }
+
+    /// A sparse random community with some structure.
+    fn random_community(samples: usize, features: usize, seed: u64) -> Vec<Vec<f64>> {
+        let mut state = seed.max(1);
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 11) as f64 / (1u64 << 53) as f64
+        };
+        (0..samples)
+            .map(|i| {
+                (0..features)
+                    .map(|f| {
+                        let v = next();
+                        if v < 0.6 {
+                            0.0
+                        } else {
+                            (v * 100.0 * (1.0 + ((i / 10 + f) % 5) as f64)).round()
+                        }
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// The distances skip features absent from both samples, which changes
+    /// nothing: Bray-Curtis and Jaccard are exactly as before, Aitchison
+    /// (summed in four parts) the same but for rounding.
+    #[test]
+    fn distances_match_the_first_implementation() {
+        let mut samples = random_community(40, 70, 17);
+        samples.push(vec![0.0; 70]); // an empty sample
+        samples.push(samples[3].clone()); // a duplicate
+        for metric in Distance::ALL {
+            let fast = distances(&samples, metric);
+            let reference = distances_reference(&samples, metric);
+            for i in 0..samples.len() {
+                for j in 0..samples.len() {
+                    let (a, b) = (fast.get(i, j), reference.get(i, j));
+                    if metric == Distance::Aitchison {
+                        assert!((a - b).abs() < 1e-12, "{a} vs {b}");
+                    } else {
+                        assert_eq!(a.to_bits(), b.to_bits(), "{metric:?} {i} {j}");
+                    }
+                }
+            }
+        }
+    }
+
+    fn assert_same_ordination(a: &[Vec<f64>], b: &[Vec<f64>], axes: usize) {
+        for (x, y) in a.iter().zip(b) {
+            for k in 0..axes {
+                assert!((x[k] - y[k]).abs() < 1e-9, "{} vs {}", x[k], y[k]);
+            }
+        }
+    }
+
+    /// PCoA, on every axis and on the leading ones, and NMDS agree with
+    /// the first implementations (cyclic Jacobi eigenvectors, the Guttman
+    /// transform through the whole matrix) on a Bray-Curtis matrix with
+    /// negative eigenvalues.
+    #[test]
+    fn ordinations_match_the_first_implementation() {
+        let samples = random_community(90, 50, 5);
+        let matrix = distances(&samples, Distance::BrayCurtis);
+        let reference = pcoa_reference(&matrix).unwrap();
+        let all = pcoa(&matrix).unwrap();
+        let leading = pcoa_leading(&matrix, 3).unwrap();
+        assert_eq!(
+            all.variance_fractions.len(),
+            reference.variance_fractions.len()
+        );
+        assert!(
+            all.variance_fractions.len() < 89,
+            "negative eigenvalues left out"
+        );
+        for (a, b) in all
+            .variance_fractions
+            .iter()
+            .zip(&reference.variance_fractions)
+        {
+            assert!((a - b).abs() < 1e-12);
+        }
+        assert_eq!(leading.variance_fractions, all.variance_fractions);
+        assert!(leading.positions.iter().all(|p| p.len() == 3));
+        assert_same_ordination(&all.positions, &reference.positions, 10);
+        assert_same_ordination(&leading.positions, &reference.positions, 3);
+
+        for matrix in [matrix, distances(&table(), Distance::BrayCurtis)] {
+            let fast = nmds(&matrix, 2).unwrap();
+            let slow = nmds_reference(&matrix, 2).unwrap();
+            assert!((fast.stress - slow.stress).abs() < 1e-9);
+            assert_same_ordination(&fast.positions, &slow.positions, 2);
+        }
+    }
 
     #[test]
     fn nmds_recovers_a_layout_from_the_order_of_its_distances() {

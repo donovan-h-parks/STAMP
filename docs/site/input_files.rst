@@ -102,6 +102,18 @@ as they are read:
    * - mothur
      - A taxonomy file with a groups file, and optionally a names file.
        STAMP asks for the other files after the first.
+   * - SingleM condensed profile
+     - The output of ``singlem pipe -p`` or ``singlem summarise``: columns
+       ``sample``, ``coverage`` and ``taxonomy``, any number of samples in
+       one file. The variant written with
+       ``--output-taxonomic-profile-with-extras`` is read too (its
+       ``coverage`` column is used).
+   * - Sandpiper profile (``.json``)
+     - The condensed profile of one run from the Sandpiper web service
+       (``https://sandpiper.qut.edu.au/api/condensed/<run>``, GTDB or GlobDB
+       taxonomy). Choose the files of all runs together in the file dialog;
+       each is one sample, named by its ``sample_name`` (or else the file
+       name).
 
 The command line also converts the output of other tools to STAMP
 profiles (see :ref:`cli-convert`):
@@ -109,7 +121,51 @@ profiles (see :ref:`cli-convert`):
 * **MG-RAST** functional or taxonomic abundance tables,
 * **CoMet** profiles, one file per sample,
 * **RITA** classifications, one file per sample,
+* **SingleM** condensed profiles and **Sandpiper** profiles,
 * **IMG/M COG** profiles, to which COG categories are added.
+
+The window's **File > Convert** menu converts the same formats, saves the
+profile and opens it.
+
+.. _singlem-profiles:
+
+SingleM and Sandpiper profiles
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+SingleM, and Sandpiper (which holds SingleM profiles of public
+metagenomes), give each taxon of the GTDB taxonomy a **coverage**: an
+estimate of how many times over its genomes were sequenced. A taxon's
+coverage is its **own**, not including that of its descendants: coverage
+given to a family is what SingleM could not place in any of its genera.
+STAMP makes a profile with seven levels, *Domain*, *Phylum*, *Class*,
+*Order*, *Family*, *Genus* and *Species*:
+
+* Taxa are named without their GTDB rank prefixes (``Bacillota``, not
+  ``p__Bacillota``).
+* Coverage that stops at a higher rank goes into a row padded with
+  ``unclassified <taxon>`` at every lower level, the taxon written with its
+  rank prefix. Coverage of the family ``f__Oscillospiraceae`` becomes:
+
+  .. code-block:: text
+
+     Bacteria  Bacillota  Clostridia  Oscillospirales  Oscillospiraceae  unclassified f__Oscillospiraceae  unclassified f__Oscillospiraceae
+
+  The prefix keeps these names distinct where GTDB uses one name at two
+  ranks (``UBA644`` is both an order and a family). As the names contain
+  *unclassified*, the *Unclassified* choice of the window (or
+  ``--unclassified``) decides whether they are tested. Coverage that was
+  not placed in any domain goes into ``unclassified Root`` rows.
+* A name found under two different parents at the same rank (a genus in two
+  families, which can happen when profiles come from different GTDB
+  releases) is written as ``name (parent)``, so the hierarchy stays strict.
+* Values are kept to six significant digits.
+
+The values are coverages, not counts of sequences. Analyses that compare
+proportions work with them, but those that need counts do not:
+rarefaction and rarefying, and the count-based tests of two samples
+(Fisher's exact test, the G-test and the chi-square test treat the values
+as numbers of sequences). Prefer the group tests, which compare
+proportions between samples.
 
 Example data
 ------------

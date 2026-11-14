@@ -9,7 +9,7 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use eframe::egui;
-use stamp_core::import::{biom, cog, comet, mgrast, mothur, rita, NamedText};
+use stamp_core::import::{biom, cog, comet, mgrast, mothur, rita, sandpiper, singlem, NamedText};
 use stamp_plot::export::{export, Format};
 use stamp_plot::Figure;
 
@@ -33,16 +33,20 @@ pub enum Source {
     MgRast,
     Mothur,
     Rita,
+    SingleM,
+    Sandpiper,
     ImgCog,
 }
 
 impl Source {
-    pub const ALL: [Source; 6] = [
+    pub const ALL: [Source; 8] = [
         Source::Biom,
         Source::CoMet,
         Source::MgRast,
         Source::Mothur,
         Source::Rita,
+        Source::SingleM,
+        Source::Sandpiper,
         Source::ImgCog,
     ];
 
@@ -53,6 +57,8 @@ impl Source {
             Source::MgRast => "MG-RAST profile...",
             Source::Mothur => "mothur files...",
             Source::Rita => "RITA profiles...",
+            Source::SingleM => "SingleM condensed profiles...",
+            Source::Sandpiper => "Sandpiper profiles...",
             Source::ImgCog => "IMG/M COG profile (add COG categories)...",
         }
     }
@@ -67,6 +73,13 @@ impl Source {
             Source::ImgCog => &[("IMG/M COG profile", &["xls", "tsv"], false, false)],
             Source::CoMet => &[("CoMet profiles, one per sample", &["txt"], true, false)],
             Source::Rita => &[("RITA profiles, one per sample", &["txt"], true, false)],
+            Source::SingleM => &[(
+                "SingleM condensed profiles",
+                &["tsv", "txt", "csv"],
+                true,
+                false,
+            )],
+            Source::Sandpiper => &[("Sandpiper profiles, one per sample", &["json"], true, false)],
             Source::Mothur => &[
                 ("mothur taxonomy file", &["taxonomy"], false, false),
                 ("mothur groups file", &["groups"], false, false),
@@ -100,7 +113,8 @@ pub enum Request {
 
 /// The outcome of a request.
 pub enum Event {
-    Profile(OpenedFile),
+    /// Files chosen with Load profile: one, or several Sandpiper profiles.
+    Profile(Vec<OpenedFile>),
     Metadata(OpenedFile),
     Auxiliary(Auxiliary, OpenedFile),
     /// A converted profile, ready to be loaded.
@@ -130,6 +144,8 @@ pub fn convert_files(source: Source, files: &[OpenedFile]) -> Result<String, Str
         Source::CoMet => comet::to_spf(&named),
         Source::MgRast => mgrast::MgRastProfile::parse(&texts[0]).and_then(|p| p.to_spf()),
         Source::Rita => rita::to_spf(&named, &rita::GROUPS),
+        Source::SingleM => singlem::to_spf(&named),
+        Source::Sandpiper => sandpiper::to_spf(&named),
         Source::ImgCog => cog::append_categories(&texts[0], cog::MultiCodeTreatment::AsFeature),
         Source::Mothur => {
             let groups = texts
@@ -165,8 +181,9 @@ impl Default for Platform {
     }
 }
 
-/// STAMP profiles, BIOM tables and mothur taxonomy files.
-const PROFILE_EXTENSIONS: [&str; 6] = ["spf", "tsv", "txt", "biom", "gz", "taxonomy"];
+/// STAMP profiles, BIOM tables, mothur taxonomy files, SingleM profiles and
+/// Sandpiper profiles (JSON).
+const PROFILE_EXTENSIONS: [&str; 7] = ["spf", "tsv", "txt", "biom", "gz", "taxonomy", "json"];
 const METADATA_EXTENSIONS: [&str; 3] = ["tsv", "txt", "csv"];
 
 impl Platform {
@@ -191,10 +208,11 @@ impl Platform {
 /// desktop and browser implementations, which differ only in how they ask.
 async fn perform(request: Request) -> Result<Option<Event>, String> {
     match request {
-        Request::OpenProfile => Ok(imp::open("Load profile", &PROFILE_EXTENSIONS, false)
-            .await
-            .pop()
-            .map(Event::Profile)),
+        Request::OpenProfile => {
+            // Several files can be chosen: Sandpiper gives one per sample.
+            let files = imp::open("Load profile", &PROFILE_EXTENSIONS, true).await;
+            Ok((!files.is_empty()).then_some(Event::Profile(files)))
+        }
         Request::OpenMetadata => Ok(imp::open("Load metadata", &METADATA_EXTENSIONS, false)
             .await
             .pop()
@@ -370,6 +388,17 @@ mod tests {
             convert_files(Source::CoMet, &comet).unwrap(),
             "Category\tA\tB\nKinase\t5.0\t2.0\n"
         );
+
+        let singlem = [file(
+            "p.tsv",
+            "sample\tcoverage\ttaxonomy\nA\t1\tRoot; d__Bacteria\nB\t2\tRoot; d__Archaea\n",
+        )];
+        assert!(convert_files(Source::SingleM, &singlem)
+            .unwrap()
+            .starts_with("Domain\tPhylum\tClass\tOrder\tFamily\tGenus\tSpecies\tA\tB\n"));
+        assert!(convert_files(Source::Sandpiper, &singlem)
+            .unwrap_err()
+            .contains("Sandpiper"));
 
         let mothur = [
             file("x.taxonomy", "s1\tBacteria;Firmicutes;\n"),

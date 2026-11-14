@@ -8,9 +8,12 @@
 pub mod biom;
 pub mod cog;
 pub mod comet;
+pub mod lineage;
 pub mod mgrast;
 pub mod mothur;
 pub mod rita;
+pub mod sandpiper;
+pub mod singlem;
 
 /// The contents of an input file together with its file name, for converters
 /// that derive sample names from file names.
