@@ -1,6 +1,7 @@
-name: Publish browser version
+name: Publish browser version and documentation
 
-# Publishes the browser version of STAMP to GitHub Pages. It only runs when
+# Publishes the browser version of STAMP to GitHub Pages, with the
+# documentation (docs/site, built by Sphinx) under docs/. It only runs when
 # started by hand from the Actions tab, and needs Pages to be enabled for the
 # repository with "GitHub Actions" as the source (Settings > Pages).
 on:
@@ -30,6 +31,11 @@ jobs:
           tool: trunk
       - run: trunk build --release
         working-directory: crates/stamp-gui
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r docs/site/requirements.txt
+      - run: sphinx-build -b html -W docs/site crates/stamp-gui/dist/docs
       - uses: actions/upload-pages-artifact@v3
         with:
           path: crates/stamp-gui/dist

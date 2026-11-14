@@ -22,6 +22,11 @@ Add an entry here whenever a feature is added that v2 did not have.
   without any files: "Enterotypes" (proportions of phyla and genera in gut
   samples) and "Coal seam gas" (sequence counts with a full taxonomy, which
   suits the rarefaction curves) [26].
+- **Online documentation** (`docs/site`, published beside the browser
+  version), replacing v2's PDF user's guide: installation, a quick start on
+  the example data, every control of the window and command, and pages
+  that explain each test, post-hoc test, correction and plot for
+  biologists, with worked examples and what to look for.
 - **Repeatable resampling.** Bootstrap and permutation tests use a seed that
   can be set in the preferences, so results can be reproduced exactly.
 

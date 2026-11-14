@@ -251,7 +251,7 @@ pub enum PlotTypeArg {
     Scatter,
     /// Sequence counts of the features of two samples
     SequenceHistogram,
-    /// Corrected p-values
+    /// Distribution of the p-values (corrected, unless --plot-uncorrected-p-values)
     PValueHistogram,
     /// Three views of the multiple-test correction
     MultipleComparison,

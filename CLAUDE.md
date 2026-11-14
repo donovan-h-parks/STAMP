@@ -59,6 +59,15 @@ cd legacy/golden && pixi run golden      # regenerates tests/golden from the Pyt
 cd legacy/golden && pixi run unittests   # the original Python unit tests
 ```
 
+User documentation (Sphinx, Read the Docs theme, in the style of CheckM's) is in `docs/site`; the Pages workflow publishes it under `docs/` beside the browser version. Build it locally with:
+
+```bash
+pip install -r docs/site/requirements.txt
+sphinx-build -b html -W docs/site docs/site/_build   # _build is untracked
+```
+
+Its figures are in `docs/site/images`: plots made with `stamp-cli --plot ... --plot-dpi 100` from the example data, and GUI screenshots from the `STAMP_SCREENSHOTS` run above. When a control, label, default or test changes, update the page that describes it (`analyses.rst`, `statistics.rst`, `plots.rst`, `command_line.rst`).
+
 Packaging and releases are described in `docs/RELEASING.md` (`scripts/package.sh`, tag `v*` triggers the release workflow).
 
 ## Architecture

@@ -6,9 +6,23 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle. Roadmap tiers 1 to 4 are all done, committed and pushed. Nothing further is queued.
+Idle.
 
 ## Last completed
+
+- **User documentation** (2026-11-15): a Sphinx site in the style of
+  CheckM's (Read the Docs theme) in `docs/site/`: installing, quick start,
+  FAQ, input files, the main window, analyses, command line, a statistics
+  guide for biologists (`statistics.rst`: p-values, effect sizes, CIs,
+  corrections, every test and post-hoc test, CLR, diversity, distances,
+  community tests, Mantel, ANCOM, NMDS stress, with worked examples from
+  the figures), `choosing_a_test.rst`, a plots guide (`plots.rst`, every
+  plot with "what to look for"), changes from v2 and citing. Builds with
+  `sphinx-build -W` without warnings. The Pages workflow now also builds it
+  into `dist/docs`. Small code changes made along the way: the command
+  line's PCA/PCoA/NMDS plots get a legend, its p-value histogram honours
+  `--plot-uncorrected-p-values`, and the window's correlation p-value
+  histogram labels uncorrected p-values correctly. Committed and pushed.
 
 - **Optimisation and fixes** (2026-11-15): rarefaction curves computed once
   per distinct count (6.9 s to 0.7 s on 120 samples x 3000 features);

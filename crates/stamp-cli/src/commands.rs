@@ -351,10 +351,27 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
                 },
             ),
             PlotTypeArg::PValueHistogram => {
-                let p: Vec<f64> = results.rows.iter().map(|r| r.p_value_corrected).collect();
+                let uncorrected = plot.plot_uncorrected_p_values;
+                let p: Vec<f64> = results
+                    .rows
+                    .iter()
+                    .map(|r| {
+                        if uncorrected {
+                            r.p_value
+                        } else {
+                            r.p_value_corrected
+                        }
+                    })
+                    .collect();
                 histogram::p_value_histogram(
                     &p,
                     &histogram::PValueOptions {
+                        label: if uncorrected {
+                            "p-value"
+                        } else {
+                            "p-value (corrected)"
+                        }
+                        .to_string(),
                         width: plot.plot_width,
                         height: size(7.0),
                         ..Default::default()
@@ -570,6 +587,9 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                 &pca_plot::Options {
                     width: plot.plot_width,
                     height: size(6.0),
+                    // A legend of the groups, placed where it is clearest, as in
+                    // the graphical application.
+                    legend: stamp_plot::axes::LegendPosition::Best,
                     ..Default::default()
                 },
             ),
@@ -775,6 +795,9 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                 &pca_plot::Options {
                     width: plot.plot_width,
                     height: size(6.0),
+                    // A legend of the groups, placed where it is clearest, as in
+                    // the graphical application.
+                    legend: stamp_plot::axes::LegendPosition::Best,
                     ..Default::default()
                 },
             ),
@@ -1030,10 +1053,27 @@ fn correlation(args: CorrelationArgs) -> CliResult {
                 },
             ),
             PlotTypeArg::PValueHistogram => {
-                let p: Vec<f64> = results.rows.iter().map(|r| r.p_value_corrected).collect();
+                let uncorrected = plot.plot_uncorrected_p_values;
+                let p: Vec<f64> = results
+                    .rows
+                    .iter()
+                    .map(|r| {
+                        if uncorrected {
+                            r.p_value
+                        } else {
+                            r.p_value_corrected
+                        }
+                    })
+                    .collect();
                 histogram::p_value_histogram(
                     &p,
                     &histogram::PValueOptions {
+                        label: if uncorrected {
+                            "p-value"
+                        } else {
+                            "p-value (corrected)"
+                        }
+                        .to_string(),
                         width: plot.plot_width,
                         height: plot.plot_height.unwrap_or(7.0),
                         ..Default::default()
@@ -1177,6 +1217,9 @@ fn community_figure(
                 &pca_plot::Options {
                     width: plot.plot_width,
                     height: plot.plot_height.unwrap_or(6.0),
+                    // A legend of the groups, placed where it is clearest, as in
+                    // the graphical application.
+                    legend: stamp_plot::axes::LegendPosition::Best,
                     ..Default::default()
                 },
             )
@@ -1187,6 +1230,9 @@ fn community_figure(
             &pca_plot::Options {
                 width: plot.plot_width,
                 height: plot.plot_height.unwrap_or(6.0),
+                // A legend of the groups, placed where it is clearest, as in
+                // the graphical application.
+                legend: stamp_plot::axes::LegendPosition::Best,
                 ..Default::default()
             },
         ),

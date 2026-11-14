@@ -990,12 +990,24 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     &volcano_options,
                 ),
                 PlotKind::PValueHistogram => {
-                    let values: Vec<f64> = if settings.p_value_histogram_corrected {
+                    let corrected = settings.p_value_histogram_corrected;
+                    let values: Vec<f64> = if corrected {
                         results.rows.iter().map(|r| r.p_value_corrected).collect()
                     } else {
                         results.rows.iter().map(|r| r.p_value).collect()
                     };
-                    histogram::p_value_histogram(&values, &settings.p_value_histogram)
+                    let label = if corrected {
+                        "p-value (corrected)"
+                    } else {
+                        "p-value"
+                    };
+                    histogram::p_value_histogram(
+                        &values,
+                        &histogram::PValueOptions {
+                            label: label.to_string(),
+                            ..settings.p_value_histogram.clone()
+                        },
+                    )
                 }
                 PlotKind::Mantel => {
                     let Some(tree) = &session.tree else {

@@ -1,0 +1,5 @@
+/* Figures a little apart from the text, and captions in the text colour. */
+.rst-content .figure, .rst-content figure { margin-bottom: 1.5em; }
+.rst-content figure figcaption { color: #404040; }
+/* Tables of options wrap their long cells instead of scrolling sideways. */
+.wy-table-responsive table td, .wy-table-responsive table th { white-space: normal; }

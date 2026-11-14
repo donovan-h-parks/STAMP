@@ -65,3 +65,9 @@ pip-log.txt
 #############
 
 dist/
+
+#############
+## Documentation build
+#############
+
+docs/site/_build/

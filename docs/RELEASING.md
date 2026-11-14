@@ -57,9 +57,11 @@ artifacts of the run.
 
 ## Publishing the browser version
 
-`.github/workflows/pages.yml` publishes the browser version to GitHub Pages.
-It runs only when started by hand, and needs Pages enabled for the repository
-with "GitHub Actions" as the source (Settings > Pages).
+`.github/workflows/pages.yml` publishes the browser version to GitHub Pages,
+with the documentation (`docs/site`, built by Sphinx) under `docs/`. It runs
+only when started by hand, and needs Pages enabled for the repository with
+"GitHub Actions" as the source (Settings > Pages). Run it after a release so
+that the published documentation matches the released version.
 
 ## Known limits
 
