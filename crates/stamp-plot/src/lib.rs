@@ -6,8 +6,9 @@
 //! * the GUI draws it with egui's painter (in `stamp-gui`), which keeps plots
 //!   sharp on screen and leaves room for interaction such as hover, selection
 //!   and zoom;
-//! * this crate exports it as SVG, and as PNG and PDF derived from that SVG,
-//!   so exported files always agree with each other.
+//! * this crate exports it as SVG and PDF, each written directly from the
+//!   figure, and as PNG drawn from the SVG (with resvg, the `png` feature;
+//!   the browser build has the browser draw the SVG instead).
 //!
 //! Both renderers share one bundled font (DejaVu Sans, the font of STAMP v2's
 //! plots) and one text-measurement routine, so that on-screen layout and
@@ -35,6 +36,7 @@ pub mod multi_box;
 pub mod ordination_plot;
 pub mod ordination_style;
 pub mod p_values;
+pub mod pdf;
 pub mod post_hoc;
 pub mod prevalence_plot;
 pub mod rank_abundance;

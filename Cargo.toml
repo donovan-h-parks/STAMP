@@ -12,7 +12,9 @@ repository = "https://github.com/donovan-h-parks/STAMP"
 
 [workspace.dependencies]
 stamp-core = { path = "crates/stamp-core" }
-stamp-plot = { path = "crates/stamp-plot" }
+# PNG export (resvg) is a feature, enabled by the crates that want it: the
+# browser build draws PNG images with the browser instead.
+stamp-plot = { path = "crates/stamp-plot", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
@@ -51,13 +53,10 @@ ttf-parser = "0.25"
 # Triangulates the filled outlines of the map plot for the on-screen painter
 # (pure Rust).
 earcut = "0.4"
-# Only text is needed to render STAMP's own SVG: no system fonts (the fonts
-# are bundled), raster images or filters, which would add to the browser
-# download.
-# The version svg2pdf builds on, so that one copy of the SVG library is
-# compiled rather than two.
+# Renders STAMP's own SVG as PNG on the desktop and in stamp-cli (not in the
+# browser build). Only text is needed: no system fonts (the fonts are
+# bundled), raster images or filters.
 resvg = { version = "0.45", default-features = false, features = ["text"] }
-svg2pdf = { version = "0.13", default-features = false, features = ["text"] }
 
 [profile.release]
 lto = "thin"

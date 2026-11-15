@@ -29,10 +29,7 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
         )
         .on_hover_text("Copy the plot as an image, to paste into a chat");
     if image.clicked() {
-        match plot_image(app.figure()) {
-            Ok(image) => ui.ctx().copy_image(image),
-            Err(message) => app.show_notice(message),
-        }
+        app.copy_plot_image(ui.ctx());
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -94,29 +91,6 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
         .clicked()
     {
         app.undo_assistant_change();
-    }
-}
-
-/// An image of a figure for the clipboard, at twice the resolution of the
-/// screen.
-fn plot_image(figure: &stamp_plot::Figure) -> Result<egui::ColorImage, String> {
-    let bytes = crate::platform::encode_plot(figure, "plot.png", 144.0)?;
-    let failed = |_| "The plot could not be turned into an image.".to_string();
-    let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
-        .read_info()
-        .map_err(failed)?;
-    let mut buffer = vec![0; reader.output_buffer_size()];
-    let info = reader.next_frame(&mut buffer).map_err(failed)?;
-    let size = [info.width as usize, info.height as usize];
-    match (info.color_type, info.bit_depth) {
-        (png::ColorType::Rgba, png::BitDepth::Eight) => Ok(
-            egui::ColorImage::from_rgba_unmultiplied(size, &buffer[..info.buffer_size()]),
-        ),
-        (png::ColorType::Rgb, png::BitDepth::Eight) => Ok(egui::ColorImage::from_rgb(
-            size,
-            &buffer[..info.buffer_size()],
-        )),
-        _ => Err("The plot could not be turned into an image.".to_string()),
     }
 }
 

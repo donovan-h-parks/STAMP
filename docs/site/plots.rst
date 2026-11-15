@@ -70,7 +70,10 @@ Each row is a feature that passed the filters.
 * **Middle**: the difference between them (the effect size), with its
   confidence interval. The marker takes the colour of the sample or group
   in which the feature is more abundant. The dashed line marks zero: no
-  difference.
+  difference. A ratio (two samples, *Ratio of proportions* or *Odds
+  ratio*) is drawn as the larger proportion over the smaller, so that every
+  marker points right; the axis says *(larger / smaller)*, and the tooltip
+  gives the ratio itself as well.
 * **Right**: the p-value, labelled by the multiple test correction (see
   :ref:`how plots name p-values <p-value-labels>`).
 
@@ -98,7 +101,11 @@ Volcano plot
 *All analyses.* Every feature as a point: the effect size along the bottom,
 and the significance (−log\ :sub:`10` of the p-value) up the side, so that
 the more significant a feature, the higher it sits. The horizontal dashed
-line marks the significance threshold.
+line marks the significance threshold (on the command line, the one given
+with ``--significance``, or 0.05). A ratio (two samples, *Ratio of
+proportions* or *Odds ratio*) is plotted as its log\ :sub:`2`, so that
+twice and half as abundant lie equally far either side of no effect; the
+tooltip gives the ratio itself as well.
 
 .. figure:: images/tg_volcano.png
    :width: 80%

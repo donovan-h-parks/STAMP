@@ -24,6 +24,8 @@ path = "src/bridge_main.rs"
 
 [dependencies]
 stamp-core = { workspace = true }
+# Without PNG export (resvg) in the browser, which draws PNG images itself;
+# the desktop enables it below.
 stamp-plot = { workspace = true }
 eframe = { workspace = true }
 serde = { workspace = true }
@@ -38,6 +40,8 @@ serde_json = { workspace = true }
 # Windows). Desktop only.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 alacritty_terminal = "0.26"
+# PNG export through resvg.
+stamp-plot = { workspace = true, features = ["png"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
@@ -51,6 +55,9 @@ web-sys = { version = "0.3", features = [
     "HtmlAnchorElement",
     "HtmlCanvasElement",
     "HtmlElement",
+    "HtmlImageElement",
+    "CanvasRenderingContext2d",
+    "ImageData",
     "Url",
     "Window",
 ] }

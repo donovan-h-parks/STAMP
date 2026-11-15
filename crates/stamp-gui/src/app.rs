@@ -250,19 +250,39 @@ fn plain_label(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) {
 /// Order of two table cells: numbers by value (a p-value shown as a bound,
 /// such as `< 1e-15`, by its bound), ahead of text, which is compared
 /// without regard to case.
+#[cfg(test)]
 fn compare_cells(a: &str, b: &str) -> std::cmp::Ordering {
-    let number = |cell: &str| {
-        cell.trim()
-            .trim_start_matches('<')
-            .trim()
-            .parse::<f64>()
-            .ok()
-    };
-    match (number(a), number(b)) {
-        (Some(x), Some(y)) => x.total_cmp(&y),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => a.to_lowercase().cmp(&b.to_lowercase()),
+    CellKey::of(a).cmp(&CellKey::of(b))
+}
+
+/// A value worked out from the state of the window, kept with what it was
+/// worked out from (the key) until that changes.
+type Cached<K, V> = std::cell::RefCell<Option<(K, V)>>;
+
+/// A table cell as it is sorted: numbers by value (a p-value shown as a
+/// bound, such as `< 1e-15`, by its bound), ahead of text, which is
+/// compared without regard to case.
+enum CellKey {
+    Number(f64),
+    Text(String),
+}
+
+impl CellKey {
+    fn of(cell: &str) -> CellKey {
+        match cell.trim().trim_start_matches('<').trim().parse::<f64>() {
+            Ok(number) => CellKey::Number(number),
+            Err(_) => CellKey::Text(cell.to_lowercase()),
+        }
+    }
+
+    fn cmp(&self, other: &CellKey) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        match (self, other) {
+            (CellKey::Number(x), CellKey::Number(y)) => x.total_cmp(y),
+            (CellKey::Number(_), CellKey::Text(_)) => Ordering::Less,
+            (CellKey::Text(_), CellKey::Number(_)) => Ordering::Greater,
+            (CellKey::Text(a), CellKey::Text(b)) => a.cmp(b),
+        }
     }
 }
 
@@ -292,8 +312,13 @@ impl SortState {
     pub fn order<'a>(&self, count: usize, cell: impl Fn(usize, usize) -> &'a str) -> Vec<usize> {
         let mut order: Vec<usize> = (0..count).collect();
         if let Some(column) = self.column {
+            // Each cell is read as a number (or lower-cased) once, rather
+            // than at every comparison.
+            let keys: Vec<CellKey> = (0..count)
+                .map(|row| CellKey::of(cell(row, column)))
+                .collect();
             order.sort_by(|&a, &b| {
-                let ordering = compare_cells(cell(a, column), cell(b, column));
+                let ordering = keys[a].cmp(&keys[b]);
                 if self.descending {
                     ordering.reverse()
                 } else {
@@ -878,10 +903,25 @@ pub struct StampApp {
     /// A profile being read (and converted) from files, with what is said
     /// meanwhile and when that started.
     loading: Option<Loading>,
+    /// Metadata opened while a profile was still being read, for that
+    /// profile once it is ready (its name and text).
+    pending_metadata: Option<(String, String)>,
     table: Table,
     table_features: Vec<String>,
     /// What the results table was last built from (see `refresh_view`).
     table_key: String,
+    /// Increases whenever the rows of the results table change, so that its
+    /// order is worked out again only then (see `results_table_order`).
+    table_version: u64,
+    /// The last order of the results table, for its version and sorting.
+    results_order: Cached<(u64, SortState), Vec<usize>>,
+    /// The same for the feature table, which also depends on whether only
+    /// active features are shown.
+    feature_rows_version: u64,
+    feature_order: Cached<(u64, bool, SortState), Vec<usize>>,
+    /// The last highlighting choices, for the session generation, mode and
+    /// level they were found for.
+    highlight_cache: Cached<(u64, Mode, String), Vec<String>>,
     /// A large results table still being built.
     table_pending: Option<TablePending>,
     /// For saving the results table once built.
@@ -1104,12 +1144,18 @@ impl StampApp {
             stale_figure: None,
             cancelled_plot: None,
             loading: None,
+            pending_metadata: None,
             table: Table {
                 headings: Vec::new(),
                 rows: Vec::new(),
             },
             table_features: Vec::new(),
             table_key: String::new(),
+            table_version: 0,
+            results_order: Default::default(),
+            feature_rows_version: 0,
+            feature_order: Default::default(),
+            highlight_cache: Default::default(),
             table_pending: None,
             table_context: None,
             feature_rows: Vec::new(),
@@ -1225,6 +1271,7 @@ impl StampApp {
     /// does: the profile loaded before stays.
     pub fn cancel_loading(&mut self) {
         self.loading = None;
+        self.pending_metadata = None;
     }
 
     /// Read (and convert) files that make a profile without asking
@@ -1241,6 +1288,8 @@ impl StampApp {
             return;
         }
         self.pending_profile = None;
+        // Metadata opened for a profile still being read is not for this one.
+        self.pending_metadata = None;
         let label = match files.as_slice() {
             [file] => format!("Reading {}", file.name),
             _ => format!("Reading {} files", files.len()),
@@ -1260,6 +1309,7 @@ impl StampApp {
 
     /// Read a profile already converted, in a job.
     fn start_loading_text(&mut self, name: String, spf: String) {
+        self.pending_metadata = None;
         self.loading = Some(Loading::start(format!("Reading {name}"), move || {
             stamp_core::ProfileTree::read(&spf)
                 .map(|tree| (name.clone(), tree))
@@ -1282,10 +1332,14 @@ impl StampApp {
             }
             outcome => {
                 self.loading = None;
+                let metadata = self.pending_metadata.take();
                 match outcome {
                     Ok(Ok((name, tree))) => {
                         self.notice = None;
                         self.use_profile(&name, Ok(tree));
+                        if let Some((name, text)) = metadata {
+                            self.load_metadata(&name, &text);
+                        }
                     }
                     Ok(Err(notice)) => self.notice = Some(notice),
                     _ => {
@@ -1882,6 +1936,19 @@ impl StampApp {
     /// The names found at a hierarchical level of the current profile, in
     /// alphabetical order: the choices for highlighting.
     pub fn highlight_choices(&self, level: &str) -> Vec<String> {
+        // Asked for every frame while a level is chosen.
+        let key = (self.session.generation, self.mode, level.to_string());
+        if let Some((cached, choices)) = self.highlight_cache.borrow().as_ref() {
+            if *cached == key {
+                return choices.clone();
+            }
+        }
+        let choices = self.find_highlight_choices(level);
+        *self.highlight_cache.borrow_mut() = Some((key, choices.clone()));
+        choices
+    }
+
+    fn find_highlight_choices(&self, level: &str) -> Vec<String> {
         let Some(profile) = self.current_profile() else {
             return Vec::new();
         };
@@ -1981,6 +2048,7 @@ impl StampApp {
                 self.table.headings = part.headings;
             }
             self.table.rows.extend(part.rows);
+            self.table_version += 1;
         }
         if next >= total {
             let download = pending.download;
@@ -2058,11 +2126,20 @@ impl StampApp {
             .iter()
             .filter(|row| row.active || !self.show_only_active_features)
             .collect();
-        self.feature_sort
-            .order(rows.len(), |row, column| rows[row].cells()[column.min(4)])
-            .into_iter()
-            .map(|index| rows[index])
-            .collect()
+        let key = (
+            self.feature_rows_version,
+            self.show_only_active_features,
+            self.feature_sort,
+        );
+        let mut cache = self.feature_order.borrow_mut();
+        if cache.as_ref().is_none_or(|(cached, _)| *cached != key) {
+            let order = self
+                .feature_sort
+                .order(rows.len(), |row, column| rows[row].cells()[column.min(4)]);
+            *cache = Some((key, order));
+        }
+        let (_, order) = cache.as_ref().expect("just filled");
+        order.iter().map(|&index| rows[index]).collect()
     }
 
     /// Sort the feature table by a column, as clicking its heading does;
@@ -2073,10 +2150,16 @@ impl StampApp {
 
     /// The order in which the rows of the results table are shown.
     pub fn results_table_order(&self) -> Vec<usize> {
-        let rows = &self.table.rows;
-        self.table_sort.order(rows.len(), |row, column| {
-            rows[row].get(column).map_or("", String::as_str)
-        })
+        let key = (self.table_version, self.table_sort);
+        let mut cache = self.results_order.borrow_mut();
+        if cache.as_ref().is_none_or(|(cached, _)| *cached != key) {
+            let rows = &self.table.rows;
+            let order = self.table_sort.order(rows.len(), |row, column| {
+                rows[row].get(column).map_or("", String::as_str)
+            });
+            *cache = Some((key, order));
+        }
+        cache.as_ref().expect("just filled").1.clone()
     }
 
     /// Sort the results table by a column, as clicking its heading does.
@@ -2136,6 +2219,9 @@ impl StampApp {
 
     /// Load a profile from the text of a file.
     pub fn load_profile(&mut self, name: &str, text: &str) {
+        // A profile still being read would replace this one when ready.
+        self.loading = None;
+        self.pending_metadata = None;
         let tree = stamp_core::ProfileTree::read(text).map_err(|e| e.to_string());
         self.use_profile(name, tree);
     }
@@ -2161,8 +2247,13 @@ impl StampApp {
         self.view_dirty = true;
     }
 
-    /// Load metadata from the text of a file.
+    /// Load metadata from the text of a file. While a profile is still
+    /// being read, the metadata waits for it.
     pub fn load_metadata(&mut self, name: &str, text: &str) {
+        if self.loading.is_some() {
+            self.pending_metadata = Some((name.to_string(), text.to_string()));
+            return;
+        }
         match self.session.load_metadata(name, text) {
             Ok(()) => {
                 self.mode = Mode::TwoGroups;
@@ -2280,20 +2371,29 @@ impl StampApp {
     /// Save the plot as a PNG image of the given resolution, through the
     /// platform's save dialog or as a browser download.
     pub fn save_png(&mut self, ctx: &egui::Context, dpi: f64) {
-        match platform::encode_plot(&self.figure, "plot.png", dpi) {
-            Ok(bytes) => self.platform.request(
-                Request::Save {
-                    name: "plot.png".to_string(),
-                    bytes,
-                },
-                ctx,
-            ),
-            Err(message) => self.notice = Some(message),
-        }
+        self.platform.request(
+            Request::SavePng {
+                figure: Box::new(self.figure.clone()),
+                dpi,
+            },
+            ctx,
+        );
+    }
+
+    /// Put an image of the plot on the clipboard, at twice the resolution
+    /// of the screen.
+    pub fn copy_plot_image(&mut self, ctx: &egui::Context) {
+        self.platform.request(
+            Request::PlotImage {
+                figure: Box::new(self.figure.clone()),
+                dpi: 144.0,
+            },
+            ctx,
+        );
     }
 
     /// Act on files that have been opened or converted since the last frame.
-    fn handle_file_events(&mut self) {
+    fn handle_file_events(&mut self, ctx: &egui::Context) {
         for event in self.platform.poll() {
             match event {
                 Event::Profile(files) => self.start_loading(files),
@@ -2309,6 +2409,7 @@ impl StampApp {
                 }
                 Event::Metadata(file) => self.load_metadata(&file.name, &file.text()),
                 Event::Converted { name, spf } => self.start_loading_text(name, spf),
+                Event::PlotImage(image) => ctx.copy_image(image),
                 Event::Failed(message) => self.notice = Some(message),
             }
         }
@@ -2494,7 +2595,7 @@ impl StampApp {
         let table_key = format!(
             "{:?}|{}|{}",
             self.mode,
-            s.plot_fingerprint(),
+            s.table_fingerprint(self.mode, self.results_only_active),
             self.results_only_active
         );
         let rebuild_table = table_key != self.table_key;
@@ -2679,15 +2780,17 @@ impl StampApp {
             }
             self.table_features = features;
             self.table_key = table_key;
+            self.table_version += 1;
         }
         self.feature_rows = feature_rows;
+        self.feature_rows_version += 1;
         self.effect_heading = effect_heading;
         self.view_dirty = false;
     }
 
     /// Draw the whole interface for one frame.
     pub fn draw(&mut self, ui: &mut egui::Ui) {
-        self.handle_file_events();
+        self.handle_file_events(&ui.ctx().clone());
         self.handle_shortcuts(ui.ctx());
         self.serve_assistant(&ui.ctx().clone());
         if self.session.update(self.mode) {
@@ -3175,7 +3278,7 @@ impl StampApp {
             return;
         };
         let names: Vec<String> = groups.names().map(str::to_string).collect();
-        for name in &names {
+        for (index, name) in names.iter().enumerate() {
             let size = groups.samples(name).map_or(0, <[String]>::len);
             let position = self
                 .session
@@ -3185,7 +3288,7 @@ impl StampApp {
                 .position(|g| g == name);
             ui.horizontal(|ui| {
                 // The swatch opens a colour picker for the group.
-                let color = self.session.group_color(name);
+                let color = self.session.group_color_at(name, index);
                 let mut rgb = [color.r, color.g, color.b];
                 let picker = ui
                     .color_edit_button_srgb(&mut rgb)
@@ -3196,10 +3299,13 @@ impl StampApp {
                 }
                 let mut active = position.is_some();
                 let checkbox = egui::Checkbox::new(&mut active, format!("{name} ({size})"));
-                let members = groups.samples(name).unwrap_or_default().join("\n");
+                let members = groups.samples(name).unwrap_or_default();
                 let response = ui
                     .add_enabled(size > 0, checkbox)
-                    .on_hover_text(members)
+                    // The list of members is only made when it is shown.
+                    .on_hover_ui(|ui| {
+                        ui.label(members.join("\n"));
+                    })
                     .on_disabled_hover_text("Every sample of this group is switched off");
                 if response.changed() {
                     if active {
@@ -3362,9 +3468,7 @@ impl StampApp {
                 names.sort();
                 let names: Vec<String> = names
                     .into_iter()
-                    .filter(|name| {
-                        metadata.is_none_or(|m| !m.samples().contains(name) || m.is_active(name))
-                    })
+                    .filter(|name| metadata.is_none_or(|m| !m.contains(name) || m.is_active(name)))
                     .collect();
                 if names.len() >= 2 {
                     let state = &mut self.session.samples;

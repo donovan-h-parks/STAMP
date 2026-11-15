@@ -5,6 +5,11 @@
 //! is answered at once with native dialogs. In the browser, files come from
 //! the browser's file picker and are saved as downloads, both of which
 //! finish some time after they are asked for.
+//!
+//! PNG images of plots are drawn with resvg on the desktop. The browser
+//! build leaves resvg out and has the browser draw the plot's SVG into a
+//! canvas, which also finishes later, so PNG images are asked for in the
+//! same way.
 
 use std::sync::mpsc::{channel, Receiver, Sender};
 
@@ -109,6 +114,16 @@ pub enum Request {
         name: String,
         bytes: Vec<u8>,
     },
+    /// Save a figure as a PNG image of the given resolution.
+    SavePng {
+        figure: Box<Figure>,
+        dpi: f64,
+    },
+    /// Draw a figure at the given resolution, for the clipboard.
+    PlotImage {
+        figure: Box<Figure>,
+        dpi: f64,
+    },
 }
 
 /// The outcome of a request.
@@ -122,6 +137,8 @@ pub enum Event {
         name: String,
         spf: String,
     },
+    /// An image of a figure, for the clipboard.
+    PlotImage(egui::ColorImage),
     Failed(String),
 }
 
@@ -161,7 +178,8 @@ pub fn convert_files(source: Source, files: &[OpenedFile]) -> Result<String, Str
 pub const DEFAULT_DPI: f64 = 300.0;
 
 /// Encode a figure in the format implied by a file name. `dpi` sets the
-/// resolution of a PNG image.
+/// resolution of a PNG image. The browser build cannot make PNG images this
+/// way: ask for them with [`Request::SavePng`] or [`Request::PlotImage`].
 pub fn encode_plot(figure: &Figure, file_name: &str, dpi: f64) -> Result<Vec<u8>, String> {
     let format = Format::from_file_name(file_name)
         .ok_or("Use a file name ending in .png, .svg or .pdf to choose the image format.")?;
@@ -228,6 +246,13 @@ async fn perform(request: Request) -> Result<Option<Event>, String> {
                 .map(|file| Event::Auxiliary(which, file)))
         }
         Request::Save { name, bytes } => imp::save(&name, bytes).await.map(|_| None),
+        Request::SavePng { figure, dpi } => {
+            let bytes = imp::png(&figure, dpi).await?;
+            imp::save("plot.png", bytes).await.map(|_| None)
+        }
+        Request::PlotImage { figure, dpi } => {
+            Ok(Some(Event::PlotImage(imp::image(&figure, dpi).await?)))
+        }
         Request::Convert(source) => {
             let mut files = Vec::new();
             for (title, extensions, several, optional) in source.steps() {
@@ -311,6 +336,33 @@ mod imp {
             .map_err(|e| format!("Could not write {}: {e}", path.display()))?;
         Ok(path.file_name().map(|n| n.to_string_lossy().into_owned()))
     }
+
+    /// A PNG image of a figure, drawn with resvg.
+    pub async fn png(figure: &Figure, dpi: f64) -> Result<Vec<u8>, String> {
+        encode_plot(figure, "plot.png", dpi)
+    }
+
+    /// An image of a figure, drawn with resvg.
+    pub async fn image(figure: &Figure, dpi: f64) -> Result<egui::ColorImage, String> {
+        let bytes = png(figure, dpi).await?;
+        let failed = |_| "The plot could not be turned into an image.".to_string();
+        let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
+            .read_info()
+            .map_err(failed)?;
+        let mut buffer = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut buffer).map_err(failed)?;
+        let size = [info.width as usize, info.height as usize];
+        match (info.color_type, info.bit_depth) {
+            (png::ColorType::Rgba, png::BitDepth::Eight) => Ok(
+                egui::ColorImage::from_rgba_unmultiplied(size, &buffer[..info.buffer_size()]),
+            ),
+            (png::ColorType::Rgb, png::BitDepth::Eight) => Ok(egui::ColorImage::from_rgb(
+                size,
+                &buffer[..info.buffer_size()],
+            )),
+            _ => Err("The plot could not be turned into an image.".to_string()),
+        }
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -364,6 +416,118 @@ mod imp {
         anchor.click();
         let _ = web_sys::Url::revoke_object_url(&url);
         Ok(Some(default_name.to_string()))
+    }
+
+    /// The largest canvas, in pixels, that every common browser can draw
+    /// (Chrome's and Safari's limit).
+    const MAX_PIXELS: f64 = 268_435_456.0;
+
+    fn drawing_failed(_: wasm_bindgen::JsValue) -> String {
+        "The browser could not draw the plot.".to_string()
+    }
+
+    /// Have the browser draw a figure into a new canvas: its SVG, carrying
+    /// the figure's font, loaded as an image and drawn at the size the
+    /// resolution asks for. Returns the canvas's drawing context.
+    async fn draw(figure: &Figure, dpi: f64) -> Result<web_sys::CanvasRenderingContext2d, String> {
+        if !(dpi.is_finite() && dpi > 0.0) {
+            return Err(format!("Invalid resolution: {dpi} dpi."));
+        }
+        let scale = dpi / 72.0;
+        let width = (figure.width * scale).round().max(1.0);
+        let height = (figure.height * scale).round().max(1.0);
+        if width * height > MAX_PIXELS {
+            return Err(format!(
+                "The image would be {width} by {height} pixels, which is more than the browser can draw. Use a lower resolution or a vector format."
+            ));
+        }
+        let (width, height) = (width as u32, height as u32);
+
+        let svg = stamp_plot::svg::to_svg_with_font(figure, width, height);
+        let options = web_sys::BlobPropertyBag::new();
+        options.set_type("image/svg+xml");
+        let parts = js_sys::Array::of1(&wasm_bindgen::JsValue::from_str(&svg));
+        let blob = web_sys::Blob::new_with_str_sequence_and_options(&parts, &options)
+            .map_err(drawing_failed)?;
+        let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(drawing_failed)?;
+        let image = web_sys::HtmlImageElement::new().map_err(drawing_failed)?;
+        let loaded = js_sys::Promise::new(&mut |resolve, reject| {
+            image.set_onload(Some(&resolve));
+            image.set_onerror(Some(&reject));
+        });
+        image.set_src(&url);
+        let outcome = wasm_bindgen_futures::JsFuture::from(loaded).await;
+        if outcome.is_ok() {
+            // Wait until the image, with its font, is ready to be drawn;
+            // a browser that cannot say so draws it as it is.
+            let _ = wasm_bindgen_futures::JsFuture::from(image.decode()).await;
+        }
+        image.set_onload(None);
+        image.set_onerror(None);
+        let _ = web_sys::Url::revoke_object_url(&url);
+        outcome.map_err(drawing_failed)?;
+
+        let canvas: web_sys::HtmlCanvasElement = web_sys::window()
+            .and_then(|w| w.document())
+            .ok_or("No page to draw on.")?
+            .create_element("canvas")
+            .map_err(drawing_failed)?
+            .dyn_into()
+            .map_err(|_| "No canvas element.".to_string())?;
+        canvas.set_width(width);
+        canvas.set_height(height);
+        let context: web_sys::CanvasRenderingContext2d = canvas
+            .get_context("2d")
+            .map_err(drawing_failed)?
+            .ok_or("The browser could not draw the plot.")?
+            .dyn_into()
+            .map_err(|_| "No canvas drawing context.".to_string())?;
+        context
+            .draw_image_with_html_image_element_and_dw_and_dh(
+                &image,
+                0.0,
+                0.0,
+                f64::from(width),
+                f64::from(height),
+            )
+            .map_err(drawing_failed)?;
+        Ok(context)
+    }
+
+    /// A PNG image of a figure, drawn by the browser.
+    pub async fn png(figure: &Figure, dpi: f64) -> Result<Vec<u8>, String> {
+        let context = draw(figure, dpi).await?;
+        let canvas = context.canvas().ok_or("No canvas.")?;
+        let encoded = js_sys::Promise::new(&mut |resolve, reject| {
+            if let Err(error) = canvas.to_blob_with_type(&resolve, "image/png") {
+                let _ = reject.call1(&wasm_bindgen::JsValue::NULL, &error);
+            }
+        });
+        let blob: web_sys::Blob = wasm_bindgen_futures::JsFuture::from(encoded)
+            .await
+            .map_err(drawing_failed)?
+            .dyn_into()
+            // No image (null) when the canvas is too large to encode.
+            .map_err(|_| "The browser could not make the image.".to_string())?;
+        let buffer = wasm_bindgen_futures::JsFuture::from(blob.array_buffer())
+            .await
+            .map_err(drawing_failed)?;
+        Ok(js_sys::Uint8Array::new(&buffer).to_vec())
+    }
+
+    /// An image of a figure, drawn by the browser.
+    pub async fn image(figure: &Figure, dpi: f64) -> Result<egui::ColorImage, String> {
+        let context = draw(figure, dpi).await?;
+        let canvas = context.canvas().ok_or("No canvas.")?;
+        let (width, height) = (canvas.width(), canvas.height());
+        let pixels = context
+            .get_image_data(0.0, 0.0, f64::from(width), f64::from(height))
+            .map_err(drawing_failed)?
+            .data();
+        Ok(egui::ColorImage::from_rgba_unmultiplied(
+            [width as usize, height as usize],
+            &pixels,
+        ))
     }
 }
 

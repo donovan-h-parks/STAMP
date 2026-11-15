@@ -2105,7 +2105,7 @@ fn prevalence_against_mean_abundance() {
         ">Core (n=8)</text>",
         ">Produced water (n=15)</text>",
         ">Prevalence (% of samples)</text>",
-        ">Mean relative abundance (%)</text>",
+        ">Mean relative abundance (%) (log scale)</text>",
         ">g__Methanobacterium</text>",
     ] {
         assert!(svg.contains(text), "{text} is not in the plot");
@@ -2166,7 +2166,7 @@ fn prevalence_against_mean_abundance() {
         svg.contains(">Shared (specificity &lt; 50)</text>")
             || svg.contains(">Shared (specificity < 50)</text>")
     );
-    assert!(svg.contains(">Mean relative abundance where present (%)</text>"));
+    assert!(svg.contains(">Mean relative abundance where present (%) (log scale)</text>"));
     assert!(svg.contains("0.1%)</text>"));
     let svg = svg_plot(
         "two-groups",

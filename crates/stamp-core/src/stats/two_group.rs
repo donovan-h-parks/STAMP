@@ -334,34 +334,69 @@ fn rank_sum(first: &[f64], second: &[f64]) -> (f64, f64) {
 /// `u` for groups of `n1` and `n2` values without ties: `P(U <= u)` and
 /// `P(U >= u)`.
 fn mann_whitney_exact(u: f64, n1: usize, n2: usize) -> (f64, f64) {
-    // ways[i][j][k]: the number of arrangements of i values of the first
-    // group and j of the second with statistic k. The largest value is
-    // either from the first group, which then exceeds all j of the second,
-    // or from the second, which adds nothing.
     let most = n1 * n2;
-    let mut ways = vec![vec![vec![0.0f64; most + 1]; n2 + 1]; n1 + 1];
-    for (i, by_second) in ways.iter_mut().enumerate() {
-        for (j, counts) in by_second.iter_mut().enumerate() {
-            if i == 0 || j == 0 {
-                counts[0] = 1.0;
-            }
+    let at = (u.round().max(0.0) as usize).min(most);
+    // The distribution is that of the smaller group against the larger,
+    // reflected when the first group is the larger: U counts the pairs in
+    // which the first group's value is the larger.
+    let (small, large) = (n1.min(n2), n1.max(n2));
+    let counts = mann_whitney_counts(small, large);
+    let count = |k: usize| {
+        if n1 <= n2 {
+            counts[k]
+        } else {
+            counts[most - k]
         }
-    }
-    for i in 1..=n1 {
-        for j in 1..=n2 {
-            for k in 0..=i * j {
-                let with_first = if k >= j { ways[i - 1][j][k - j] } else { 0.0 };
-                ways[i][j][k] = with_first + ways[i][j - 1][k];
-            }
-        }
-    }
-    let counts = &ways[n1][n2];
+    };
     let total: f64 = counts.iter().sum();
-    let at = (u.round() as usize).min(most);
     (
-        counts[..=at].iter().sum::<f64>() / total,
-        counts[at..].iter().sum::<f64>() / total,
+        (0..=at).map(count).sum::<f64>() / total,
+        (at..=most).map(count).sum::<f64>() / total,
     )
+}
+
+/// The number of arrangements of `m` values of one group and `n` of
+/// another, without ties, for each value of the Mann-Whitney statistic
+/// (0 to m * n). Every feature of an analysis has groups of the same sizes,
+/// so the last counts are kept for the next feature.
+fn mann_whitney_counts(m: usize, n: usize) -> std::rc::Rc<Vec<f64>> {
+    /// The group sizes and their counts.
+    type Counts = ((usize, usize), std::rc::Rc<Vec<f64>>);
+    thread_local! {
+        static LAST: std::cell::RefCell<Option<Counts>> = const { std::cell::RefCell::new(None) };
+    }
+    if let Some(counts) = LAST.with(|last| {
+        last.borrow()
+            .as_ref()
+            .filter(|(key, _)| *key == (m, n))
+            .map(|(_, counts)| std::rc::Rc::clone(counts))
+    }) {
+        return counts;
+    }
+    // ways[i][k], for j values of the second group so far: the number of
+    // arrangements of i values of the first group and those j with
+    // statistic k. The largest value is either from the first group, which
+    // then exceeds all j of the second, or from the second, which adds
+    // nothing: ways(i, j, k) = ways(i - 1, j, k - j) + ways(i, j - 1, k).
+    // Only the rows of the current j are kept, (m + 1) * (m * n + 1)
+    // numbers, where a table over i, j and k needed (n + 1) times as many.
+    let most = m * n;
+    let mut ways = vec![vec![0.0f64; most + 1]; m + 1];
+    for row in ways.iter_mut() {
+        row[0] = 1.0;
+    }
+    for j in 1..=n {
+        for i in 1..=m {
+            let (before, rest) = ways.split_at_mut(i);
+            let (previous, row) = (&before[i - 1], &mut rest[0]);
+            for k in j..=i * j {
+                row[k] += previous[k - j];
+            }
+        }
+    }
+    let counts = std::rc::Rc::new(ways.swap_remove(m));
+    LAST.with(|last| *last.borrow_mut() = Some(((m, n), std::rc::Rc::clone(&counts))));
+    counts
 }
 
 /// Probabilities of a Mann-Whitney statistic at most, and at least, the
@@ -647,10 +682,38 @@ fn white(
         .map(|row| white_statistic(&row[..n1], &row[n1..]))
         .collect();
 
+    // A permutation that reproduces the observed split of values gives the
+    // observed statistic again, up to rounding. Such ties must not count as
+    // more extreme, so comparisons allow for a few units of rounding error.
+    const TIE_TOLERANCE: f64 = 1e-9;
+    let above = |t: f64| t + TIE_TOLERANCE * t.abs();
+    let sum = |values: &[f64]| values.iter().sum::<f64>();
+
+    // With few samples the null statistics of all frequently observed
+    // features are pooled to get enough resolution, and only theirs are
+    // kept; otherwise each feature is compared with its own null
+    // statistics as they are made, and none are kept. (Every statistic of
+    // every permutation used to be kept: replicates x features numbers.)
+    let pooling = n1 < 8 || n2 < 8;
+    let frequent: Vec<usize> = if pooling {
+        (0..features.len())
+            .filter(|&r| sum(features[r].seq1) >= n1 as f64 || sum(features[r].seq2) >= n2 as f64)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let mut pooled: Vec<f64> = Vec::with_capacity(replicates * frequent.len());
+    let mut more_extreme = vec![(0usize, 0usize); if pooling { 0 } else { features.len() }];
+
     // Null distribution of the t statistics under permutation of the samples.
-    let mut permuted: Vec<Vec<f64>> = Vec::with_capacity(replicates);
     let mut order: Vec<usize> = (0..n1 + n2).collect();
     let mut shuffled = vec![0.0; n1 + n2];
+    let mut permuted_statistic = |row: &[f64], order: &[usize]| {
+        for (slot, &source) in shuffled.iter_mut().zip(order) {
+            *slot = row[source];
+        }
+        white_statistic(&shuffled[..n1], &shuffled[n1..]).0
+    };
     for b in 0..replicates {
         if !progress(b, total_work) {
             return None;
@@ -658,57 +721,41 @@ fn white(
         for i in (1..order.len()).rev() {
             order.swap(i, random_index(rng, i + 1));
         }
-        let statistics = rows
-            .iter()
-            .map(|row| {
-                for (slot, &source) in shuffled.iter_mut().zip(&order) {
-                    *slot = row[source];
-                }
-                white_statistic(&shuffled[..n1], &shuffled[n1..]).0
-            })
-            .collect();
-        permuted.push(statistics);
+        if pooling {
+            for &r in &frequent {
+                pooled.push(permuted_statistic(&rows[r], &order));
+            }
+        } else {
+            for (r, row) in rows.iter().enumerate() {
+                let statistic = permuted_statistic(row, &order);
+                let t = observed[r].0;
+                let (one, two) = &mut more_extreme[r];
+                *one += usize::from(statistic > above(t));
+                *two += usize::from(statistic.abs() > above(t.abs()));
+            }
+        }
     }
 
-    // A permutation that reproduces the observed split of values gives the
-    // observed statistic again, up to rounding. Such ties must not count as
-    // more extreme, so comparisons allow for a few units of rounding error.
-    const TIE_TOLERANCE: f64 = 1e-9;
-    let above = |t: f64| t + TIE_TOLERANCE * t.abs();
-
-    let sum = |values: &[f64]| values.iter().sum::<f64>();
     let mut one_sided = vec![0.0; features.len()];
     let mut two_sided = vec![0.0; features.len()];
-    if n1 < 8 || n2 < 8 {
-        // Few samples: pool the null statistics of all frequently observed
-        // features to get enough resolution.
-        let frequent: Vec<usize> = (0..features.len())
-            .filter(|&r| sum(features[r].seq1) >= n1 as f64 || sum(features[r].seq2) >= n2 as f64)
-            .collect();
-        let mut pooled: Vec<f64> = Vec::with_capacity(replicates * frequent.len());
-        for statistics in &permuted {
-            pooled.extend(frequent.iter().map(|&r| statistics[r]));
-        }
-        let mut pooled_abs: Vec<f64> = pooled.iter().map(|t| t.abs()).collect();
-        pooled.sort_by(f64::total_cmp);
-        pooled_abs.sort_by(f64::total_cmp);
+    if pooling {
         let greater =
             |sorted: &[f64], value: f64| sorted.len() - sorted.partition_point(|t| *t <= value);
-
         let pool_size = pooled.len() as f64;
+        pooled.sort_by(f64::total_cmp);
         for &r in &frequent {
-            let t = observed[r].0;
-            one_sided[r] = greater(&pooled, above(t)) as f64 / pool_size;
-            two_sided[r] = greater(&pooled_abs, above(t.abs())) as f64 / pool_size;
+            one_sided[r] = greater(&pooled, above(observed[r].0)) as f64 / pool_size;
+        }
+        // The same numbers, as magnitudes, for the two-sided test.
+        for t in pooled.iter_mut() {
+            *t = t.abs();
+        }
+        pooled.sort_by(f64::total_cmp);
+        for &r in &frequent {
+            two_sided[r] = greater(&pooled, above(observed[r].0.abs())) as f64 / pool_size;
         }
     } else {
-        for r in 0..features.len() {
-            let t = observed[r].0;
-            let one = permuted.iter().filter(|s| s[r] > above(t)).count();
-            let two = permuted
-                .iter()
-                .filter(|s| s[r].abs() > above(t.abs()))
-                .count();
+        for (r, &(one, two)) in more_extreme.iter().enumerate() {
             one_sided[r] = (one + 1) as f64 / (replicates + 1) as f64;
             two_sided[r] = (two + 1) as f64 / (replicates + 1) as f64;
         }
@@ -805,6 +852,54 @@ mod tests {
         close(r.lower_ci, -245.93526827844681);
         close(r.upper_ci, 225.93526827844683);
         close(r.effect_size, -10.0);
+    }
+
+    #[test]
+    fn exact_mann_whitney_needs_little_memory_and_matches_the_full_table() {
+        // The full table over i, j and k, as it was computed before.
+        fn full(u: f64, n1: usize, n2: usize) -> (f64, f64) {
+            let most = n1 * n2;
+            let mut ways = vec![vec![vec![0.0f64; most + 1]; n2 + 1]; n1 + 1];
+            for (i, by_second) in ways.iter_mut().enumerate() {
+                for (j, counts) in by_second.iter_mut().enumerate() {
+                    if i == 0 || j == 0 {
+                        counts[0] = 1.0;
+                    }
+                }
+            }
+            for i in 1..=n1 {
+                for j in 1..=n2 {
+                    for k in 0..=i * j {
+                        let with_first = if k >= j { ways[i - 1][j][k - j] } else { 0.0 };
+                        ways[i][j][k] = with_first + ways[i][j - 1][k];
+                    }
+                }
+            }
+            let counts = &ways[n1][n2];
+            let total: f64 = counts.iter().sum();
+            let at = (u.round() as usize).min(most);
+            (
+                counts[..=at].iter().sum::<f64>() / total,
+                counts[at..].iter().sum::<f64>() / total,
+            )
+        }
+        for (n1, n2) in [(1, 1), (3, 5), (5, 3), (8, 8), (2, 9), (9, 2), (7, 12)] {
+            for u in 0..=n1 * n2 {
+                let (a, b) = mann_whitney_exact(u as f64, n1, n2);
+                let (c, d) = full(u as f64, n1, n2);
+                assert!(
+                    (a - c).abs() < 1e-15 && (b - d).abs() < 1e-15,
+                    "{n1} {n2} {u}"
+                );
+            }
+        }
+        // 8 against 1,500 samples needed 1.3 GB per feature.
+        let (lower, upper) = mann_whitney_exact(0.0, 8, 1500);
+        let all = (1..=8)
+            .map(|i| i as f64 / (1500 + i) as f64)
+            .product::<f64>();
+        assert!((lower / all - 1.0).abs() < 1e-9, "{lower} {all}");
+        assert_eq!(upper, 1.0);
     }
 
     #[test]

@@ -541,8 +541,18 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             }
         }
 
+        // A mirrored ratio is drawn the other way up; say so beside the
+        // ratio itself.
+        let mirrored = if data.is_ratio && d.favours_second {
+            format!(
+                "\nDrawn as {} / {}: {:.3} ({:.3} to {:.3})",
+                data.name2, data.name1, d.effect, d.low, d.high
+            )
+        } else {
+            String::new()
+        };
         let tooltip = format!(
-            "{}\n{}: {:.3}\n{}: {:.3}\n{}: {:.3} ({:.3} to {:.3})\n{}: {}",
+            "{}\n{}: {:.3}\n{}: {:.3}\n{}: {:.3} ({:.3} to {:.3}){mirrored}\n{}: {}",
             d.row.feature,
             data.name1,
             d.row.value1,
@@ -564,7 +574,14 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         .map(|&p| x_scale.map(p))
         .zip(ticks.labels())
         .collect();
-    x_axis(&mut figure, left, right, &tick_labels, &data.effect_label);
+    // Ratios below one are drawn mirrored, so that every bar points right:
+    // the axis is the larger proportion over the smaller.
+    let axis_label = if data.is_ratio {
+        format!("{} (larger / smaller)", data.effect_label)
+    } else {
+        data.effect_label.clone()
+    };
+    x_axis(&mut figure, left, right, &tick_labels, &axis_label);
 
     let title = format!(
         "{}% confidence intervals",
@@ -875,6 +892,22 @@ mod tests {
         // A ratio of 0.5 is drawn at 2, in the second sample's colour.
         assert!((circles[0].0 - circles[1].0).abs() < 1e-9);
         assert_eq!((circles[0].2, circles[1].2), (SAMPLE1_COLOR, SAMPLE2_COLOR));
+        // The axis and the tooltip say so.
+        let figure = plot(&ratio, &Options::default());
+        let label = format!("{} (larger / smaller)", ratio.effect_label);
+        assert!(figure
+            .shapes
+            .iter()
+            .any(|s| matches!(s, Shape::Text { text, .. } if *text == label)));
+        let down = figure.regions.iter().find(|r| r.item == "Down").unwrap();
+        assert!(
+            down.tooltip.contains(&format!(
+                ": 0.500 (0.333 to 0.667)\nDrawn as {} / {}: 2.000 (1.500 to 3.000)",
+                ratio.name2, ratio.name1
+            )),
+            "{}",
+            down.tooltip
+        );
     }
 
     #[test]

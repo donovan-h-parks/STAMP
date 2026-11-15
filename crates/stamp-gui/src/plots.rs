@@ -1658,8 +1658,15 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                 ),
                 PlotKind::Scatter => {
                     let mut data = scatter::Data::from_sample_profile(profile);
+                    // Looked up by name: a search of the rows for each point
+                    // took features x features comparisons.
+                    let by_name: std::collections::HashMap<&str, _> = results
+                        .rows
+                        .iter()
+                        .map(|r| (r.feature.as_str(), r))
+                        .collect();
                     data.add_p_values(PValueKind::of(results.correction.method), |feature| {
-                        let row = results.rows.iter().find(|r| r.feature == feature)?;
+                        let row = by_name.get(feature)?;
                         Some((p_text(row.p_value), p_text(row.p_value_corrected)))
                     });
                     scatter::plot(&data, &scatter_options)
@@ -1800,8 +1807,15 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         y_color: color2,
                         ..scatter::Data::from_group_profile(profile, settings.group_spread)
                     };
+                    // Looked up by name: a search of the rows for each point
+                    // took features x features comparisons.
+                    let by_name: std::collections::HashMap<&str, _> = results
+                        .rows
+                        .iter()
+                        .map(|r| (r.feature.as_str(), r))
+                        .collect();
                     data.add_p_values(PValueKind::of(results.correction.method), |feature| {
-                        let row = results.rows.iter().find(|r| r.feature == feature)?;
+                        let row = by_name.get(feature)?;
                         Some((p_text(row.p_value), p_text(row.p_value_corrected)))
                     });
                     scatter::plot(&data, &scatter_options)
@@ -2182,7 +2196,10 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         session.multi.post_hoc_coverage,
                         settings.post_hoc_only_significant,
                         &colors,
-                        &settings.post_hoc,
+                        &extended_error_bar::Options {
+                            min_p_value_exponent: settings.min_p_exponent,
+                            ..settings.post_hoc.clone()
+                        },
                     ),
                     (_, Some(Err(message))) => Figure::message(&message),
                     _ => Figure::message(NO_FEATURE),

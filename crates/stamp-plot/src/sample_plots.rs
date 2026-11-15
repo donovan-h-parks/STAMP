@@ -1,7 +1,7 @@
 //! Plots of two-sample results: the profile bar plot, the bar plot of a
 //! chosen statistic, and the multiple-comparison plots.
 
-use stamp_core::stats::results::{SampleResults, SampleRow};
+use stamp_core::stats::results::{format_p_value, SampleResults, SampleRow};
 use stamp_core::stats::wilson::wilson_interval;
 use stamp_core::SampleProfile;
 
@@ -288,6 +288,43 @@ impl Default for StatBarOptions {
     }
 }
 
+/// The tooltip of one feature of [`stat_bar`]: both samples' values when
+/// there are two bars, p-values in the usual form, and a ratio as well as
+/// the logarithm drawn.
+fn bar_tooltip(
+    row: &SampleRow,
+    x_label: &str,
+    first: f64,
+    second: Option<f64>,
+    field: BarField,
+    log: bool,
+    profile: &SampleProfile,
+) -> String {
+    let names = &profile.profile.sample_names;
+    let number = |v: f64| match field {
+        BarField::Proportions => format!("{v:.4}"),
+        _ => format!("{v}"),
+    };
+    let values = match (field, second) {
+        (_, Some(second)) => format!(
+            "{}: {}\n{}: {}",
+            names[0],
+            number(first),
+            names[1],
+            number(second)
+        ),
+        (BarField::PValues | BarField::CorrectedPValues, None) => format_p_value(first, -15),
+        (BarField::EffectSize, None) if log => {
+            format!("{:.4} (log10 {first:.4})", row.effect_size)
+        }
+        _ => format!("{first:.4}"),
+    };
+    match second {
+        Some(_) => format!("{}\n{x_label}\n{values}", row.feature),
+        None => format!("{}\n{x_label}: {values}", row.feature),
+    }
+}
+
 /// Horizontal bars of one statistic for each feature: a pair of bars for
 /// per-sample statistics, a single bar otherwise.
 pub fn stat_bar<'a>(
@@ -323,7 +360,7 @@ pub fn stat_bar<'a>(
         BarField::CorrectedPValues => PValueKind::of(results.correction.method)
             .plural()
             .to_string(),
-        BarField::EffectSize if log => format!("log({})", ci.plot_label()),
+        BarField::EffectSize if log => format!("log10({})", ci.plot_label()),
         BarField::EffectSize => ci.plot_label().to_string(),
     };
 
@@ -429,7 +466,7 @@ pub fn stat_bar<'a>(
             figure.width,
             row_height,
             &row.feature,
-            format!("{}\n{x_label}: {first:.4}", row.feature),
+            bar_tooltip(row, &x_label, first, second, options.field, log, profile),
         );
     }
     x_axis(
@@ -796,6 +833,14 @@ mod tests {
             (12, 12)
         );
         assert!((paired.height - (12.0 * 0.2 + 0.6) * 72.0).abs() < 1e-9);
+        // The tooltip names both samples' values.
+        let tooltip = &paired.regions[0].tooltip;
+        let names = &profile.profile.sample_names;
+        assert!(
+            tooltip.contains(&format!("\n{}: ", names[0]))
+                && tooltip.contains(&format!("\n{}: ", names[1])),
+            "{tooltip}"
+        );
 
         let p = stat_bar(
             &profile,
@@ -809,8 +854,12 @@ mod tests {
         assert_eq!(rects(&p, Color::grey(0.5)), 12);
         // Benjamini-Hochberg q-values.
         assert!(has_text(&p, "q-values"));
-        // Smallest p-value at the top.
+        // Smallest p-value at the top, written as p-values are elsewhere
+        // (not "0.0000" when it is small).
         assert_eq!(p.regions[0].item, results.rows[0].feature);
+        assert!(p.regions[0]
+            .tooltip
+            .ends_with(&format_p_value(results.rows[0].p_value_corrected, -15)));
 
         let effect = stat_bar(
             &profile,
@@ -832,7 +881,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert!(has_text(&effect, "log(Ratio of proportions)"));
+        assert!(has_text(&effect, "log10(Ratio of proportions)"));
     }
 
     #[test]

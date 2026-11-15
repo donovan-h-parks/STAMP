@@ -101,7 +101,9 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Profiles in other formats open directly.** BIOM tables and mothur files
   are loaded from File > Load profile without first being converted and
   saved [48].
-- **PDF export** of plots, alongside PNG and SVG.
+- **PDF export** of plots, alongside PNG and SVG, in the browser too. The
+  PDF is written directly from the plot, with its text as selectable text
+  in the embedded plot font.
 - **SingleM and Sandpiper profiles.** SingleM condensed taxonomic profiles
   (`singlem pipe -p`, `singlem summarise`, also the variant with extras;
   many samples per file) and Sandpiper condensed profiles (the JSON of

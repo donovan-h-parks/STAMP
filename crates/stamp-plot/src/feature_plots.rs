@@ -311,7 +311,10 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         &mut figure,
         &frame,
         &axis.scaled(&y),
-        Some(data.axis_label()),
+        Some(&crate::axes::scale_label(
+            data.axis_label(),
+            options.log_scale,
+        )),
         AXES_COLOR,
     );
     axis.draw_break(&mut figure, &frame, &y, false);

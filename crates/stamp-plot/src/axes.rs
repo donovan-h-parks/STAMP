@@ -68,6 +68,15 @@ pub fn tick_style() -> TextStyle {
 }
 
 /// The name of an axis.
+/// An axis title, marked as logarithmic when the axis is.
+pub fn scale_label(label: &str, log: bool) -> String {
+    if log {
+        format!("{label} (log scale)")
+    } else {
+        label.to_string()
+    }
+}
+
 pub fn axis_label_style() -> TextStyle {
     TextStyle::new(fonts().axis_label)
 }

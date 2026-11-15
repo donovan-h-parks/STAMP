@@ -512,7 +512,9 @@ fn panels(
         // Upright panels in several rows share one name for their value
         // axes, centred down the figure, drawn below.
         let one_name = multi && !options.horizontal && rows > 1;
-        let label = (name_axis && !one_name).then_some(feature.axis_label());
+        let label = (name_axis && !one_name)
+            .then(|| crate::axes::scale_label(feature.axis_label(), options.log_scale));
+        let label = label.as_deref();
         if options.horizontal {
             y_axis(&mut figure, frame, &ticks, None, AXES_COLOR);
             x_axis(
@@ -558,7 +560,7 @@ fn panels(
         figure.text(
             padding,
             (top + bottom) / 2.0,
-            features[0].axis_label(),
+            crate::axes::scale_label(features[0].axis_label(), options.log_scale),
             crate::axes::axis_label_style()
                 .align(HAlign::Center, VAlign::Top)
                 .rotated(90.0),
@@ -736,7 +738,8 @@ fn grouped(
             }
         }
     }
-    let label = features[0].axis_label();
+    let label = crate::axes::scale_label(features[0].axis_label(), options.log_scale);
+    let label = label.as_str();
     if options.horizontal {
         y_axis(&mut figure, &frame, &ticks, None, AXES_COLOR);
         x_axis(

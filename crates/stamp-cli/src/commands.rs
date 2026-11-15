@@ -474,6 +474,8 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
                     width: plot.plot_width,
                     height: size(6.0),
                     corrected: !plot.plot_uncorrected_p_values,
+                    // The threshold the table is filtered at, or 0.05.
+                    significance: Some(args.significance.unwrap_or(0.05)),
                     ..Default::default()
                 },
             ),
@@ -748,6 +750,8 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     width: plot.plot_width,
                     height: size(6.0),
                     corrected: !plot.plot_uncorrected_p_values,
+                    // The threshold the table is filtered at, or 0.05.
+                    significance: Some(args.significance.unwrap_or(0.05)),
                     ..Default::default()
                 },
             ),
@@ -1035,6 +1039,8 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                     width: plot.plot_width,
                     height: plot.plot_height.unwrap_or(6.0),
                     corrected: !plot.plot_uncorrected_p_values,
+                    // The threshold the table is filtered at, or 0.05.
+                    significance: Some(args.significance.unwrap_or(0.05)),
                     ..Default::default()
                 },
             ),
@@ -1266,6 +1272,8 @@ fn correlation(args: CorrelationArgs) -> CliResult {
                     width: plot.plot_width,
                     height,
                     corrected: !plot.plot_uncorrected_p_values,
+                    // The threshold the table is filtered at, or 0.05.
+                    significance: Some(args.significance.unwrap_or(0.05)),
                     ..Default::default()
                 },
             ),

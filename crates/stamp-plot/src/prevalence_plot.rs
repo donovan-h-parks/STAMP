@@ -204,10 +204,11 @@ fn short_number(value: f64) -> String {
     }
 }
 
+/// The abundance axis is always logarithmic.
 fn x_label(over: MeanOver) -> &'static str {
     match over {
-        MeanOver::AllSamples => "Mean relative abundance (%)",
-        MeanOver::PresentSamples => "Mean relative abundance where present (%)",
+        MeanOver::AllSamples => "Mean relative abundance (%) (log scale)",
+        MeanOver::PresentSamples => "Mean relative abundance where present (%) (log scale)",
     }
 }
 
@@ -755,7 +756,7 @@ mod tests {
         let figure = plot(&data(), &options);
         assert!(texts(&figure)
             .iter()
-            .any(|t| t == "Mean relative abundance where present (%)"));
+            .any(|t| t == "Mean relative abundance where present (%) (log scale)"));
         let mut empty = data();
         empty.features.clear();
         assert_eq!(texts(&plot(&empty, &Options::default())), [NOTHING]);

@@ -187,7 +187,13 @@ Saving plots
 * **PNG**, a picture, at a resolution you choose (300 dots per inch suits
   most journals);
 * **SVG** or **PDF**, drawings whose text and shapes stay editable in
-  programs such as Inkscape or Adobe Illustrator.
+  programs such as Inkscape or Adobe Illustrator. The text of a PDF is real
+  text in the plot's font, which is embedded, so it can be searched and
+  copied.
+
+In the browser version the PNG image is drawn by the browser from the SVG
+drawing, so its text may be placed very slightly differently from the
+desktop version's image.
 
 **View > Send plot to window** opens the current plot in a window of its own,
 so that several plots can be compared side by side.

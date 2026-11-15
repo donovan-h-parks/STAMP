@@ -143,6 +143,8 @@ pub struct Session {
     pub warnings: Vec<String>,
     /// The most recent error of each analysis, shown until it runs again.
     errors: [Option<String>; 4],
+    /// See [`Session::numeric_fields`].
+    numeric_fields: Vec<String>,
 
     pub profile_level: String,
     /// `None` is the entire sample.
@@ -225,6 +227,7 @@ impl Default for Session {
             metadata: None,
             warnings: Vec::new(),
             errors: Default::default(),
+            numeric_fields: Vec::new(),
             profile_level: String::new(),
             parent_level: None,
             unclassified: Unclassified::Retain,
@@ -336,6 +339,7 @@ impl Session {
         self.warnings = warnings;
         let field = metadata.fields().first().cloned();
         self.metadata = Some(metadata);
+        self.numeric_fields = self.find_numeric_fields();
         match field {
             Some(field) => self.set_group_field(&field),
             None => self.group_field = None,
@@ -371,6 +375,34 @@ impl Session {
             self.multi.post_hoc_test,
             self.multi.post_hoc_coverage,
         )
+    }
+
+    /// A description of what the results table of `mode` is made from: its
+    /// results and, when it lists only the features that pass the filters,
+    /// those filters. Unlike [`Session::plot_fingerprint`] it leaves out
+    /// what only changes how plots look, such as group colours.
+    pub fn table_fingerprint(&self, mode: Mode, only_active: bool) -> String {
+        let filter = if only_active {
+            match mode {
+                Mode::TwoSamples => format!("{:?}", self.samples.filter),
+                Mode::TwoGroups => format!("{:?}", self.groups.filter),
+                Mode::MultipleGroups => format!("{:?}", self.multi.filter),
+                Mode::Correlation => format!("{:?}", self.correlation.filter),
+            }
+        } else {
+            String::new()
+        };
+        format!("{}|{:?}|{filter}", self.generation, self.stats)
+    }
+
+    /// The colour of the group at `position` among all groups of the field,
+    /// as [`Session::group_color`] gives it, without grouping the samples
+    /// again.
+    pub fn group_color_at(&self, group: &str, position: usize) -> stamp_plot::Color {
+        if let Some(color) = self.group_colors.get(group) {
+            return *color;
+        }
+        stamp_plot::axes::group_color(position)
     }
 
     /// Colour of a group: the one the user chose, or else one from the
@@ -511,8 +543,13 @@ impl Session {
     }
 
     /// The metadata fields a correlation can be made with: those that hold
-    /// a number for at least three samples.
+    /// a number for at least three samples. Worked out once, when the
+    /// metadata is loaded, since the window asks for them every frame.
     pub fn numeric_fields(&self) -> Vec<String> {
+        self.numeric_fields.clone()
+    }
+
+    fn find_numeric_fields(&self) -> Vec<String> {
         let Some(metadata) = &self.metadata else {
             return Vec::new();
         };

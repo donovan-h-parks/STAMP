@@ -74,7 +74,11 @@ pub fn plot_with_colors(
             let (p_text, significant, p_numeric) = if p.is_nan() {
                 ("n/a".to_string(), false, 1.0)
             } else {
-                (format_p_value(p, -15), p < alpha, p)
+                (
+                    format_p_value(p, options.min_p_value_exponent),
+                    p < alpha,
+                    p,
+                )
             };
             if only_significant && !significant {
                 continue;
@@ -122,9 +126,12 @@ pub fn plot_with_colors(
             options.truncate_labels.unwrap_or(usize::MAX - 3),
         )),
     };
-    // The legend names two fixed groups, which does not apply here.
+    // The legend names two fixed groups, which does not apply here. The
+    // post-hoc test gives one p-value per pair, so there is no choice of
+    // corrected or uncorrected values to show.
     let options = Options {
         legend: extended_error_bar::Legend::None,
+        show_corrected_p_values: true,
         ..options.clone()
     };
     extended_error_bar::plot(&data, &options)

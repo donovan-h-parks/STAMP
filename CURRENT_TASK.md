@@ -6,7 +6,23 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle. Last task (2026-11-16): **OpenCode in the assistant panel**, on
+Idle. Last task (2026-11-16): **code review fixes**, on `rust-port`
+(commits "Fix crashes and wrong results found in the code review" and "Fix
+plot labels, speed up tests and the window, shrink the web build"). Crashes
+(10 shapes, Scheffé with single-sample groups), stale GUI results (per-mode
+errors, cancel, correction during a run, empty groups), Storey pi_0 = 0,
+Fisher fractional counts, ANOVA zero within-variance, metadata header with
+a leading tab, empty grouping values, composition with a parent level,
+histogram p = 1; plot labels (post-hoc, volcano log2 ratios, bar tooltips,
+log scale, mirrored ratios); exact Mann-Whitney and White's memory; profile
+loading race; per-frame caches; direct PDF writer (`stamp-plot/src/pdf.rs`)
+and canvas PNGs in the browser (no resvg/svg2pdf in wasm); icon font subset
+(`scripts/icons/subset.sh`). Not tested in a real browser: PNG saving and
+Copy plot image. Remaining review items are listed in the session that did
+the review (BIOM depth, ordination tooltip order, file errors, conversion
+speed, DejaVu subset, ...).
+
+Previous: Idle. Last task (2026-11-16): **OpenCode in the assistant panel**, on
 `rust-port`, committed and pushed; Windows package built. `launch::Agent {ClaudeCode, OpenCode}` (name,
 accounts, find, command, prepare, prepare_install, installer);
 `find_opencode`, `opencode_major` (`--version`, cached per path+mtime),

@@ -160,6 +160,11 @@ impl Metadata {
 
     /// True if a sample takes part in group analyses: it is switched on
     /// and the sample filter keeps it.
+    /// True if the metadata has a row for the sample.
+    pub fn contains(&self, sample: &str) -> bool {
+        self.sample_index.contains_key(sample)
+    }
+
     pub fn is_active(&self, sample: &str) -> bool {
         self.sample_index
             .get(sample)

@@ -266,6 +266,45 @@ fn problems_are_shown_to_the_user() {
 }
 
 #[test]
+fn data_opened_while_a_profile_is_read_is_not_lost() {
+    use stamp_gui::platform::{Event, OpenedFile};
+    let file = |relative: &str| OpenedFile {
+        name: relative.rsplit('/').next().unwrap().to_string(),
+        bytes: example(relative).into_bytes(),
+    };
+
+    // Metadata opened before the profile has been read is for that
+    // profile: it used to be loaded into the session the profile then
+    // replaced.
+    let mut harness = Harness::new();
+    harness.app.deliver(Event::Profile(vec![file(
+        "EnterotypesArumugam/Enterotypes.profile.spf",
+    )]));
+    harness.app.deliver(Event::Metadata(file(
+        "EnterotypesArumugam/Enterotypes.metadata.tsv",
+    )));
+    harness.settle();
+    assert_eq!(harness.app.session.profile_name, "Enterotypes.profile.spf");
+    assert_eq!(
+        harness.app.session.metadata_name,
+        "Enterotypes.metadata.tsv"
+    );
+    assert_eq!(harness.app.mode, Mode::TwoGroups);
+
+    // Example data chosen while a profile is read wins over it.
+    harness
+        .app
+        .deliver(Event::Profile(vec![file("CoalSeamGas/coal.spf")]));
+    let app = &mut harness.app;
+    harness.renderer.run(1, |ui| app.draw(ui));
+    assert!(harness.app.loading().is_some());
+    harness.app.load_example();
+    harness.settle();
+    assert_eq!(harness.app.session.profile_name, "Enterotypes.profile.spf");
+    assert!(harness.app.loading().is_none());
+}
+
+#[test]
 fn built_in_example_and_opened_files_are_loaded() {
     use stamp_gui::platform::{Event, OpenedFile};
 
@@ -2843,7 +2882,9 @@ fn box_plot_of_several_features_and_the_prevalence_plot() {
     assert!(!figure.regions.is_empty());
     let shown = texts(&figure);
     assert!(shown.iter().any(|t| t == "Bacteroidetes"), "{shown:?}");
-    assert!(shown.iter().any(|t| t == "Mean relative abundance (%)"));
+    assert!(shown
+        .iter()
+        .any(|t| t == "Mean relative abundance (%) (log scale)"));
     assert!(figure
         .regions
         .iter()

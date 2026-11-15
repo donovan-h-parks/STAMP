@@ -1,4 +1,9 @@
 //! Export of figures to image files, as bytes.
+//!
+//! SVG and PDF are written directly from the figure ([`crate::svg`],
+//! [`crate::pdf`]). PNG images are drawn from the SVG with resvg, with the
+//! `png` feature; the browser build leaves it out and has the browser draw
+//! the SVG instead.
 
 use crate::figure::Figure;
 use crate::svg::to_svg;
@@ -93,29 +98,9 @@ pub fn to_png(_figure: &Figure, _dpi: f64) -> Result<Vec<u8>, ExportError> {
     ))
 }
 
-/// Render a figure as a single-page PDF document.
-#[cfg(feature = "pdf")]
+/// Render a figure as a single-page PDF document (see [`crate::pdf`]).
 pub fn to_pdf(figure: &Figure) -> Result<Vec<u8>, ExportError> {
-    use svg2pdf::usvg;
-
-    let mut options = usvg::Options::default();
-    options
-        .fontdb_mut()
-        .load_font_data(figure.font.data().to_vec());
-    options.font_family = figure.font.bundled_family().to_string();
-    let tree = usvg::Tree::from_str(&to_svg(figure), &options)
-        .map_err(|e| ExportError(format!("Could not render the plot: {e}")))?;
-    // 96 SVG pixels per inch, so that the page has the figure's size in points.
-    let page = svg2pdf::PageOptions { dpi: 96.0 };
-    svg2pdf::to_pdf(&tree, svg2pdf::ConversionOptions::default(), page)
-        .map_err(|e| ExportError(format!("Could not write the PDF: {e}")))
-}
-
-#[cfg(not(feature = "pdf"))]
-pub fn to_pdf(_figure: &Figure) -> Result<Vec<u8>, ExportError> {
-    Err(ExportError(
-        "This build does not include PDF export.".to_string(),
-    ))
+    Ok(crate::pdf::to_pdf(figure))
 }
 
 #[cfg(test)]
@@ -212,7 +197,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "pdf")]
     #[test]
     fn pdf_is_a_pdf() {
         let pdf = to_pdf(&sample()).unwrap();

@@ -80,7 +80,7 @@ impl PlotFont {
         }
     }
 
-    fn face(self) -> &'static ttf_parser::Face<'static> {
+    pub(crate) fn face(self) -> &'static ttf_parser::Face<'static> {
         static FACES: [OnceLock<ttf_parser::Face<'static>>; 4] = [
             OnceLock::new(),
             OnceLock::new(),

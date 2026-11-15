@@ -196,7 +196,8 @@ fn one_histogram(
         LabelRotation::Horizontal,
         AXES_COLOR,
     );
-    y_axis(figure, frame, &y_ticks, y_label, AXES_COLOR);
+    let y_label = y_label.map(|l| crate::axes::scale_label(l, log));
+    y_axis(figure, frame, &y_ticks, y_label.as_deref(), AXES_COLOR);
 }
 
 /// Histogram of p-values between 0 and 1.
@@ -358,7 +359,10 @@ pub fn sequence_histogram(profile: &SampleProfile, options: &SequenceOptions) ->
         &mut figure,
         &frame,
         &y_ticks,
-        Some("Number of features"),
+        Some(&crate::axes::scale_label(
+            "Number of features",
+            options.log_scale,
+        )),
         AXES_COLOR,
     );
 

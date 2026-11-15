@@ -29,8 +29,8 @@ pub struct Data {
     pub points: Vec<Point>,
     /// Label of the effect-size axis.
     pub effect_label: String,
-    /// The effect size that means "no difference": zero for a difference,
-    /// one for a ratio.
+    /// The effect size that means "no difference": zero for a difference
+    /// and for the logarithm of a ratio.
     pub no_effect: f64,
     /// The two samples or groups compared, with their colours. A feature
     /// that is more abundant in the first lies to the right. `None` when
@@ -38,25 +38,40 @@ pub struct Data {
     pub sides: Option<[(String, Color); 2]>,
     /// What the corrected p-values are, which names them.
     pub corrected_kind: PValueKind,
+    /// For a ratio, plotted as its base-2 logarithm, the name of the ratio,
+    /// which tooltips give alongside.
+    pub log2_of: Option<String>,
 }
 
 impl Data {
     pub fn from_sample_results(profile: &SampleProfile, results: &SampleResults) -> Data {
         let ci = results.analysis.ci_method;
         let names = &profile.profile.sample_names;
+        // A ratio is plotted as its logarithm, so that twice and half as
+        // abundant lie equally far from no effect, on either side.
+        let ratio = ci.is_ratio();
         Data {
             points: results
                 .rows
                 .iter()
                 .map(|r| Point {
                     feature: r.feature.clone(),
-                    effect_size: r.effect_size,
+                    effect_size: if ratio {
+                        r.effect_size.log2()
+                    } else {
+                        r.effect_size
+                    },
                     p_value: r.p_value,
                     p_value_corrected: r.p_value_corrected,
                 })
                 .collect(),
-            effect_label: ci.plot_label().to_string(),
-            no_effect: if ci.is_ratio() { 1.0 } else { 0.0 },
+            effect_label: if ratio {
+                format!("log2({})", ci.plot_label())
+            } else {
+                ci.plot_label().to_string()
+            },
+            no_effect: 0.0,
+            log2_of: ratio.then(|| ci.plot_label().to_string()),
             sides: Some([
                 (names[0].clone(), SAMPLE1_COLOR),
                 (names[1].clone(), SAMPLE2_COLOR),
@@ -84,6 +99,7 @@ impl Data {
                 (profile.group_name2.clone(), group_color(1)),
             ]),
             corrected_kind: PValueKind::of(results.correction.method),
+            log2_of: None,
         }
     }
 
@@ -112,6 +128,7 @@ impl Data {
                 (format!("samples with a low {field}"), NEGATIVE),
             ]),
             corrected_kind: PValueKind::of(results.correction.method),
+            log2_of: None,
         }
     }
 
@@ -131,6 +148,7 @@ impl Data {
             no_effect: 0.0,
             sides: None,
             corrected_kind: PValueKind::of(results.correction.method),
+            log2_of: None,
         }
     }
 }
@@ -312,10 +330,17 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             2.0 * radius + 2.0,
             &point.feature,
             format!(
-                "{}\n\n{}: {:.3}\n{}",
+                "{}\n\n{}\n{}",
                 point.feature,
-                data.effect_label,
-                point.effect_size,
+                match &data.log2_of {
+                    Some(ratio) => format!(
+                        "{ratio}: {:.3}\n{}: {:.3}",
+                        point.effect_size.exp2(),
+                        data.effect_label,
+                        point.effect_size
+                    ),
+                    None => format!("{}: {:.3}", data.effect_label, point.effect_size),
+                },
                 tooltip_lines(
                     &format_p_value(point.p_value, options.min_p_value_exponent),
                     &format_p_value(point.p_value_corrected, options.min_p_value_exponent),
@@ -382,6 +407,7 @@ mod tests {
                 ("Obese".to_string(), group_color(1)),
             ]),
             corrected_kind: PValueKind::Corrected,
+            log2_of: None,
         }
     }
 
@@ -462,6 +488,58 @@ mod tests {
             .tooltip;
         assert!(
             tooltip.contains("Uncorrected p-value: 1.00e-4\nCorrected p-value: 1.00e-3"),
+            "{tooltip}"
+        );
+    }
+
+    #[test]
+    fn ratios_are_plotted_as_their_logarithm() {
+        use stamp_core::stats::ci::SampleCi;
+        use stamp_core::stats::results::{run_sample_analysis, SampleAnalysis};
+        let tree =
+            stamp_core::ProfileTree::read("F\ta\tb\nup\t40\t10\ndown\t10\t40\nsame\t50\t50\n")
+                .unwrap();
+        let profile = tree
+            .sample_profile("a", "b", None, "F", stamp_core::Unclassified::Retain)
+            .unwrap();
+        let analysis = SampleAnalysis {
+            test: stamp_core::stats::two_sample::SampleTest::Fisher,
+            test_type: stamp_core::stats::TestType::TwoSided,
+            ci_method: SampleCi::RatioProportions,
+            coverage: 0.95,
+            correction: stamp_core::stats::correction::Correction::None,
+        };
+        let results = run_sample_analysis(
+            &profile,
+            analysis,
+            &stamp_core::stats::StatsSettings::default(),
+            &mut stamp_core::stats::rng_from_seed(1),
+            &mut |_, _| true,
+        )
+        .unwrap();
+        let data = Data::from_sample_results(&profile, &results);
+        assert_eq!(data.effect_label, "log2(Ratio of proportions)");
+        assert_eq!(data.no_effect, 0.0);
+        let effect = |name: &str| {
+            data.points
+                .iter()
+                .find(|p| p.feature == name)
+                .unwrap()
+                .effect_size
+        };
+        // Four times and a quarter as abundant lie equally far from no
+        // effect, on either side.
+        assert!((effect("up") - 2.0).abs() < 1e-9);
+        assert!((effect("down") + 2.0).abs() < 1e-9);
+        let figure = plot(&data, &Options::default());
+        let tooltip = &figure
+            .regions
+            .iter()
+            .find(|r| r.item == "up")
+            .unwrap()
+            .tooltip;
+        assert!(
+            tooltip.contains("Ratio of proportions: 4.000\nlog2(Ratio of proportions): 2.000"),
             "{tooltip}"
         );
     }
