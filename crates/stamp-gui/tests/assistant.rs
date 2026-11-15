@@ -514,11 +514,18 @@ fn the_claude_code_panel_runs_a_terminal() {
     let mut h = Harness { renderer, app };
     let folder = std::env::temp_dir();
     let ctx = h.renderer.ctx.clone();
-    stamp_gui::assistant::window::run_in_panel(&mut h.app, &ctx, "Shell", "/bin/sh", &[], &folder)
+    // STAMP_TEST_SHELL tries another shell (CI has dash on Ubuntu).
+    let shell = std::env::var("STAMP_TEST_SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    stamp_gui::assistant::window::run_in_panel(&mut h.app, &ctx, "Shell", &shell, &[], &folder)
         .unwrap();
-    // Wait until the screen shows `wanted`.
+    // Wait (up to half a minute: CI machines can be slow) until the screen
+    // shows `wanted`. Commands print a computed value, such as
+    // `$((6*7))`, so that what is waited for is their output, never the
+    // command as typed and echoed, whatever the shell (dash on Ubuntu,
+    // bash on macOS).
     let wait_for = |h: &mut Harness, wanted: &str| {
-        for _ in 0..1500 {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while std::time::Instant::now() < end {
             h.frames(1);
             if h.app.assistant_terminal_text().unwrap().contains(wanted) {
                 return;
@@ -552,7 +559,8 @@ fn the_claude_code_panel_runs_a_terminal() {
     typed(
         &mut h,
         vec![
-            egui::Event::Text("echo stamp-$((6*7))".to_string()),
+            // A known prompt, to wait for after an interruption.
+            egui::Event::Text("PS1='ready> '; echo stamp-$((6*7))".to_string()),
             key(egui::Key::Enter, egui::Modifiers::NONE),
         ],
     );
@@ -563,42 +571,56 @@ fn the_claude_code_panel_runs_a_terminal() {
     typed(
         &mut h,
         vec![
-            egui::Event::Text("sleep 60; echo too-late".to_string()),
+            egui::Event::Text("echo sleeping-$((2+2)); sleep 60; echo too-$((2+3))".to_string()),
             key(egui::Key::Enter, egui::Modifiers::NONE),
         ],
     );
-    h.frames(20);
+    wait_for(&mut h, "sleeping-4");
     typed(&mut h, vec![egui::Event::Copy]);
-    typed(
-        &mut h,
-        vec![
-            egui::Event::Text("echo interrupted".to_string()),
-            key(egui::Key::Enter, egui::Modifiers::NONE),
-        ],
-    );
-    wait_for(&mut h, "\ninterrupted");
-    assert!(!h
+    // Some shells (zsh) drop what was typed while a command is
+    // interrupted: wait for the prompt to come back.
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !h
         .app
         .assistant_terminal_text()
         .unwrap()
-        .contains("\ntoo-late"));
+        .trim_end()
+        .ends_with("ready>")
+    {
+        assert!(
+            std::time::Instant::now() < end,
+            "no prompt after Ctrl+C:\n{}",
+            h.app.assistant_terminal_text().unwrap()
+        );
+        h.frames(1);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    typed(
+        &mut h,
+        vec![
+            egui::Event::Text("echo after-$((1+1))".to_string()),
+            key(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+    );
+    wait_for(&mut h, "after-2");
+    assert!(!h.app.assistant_terminal_text().unwrap().contains("too-5"));
 
     // A paste arrives as typed text.
     typed(
         &mut h,
-        vec![egui::Event::Paste("echo pasted-text\n".to_string())],
+        vec![egui::Event::Paste("echo pasted-$((1+2))\n".to_string())],
     );
-    wait_for(&mut h, "\npasted-text");
+    wait_for(&mut h, "pasted-3");
 
     // Keys send what a terminal sends: `cat -v` shows them.
     typed(
         &mut h,
         vec![
-            egui::Event::Text("cat -v".to_string()),
+            egui::Event::Text("echo cat-$((1+1)); cat -v".to_string()),
             key(egui::Key::Enter, egui::Modifiers::NONE),
         ],
     );
-    h.frames(10);
+    wait_for(&mut h, "cat-2");
     typed(
         &mut h,
         vec![
@@ -662,11 +684,15 @@ fn the_claude_code_panel_runs_a_terminal() {
     typed(
         &mut h,
         vec![
-            egui::Event::Text("clear; printf '\\033[?1000h\\033[?1006h'; cat -v".to_string()),
+            egui::Event::Text(
+                "clear; printf '\\033[?1000h\\033[?1006h'; echo mouse-$((2*3)); cat -v".to_string(),
+            ),
             key(egui::Key::Enter, egui::Modifiers::NONE),
         ],
     );
-    h.frames(10);
+    // Mouse reports are on once the marker after them is shown.
+    wait_for(&mut h, "mouse-6");
+    h.renderer.move_pointer(egui::pos2(640.0, 650.0));
     typed(&mut h, vec![wheel(1.0)]);
     typed(&mut h, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
     wait_for(&mut h, "^[[<64;");
