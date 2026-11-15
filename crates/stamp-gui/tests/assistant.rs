@@ -578,7 +578,8 @@ fn the_claude_code_panel_runs_a_terminal() {
     wait_for(&mut h, "sleeping-4");
     typed(&mut h, vec![egui::Event::Copy]);
     // Some shells (zsh) drop what was typed while a command is
-    // interrupted: wait for the prompt to come back.
+    // interrupted: wait for the prompt to come back (within 30 s, half the
+    // time `sleep 60` would take).
     let end = std::time::Instant::now() + std::time::Duration::from_secs(30);
     while !h
         .app
@@ -603,7 +604,9 @@ fn the_claude_code_panel_runs_a_terminal() {
         ],
     );
     wait_for(&mut h, "after-2");
-    assert!(!h.app.assistant_terminal_text().unwrap().contains("too-5"));
+    // The prompt came back well within the minute `sleep` would have taken:
+    // Ctrl+C interrupted it. (Whether the rest of the line then runs
+    // depends on the shell: macOS's bash 3.2 runs it, dash does not.)
 
     // A paste arrives as typed text.
     typed(
