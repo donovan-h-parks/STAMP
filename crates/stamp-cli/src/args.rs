@@ -251,6 +251,8 @@ pub enum DistanceArg {
     BrayCurtis,
     Jaccard,
     Aitchison,
+    /// Euclidean distance between proportions (a PCoA of it is a PCA)
+    Euclidean,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
@@ -281,8 +283,6 @@ pub enum PlotTypeArg {
     PValueHistogram,
     /// Three views of the multiple-test correction
     MultipleComparison,
-    /// Samples on their principal components
-    Pca,
     /// Features against samples, clustered
     Heatmap,
     /// Every pair of groups for one feature
@@ -756,18 +756,18 @@ pub struct HeatmapArgs {
     pub heatmap_table: Option<PathBuf>,
 }
 
-/// Options of the ordination plots (`--plot-type pca`, `pcoa`, `nmds`):
+/// Options of the ordination plots (`--plot-type pcoa`, `nmds`):
 /// what colours and shapes the samples.
 #[derive(Args)]
 pub struct OrdinationArgs {
-    /// PCA, PCoA and NMDS plots: what colours the samples: group (the groups
+    /// PCoA and NMDS plots: what colours the samples: group (the groups
     /// of the analysis), field:NAME (a metadata field; a colour scale if its
     /// values are numbers, else a colour per value), category:NAME (a colour
     /// per value even for numbers) or feature:NAME (the relative abundance,
     /// %, of a feature at the profile level)
     #[arg(long, default_value = "group", value_name = "SOURCE")]
     pub color_by: String,
-    /// PCA, PCoA and NMDS plots: categorical metadata field that gives the
+    /// PCoA and NMDS plots: categorical metadata field that gives the
     /// samples their marker shapes [default: the groups]
     #[arg(long, value_name = "FIELD")]
     pub shape_by: Option<String>,
@@ -781,10 +781,10 @@ pub struct OrdinationArgs {
     /// Colouring by a number: which samples are drawn on top
     #[arg(long, value_enum, default_value_t = DrawOrderArg::HighOnTop)]
     pub draw_order: DrawOrderArg,
-    /// PCA, PCoA and NMDS plots: area of the markers, in square points
+    /// PCoA and NMDS plots: area of the markers, in square points
     #[arg(long, default_value_t = 30.0, value_name = "POINTS")]
     pub marker_size: f64,
-    /// PCA, PCoA and NMDS plots: opacity of the markers, from 0 to 1
+    /// PCoA and NMDS plots: opacity of the markers, from 0 to 1
     #[arg(long, default_value_t = 1.0, value_name = "OPACITY")]
     pub opacity: f64,
 }

@@ -553,6 +553,11 @@ Aitchison
    The Euclidean distance between the CLR-transformed samples (see
    :ref:`clr`). Respects the compositional nature of the data.
 
+Euclidean
+   The straight-line distance between the proportions of two samples. A
+   PCoA of it is a principal component analysis (PCA) of the proportions.
+   Like Bray-Curtis, it is dominated by the most abundant features.
+
 .. tip::
 
    If Bray-Curtis and Jaccard tell different stories, the groups differ in

@@ -1,7 +1,7 @@
-//! PCA plot: samples projected onto their first three principal components.
-
-use stamp_core::stats::pca::{pca_leading, Pca};
-use stamp_core::{GroupProfile, MultiGroupProfile, Profile};
+//! Ordination plots (PCoA and NMDS): samples placed on the first axes of
+//! an ordination, in up to three panels, coloured and shaped by group or
+//! by metadata. The ordination itself is computed elsewhere
+//! (`community_plots`).
 
 use crate::axes::{
     group_color, legend, marker_styled, repeated_colors_note, scaled_ticks, swatch_legend_at,
@@ -22,8 +22,6 @@ pub struct Sample {
     pub name: String,
     /// Index of the sample's group in [`Data::groups`].
     pub group: usize,
-    /// Proportion of each feature in the sample.
-    pub proportions: Vec<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,66 +44,7 @@ impl Data {
     }
 }
 
-fn proportions(profile: &Profile, column: usize) -> Vec<f64> {
-    profile
-        .features()
-        .iter()
-        .map(|f| {
-            let parent = profile.parent_counts(f)[column];
-            if parent > 0.0 {
-                f.counts[column] / parent
-            } else {
-                0.0
-            }
-        })
-        .collect()
-}
-
-impl Data {
-    pub fn from_group_profile(profile: &GroupProfile) -> Data {
-        let first = profile.samples_in_group1().len();
-        let samples = profile
-            .profile
-            .sample_names
-            .iter()
-            .enumerate()
-            .map(|(i, name)| Sample {
-                name: name.clone(),
-                group: usize::from(i >= first),
-                proportions: proportions(&profile.profile, i),
-            })
-            .collect();
-        Data {
-            samples,
-            groups: vec![profile.group_name1.clone(), profile.group_name2.clone()],
-            group_colors: Vec::new(),
-            styling: Styling::default(),
-        }
-    }
-
-    pub fn from_multi_group_profile(profile: &MultiGroupProfile) -> Data {
-        let mut samples = Vec::new();
-        let mut column = 0;
-        for (group, members) in profile.samples_in_groups().into_iter().enumerate() {
-            for name in members {
-                samples.push(Sample {
-                    name: name.clone(),
-                    group,
-                    proportions: proportions(&profile.profile, column),
-                });
-                column += 1;
-            }
-        }
-        Data {
-            samples,
-            groups: profile.group_names.clone(),
-            group_colors: Vec::new(),
-            styling: Styling::default(),
-        }
-    }
-}
-
-/// Appearance of the PCA plot. Lengths are in inches.
+/// Appearance of an ordination plot. Lengths are in inches.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Options {
@@ -168,36 +107,6 @@ impl Default for Options {
             opacity: 1.0,
         }
     }
-}
-
-pub fn plot(data: &Data, options: &Options) -> Figure {
-    draw(data, layout(data).as_ref(), options)
-}
-
-/// The principal components a PCA plot of `data` shows, on its first three
-/// axes: the slow part of drawing it, which the window keeps so that
-/// changing how the plot looks does not compute it again. `None` if the
-/// samples do not vary.
-pub fn layout(data: &Data) -> Option<Pca> {
-    let matrix: Vec<Vec<f64>> = data.samples.iter().map(|s| s.proportions.clone()).collect();
-    pca_leading(&matrix, 3)
-}
-
-/// The PCA plot of `data` from its [`layout`].
-pub fn draw(data: &Data, layout: Option<&Pca>, options: &Options) -> Figure {
-    let Some(result) = layout else {
-        return Figure::message(
-            "Degenerate PCA plot. Try plotting at a different level in the hierarchy.",
-        );
-    };
-    plot_ordination(
-        data,
-        &result.positions,
-        &result.variance_fractions,
-        "PC",
-        &[],
-        options,
-    )
 }
 
 /// How one sample is drawn.
@@ -474,7 +383,7 @@ pub fn plot_ordination(
         let across = span(0) + if beside { span(2) } else { 0.0 };
         let room = inner_width - if beside { gap } else { 0.0 };
         if !(across > 0.0 && span(1) > 0.0 && room > 0.0) {
-            return Figure::message("Degenerate PCA plot");
+            return Figure::message("Degenerate plot");
         }
         let unit = room / across;
         main_w = span(0) * unit;
@@ -697,29 +606,46 @@ mod tests {
     use super::*;
     use crate::figure::Shape;
 
-    fn data(features: usize) -> Data {
-        let sample = |name: &str, group: usize, seed: f64| Sample {
+    fn data() -> Data {
+        let sample = |name: &str, group: usize| Sample {
             name: name.to_string(),
             group,
-            proportions: (0..features)
-                .map(|f| {
-                    ((seed * (f as f64 + 1.3)).sin() + 1.0) / 10.0
-                        + group as f64 * 0.2 * (f % 2) as f64
-                })
-                .collect(),
         };
         Data {
             samples: vec![
-                sample("a1", 0, 1.0),
-                sample("a2", 0, 2.0),
-                sample("a3", 0, 3.0),
-                sample("b1", 1, 4.0),
-                sample("b2", 1, 5.0),
+                sample("a1", 0),
+                sample("a2", 0),
+                sample("a3", 0),
+                sample("b1", 1),
+                sample("b2", 1),
             ],
             groups: vec!["A".to_string(), "B".to_string()],
             group_colors: Vec::new(),
             styling: Styling::default(),
         }
+    }
+
+    /// Where an ordination of [`data`] puts its samples, on three axes.
+    fn positions(data: &Data) -> Vec<Vec<f64>> {
+        data.samples
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let i = i as f64;
+                vec![
+                    0.3 * (1.3 * i).sin() + 0.4 * s.group as f64,
+                    0.2 * (0.7 * i + 0.5).cos(),
+                    0.1 * (2.1 * i).sin(),
+                ]
+            })
+            .collect()
+    }
+
+    /// The share of the variation on each of the three axes.
+    const FRACTIONS: [f64; 3] = [0.6, 0.3, 0.1];
+
+    fn plot(data: &Data, options: &Options) -> Figure {
+        plot_ordination(data, &positions(data), &FRACTIONS, "PC", &[], options)
     }
 
     fn texts(figure: &Figure) -> Vec<String> {
@@ -735,7 +661,7 @@ mod tests {
 
     #[test]
     fn three_panels_show_every_sample() {
-        let figure = plot(&data(6), &Options::default());
+        let figure = plot(&data(), &Options::default());
         assert_eq!(figure.regions.len(), 15);
         let texts = texts(&figure);
         for component in ["PC1 (", "PC2 (", "PC3 ("] {
@@ -753,7 +679,7 @@ mod tests {
         assert!(figure.regions[3].tooltip.ends_with("\nB"));
 
         let two = plot(
-            &data(6),
+            &data(),
             &Options {
                 show_pc3_vs_pc2: false,
                 show_pc1_vs_pc3: false,
@@ -780,7 +706,7 @@ mod tests {
         };
         let with = |legend: LegendPosition, panels: bool| {
             plot(
-                &data(6),
+                &data(),
                 &Options {
                     legend,
                     show_pc3_vs_pc2: panels,
@@ -839,7 +765,7 @@ mod tests {
     fn panels_are_chosen_one_by_one() {
         let regions = |beside: bool, beneath: bool| {
             plot(
-                &data(6),
+                &data(),
                 &Options {
                     show_pc3_vs_pc2: beside,
                     show_pc1_vs_pc3: beneath,
@@ -857,7 +783,7 @@ mod tests {
         // unless asked otherwise.
         let angled = |rotate: bool| {
             plot(
-                &data(6),
+                &data(),
                 &Options {
                     rotate_pc3_labels: rotate,
                     ..Options::default()
@@ -875,9 +801,9 @@ mod tests {
     #[test]
     fn a_fixed_scale_gives_every_axis_the_same_length_per_unit() {
         // The frame of each panel is its bottom and left axis lines.
-        let fixed = plot(&data(6), &Options::default());
+        let fixed = plot(&data(), &Options::default());
         let free = plot(
-            &data(6),
+            &data(),
             &Options {
                 fixed_scale: false,
                 ..Options::default()
@@ -892,13 +818,8 @@ mod tests {
 
         // Two samples one unit apart along PC1 and along PC2 are as far
         // apart on the page in both directions.
-        let matrix: Vec<Vec<f64>> = data(6)
-            .samples
-            .iter()
-            .map(|s| s.proportions.clone())
-            .collect();
-        let result = stamp_core::stats::pca::pca(&matrix).unwrap();
-        let (a, b) = (&result.positions[0], &result.positions[3]);
+        let placed = positions(&data());
+        let (a, b) = (&placed[0], &placed[3]);
         let (ra, rb) = (&fixed.regions[0], &fixed.regions[3]);
         let per_unit_x = (rb.x - ra.x) / (b[0] - a[0]);
         let per_unit_y = (ra.y - rb.y) / (b[1] - a[1]);
@@ -911,7 +832,7 @@ mod tests {
     #[test]
     fn groups_get_their_own_shapes() {
         let shaped = plot(
-            &data(6),
+            &data(),
             &Options {
                 show_pc3_vs_pc2: false,
                 show_pc1_vs_pc3: false,
@@ -925,7 +846,7 @@ mod tests {
             .count();
         assert_eq!(squares, 2);
         let round = plot(
-            &data(6),
+            &data(),
             &Options {
                 show_pc3_vs_pc2: false,
                 show_pc1_vs_pc3: false,
@@ -965,7 +886,7 @@ mod tests {
                 }),
                 group_label: Some("Diet".to_string()),
             },
-            ..data(6)
+            ..data()
         }
     }
 
@@ -1135,7 +1056,7 @@ mod tests {
 
     #[test]
     fn categories_beyond_the_palette_are_noted() {
-        let mut data = data(6);
+        let mut data = data();
         let mut values = std::collections::HashMap::new();
         for i in 0..22 {
             let name = format!("s{i}");
@@ -1155,15 +1076,22 @@ mod tests {
 
     #[test]
     fn degenerate_data() {
-        let mut same = data(4);
-        for s in same.samples.iter_mut() {
-            s.proportions = vec![0.25; 4];
-        }
-        assert!(texts(&plot(&same, &Options::default()))[0].starts_with("Degenerate PCA plot"));
-        // One feature: a single direction of variation.
-        assert!(texts(&plot(&data(1), &Options::default()))[0].contains("single direction"));
+        // One axis only: a single direction of variation.
+        let line: Vec<Vec<f64>> = (0..5).map(|i| vec![i as f64]).collect();
+        let single = plot_ordination(&data(), &line, &[1.0], "PC", &[], &Options::default());
+        assert!(texts(&single)[0].contains("single direction"));
+        // Positions for some other samples.
+        let wrong = plot_ordination(
+            &data(),
+            &line[..3],
+            &FRACTIONS,
+            "PC",
+            &[],
+            &Options::default(),
+        );
+        assert!(texts(&wrong)[0].contains("does not match"));
         assert!(texts(&plot(
-            &data(6),
+            &data(),
             &Options {
                 width: 1.5,
                 ..Options::default()

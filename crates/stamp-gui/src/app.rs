@@ -1190,7 +1190,7 @@ impl StampApp {
         self.figures_built
     }
 
-    /// Number of ordination layouts (PCA, PCoA with its tests, NMDS)
+    /// Number of ordination layouts (PCoA with its tests, NMDS)
     /// computed so far, not counting those reused when only the look of the
     /// plot changed.
     pub fn ordinations_computed(&self) -> usize {

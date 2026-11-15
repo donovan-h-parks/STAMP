@@ -2,7 +2,7 @@
 //! and shaped by: their group, another metadata field, a number from the
 //! metadata, or the relative abundance of a feature.
 //!
-//! The choice is made in [`pca_plot::Options`](crate::pca_plot::Options)
+//! The choice is made in [`ordination_plot::Options`](crate::ordination_plot::Options)
 //! (`color_by`, `shape_by`); [`resolve`] looks the values up in the
 //! metadata and the profile and gives the [`Styling`] that the plot draws.
 

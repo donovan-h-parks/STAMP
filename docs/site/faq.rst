@@ -66,12 +66,12 @@ How do I make plots for a paper?
    plot's own size and options in *Configure plot*.
 
 How long do the ordination plots take with many samples?
-   The PCA, PCoA and NMDS plots compare every pair of samples, so their
+   The PCoA and NMDS plots compare every pair of samples, so their
    time grows with the square of the number of samples. As a guide, for a
    profile of about 6,000 genera on a desktop computer: with 619 samples
-   the PCA takes under a second, the PCoA with its three community tests
-   (999 permutations) about 1.5 seconds and the NMDS about 2 seconds; with
-   1,307 samples about 1, 7 and 10 seconds. The browser version is
+   the PCoA with its three community tests (999 permutations) takes about
+   1.5 seconds and the NMDS about 2 seconds; with 1,307 samples about 7
+   and 10 seconds. The browser version is
    slower. While a plot is computed, the window stays usable and shows
    what is being done and how far it has got, with a button to cancel (see
    :doc:`main_window`). Once computed, a plot is kept: changing only how it looks

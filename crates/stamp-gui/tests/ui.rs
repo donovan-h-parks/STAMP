@@ -850,14 +850,14 @@ fn new_plot_options_change_the_plots() {
     assert_eq!(harness.app.figure().regions.len(), active);
     assert!(texts(harness.app.figure()).contains(&"Number of sequences".to_string()));
 
-    // PCA: the panels are chosen separately.
-    harness.app.set_plot_kind(PlotKind::Pca);
+    // PCoA: the panels are chosen separately.
+    harness.app.set_plot_kind(PlotKind::Pcoa);
     harness.settle();
     let samples = harness.app.figure().regions.len() / 3;
-    harness.screenshot("pca_fixed_scale");
+    harness.screenshot("pcoa_fixed_scale");
     let mut settings = harness.app.plot_settings().clone();
-    settings.pca.show_pc1_vs_pc3 = false;
-    settings.pca.fixed_scale = false;
+    settings.pcoa.show_pc1_vs_pc3 = false;
+    settings.pcoa.fixed_scale = false;
     harness.app.set_plot_settings(settings);
     harness.settle();
     assert_eq!(harness.app.figure().regions.len(), 2 * samples);
@@ -1166,7 +1166,7 @@ fn shortcuts_plot_windows_and_remembered_settings() {
     // What is remembered survives being written out and read back.
     let mut settings = harness.app.plot_settings().clone();
     settings.min_p_exponent = -5;
-    settings.pca.fixed_scale = false;
+    settings.pcoa.fixed_scale = false;
     settings.heatmap.color_map = stamp_plot::heatmap::ColorMap::Jet;
     settings.axes_color = stamp_plot::Color::rgb(10, 20, 30);
     harness.app.set_plot_settings(settings.clone());
@@ -1360,7 +1360,7 @@ fn starts_with_the_tests_and_legends_of_stamp_v2() {
         settings.profile_bar.legend,
         settings.sequence_histogram.legend,
         settings.bar.legend,
-        settings.pca.legend,
+        settings.pcoa.legend,
         settings.heatmap.legend,
     ] {
         assert_eq!(legend, LegendPosition::Best);
@@ -1760,24 +1760,30 @@ fn remembered_plot_settings_do_not_outlive_their_defaults() {
     // the legend positions that version started with.
     let harness = Harness::enterotypes();
     let mut old = harness.app.saved(&harness.renderer.ctx);
-    old.plots.pca.legend = LegendPosition::UpperRight;
+    old.plots.pcoa.legend = LegendPosition::UpperRight;
     old.plots.bar.legend = LegendPosition::None;
     old.zoom = 2.5;
     let mut stored: serde_json::Value = serde_json::to_value(&old).unwrap();
     stored.as_object_mut().unwrap().remove("defaults_version");
+    // Settings of a plot that no longer exists (the PCA plot) are ignored.
+    let pcoa = stored["plots"]["pcoa"].clone();
+    stored["plots"]
+        .as_object_mut()
+        .unwrap()
+        .insert("pca".to_string(), pcoa);
     let read: Saved = serde_json::from_value(stored).unwrap();
     assert_eq!(read.defaults_version, 0);
 
     // The plots start from the current defaults; the rest is kept.
     let current = read.up_to_date();
     assert_eq!(current.defaults_version, DEFAULTS_VERSION);
-    assert_eq!(current.plots.pca.legend, LegendPosition::Best);
+    assert_eq!(current.plots.pcoa.legend, LegendPosition::Best);
     assert_eq!(current.plots.bar.legend, LegendPosition::Best);
     assert_eq!(current.zoom, 2.5);
 
     // Settings saved by this version are restored as they are.
     let mut chosen = harness.app.saved(&harness.renderer.ctx);
-    chosen.plots.pca.legend = LegendPosition::LowerLeft;
+    chosen.plots.pcoa.legend = LegendPosition::LowerLeft;
     assert_eq!(chosen.defaults_version, DEFAULTS_VERSION);
     assert_eq!(chosen.clone().up_to_date(), chosen);
 }
@@ -1984,7 +1990,7 @@ fn community_plots_for_groups() {
     harness.screenshot("pcoa");
     // The same seed gives the same permutation p-values on every redraw.
     let first = shown.clone();
-    harness.app.set_plot_kind(PlotKind::Pca);
+    harness.app.set_plot_kind(PlotKind::Nmds);
     harness.settle();
     harness.app.set_plot_kind(PlotKind::Pcoa);
     harness.settle();
@@ -2000,6 +2006,13 @@ fn community_plots_for_groups() {
     assert!(!shown.iter().any(|t| t.starts_with("PERMANOVA")));
     harness.screenshot("pcoa_settings");
     harness.app.show_plot_config(false);
+    // Euclidean distances between proportions: what a PCA would show.
+    settings.community_distance = Distance::Euclidean;
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    let shown = texts(&harness.app);
+    assert!(shown.contains(&"Euclidean distance".to_string()));
+    assert!(shown.iter().any(|t| t.starts_with("PCo1 (")));
 
     // Distances within each group and between groups.
     harness.app.set_plot_kind(PlotKind::DistanceBox);
@@ -2396,9 +2409,9 @@ fn font_sizes_are_set_in_the_preferences_and_per_plot() {
     harness.app.show_preferences(false);
 
     // Legends follow the preference.
-    harness.app.set_plot_kind(PlotKind::Pca);
+    harness.app.set_plot_kind(PlotKind::Pcoa);
     let mut settings = harness.app.plot_settings().clone();
-    settings.pca.legend = stamp_plot::axes::LegendPosition::UpperRight;
+    settings.pcoa.legend = stamp_plot::axes::LegendPosition::UpperRight;
     harness.app.set_plot_settings(settings);
     harness.settle();
     assert_eq!(size_of(&harness.app, "Enterotype 1"), 11.0);
@@ -2434,7 +2447,7 @@ fn the_plot_selector_lists_plots_by_group() {
     let app = &mut harness.app;
     harness
         .renderer
-        .click(egui::pos2(320.0, 727.0), |ui| app.draw(ui));
+        .click(egui::pos2(320.0, 712.0), |ui| app.draw(ui));
     let app = &mut harness.app;
     harness.renderer.run(30, |ui| app.draw(ui));
     let open = harness.screenshot("plot_selector_open");
@@ -2443,8 +2456,8 @@ fn the_plot_selector_lists_plots_by_group() {
         (0..closed.pixels.len()).any(|i| closed.pixels[i] != open.pixels[i]),
         "the selector did not open"
     );
-    // The default plot is still the first offered.
-    assert_eq!(harness.app.plot_kind(), PlotKind::Pca);
+    // The default plot is still the first offered: the PCoA.
+    assert_eq!(harness.app.plot_kind(), PlotKind::Pcoa);
 }
 
 #[test]
@@ -2892,7 +2905,7 @@ fn box_and_prevalence_settings_dialogs() {
     }
 }
 
-/// The ordinations (PCA, PCoA with its community tests, NMDS) are computed
+/// The ordinations (PCoA with its community tests, NMDS) are computed
 /// once for their data and settings: changing only how the plot looks
 /// (colours, shapes, marker size, opacity, legend, fonts) draws it again
 /// from the kept layout.
@@ -2903,7 +2916,7 @@ fn styling_an_ordination_does_not_compute_it_again() {
     harness.app.session.set_group_field("Environment");
     harness.app.session.invalidate_all();
     harness.app.set_mode(Mode::MultipleGroups);
-    for kind in [PlotKind::Pca, PlotKind::Pcoa, PlotKind::Nmds] {
+    for kind in [PlotKind::Pcoa, PlotKind::Nmds] {
         harness.app.set_plot_kind(kind);
         harness.settle();
         let computed = harness.app.ordinations_computed();
@@ -2915,7 +2928,7 @@ fn styling_an_ordination_does_not_compute_it_again() {
         assert!(!harness.app.results_table().rows.is_empty());
 
         let mut settings = harness.app.plot_settings().clone();
-        for options in [&mut settings.pca, &mut settings.pcoa, &mut settings.nmds] {
+        for options in [&mut settings.pcoa, &mut settings.nmds] {
             options.color_by = ColorSource::Field("Depth".to_string());
             options.shape_by = Some("Company".to_string());
             options.marker_size *= 2.0;
@@ -2942,13 +2955,11 @@ fn styling_an_ordination_does_not_compute_it_again() {
         );
 
         // A change of what it is computed from computes it again.
-        if kind != PlotKind::Pca {
-            settings.community_distance = stamp_core::stats::diversity::Distance::Jaccard;
-            harness.app.set_plot_settings(settings.clone());
-            harness.settle();
-            assert_eq!(harness.app.ordinations_computed(), computed + 1, "{kind:?}");
-            settings.community_distance = stamp_core::stats::diversity::Distance::BrayCurtis;
-        }
+        settings.community_distance = stamp_core::stats::diversity::Distance::Jaccard;
+        harness.app.set_plot_settings(settings.clone());
+        harness.settle();
+        assert_eq!(harness.app.ordinations_computed(), computed + 1, "{kind:?}");
+        settings.community_distance = stamp_core::stats::diversity::Distance::BrayCurtis;
         if kind == PlotKind::Pcoa {
             settings.community_permutations += 1;
             harness.app.set_plot_settings(settings.clone());
@@ -2957,7 +2968,6 @@ fn styling_an_ordination_does_not_compute_it_again() {
         }
         // Back to the first look: from the kept layout again.
         let mut plain = settings.clone();
-        plain.pca = Default::default();
         plain.pcoa = Default::default();
         plain.nmds = Default::default();
         let before = harness.app.ordinations_computed();
@@ -2967,7 +2977,7 @@ fn styling_an_ordination_does_not_compute_it_again() {
     }
 }
 
-/// PCA, PCoA and NMDS plots coloured by a metadata field (a number or a
+/// PCoA and NMDS plots coloured by a metadata field (a number or a
 /// category) or by the abundance of a feature, and shaped by another field.
 #[test]
 fn ordinations_are_coloured_and_shaped_by_other_fields() {
@@ -2977,7 +2987,7 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
     harness.app.session.invalidate_all();
     harness.app.show_feature_table(false);
     harness.app.set_mode(Mode::MultipleGroups);
-    harness.app.set_plot_kind(PlotKind::Pca);
+    harness.app.set_plot_kind(PlotKind::Pcoa);
     harness.settle();
     // Coloured by group: the legend inside the frame names the groups.
     let plain = figure_texts(&harness.app);
@@ -2987,8 +2997,8 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
     // By a number: a colour bar titled with the field; the sample whose
     // depth is "unknown" is drawn hollow and counted.
     let mut settings = harness.app.plot_settings().clone();
-    settings.pca.color_by = ColorSource::Field("Depth".to_string());
-    settings.pca.shape_by = Some("Company".to_string());
+    settings.pcoa.color_by = ColorSource::Field("Depth".to_string());
+    settings.pcoa.shape_by = Some("Company".to_string());
     harness.app.set_plot_settings(settings.clone());
     harness.settle();
     let shown = figure_texts(&harness.app);
@@ -3003,10 +3013,10 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
         tooltip.contains("Depth: ") && tooltip.contains("Company: "),
         "{tooltip}"
     );
-    harness.screenshot("pca_coloured_by_depth");
+    harness.screenshot("pcoa_coloured_by_depth");
 
     // The same field drawn by category.
-    settings.pca.color_by = ColorSource::Category("Depth".to_string());
+    settings.pcoa.color_by = ColorSource::Category("Depth".to_string());
     harness.app.set_plot_settings(settings.clone());
     harness.settle();
     assert!(figure_texts(&harness.app)
@@ -3028,9 +3038,9 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
         .map(|r| r.feature.clone())
         .collect();
     harness.app.select_feature(&features[0]);
-    settings.pca.color_by = ColorSource::SelectedFeature;
-    settings.pca.color_scale = ColorScale::Log10;
-    settings.pca.shape_by = None;
+    settings.pcoa.color_by = ColorSource::SelectedFeature;
+    settings.pcoa.color_scale = ColorScale::Log10;
+    settings.pcoa.shape_by = None;
     harness.app.set_plot_settings(settings.clone());
     harness.settle();
     let first = format!("{} (%)", features[0]);
@@ -3049,16 +3059,16 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
         .any(|t| t.starts_with("Core (")));
 
     // A feature by name, and a name that is not a feature.
-    settings.pca.color_by = ColorSource::Feature(features[2].clone());
+    settings.pcoa.color_by = ColorSource::Feature(features[2].clone());
     harness.app.set_plot_settings(settings.clone());
     harness.settle();
     assert_eq!(harness.app.figure().regions.len(), 3 * samples);
-    settings.pca.color_by = ColorSource::Feature("No such feature".to_string());
+    settings.pcoa.color_by = ColorSource::Feature("No such feature".to_string());
     harness.app.set_plot_settings(settings.clone());
     harness.settle();
     assert!(figure_texts(&harness.app)[0].contains("unknown feature"));
 
-    // PCoA: the community tests still compare the groups.
+    // The community tests still compare the groups.
     settings.pcoa.color_by = ColorSource::Field("Company".to_string());
     settings.pcoa.show_pc3_vs_pc2 = false;
     settings.pcoa.show_pc1_vs_pc3 = false;
@@ -3100,12 +3110,12 @@ fn ordination_settings_dialogs() {
         ..Context::default()
     };
     for (kind, name, height) in [
-        (PlotKind::Pca, "dialog_pca", 1000.0),
+        (PlotKind::Nmds, "dialog_nmds", 1000.0),
         (PlotKind::Pcoa, "dialog_pcoa", 1100.0),
     ] {
         let mut renderer = Renderer::new(420.0, height, 1.0);
         let mut settings = PlotSettings::default();
-        settings.pca.color_by = ColorSource::Field("Latitude".into());
+        settings.nmds.color_by = ColorSource::Field("Latitude".into());
         settings.pcoa.color_by = ColorSource::Feature("Equivita".into());
         settings.pcoa.shape_by = Some("Captivity".into());
         let image = renderer.render(|ui| {
@@ -3115,7 +3125,10 @@ fn ordination_settings_dialogs() {
         });
         assert!(ink(&image, 0, 0, 420, 600) > 0.05);
         // Showing the controls changes nothing.
-        assert_eq!(settings.pca.color_by, ColorSource::Field("Latitude".into()));
+        assert_eq!(
+            settings.nmds.color_by,
+            ColorSource::Field("Latitude".into())
+        );
         assert_eq!(
             settings.pcoa.color_by,
             ColorSource::Feature("Equivita".into())
@@ -3141,7 +3154,7 @@ fn a_slow_plot_shows_its_progress_and_can_be_cancelled() {
     harness.app.session.set_group_field("Environment");
     harness.app.session.invalidate_all();
     harness.app.set_mode(Mode::MultipleGroups);
-    harness.app.set_plot_kind(PlotKind::Pca);
+    harness.app.set_plot_kind(PlotKind::Composition);
     harness.settle();
     assert!(!harness.app.figure().regions.is_empty());
 
@@ -3356,7 +3369,7 @@ fn a_plot_part_way_through_its_community_tests() {
         .load_metadata("metadata.tsv", &example("LargeDataset/metadata.tsv"));
     harness.app.set_p_value_filter(None);
     harness.app.set_mode(Mode::MultipleGroups);
-    harness.app.set_plot_kind(PlotKind::Pca);
+    harness.app.set_plot_kind(PlotKind::Composition);
     harness.settle();
     assert_eq!(harness.app.plot_settings().community_permutations, 999);
     harness.app.set_plot_kind(PlotKind::Pcoa);

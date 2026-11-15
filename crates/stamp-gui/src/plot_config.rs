@@ -18,7 +18,7 @@ use stamp_plot::feature_plots::{BoxLayout, Field, GroupOrder as BoxGroupOrder};
 use stamp_plot::group_heatmap::{ColumnOrder as GroupOrder, NumberFormat, Scale};
 use stamp_plot::heatmap::{ColorMap, Order};
 use stamp_plot::histogram::Inset;
-use stamp_plot::pca_plot;
+use stamp_plot::ordination_plot;
 use stamp_plot::prevalence_plot::View as PrevalenceView;
 use stamp_plot::rank_abundance;
 use stamp_plot::rarefaction;
@@ -383,7 +383,7 @@ impl Dialog<'_> {
     /// that only one kind of ordination has, after the plots to show.
     fn ordination(
         &mut self,
-        o: &mut pca_plot::Options,
+        o: &mut ordination_plot::Options,
         axis: &str,
         notes: bool,
         context: &Context,
@@ -427,7 +427,7 @@ impl Dialog<'_> {
     /// What colours and shapes the samples of an ordination plot: the
     /// groups, a metadata field (numeric fields marked), or the abundance
     /// of a feature; and a field for the shapes.
-    fn colours_and_shapes(&mut self, o: &mut pca_plot::Options, context: &Context) {
+    fn colours_and_shapes(&mut self, o: &mut ordination_plot::Options, context: &Context) {
         self.styles(
             Styles {
                 color_by: &mut o.color_by,
@@ -1363,9 +1363,6 @@ pub fn show(
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.check("Label curves", &mut o.label_samples);
             });
-        }
-        PlotKind::Pca => {
-            dialog.ordination(&mut settings.pca, "PC", false, context, |_| {});
         }
         PlotKind::Map => dialog.map(settings, context),
         PlotKind::Pcoa => {

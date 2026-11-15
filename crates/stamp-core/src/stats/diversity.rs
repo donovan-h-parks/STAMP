@@ -220,18 +220,37 @@ pub enum Distance {
     /// Aitchison distance: Euclidean distance after the centred log-ratio
     /// transform, which respects that proportions are compositional.
     Aitchison,
+    /// Euclidean distance between the proportions of the two samples. A
+    /// principal coordinates analysis of it places samples as a principal
+    /// component analysis of their proportions would.
+    Euclidean,
 }
 
 impl Distance {
-    pub const ALL: [Distance; 3] = [Distance::BrayCurtis, Distance::Jaccard, Distance::Aitchison];
+    pub const ALL: [Distance; 4] = [
+        Distance::BrayCurtis,
+        Distance::Jaccard,
+        Distance::Aitchison,
+        Distance::Euclidean,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Distance::BrayCurtis => "Bray-Curtis",
             Distance::Jaccard => "Jaccard",
             Distance::Aitchison => "Aitchison",
+            Distance::Euclidean => "Euclidean",
         }
     }
+}
+
+/// A sample as proportions of its total; all zeros if it has none.
+fn as_proportions(sample: &[f64]) -> Vec<f64> {
+    let total: f64 = sample.iter().filter(|a| **a > 0.0).sum();
+    sample
+        .iter()
+        .map(|&a| if total > 0.0 { a.max(0.0) / total } else { 0.0 })
+        .collect()
 }
 
 /// Distances between every pair of a set of samples.
@@ -323,13 +342,7 @@ impl DistanceRun {
         let prepared: Vec<Vec<f64>> = samples
             .iter()
             .map(|sample| match metric {
-                Distance::BrayCurtis => {
-                    let total: f64 = sample.iter().filter(|a| **a > 0.0).sum();
-                    sample
-                        .iter()
-                        .map(|&a| if total > 0.0 { a.max(0.0) / total } else { 0.0 })
-                        .collect()
-                }
+                Distance::BrayCurtis | Distance::Euclidean => as_proportions(sample),
                 Distance::Jaccard => sample
                     .iter()
                     .map(|&a| if a > 0.0 { 1.0 } else { 0.0 })
@@ -346,7 +359,7 @@ impl DistanceRun {
                 .iter()
                 .map(|sample| (0..sample.len()).filter(|&f| sample[f] != 0.0).collect())
                 .collect(),
-            Distance::Aitchison => Vec::new(),
+            Distance::Aitchison | Distance::Euclidean => Vec::new(),
         };
         let n = samples.len();
         DistanceRun {
@@ -390,7 +403,7 @@ impl DistanceRun {
     fn distance(&self, i: usize, j: usize) -> f64 {
         let (a, b) = (&self.prepared[i], &self.prepared[j]);
         let metric = self.metric;
-        if metric == Distance::Aitchison {
+        if matches!(metric, Distance::Aitchison | Distance::Euclidean) {
             return squared_difference(a, b).sqrt();
         }
         let (fa, fb) = (&self.present[i], &self.present[j]);
@@ -991,6 +1004,21 @@ pub(crate) mod tests {
                     1.6635774589938441,
                 ],
             ),
+            // SciPy 1.17 `scipy.spatial.distance.pdist(p, "euclidean")` of
+            // the proportions p, which scikit-bio 0.7.4's
+            // `beta_diversity("euclidean", p)` matches.
+            (
+                Distance::Euclidean,
+                [
+                    0.0,
+                    0.10393492741038726,
+                    0.07904928717555415,
+                    0.6230680015599431,
+                    0.5749937151223583,
+                    0.650392938105035,
+                    0.4036675994728801,
+                ],
+            ),
         ];
         for (metric, row) in expected {
             let matrix = distances(&table(), metric);
@@ -1006,6 +1034,26 @@ pub(crate) mod tests {
         // A centred log-ratio sums to zero.
         let clr = centred_log_ratio(&[4.0, 0.0, 1.0]);
         assert!(clr.iter().sum::<f64>().abs() < 1e-12);
+    }
+
+    /// A PCoA of Euclidean distances between proportions is a PCA of the
+    /// proportions: the same share of variation on each axis and the same
+    /// positions, up to the sign of each axis.
+    #[test]
+    fn euclidean_pcoa_is_a_pca_of_the_proportions() {
+        let proportions: Vec<Vec<f64>> = table().iter().map(|s| as_proportions(s)).collect();
+        let pca = crate::stats::pca::pca(&proportions).unwrap();
+        let pcoa = pcoa(&distances(&table(), Distance::Euclidean)).unwrap();
+        for axis in 0..3 {
+            assert!(
+                (pca.variance_fractions[axis] - pcoa.variance_fractions[axis]).abs() < 1e-9,
+                "axis {axis}"
+            );
+            let sign = (pca.positions[0][axis] * pcoa.positions[0][axis]).signum();
+            for (a, b) in pca.positions.iter().zip(&pcoa.positions) {
+                assert!((a[axis] - sign * b[axis]).abs() < 1e-9, "axis {axis}");
+            }
+        }
     }
 
     #[test]
@@ -1332,13 +1380,7 @@ pub(crate) mod tests {
         let prepared: Vec<Vec<f64>> = samples
             .iter()
             .map(|sample| match metric {
-                Distance::BrayCurtis => {
-                    let total: f64 = sample.iter().filter(|a| **a > 0.0).sum();
-                    sample
-                        .iter()
-                        .map(|&a| if total > 0.0 { a.max(0.0) / total } else { 0.0 })
-                        .collect()
-                }
+                Distance::BrayCurtis | Distance::Euclidean => as_proportions(sample),
                 Distance::Jaccard => sample
                     .iter()
                     .map(|&a| if a > 0.0 { 1.0 } else { 0.0 })
@@ -1368,7 +1410,9 @@ pub(crate) mod tests {
                         0.0
                     }
                 }
-                Distance::Aitchison => pairs.map(|(a, b)| (a - b) * (a - b)).sum::<f64>().sqrt(),
+                Distance::Aitchison | Distance::Euclidean => {
+                    pairs.map(|(a, b)| (a - b) * (a - b)).sum::<f64>().sqrt()
+                }
             }
         })
     }
@@ -1412,7 +1456,7 @@ pub(crate) mod tests {
             for i in 0..samples.len() {
                 for j in 0..samples.len() {
                     let (a, b) = (fast.get(i, j), reference.get(i, j));
-                    if metric == Distance::Aitchison {
+                    if matches!(metric, Distance::Aitchison | Distance::Euclidean) {
                         assert!((a - b).abs() < 1e-12, "{a} vs {b}");
                     } else {
                         assert_eq!(a.to_bits(), b.to_bits(), "{metric:?} {i} {j}");

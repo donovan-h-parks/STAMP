@@ -478,7 +478,7 @@ fn claude_code_reaches_the_tools_over_http() {
     let client = std::thread::spawn(move || {
         let body = json!({
             "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-            "params": {"name": "show_plot", "arguments": {"plot": "Pca"}}
+            "params": {"name": "show_plot", "arguments": {"plot": "Pcoa"}}
         })
         .to_string();
         let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
@@ -505,8 +505,8 @@ fn claude_code_reaches_the_tools_over_http() {
     let body: Value = serde_json::from_str(response.split("\r\n\r\n").nth(1).unwrap()).unwrap();
     assert_eq!(body["result"]["isError"], false, "{body}");
     let said = body["result"]["content"][1]["text"].as_str().unwrap();
-    assert!(said.contains("PCA plot"), "{said}");
-    assert_eq!(h.app.plot_kind(), PlotKind::Pca);
+    assert!(said.contains("PCoA plot"), "{said}");
+    assert_eq!(h.app.plot_kind(), PlotKind::Pcoa);
 }
 
 /// Claude Desktop's side: it starts `stamp-mcp` and talks to it over

@@ -309,7 +309,7 @@ features left after the filters.
 ``--plot-type``
    Any plot available for the analysis: ``extended-error-bar``, ``bar``,
    ``box``, ``profile-bar``, ``scatter``, ``sequence-histogram``,
-   ``p-value-histogram``, ``multiple-comparison``, ``pca``, ``heatmap``,
+   ``p-value-histogram``, ``multiple-comparison``, ``heatmap``,
    ``post-hoc``, ``rarefaction``, ``volcano``, ``composition``,
    ``alpha-diversity``, ``pcoa``, ``distance-box``, ``correlation-scatter``,
    ``nmds``, ``shared-features``, ``rank-abundance``, ``ancom``,
@@ -335,17 +335,19 @@ features left after the filters.
    Font (``arial``, ``times-new-roman``, ``courier-new``, ``dejavu-sans``)
    and sizes in points.
 ``--alpha-metric``, ``--distance``
-   The diversity measure and distance of the community plots.
+   The diversity measure, and the distance of the community plots:
+   ``bray-curtis`` (default), ``jaccard``, ``aitchison`` or ``euclidean``
+   (a PCoA of Euclidean distances is a PCA of the proportions).
 
 With more than twenty groups the group colours repeat, and the command
 prints a warning.
 
 .. _cli-ordination-colours:
 
-Colouring and shaping PCA, PCoA and NMDS plots
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Colouring and shaping PCoA and NMDS plots
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``--plot-type pca``, ``pcoa`` and ``nmds`` (``two-groups`` and
+``--plot-type pcoa`` and ``nmds`` (``two-groups`` and
 ``multi-groups``) colour the samples by group unless asked otherwise; see
 :ref:`ordination-colours`. For example, the host groups (but the feral
 horses of Sable Island) by Bray-Curtis distance, coloured by the abundance

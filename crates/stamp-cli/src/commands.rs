@@ -599,7 +599,7 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
 
     let rows = results.filter(&profile, &filter, &settings);
     if let Some(path) = &args.plot.plot {
-        use stamp_plot::{composition, feature_plots, heatmap, pca_plot, scatter, volcano};
+        use stamp_plot::{composition, feature_plots, heatmap, scatter, volcano};
         let plot = &args.plot;
         let kind = plot.plot_type.unwrap_or(PlotTypeArg::ExtendedErrorBar);
         let size = |default: f64| plot.plot_height.unwrap_or(default);
@@ -695,18 +695,6 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     &args.map,
                 )?
             }
-            PlotTypeArg::Pca => pca_plot::plot(
-                &pca_plot::Data {
-                    styling: ordination_styling(
-                        &args.ordination,
-                        &metadata,
-                        &profile.profile,
-                        &args.metadata.field,
-                    )?,
-                    ..pca_plot::Data::from_group_profile(&profile)
-                },
-                &ordination_options(plot, &args.ordination)?,
-            ),
             PlotTypeArg::Heatmap => {
                 let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
                 heatmap::plot(
@@ -911,7 +899,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
     };
     let rows = results.filter(&filter);
     if let Some(path) = &args.plot.plot {
-        use stamp_plot::{composition, feature_plots, heatmap, pca_plot, volcano};
+        use stamp_plot::{composition, feature_plots, heatmap, volcano};
         let plot = &args.plot;
         let size = |default: f64| plot.plot_height.unwrap_or(default);
         let ranked: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
@@ -979,18 +967,6 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                     &args.map,
                 )?
             }
-            PlotTypeArg::Pca => pca_plot::plot(
-                &pca_plot::Data {
-                    styling: ordination_styling(
-                        &args.ordination,
-                        &metadata,
-                        &profile.profile,
-                        &args.metadata.field,
-                    )?,
-                    ..pca_plot::Data::from_multi_group_profile(&profile)
-                },
-                &ordination_options(plot, &args.ordination)?,
-            ),
             PlotTypeArg::Bar => feature_plots::bar_plot(
                 &feature_data(&bar_feature(plot, &ranked)?)?,
                 &feature_plots::BarOptions {
@@ -1916,7 +1892,7 @@ fn community_figure(
     ordination: &OrdinationArgs,
     styling: stamp_plot::ordination_style::Styling,
 ) -> CliResult<stamp_plot::Figure> {
-    use stamp_core::stats::diversity::{AlphaMetric, Distance, Normalisation};
+    use stamp_core::stats::diversity::{AlphaMetric, Normalisation};
     use stamp_plot::community_plots::{self, Community};
     use stamp_plot::feature_plots;
 
@@ -1936,11 +1912,7 @@ fn community_figure(
     )?;
     community.styling = styling;
     let ordination_options = ordination_options(plot, ordination)?;
-    let distance = match plot.distance {
-        DistanceArg::BrayCurtis => Distance::BrayCurtis,
-        DistanceArg::Jaccard => Distance::Jaccard,
-        DistanceArg::Aitchison => Distance::Aitchison,
-    };
+    let distance = distance_of(plot);
     let boxes = feature_plots::BoxOptions {
         width: plot.plot_width,
         height: plot.plot_height.unwrap_or(6.0),
@@ -2100,11 +2072,11 @@ fn map_figure(
     Ok(map_plot::plot(&data, &options))
 }
 
-/// The appearance of the PCA, PCoA and NMDS plots.
+/// The appearance of the PCoA and NMDS plots.
 fn ordination_options(
     plot: &PlotArgs,
     args: &OrdinationArgs,
-) -> CliResult<stamp_plot::pca_plot::Options> {
+) -> CliResult<stamp_plot::ordination_plot::Options> {
     use stamp_plot::ordination_style::{ColorScale, ColorSource, DrawOrder};
     if !(args.opacity > 0.0 && args.opacity <= 1.0) {
         return Err("--opacity must be above 0 and at most 1".into());
@@ -2112,7 +2084,7 @@ fn ordination_options(
     if args.marker_size.is_nan() || args.marker_size <= 0.0 {
         return Err("--marker-size must be above 0".into());
     }
-    Ok(stamp_plot::pca_plot::Options {
+    Ok(stamp_plot::ordination_plot::Options {
         width: plot.plot_width,
         height: plot.plot_height.unwrap_or(6.0),
         // A legend of the groups, placed where it is clearest, as in the
@@ -2137,7 +2109,7 @@ fn ordination_options(
     })
 }
 
-/// What colours and shapes the samples of the PCA, PCoA and NMDS plots, from
+/// What colours and shapes the samples of the PCoA and NMDS plots, from
 /// the metadata and `profile` (for a feature's relative abundance).
 fn ordination_styling(
     args: &OrdinationArgs,
@@ -2171,6 +2143,7 @@ fn distance_of(plot: &PlotArgs) -> stamp_core::stats::diversity::Distance {
         DistanceArg::BrayCurtis => Distance::BrayCurtis,
         DistanceArg::Jaccard => Distance::Jaccard,
         DistanceArg::Aitchison => Distance::Aitchison,
+        DistanceArg::Euclidean => Distance::Euclidean,
     }
 }
 

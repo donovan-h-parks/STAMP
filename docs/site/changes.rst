@@ -18,8 +18,8 @@ Analyses
 
 Communities
    Rarefaction and rank-abundance curves; alpha diversity (observed
-   features, Shannon, Simpson, Chao1); Bray-Curtis, Jaccard and Aitchison
-   distances; PCoA and NMDS; PERMANOVA, ANOSIM, PERMDISP and the Mantel
+   features, Shannon, Simpson, Chao1); Bray-Curtis, Jaccard, Aitchison and
+   Euclidean distances; PCoA and NMDS; PERMANOVA, ANOSIM, PERMDISP and the Mantel
    test; shared-feature plots (UpSet and Venn).
 
 Plots

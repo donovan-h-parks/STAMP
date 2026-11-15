@@ -24,8 +24,8 @@ ordination on them, and tests on them), which is where most studies begin.
 
 - [x] **Alpha diversity**: observed richness, Shannon, Simpson and Chao1 for
   each sample; a box plot by group; a test between groups.
-- [x] **Distances between samples**: Bray-Curtis, Jaccard and Aitchison.
-- [x] **PCoA** on a chosen distance, beside the existing PCA.
+- [x] **Distances between samples**: Bray-Curtis, Jaccard, Aitchison and Euclidean.
+- [x] **PCoA** on a chosen distance; replaces the PCA plot.
 - [x] **PERMANOVA**, with **PERMDISP** to tell a difference in location from
   a difference in spread; **ANOSIM** as the older alternative.
 - [x] **Box plot of distances** within and between groups.

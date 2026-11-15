@@ -11,8 +11,8 @@ use stamp_plot::extended_error_bar::{self, SAMPLE1_COLOR, SAMPLE2_COLOR};
 use stamp_plot::p_values::{p_value_text, PValueKind};
 use stamp_plot::{
     ancom_plot, co_occurrence_plot, composition, correlation_plot, feature_plots, group_heatmap,
-    heatmap, histogram, map_plot, multi_box, pca_plot, post_hoc, prevalence_plot, rank_abundance,
-    rarefaction, sample_plots, scatter, shared_features, volcano, Color, Figure,
+    heatmap, histogram, map_plot, multi_box, ordination_plot, post_hoc, prevalence_plot,
+    rank_abundance, rarefaction, sample_plots, scatter, shared_features, volcano, Color, Figure,
 };
 
 use crate::session::{Mode, Session};
@@ -65,7 +65,6 @@ impl PartialEq for OrdinationKey {
 /// The slow part of a plot.
 #[derive(Clone)]
 pub enum Cached {
-    Pca(Option<stamp_core::stats::pca::Pca>),
     Community(Result<community_plots::Layout, String>),
     /// Distances between samples, and the depth they were rarefied to.
     Distances(std::sync::Arc<DistanceMatrix>, Option<u64>),
@@ -163,24 +162,6 @@ const ORDINATION_CACHE_SIZE: usize = 6;
 /// The text of the placeholder drawn while the slow part of a plot is
 /// computed.
 pub const COMPUTING: &str = "Computing the plot...";
-
-/// A [`Work`] that does `compute` in one piece, saying first that it is
-/// doing `stage` (so that, in the browser, the page shows that before the
-/// work begins).
-fn work_in_one_piece(stage: &str, compute: impl FnOnce() -> Cached + Send + 'static) -> Work {
-    let stage = stage.to_string();
-    let mut compute = Some(compute);
-    let mut announced = false;
-    Box::new(move |progress, _| {
-        if !progress.report_stage(&stage, 0, 0) {
-            return Some(None);
-        }
-        if !std::mem::replace(&mut announced, true) {
-            return None;
-        }
-        compute.take().map(|compute| Some(compute()))
-    })
-}
 
 /// How a run inside a [`Work`] paces itself: it reports what it is doing,
 /// stops once cancelled, pauses when its time is up, and pauses too
@@ -292,27 +273,6 @@ fn hash_of_values<'a>(values: impl Iterator<Item = &'a [f64]>) -> u64 {
     hasher.finish()
 }
 
-/// The PCA plot of `data`, its principal components computed only if not
-/// already kept for the same values.
-fn pca_figure(session: &Session, data: &pca_plot::Data, options: &pca_plot::Options) -> Figure {
-    let hash = hash_of_values(data.samples.iter().map(|s| s.proportions.as_slice()));
-    let key = OrdinationKey {
-        tree: None,
-        inputs: format!("PCA|{}|{hash:016x}", data.samples.len()),
-    };
-    let work = || {
-        let data = data.clone();
-        work_in_one_piece("Computing principal components", move || {
-            Cached::Pca(pca_plot::layout(&data))
-        })
-    };
-    match session.ordinations.get_or_request(key, work) {
-        Some(Cached::Pca(layout)) => pca_plot::draw(data, layout.as_ref(), options),
-        Some(_) => Figure::message("Degenerate PCA plot"),
-        None => Figure::message(COMPUTING),
-    }
-}
-
 /// The plots, each available in one or more modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlotKind {
@@ -324,7 +284,6 @@ pub enum PlotKind {
     SequenceHistogram,
     PValueHistogram,
     MultipleComparison,
-    Pca,
     Heatmap,
     PostHoc,
     Rarefaction,
@@ -356,7 +315,6 @@ impl PlotKind {
             PlotKind::SequenceHistogram => "Sequence histogram",
             PlotKind::PValueHistogram => "p-value histogram",
             PlotKind::MultipleComparison => "Multiple comparison plots",
-            PlotKind::Pca => "PCA plot",
             PlotKind::Heatmap => "Heatmap plot",
             PlotKind::PostHoc => "Post-hoc plot",
             PlotKind::Rarefaction => "Rarefaction curves",
@@ -391,7 +349,7 @@ impl PlotKind {
                 PlotGroup::Composition
             }
             Rarefaction | RankAbundance | AlphaDiversity => PlotGroup::Diversity,
-            Pca | Pcoa | Nmds | DistanceBox | Mantel => PlotGroup::Similarity,
+            Pcoa | Nmds | DistanceBox | Mantel => PlotGroup::Similarity,
             Map => PlotGroup::Samples,
         }
     }
@@ -446,7 +404,6 @@ impl PlotKind {
                 PlotKind::Bar,
                 PlotKind::Box,
                 PlotKind::Scatter,
-                PlotKind::Pca,
                 PlotKind::Heatmap,
                 PlotKind::GroupHeatmap,
                 PlotKind::CoOccurrence,
@@ -472,7 +429,7 @@ impl PlotKind {
                 PlotKind::Map,
             ],
             Mode::MultipleGroups => &[
-                PlotKind::Pca,
+                PlotKind::Pcoa,
                 PlotKind::Heatmap,
                 PlotKind::GroupHeatmap,
                 PlotKind::CoOccurrence,
@@ -484,7 +441,6 @@ impl PlotKind {
                 PlotKind::Volcano,
                 PlotKind::Composition,
                 PlotKind::AlphaDiversity,
-                PlotKind::Pcoa,
                 PlotKind::Nmds,
                 PlotKind::DistanceBox,
                 PlotKind::Ancom,
@@ -610,7 +566,6 @@ pub struct PlotSettings {
     pub box_category_field: Option<String>,
     /// What the group bar and box plots show for each sample.
     pub feature_field: feature_plots::Field,
-    pub pca: pca_plot::Options,
     pub heatmap: heatmap::Options,
     pub rarefaction: rarefaction::Options,
     pub volcano: volcano::Options,
@@ -624,12 +579,12 @@ pub struct PlotSettings {
     pub community_permutations: usize,
     pub alpha_metric: AlphaMetric,
     pub alpha_box: feature_plots::BoxOptions,
-    pub pcoa: pca_plot::Options,
+    pub pcoa: ordination_plot::Options,
     /// Write the outcome of PERMANOVA, ANOSIM and PERMDISP above the PCoA
     /// plot.
     pub pcoa_show_tests: bool,
     pub distance_box: feature_plots::BoxOptions,
-    pub nmds: pca_plot::Options,
+    pub nmds: ordination_plot::Options,
     pub mantel: correlation_plot::Options,
     pub shared: shared_features::Options,
     pub rank_abundance: rank_abundance::Options,
@@ -691,7 +646,6 @@ impl PlotSettings {
     pub fn colors_by_selected_feature(&self, kind: PlotKind) -> bool {
         use stamp_plot::ordination_style::ColorSource;
         let options = match kind {
-            PlotKind::Pca => &self.pca,
             PlotKind::Pcoa => &self.pcoa,
             PlotKind::Nmds => &self.nmds,
             PlotKind::Map => {
@@ -755,10 +709,6 @@ impl Default for PlotSettings {
             box_feature_list: String::new(),
             box_category_field: None,
             feature_field: feature_plots::Field::Proportion,
-            pca: pca_plot::Options {
-                legend,
-                ..Default::default()
-            },
             heatmap: heatmap::Options {
                 legend,
                 height: 6.0,
@@ -776,7 +726,7 @@ impl Default for PlotSettings {
                 height: 6.0,
                 ..Default::default()
             },
-            pcoa: pca_plot::Options {
+            pcoa: ordination_plot::Options {
                 legend,
                 ..Default::default()
             },
@@ -785,7 +735,7 @@ impl Default for PlotSettings {
                 height: 6.0,
                 ..Default::default()
             },
-            nmds: pca_plot::Options {
+            nmds: ordination_plot::Options {
                 legend,
                 show_pc3_vs_pc2: false,
                 show_pc1_vs_pc3: false,
@@ -868,7 +818,6 @@ impl PlotSettings {
                 self.p_value_histogram_corrected = defaults.p_value_histogram_corrected;
             }
             PlotKind::MultipleComparison => self.multiple_comparison = defaults.multiple_comparison,
-            PlotKind::Pca => self.pca = defaults.pca,
             PlotKind::Rarefaction => self.rarefaction = defaults.rarefaction,
             PlotKind::Volcano => self.volcano = defaults.volcano,
             PlotKind::CorrelationScatter => self.correlation = defaults.correlation,
@@ -1245,7 +1194,7 @@ pub fn map_fields(
 /// profile, for a feature's relative abundance).
 fn ordination_styling(
     session: &Session,
-    options: &pca_plot::Options,
+    options: &ordination_plot::Options,
     profile: &stamp_core::Profile,
 ) -> Result<stamp_plot::ordination_style::Styling, String> {
     stamp_plot::ordination_style::resolve(
@@ -1862,19 +1811,6 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     vec![color1, color2],
                     settings,
                 ),
-                PlotKind::Pca => match ordination_styling(session, &settings.pca, &profile.profile)
-                {
-                    Ok(styling) => pca_figure(
-                        session,
-                        &pca_plot::Data {
-                            group_colors: vec![color1, color2],
-                            styling,
-                            ..pca_plot::Data::from_group_profile(profile)
-                        },
-                        &settings.pca,
-                    ),
-                    Err(message) => Figure::message(&message),
-                },
                 PlotKind::Heatmap => {
                     let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
                     heatmap::plot(
@@ -2167,19 +2103,6 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         settings,
                     )
                 }
-                PlotKind::Pca => match ordination_styling(session, &settings.pca, &profile.profile)
-                {
-                    Ok(styling) => pca_figure(
-                        session,
-                        &pca_plot::Data {
-                            group_colors: colors.clone(),
-                            styling,
-                            ..pca_plot::Data::from_multi_group_profile(profile)
-                        },
-                        &settings.pca,
-                    ),
-                    Err(message) => Figure::message(&message),
-                },
                 PlotKind::Heatmap => {
                     let names: Vec<String> = rows.iter().map(|r| r.feature.clone()).collect();
                     heatmap::plot(
@@ -2371,7 +2294,6 @@ mod tests {
             PlotKind::Pcoa,
             PlotKind::Nmds,
             PlotKind::DistanceBox,
-            PlotKind::Pca,
             PlotKind::Ancom,
         ] {
             let figure = build(&session, Mode::MultipleGroups, kind, &settings);
@@ -2448,7 +2370,7 @@ mod tests {
             message(build(
                 &no_metadata,
                 Mode::TwoGroups,
-                PlotKind::Pca,
+                PlotKind::Pcoa,
                 &PlotSettings::default()
             )),
             NO_METADATA
@@ -2487,9 +2409,9 @@ mod tests {
             (Mode::TwoGroups, PlotKind::Bar),
             (Mode::TwoGroups, PlotKind::Box),
             (Mode::TwoGroups, PlotKind::Scatter),
-            (Mode::TwoGroups, PlotKind::Pca),
+            (Mode::TwoGroups, PlotKind::Pcoa),
             (Mode::TwoGroups, PlotKind::Heatmap),
-            (Mode::MultipleGroups, PlotKind::Pca),
+            (Mode::MultipleGroups, PlotKind::Pcoa),
             (Mode::MultipleGroups, PlotKind::Heatmap),
             (Mode::MultipleGroups, PlotKind::Bar),
             (Mode::MultipleGroups, PlotKind::Box),

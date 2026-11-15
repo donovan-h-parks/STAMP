@@ -134,7 +134,7 @@ stamp-cli two-samples --profile examples/IronMineEdwards/EdwardsIronMine.spf \
 
 ![Extended error bar plot of the iron mine example](docs/images/extended_error_bar.png)
 
-`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `pca`, `heatmap`, `rarefaction`, `volcano`, `composition`, `alpha-diversity`, `pcoa`, `distance-box`, `nmds`, `shared-features`, `rank-abundance`, `ancom`, `group-heatmap` (a summary of each feature in each group), `map` (sample locations on a map made with Natural Earth), (with the `correlation` command) `correlation-scatter` and `mantel`, and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
+`--plot-type` selects any of the other plots: `bar`, `box`, `profile-bar`, `scatter`, `sequence-histogram`, `p-value-histogram`, `multiple-comparison`, `heatmap`, `rarefaction`, `volcano`, `composition`, `alpha-diversity`, `pcoa`, `distance-box`, `nmds`, `shared-features`, `rank-abundance`, `ancom`, `group-heatmap` (a summary of each feature in each group), `map` (sample locations on a map made with Natural Earth), (with the `correlation` command) `correlation-scatter` and `mantel`, and (with the `post-hoc` command) `post-hoc`. For example, a clustered heatmap of the genera that differ between three enterotypes:
 
 ```bash
 stamp-cli multi-groups --profile examples/EnterotypesArumugam/Enterotypes.profile.spf \

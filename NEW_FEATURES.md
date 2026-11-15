@@ -75,7 +75,7 @@ Add an entry here whenever a feature is added that v2 did not have.
   that explain each test, post-hoc test, correction and plot for
   biologists, with worked examples and what to look for.
 - **Progress of slow work, and cancelling it.** Analyses, plots that
-  take a while to compute (PCA, PCoA with its community tests, NMDS, the
+  take a while to compute (PCoA with its community tests, NMDS, the
   distance box and Mantel plots, ANCOM), reading large profiles and building
   large results tables run in the background (on another thread on the
   desktop, in time slices in the browser) and show what they are doing with
@@ -282,7 +282,7 @@ Add an entry here whenever a feature is added that v2 did not have.
   `--color-scale`, `--color-map` (also offered by the correlation command
   for the map). The data are converted by
   `scripts/naturalearth/convert.py`.
-- **Ordination plots coloured and shaped by any field** (PCA, PCoA, NMDS, in
+- **Ordination plots coloured and shaped by any field** (PCoA, NMDS, in
   every analysis that has them). Colour by the groups (as before), another
   categorical metadata field, a numeric field on a continuous colour scale
   (viridis by default, plasma, magma, cividis or any heatmap colour map;
@@ -381,8 +381,8 @@ Add an entry here whenever a feature is added that v2 did not have.
   test and significance level are options. On the command line:
   `stamp-cli ancom --plot FILE`, or `--plot-type ancom` with
   `two-groups` and `multi-groups`.
-- **NMDS plot**, for two groups and multiple groups, beside the PCA and
-  PCoA plots, with the stress written above it. On the command line:
+- **NMDS plot**, for two groups and multiple groups, beside the PCoA
+  plot, with the stress written above it. On the command line:
   `--plot-type nmds`.
 - **Shared features plot**, in all three analysis types: which features
   each group (or sample) has, and which combinations of groups share
@@ -405,11 +405,13 @@ Add an entry here whenever a feature is added that v2 did not have.
   Kruskal-Wallis p-value. On the command line:
   `--plot-type alpha-diversity`, with
   `--alpha-metric observed|shannon|simpson|chao1` and `--rarefy`.
-- **PCoA plot**, for two groups and multiple groups: the samples laid out
-  by principal coordinates analysis of a chosen distance, beside the
-  existing PCA plot and with the same options, with the outcome of
-  PERMANOVA, ANOSIM and PERMDISP above it. On the command line:
-  `--plot-type pcoa`, with `--distance bray-curtis|jaccard|aitchison`.
+- **PCoA plot**, for two groups and multiple groups, and the first plot
+  shown for multiple groups: the samples laid out by principal coordinates
+  analysis of a chosen distance (Bray-Curtis, Jaccard, Aitchison, or
+  Euclidean, which reproduces a PCA of the proportions), with the outcome
+  of PERMANOVA, ANOSIM and PERMDISP above it. It replaces v2's PCA plot
+  [64]. On the command line: `--plot-type pcoa`, with
+  `--distance bray-curtis|jaccard|aitchison|euclidean`.
 - **Distance box plot**, for two groups and multiple groups: the distances
   between samples of the same group, group by group, beside the distances
   between samples of different groups. On the command line:
@@ -455,6 +457,6 @@ Add an entry here whenever a feature is added that v2 did not have.
   - The idea follows the rarefaction plot of the GenomicaMicrob fork of
     STAMP; the implementation is independent of it.
 
-- **"Best" legend position for the PCA plot and the heatmap**, and legends
+- **"Best" legend position for the ordination plots and the heatmap**, and legends
   on the left and right sides as well as in the corners [36, 43].
 - **Any confidence level** for the post-hoc plot [47].

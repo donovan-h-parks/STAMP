@@ -389,7 +389,7 @@ pub fn plot_id(kind: PlotKind) -> String {
 }
 
 /// The plot kinds, for looking one up by id or name.
-pub const ALL_PLOT_KINDS: [PlotKind; 27] = [
+pub const ALL_PLOT_KINDS: [PlotKind; 26] = [
     PlotKind::ExtendedErrorBar,
     PlotKind::Bar,
     PlotKind::Box,
@@ -398,7 +398,6 @@ pub const ALL_PLOT_KINDS: [PlotKind; 27] = [
     PlotKind::SequenceHistogram,
     PlotKind::PValueHistogram,
     PlotKind::MultipleComparison,
-    PlotKind::Pca,
     PlotKind::Heatmap,
     PlotKind::PostHoc,
     PlotKind::Rarefaction,
@@ -454,7 +453,6 @@ pub fn option_fields(mode: Mode, kind: PlotKind) -> &'static [&'static str] {
         PlotKind::SequenceHistogram => &["sequence_histogram"],
         PlotKind::PValueHistogram => &["p_value_histogram", "p_value_histogram_corrected"],
         PlotKind::MultipleComparison => &["multiple_comparison"],
-        PlotKind::Pca => &["pca"],
         PlotKind::Rarefaction => &["rarefaction"],
         PlotKind::Volcano => &["volcano"],
         PlotKind::CorrelationScatter => &["correlation"],

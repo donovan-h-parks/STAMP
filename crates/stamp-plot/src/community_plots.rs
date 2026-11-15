@@ -19,7 +19,7 @@ use stamp_core::{ProfileTree, Unclassified};
 use crate::axes::group_color;
 use crate::feature_plots::{self, BoxOptions, FeatureData, Field, Group};
 use crate::figure::{Color, Figure};
-use crate::{correlation_plot, pca_plot};
+use crate::{correlation_plot, ordination_plot};
 
 /// The samples of a community with their groups.
 #[derive(Debug, Clone, PartialEq)]
@@ -268,7 +268,7 @@ pub fn pcoa_plot(
     community: &Community,
     distance: Distance,
     tests: Option<(usize, &mut StampRng)>,
-    options: &pca_plot::Options,
+    options: &ordination_plot::Options,
 ) -> Figure {
     match pcoa_layout(community, distance, tests) {
         Ok(layout) => draw_pcoa(community, &layout, options),
@@ -277,7 +277,11 @@ pub fn pcoa_plot(
 }
 
 /// The PCoA plot of a community from its [`pcoa_layout`].
-pub fn draw_pcoa(community: &Community, layout: &Layout, options: &pca_plot::Options) -> Figure {
+pub fn draw_pcoa(
+    community: &Community,
+    layout: &Layout,
+    options: &ordination_plot::Options,
+) -> Figure {
     let data = ordination_data(community);
     let mut notes = layout.notes.clone();
     if let Some(tests) = &layout.tests {
@@ -290,7 +294,7 @@ pub fn draw_pcoa(community: &Community, layout: &Layout, options: &pca_plot::Opt
             ));
         }
     }
-    pca_plot::plot_ordination(
+    ordination_plot::plot_ordination(
         &data,
         &layout.positions,
         &layout.variance_fractions,
@@ -337,7 +341,11 @@ fn nmds_result(
 
 /// Non-metric multidimensional scaling plot of the samples by a distance,
 /// in two dimensions, with its stress.
-pub fn nmds_plot(community: &Community, distance: Distance, options: &pca_plot::Options) -> Figure {
+pub fn nmds_plot(
+    community: &Community,
+    distance: Distance,
+    options: &ordination_plot::Options,
+) -> Figure {
     match nmds_layout(community, distance) {
         Ok(layout) => draw_nmds(community, &layout, options),
         Err(message) => Figure::message(&message),
@@ -345,14 +353,18 @@ pub fn nmds_plot(community: &Community, distance: Distance, options: &pca_plot::
 }
 
 /// The NMDS plot of a community from its [`nmds_layout`].
-pub fn draw_nmds(community: &Community, layout: &Layout, options: &pca_plot::Options) -> Figure {
+pub fn draw_nmds(
+    community: &Community,
+    layout: &Layout,
+    options: &ordination_plot::Options,
+) -> Figure {
     let data = ordination_data(community);
-    let options = pca_plot::Options {
+    let options = ordination_plot::Options {
         show_pc3_vs_pc2: false,
         show_pc1_vs_pc3: false,
         ..options.clone()
     };
-    pca_plot::plot_ordination(
+    ordination_plot::plot_ordination(
         &data,
         &layout.positions,
         &layout.variance_fractions,
@@ -363,16 +375,15 @@ pub fn draw_nmds(community: &Community, layout: &Layout, options: &pca_plot::Opt
 }
 
 /// The samples of a community as an ordination plot wants them.
-fn ordination_data(community: &Community) -> pca_plot::Data {
-    pca_plot::Data {
+fn ordination_data(community: &Community) -> ordination_plot::Data {
+    ordination_plot::Data {
         samples: community
             .samples
             .iter()
             .zip(&community.sample_groups)
-            .map(|(name, &group)| pca_plot::Sample {
+            .map(|(name, &group)| ordination_plot::Sample {
                 name: name.clone(),
                 group,
-                proportions: Vec::new(),
             })
             .collect(),
         groups: community.groups.clone(),
@@ -935,10 +946,10 @@ mod tests {
             &community,
             Distance::BrayCurtis,
             Some((199, &mut rng)),
-            &pca_plot::Options {
+            &ordination_plot::Options {
                 show_pc3_vs_pc2: false,
                 show_pc1_vs_pc3: false,
-                ..pca_plot::Options::default()
+                ..ordination_plot::Options::default()
             },
         );
         assert_eq!(figure.regions.len(), 6);
@@ -969,7 +980,7 @@ mod tests {
             &community,
             Distance::Jaccard,
             None,
-            &pca_plot::Options::default(),
+            &ordination_plot::Options::default(),
         );
         assert!(!self::texts(&plain)
             .iter()
@@ -1006,7 +1017,7 @@ mod tests {
         let figure = nmds_plot(
             &community,
             Distance::BrayCurtis,
-            &pca_plot::Options::default(),
+            &ordination_plot::Options::default(),
         );
         assert_eq!(figure.regions.len(), 6);
         let shown = texts(&figure);

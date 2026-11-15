@@ -673,48 +673,59 @@ These plots place samples so that similar samples are close together.
 per feature) squeezed into two that keep as much of the picture as
 possible.
 
-PCA plot
-^^^^^^^^
-
-*Two groups, multiple groups.* Principal component analysis of the
-proportions of all features. The first principal component (PC1) is the
-direction in which the samples vary most; PC2 the next, at right angles to
-it; and so on. Three panels show PC1 against PC2, PC3 against PC2 and PC1
-against PC3. Each axis gives the share of all variation it captures.
-
-With all three panels shown, the legend of the groups is drawn in the empty
-space at the bottom right, below the PC3 against PC2 panel, so that it never
-covers a sample; *Legend position* in Configure plot then places it within
-that space (upper left, lower right and so on). If one of the two smaller
-panels is switched off there is no such space, and the legend is placed
-within the main panel. The PCoA plot does the same.
-
-.. figure:: images/mg_pca.png
-   :width: 90%
-
-   PCA of the genera of the three enterotypes.
-
-**What to look for.** Whether groups form separate clouds. Here
-Enterotype 1 is separated from the others along PC1, which captures 57% of
-the variation, and Enterotype 2 along PC2. If the first two axes together
-capture little of the variation, the plot shows only a small part of the
-picture.
-
-.. tip::
-
-   PCA of proportions is dominated by the most abundant features. To see
-   whether the groups differ in the rest of the community too, use the PCoA
-   plot with the Jaccard distance.
-
 PCoA plot
 ^^^^^^^^^
 
-*Two groups, multiple groups.* Principal coordinates analysis: like PCA,
-but built from a chosen distance between samples (Bray-Curtis, Jaccard or
-Aitchison), which suits community data better. Above the plot are the
-results of PERMANOVA, ANOSIM and PERMDISP, whether the groups differ as a
-whole. See :ref:`the community tests <community-tests>` for an
-example of how to read them.
+*Two groups, multiple groups; the first plot shown for multiple groups.*
+Principal coordinates analysis places the samples so that the distances
+between them on the plot match, as well as two or three axes can, a chosen
+distance between their communities. PCo1 is the direction in which the
+samples differ most, PCo2 the next, at right angles to it, and so on; each
+axis gives the share of all variation it captures. Three panels show PCo1
+against PCo2, PCo3 against PCo2 and PCo1 against PCo3.
+
+The distance, chosen in *Configure plot* (``--distance`` on the command
+line), decides what "similar" means:
+
+* **Bray-Curtis** (the default): the share of the abundance two samples do
+  not have in common; driven by the abundant features.
+* **Jaccard**: the share of features found in only one of the two; who is
+  there, not how many.
+* **Aitchison**: Euclidean distance between centred log ratios; respects the
+  compositional nature of the data, so that rare features count too.
+* **Euclidean**: Euclidean distance between proportions. A PCoA of it is
+  exactly a principal component analysis (PCA) of the proportions, so this
+  is the choice for a PCA. Like Bray-Curtis it is dominated by the most
+  abundant features.
+
+Above the plot are the results of PERMANOVA, ANOSIM and PERMDISP, which
+test whether the groups differ as a whole; see :ref:`the community tests
+<community-tests>` for how to read them.
+
+With all three panels shown, the legend of the groups is drawn in the empty
+space at the bottom right, below the PCo3 against PCo2 panel, so that it
+never covers a sample; *Legend position* in Configure plot then places it
+within that space (upper left, lower right and so on). If one of the two
+smaller panels is switched off there is no such space, and the legend is
+placed within the main panel.
+
+.. figure:: images/mg_pcoa_enterotypes.png
+   :width: 90%
+
+   PCoA (Bray-Curtis) of the genera of the three enterotypes.
+
+**What to look for.** Whether groups form separate clouds. Here
+Enterotype 1 lies to the left along PCo1, which captures 30% of the
+variation, Enterotype 2 to the lower right, and Enterotype 3 above them;
+PERMANOVA and ANOSIM agree that the groups differ (p = 0.001). If the first
+two axes together capture little of the variation, the plot shows only a
+small part of the picture.
+
+.. tip::
+
+   Try more than one distance. Groups that separate with Bray-Curtis but not
+   with Jaccard differ in the abundance of common features rather than in
+   which features they have.
 
 NMDS plot
 ^^^^^^^^^
@@ -740,7 +751,7 @@ cuttings and produced water spread widely.
 Colouring and shaping the samples
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The PCA, PCoA and NMDS plots colour samples by group unless asked
+The PCoA and NMDS plots colour samples by group unless asked
 otherwise. **Colours and shapes** in Configure plot (``--color-by`` and
 ``--shape-by`` on the command line) offers instead:
 

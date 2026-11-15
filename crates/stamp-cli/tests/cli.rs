@@ -943,14 +943,16 @@ fn every_plot_type_can_be_drawn() {
         );
         assert!(has(&svg, label), "two-groups {kind}: no {label:?}");
     }
-    let pca = svg_plot(
+    // A PCoA of Euclidean distances, which is what the PCA plot showed.
+    let euclidean = svg_plot(
         "two-groups",
         &groups,
-        &["--plot-type", "pca"],
+        &["--plot-type", "pcoa", "--distance", "euclidean"],
         &directory,
-        "g-pca",
+        "g-euclidean",
     );
-    assert!(pca.contains(">PC1 (") && pca.contains(">PC3 ("));
+    assert!(euclidean.contains(">PCo1 (") && euclidean.contains(">PCo3 ("));
+    assert!(has(&euclidean, "Euclidean distance"));
     let chosen = svg_plot(
         "two-groups",
         &groups,
@@ -977,7 +979,7 @@ fn every_plot_type_can_be_drawn() {
     ];
     let heatmap = svg_plot("multi-groups", &multi, &filtered, &directory, "m-heatmap");
     assert!(has(&heatmap, "Bacteroides") && has(&heatmap, "Enterotype 2"));
-    for kind in ["pca", "bar", "box"] {
+    for kind in ["pcoa", "bar", "box"] {
         let svg = svg_plot(
             "multi-groups",
             &multi,
@@ -1125,9 +1127,20 @@ fn every_plot_type_can_be_drawn() {
     let message = failure(&with(
         "two-samples",
         &iron,
+        &["--plot-type", "pcoa", "--plot", refused.to_str().unwrap()],
+    ));
+    assert!(
+        message.contains("the pcoa plot is not available for two samples"),
+        "{message}"
+    );
+    assert!(!refused.exists());
+    // The PCA plot is gone: a PCoA of Euclidean distances replaces it.
+    let message = failure(&with(
+        "two-groups",
+        &groups,
         &["--plot-type", "pca", "--plot", refused.to_str().unwrap()],
     ));
-    assert!(message.contains("the pca plot is not available for two samples"));
+    assert!(message.contains("invalid value 'pca'"), "{message}");
     assert!(!refused.exists());
     let message = failure(&with(
         "two-groups",
@@ -2148,12 +2161,12 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
         "Phylum",
     ];
 
-    let pca = svg_plot(
+    let depth = svg_plot(
         "multi-groups",
         &coal,
         &[
             "--plot-type",
-            "pca",
+            "pcoa",
             "--color-by",
             "field:Depth",
             "--shape-by",
@@ -2162,9 +2175,9 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
             "magma",
         ],
         &directory,
-        "pca-depth",
+        "pcoa-depth",
     );
-    assert!(has(&pca, "Depth") && has(&pca, "No value (1)") && has(&pca, "Company"));
+    assert!(has(&depth, "Depth") && has(&depth, "No value (1)") && has(&depth, "Company"));
 
     let pcoa = svg_plot(
         "multi-groups",
@@ -2228,7 +2241,7 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
         ),
         (["--opacity", "2"], "--opacity"),
     ] {
-        let mut args = with("multi-groups", &coal, &["--plot-type", "pca"]);
+        let mut args = with("multi-groups", &coal, &["--plot-type", "pcoa"]);
         args.extend_from_slice(&extra);
         args.extend_from_slice(&["--plot", refused.to_str().unwrap()]);
         let text = failure(&args);

@@ -37,10 +37,10 @@ Compare several groups
 
 Click the **Multiple groups** tab. STAMP tests every genus (choose
 *Genera* as the profile level on the left) for a difference between the
-ticked groups with an ANOVA, and shows a **PCA plot**: each point is a
+ticked groups with an ANOVA, and shows a **PCoA plot**: each point is a
 sample, placed so that samples with similar profiles are close together.
 The three enterotypes form fairly separate clouds, which is how they were
-defined.
+defined, and the PERMANOVA above the plot confirms that they differ.
 
 .. tip::
 
