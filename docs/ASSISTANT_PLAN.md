@@ -1,6 +1,7 @@
 # Plan: a STAMP assistant built on Claude Code
 
-Status: phases A, B, C and D1 implemented on branch `rust-port-llm`
+Status: phases A, B, C and D1 implemented on branch `rust-port-llm`,
+merged into `rust-port`
 (2026-11-15); D2 not started.
 
 ## Goal

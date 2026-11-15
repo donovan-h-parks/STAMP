@@ -20,7 +20,7 @@ RELEASING, NEW_FEATURES, ASSISTANT_PLAN). Tests: bridge subprocess test in
 Gatekeeper on the unsigned bridge, Claude Desktop's tool-call time limit.
 Committed on `rust-port-llm`, in the commit after the Windows icon change
 (`023f7a7`: build.rs, build-dependency, RELEASING "Windows executables from
-Linux"). Not pushed, not merged into `rust-port`.
+Linux"). Merged into `rust-port` (fast-forward, 2026-11-15); not pushed.
 
 Previous task: **LLM assistant built on Claude Code** (2026-11-15), branch
 `rust-port-llm` (from `rust-port`). Plan in `docs/ASSISTANT_PLAN.md`
@@ -46,7 +46,7 @@ Linux terminal choice is unit-tested; no display here to open one); the
 interactive (non `-p`) first run of Claude Code with its folder-trust
 prompt; Phase D2 (terminal inside STAMP). Known limit: while STAMP's window
 is hidden, read tools are answered (`App::logic`) but changes wait for the
-window to redraw. Committed on `rust-port-llm` (not pushed, not merged into `rust-port`).
+window to redraw. Committed on `rust-port-llm`, since merged into `rust-port`.
 
 ## Last completed
 
