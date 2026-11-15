@@ -46,7 +46,13 @@ Add an entry here whenever a feature is added that v2 did not have.
   `set_group_colors` for the colour of any group, `switch_samples` to
   leave samples out by name or metadata value ("remove the samples from
   the QS company"), and `set_plot_fonts` for the text sizes and font of
-  every plot. Plan:
+  every plot. **OpenCode** (opencode.ai) runs in the same panel
+  (Assistant > Open OpenCode), connected to the same server, for people
+  with a ChatGPT plan, GitHub Copilot or another provider rather than a
+  Claude plan: STAMP writes `opencode.json` (the server and token, and
+  ask-first rules for commands, edits and web fetches) and `AGENTS.md` in
+  its assistant folder, in OpenCode 2's form or OpenCode 1's after asking
+  `opencode --version`, and installs OpenCode 2 if asked. Plan:
   `docs/ASSISTANT_PLAN.md`.
 - **In the browser.** STAMP runs as a web page (WebAssembly), entirely on the
   user's computer: files are read with the browser's file picker and saved as

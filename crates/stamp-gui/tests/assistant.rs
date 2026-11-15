@@ -651,8 +651,16 @@ fn the_claude_code_panel_runs_a_terminal() {
     let ctx = h.renderer.ctx.clone();
     // STAMP_TEST_SHELL tries another shell (CI has dash on Ubuntu).
     let shell = std::env::var("STAMP_TEST_SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-    stamp_gui::assistant::window::run_in_panel(&mut h.app, &ctx, "Shell", &shell, &[], &folder)
-        .unwrap();
+    stamp_gui::assistant::window::run_in_panel(
+        &mut h.app,
+        &ctx,
+        stamp_gui::assistant::launch::Agent::ClaudeCode,
+        "Shell",
+        &shell,
+        &[],
+        &folder,
+    )
+    .unwrap();
     // Wait (up to half a minute: CI machines can be slow) until the screen
     // shows `wanted`. Commands print a computed value, such as
     // `$((6*7))`, so that what is waited for is their output, never the
@@ -900,6 +908,7 @@ fn claude_code_in_the_panel() {
     stamp_gui::assistant::window::run_in_panel(
         &mut h.app,
         &ctx,
+        stamp_gui::assistant::launch::Agent::ClaudeCode,
         "Claude Code",
         &program,
         &args,
@@ -998,6 +1007,109 @@ fn claude_code_in_the_panel() {
     shoot(&mut h, "claude-scrolled");
     let after = h.app.assistant_terminal_text().unwrap_or_default();
     println!("wheel changed the screen: {}", before != after);
+    for entry in h.app.assistant_log() {
+        println!("tool: {} {}", entry.tool, entry.args);
+    }
+}
+
+/// Not a test: runs the real OpenCode in the assistant panel against the
+/// Enterotypes example, as Assistant > Open OpenCode does, and checks that
+/// it connects to STAMP's server and lists its tools. With
+/// `STAMP_OPENCODE_PROMPT` set (and OpenCode signed in to a provider), it
+/// also asks that and prints the tools used. Screenshots go to
+/// `STAMP_SCREENSHOTS`. OpenCode is the one installed, or
+/// `STAMP_OPENCODE`; set `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and
+/// `XDG_STATE_HOME` to keep it away from the user's own settings. Run with
+/// `--ignored --nocapture`.
+#[cfg(unix)]
+#[test]
+#[ignore]
+fn opencode_in_the_panel() {
+    use eframe::egui;
+    use stamp_gui::assistant::launch::Agent;
+
+    let folder = PathBuf::from(std::env::var("STAMP_ASSISTANT_FOLDER").expect("a folder"));
+    let opencode = std::env::var("STAMP_OPENCODE")
+        .map(PathBuf::from)
+        .ok()
+        .or_else(|| Agent::OpenCode.find())
+        .expect("OpenCode is installed");
+    let shots = std::env::var("STAMP_SCREENSHOTS").ok().map(PathBuf::from);
+    let mut h = Harness::enterotypes();
+    let ctx = h.renderer.ctx.clone();
+    let server = stamp_gui::assistant::window::start_sharing_with(&mut h.app, &ctx, None).unwrap();
+    println!(
+        "OpenCode {:?} at {}",
+        stamp_gui::assistant::launch::opencode_major(&opencode),
+        opencode.display()
+    );
+    Agent::OpenCode
+        .prepare(&folder, &server.url(), server.token(), &opencode)
+        .unwrap();
+    let (program, args) = Agent::OpenCode.command(&opencode);
+    println!("{program} {}", args.join(" "));
+    stamp_gui::assistant::window::run_in_panel(
+        &mut h.app,
+        &ctx,
+        Agent::OpenCode,
+        "OpenCode",
+        &program,
+        &args,
+        &folder,
+    )
+    .unwrap();
+    let shoot = |h: &mut Harness, name: &str| {
+        if let Some(directory) = &shots {
+            let app = &mut h.app;
+            let image = h.renderer.render(|ui| app.draw(ui));
+            std::fs::create_dir_all(directory).unwrap();
+            std::fs::write(directory.join(format!("{name}.png")), image.to_png()).unwrap();
+        }
+    };
+    let run_for = |h: &mut Harness, seconds: u64, until: &dyn Fn(&Harness) -> bool| {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+        while std::time::Instant::now() < end {
+            h.frames(1);
+            if until(h) {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        false
+    };
+    h.frames(3);
+    let app = &mut h.app;
+    h.renderer
+        .click(egui::pos2(640.0, 700.0), |ui| app.draw(ui));
+    let connected = run_for(&mut h, 60, &|h| h.app.assistant_connections() > 0);
+    run_for(&mut h, 5, &|_| false);
+    shoot(&mut h, "opencode-start");
+    println!("{}", h.app.assistant_terminal_text().unwrap_or_default());
+    assert!(connected, "OpenCode did not connect to STAMP");
+    assert_eq!(h.app.assistant_program(), "OpenCode");
+    let Ok(prompt) = std::env::var("STAMP_OPENCODE_PROMPT") else {
+        return;
+    };
+    let enter = egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let app = &mut h.app;
+    h.renderer
+        .send_events(vec![egui::Event::Text(prompt)], |ui| app.draw(ui));
+    run_for(&mut h, 1, &|_| false);
+    let app = &mut h.app;
+    h.renderer.send_events(vec![enter], |ui| app.draw(ui));
+    let wait: u64 = std::env::var("STAMP_CLAUDE_WAIT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(120);
+    run_for(&mut h, wait, &|_| false);
+    shoot(&mut h, "opencode-answer");
+    println!("{}", h.app.assistant_terminal_text().unwrap_or_default());
     for entry in h.app.assistant_log() {
         println!("tool: {} {}", entry.tool, entry.args);
     }

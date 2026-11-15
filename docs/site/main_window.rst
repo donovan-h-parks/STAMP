@@ -137,8 +137,9 @@ Tables
   filter to tick or untick all samples matching a condition (for example,
   *Remove all samples where Nationality = american*). Samples left out by
   the *Sample filter* are greyed out here.
-* **View > Claude Code** (desktop application) shows or hides the Claude
-  Code panel along the bottom of the window; see :doc:`assistant`.
+* **View > Claude Code** (desktop application) shows or hides the assistant
+  panel along the bottom of the window, which runs Claude Code or OpenCode
+  (the menu item is named after the one running); see :doc:`assistant`.
 
 The tables along the bottom share the room as tabs: click a tab to bring
 its table to the front.

@@ -27,6 +27,8 @@ pub enum Frame {
     Metadata,
     Results,
     ConfigurePlot,
+    /// The assistant panel, running Claude Code or OpenCode (named for
+    /// the first, as saved layouts name it).
     ClaudeCode,
 }
 
@@ -228,6 +230,8 @@ pub struct Behavior<'a> {
     /// The tabs container that holds only the plot, whose tab bar is not
     /// shown.
     pub plot_tabs: Option<TileId>,
+    /// The name on the assistant panel's tab: the program it runs.
+    pub terminal_title: &'static str,
 }
 
 impl egui_tiles::Behavior<Frame> for Behavior<'_> {
@@ -245,7 +249,10 @@ impl egui_tiles::Behavior<Frame> for Behavior<'_> {
     }
 
     fn tab_title_for_pane(&mut self, frame: &Frame) -> egui::WidgetText {
-        frame.title().into()
+        match frame {
+            Frame::ClaudeCode => self.terminal_title.into(),
+            _ => frame.title().into(),
+        }
     }
 
     fn is_tab_closable(&self, tiles: &Tiles<Frame>, tile_id: TileId) -> bool {

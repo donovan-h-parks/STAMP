@@ -4,8 +4,8 @@
 //!   description for AI" and for the tools.
 //! - [`tools`] is what a model may ask of STAMP.
 //! - On the desktop, `server` answers those requests over the Model Context
-//!   Protocol on this computer only, and `launch` starts Claude Code
-//!   connected to it. `bridge` is the `stamp-mcp` program that Claude
+//!   Protocol on this computer only, and `launch` starts Claude Code or
+//!   OpenCode connected to it, in the panel `terminal` draws. `bridge` is the `stamp-mcp` program that Claude
 //!   Desktop starts to reach the server, and `bundle` packs it as a Claude
 //!   Desktop extension.
 //!
@@ -50,13 +50,19 @@ pub struct State {
     /// The dialog being shown, if any.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) asking: Option<Ask>,
-    /// Claude Code (or its installer) running in the Claude Code panel.
+    /// Claude Code or OpenCode (or its installer) running in the
+    /// assistant panel.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) terminal: Option<terminal::Terminal>,
-    /// The Claude Code panel is shown.
+    /// The program the assistant panel runs, the last one opened
+    /// (remembered between runs).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) agent: launch::Agent,
+    /// The assistant panel is shown.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) show_terminal: bool,
-    /// Open Claude Code without its dialog (remembered between runs).
+    /// Open Claude Code or OpenCode without its dialog (remembered between
+    /// runs).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) skip_claude_code_dialog: bool,
 }
@@ -67,8 +73,8 @@ pub struct State {
 pub(crate) enum Ask {
     /// Asking before sharing with Claude Desktop.
     ClaudeDesktop,
-    /// Asking before opening Claude Code (and sharing with it).
-    ClaudeCode,
+    /// Asking before opening Claude Code or OpenCode (and sharing with it).
+    Agent(launch::Agent),
     /// The Claude Desktop extension has been written to `bundle`, and
     /// handed to Claude Desktop if `opened`.
     Installed {

@@ -3,6 +3,8 @@
 use eframe::egui;
 
 use super::describe;
+#[cfg(not(target_arch = "wasm32"))]
+use super::launch::Agent;
 use crate::StampApp;
 
 /// The Assistant menu.
@@ -56,19 +58,22 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
                 Err(message) => app.show_notice(message),
             }
         }
-        if ui
-            .button("Open Claude Code...")
-            .on_hover_text(
-                "Ask Claude Code, in a panel at the bottom of the window, about your data and \
-                 plots, and have it change them. Needs a Claude Pro, Max, Team or Enterprise \
-                 plan.",
-            )
-            .clicked()
-        {
-            open_claude_code_or_ask(app, ui.ctx());
+        for agent in Agent::ALL {
+            if ui
+                .button(format!("Open {}...", agent.name()))
+                .on_hover_text(format!(
+                    "Ask {}, in a panel at the bottom of the window, about your data and plots, \
+                     and have it change them. Needs {}.",
+                    agent.name(),
+                    agent.accounts()
+                ))
+                .clicked()
+            {
+                open_agent_or_ask(app, ui.ctx(), agent);
+            }
         }
         if ui
-            .add_enabled(sharing, egui::Button::new("Stop sharing with Claude"))
+            .add_enabled(sharing, egui::Button::new("Stop sharing"))
             .clicked()
         {
             app.assistant.server = None;
@@ -115,19 +120,19 @@ fn plot_image(figure: &stamp_plot::Figure) -> Result<egui::ColorImage, String> {
     }
 }
 
-/// The assistant's part of the status bar: that Claude is connected,
+/// The assistant's part of the status bar: that an assistant is connected,
 /// and an Undo button for its changes.
 pub(crate) fn status(app: &mut StampApp, ui: &mut egui::Ui) {
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(server) = &app.assistant.server {
         let text = if server.clients() > 0 {
-            "Claude connected"
+            "Assistant connected"
         } else {
-            "Sharing with Claude"
+            "Sharing with assistant"
         };
         if ui
             .link(text)
-            .on_hover_text("STAMP is sharing this session with Claude. Click for details.")
+            .on_hover_text("STAMP is sharing this session with an AI assistant. Click for details.")
             .clicked()
         {
             app.assistant.show_window = true;
@@ -161,14 +166,19 @@ pub(crate) fn windows(app: &mut StampApp, ctx: &egui::Context) {
 }
 
 /// What sharing means, said before it starts. `who` is "Claude" or
-/// "Claude Code".
+/// the program being opened.
 #[cfg(not(target_arch = "wasm32"))]
 fn sharing(who: &str) -> String {
+    let sent_to = if who == Agent::OpenCode.name() {
+        "the AI provider you sign in to in OpenCode (such as OpenAI or GitHub Copilot) to answer \
+         your questions, under your account with it"
+    } else {
+        "Anthropic to answer your questions, under your Claude account"
+    };
     format!(
         "{who} will be able to read the loaded profile and metadata, the results and the plots, \
          and to change the analysis and the plots in this window. What it reads is sent to \
-         Anthropic to answer your questions, under your Claude account. Sharing stops when you \
-         choose Assistant > Stop sharing with Claude, or close STAMP."
+         {sent_to}. Sharing stops when you choose Assistant > Stop sharing, or close STAMP."
     )
 }
 
@@ -178,12 +188,12 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
         return;
     };
     let title = match ask {
-        super::Ask::ClaudeDesktop => "Share with Claude Desktop",
-        super::Ask::ClaudeCode => "Open Claude Code",
-        super::Ask::Installed { .. } => "Install in Claude Desktop",
+        super::Ask::ClaudeDesktop => "Share with Claude Desktop".to_string(),
+        super::Ask::Agent(agent) => format!("Open {}", agent.name()),
+        super::Ask::Installed { .. } => "Install in Claude Desktop".to_string(),
     };
-    let claude = match ask {
-        super::Ask::ClaudeCode => super::launch::find_claude(),
+    let found = match ask {
+        super::Ask::Agent(agent) => agent.find(),
         _ => None,
     };
     let mut open = true;
@@ -192,7 +202,7 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
     enum Choice {
         Share,
         ShareAndInstall,
-        OpenClaudeCode { install: bool },
+        OpenAgent { agent: Agent, install: bool },
     }
     let mut chosen = None;
     egui::Window::new(title)
@@ -222,17 +232,30 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
                         close = ui.button("Cancel").clicked();
                     });
                 }
-                super::Ask::ClaudeCode => {
-                    ui.label(sharing("Claude Code"));
+                super::Ask::Agent(agent) => {
+                    let agent = *agent;
+                    let name = agent.name();
+                    ui.label(sharing(name));
                     ui.add_space(6.0);
-                    match &claude {
+                    match &found {
                         Some(path) => {
+                            let first_time = match agent {
+                                Agent::ClaudeCode => {
+                                    "The first time, sign in with your Claude account, and when \
+                                     Claude Code asks whether you trust STAMP's folder, choose \
+                                     \"Yes, I trust this folder\" (with the arrow keys and \
+                                     Enter)."
+                                }
+                                Agent::OpenCode => {
+                                    "It starts with one of OpenCode's free models. To use your \
+                                     own account, type /connect and choose how to sign in (for \
+                                     example OpenAI, then \"Sign in with ChatGPT\", or GitHub \
+                                     Copilot), then /models to choose a model."
+                                }
+                            };
                             ui.label(format!(
-                                "Claude Code opens in a panel at the bottom of this window. \
-                                 The first time, sign in with your Claude account, and when \
-                                 Claude Code asks whether you trust STAMP's folder, choose \
-                                 \"Yes, I trust this folder\" (with the arrow keys and Enter). \
-                                 Then ask your questions there.\n\nClaude Code: {}",
+                                "{name} opens in a panel at the bottom of this window. \
+                                 {first_time} Then ask your questions there.\n\n{name}: {}",
                                 path.display()
                             ));
                             ui.add_space(6.0);
@@ -241,13 +264,16 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
                                 "Don't show this again",
                             )
                             .on_hover_text(
-                                "Open Claude Code straight away next time. Settings > \
-                                 Preferences turns this message back on.",
+                                "Open Claude Code or OpenCode straight away next time. \
+                                 Settings > Preferences turns this message back on.",
                             );
                             ui.add_space(6.0);
                             ui.horizontal(|ui| {
-                                if ui.button("Open Claude Code").clicked() {
-                                    chosen = Some(Choice::OpenClaudeCode { install: false });
+                                if ui.button(format!("Open {name}")).clicked() {
+                                    chosen = Some(Choice::OpenAgent {
+                                        agent,
+                                        install: false,
+                                    });
                                 }
                                 if ui.button("Cancel").clicked() {
                                     // Cancelling does not stop the dialog
@@ -258,17 +284,20 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
                             });
                         }
                         None => {
-                            ui.label(
-                                "Claude Code is not installed. STAMP can install it with \
-                                 Anthropic's installer (claude.ai/install), in a panel at the \
-                                 bottom of this window, and then start it. Claude Code needs a \
-                                 Claude Pro, Max, Team or Enterprise plan; sign in with your \
-                                 Claude account when it starts.",
-                            );
+                            ui.label(format!(
+                                "{name} is not installed. STAMP can install it with {}, in a \
+                                 panel at the bottom of this window, and then start it. {name} \
+                                 needs {}; sign in when it starts.",
+                                agent.installer(),
+                                agent.accounts()
+                            ));
                             ui.add_space(6.0);
                             ui.horizontal(|ui| {
                                 if ui.button("Install and open").clicked() {
-                                    chosen = Some(Choice::OpenClaudeCode { install: true });
+                                    chosen = Some(Choice::OpenAgent {
+                                        agent,
+                                        install: true,
+                                    });
                                 }
                                 close = ui.button("Cancel").clicked();
                             });
@@ -320,7 +349,7 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
             .map(|_| ())
             .and_then(|()| install_in_claude_desktop())
             .map(|installed| app.assistant.asking = Some(installed)),
-        Choice::OpenClaudeCode { install } => open_claude_code(app, ctx, install),
+        Choice::OpenAgent { agent, install } => open_agent(app, ctx, agent, install),
     };
     if outcome.is_ok() {
         app.assistant.show_window = true;
@@ -355,65 +384,75 @@ fn install_in_claude_desktop() -> Result<super::Ask, String> {
     Ok(super::Ask::Installed { bundle, opened })
 }
 
-/// Assistant > Open Claude Code: the dialog that says what will be shared,
-/// or, if the user chose not to see it again and Claude Code is installed,
-/// Claude Code at once. Installing it always asks first.
+/// Assistant > Open Claude Code or Open OpenCode: the dialog that says
+/// what will be shared, or, if the user chose not to see it again and the
+/// program is installed, the program at once. Installing it always asks
+/// first.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn open_claude_code_or_ask(app: &mut StampApp, ctx: &egui::Context) {
-    if app.assistant.skip_claude_code_dialog && super::launch::find_claude().is_some() {
-        if let Err(message) = open_claude_code(app, ctx, false) {
+pub fn open_agent_or_ask(app: &mut StampApp, ctx: &egui::Context, agent: Agent) {
+    if app.assistant.skip_claude_code_dialog && agent.find().is_some() {
+        if let Err(message) = open_agent(app, ctx, agent, false) {
             app.show_notice(message);
         }
     } else {
-        app.assistant.asking = Some(super::Ask::ClaudeCode);
+        app.assistant.asking = Some(super::Ask::Agent(agent));
     }
 }
 
-/// Start sharing (if not already), prepare Claude Code's folder and open
-/// a terminal running it, or its installer first when `install` is set.
+/// Start sharing (if not already), prepare the working folder for `agent`
+/// and run it in the assistant panel, or its installer first when
+/// `install` is set.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn open_claude_code(
+pub fn open_agent(
     app: &mut StampApp,
     ctx: &egui::Context,
+    agent: Agent,
     install: bool,
 ) -> Result<(), String> {
+    let name = agent.name();
     let server = start_sharing(app, ctx)?;
     let (url, token) = (server.url(), server.token().to_string());
     let folder = super::launch::working_folder()
-        .ok_or("STAMP could not find a folder to run Claude Code in.")?;
-    let written = if install {
-        super::launch::prepare_install(&folder, &url, &token)
+        .ok_or_else(|| format!("STAMP could not find a folder to run {name} in."))?;
+    let found = if install {
+        None
     } else {
-        let claude = super::launch::find_claude().ok_or("Claude Code was not found.")?;
-        super::launch::prepare(&folder, &url, &token, &claude)
+        Some(
+            agent
+                .find()
+                .ok_or_else(|| format!("{name} was not found."))?,
+        )
+    };
+    let written = match &found {
+        Some(program) => agent.prepare(&folder, &url, &token, program),
+        None => agent.prepare_install(&folder, &url, &token),
     };
     let script = written.map_err(|e| {
         format!(
-            "Could not prepare Claude Code's folder {}: {e}",
+            "Could not prepare {name}'s folder {}: {e}",
             folder.display()
         )
     })?;
-    let (program, args) = if install {
-        super::launch::script_command(&script)
-    } else {
-        let claude = super::launch::find_claude().ok_or("Claude Code was not found.")?;
-        super::launch::claude_command(&claude)
+    let (program, args) = match &found {
+        Some(program) => agent.command(program),
+        None => super::launch::script_command(&script),
     };
     let label = if install {
-        "Installing Claude Code"
+        format!("Installing {name}")
     } else {
-        "Claude Code"
+        name.to_string()
     };
-    run_in_panel(app, ctx, label, &program, &args, &folder)
-        .map_err(|e| format!("Could not start Claude Code: {e}"))
+    run_in_panel(app, ctx, agent, &label, &program, &args, &folder)
+        .map_err(|e| format!("Could not start {name}: {e}"))
 }
 
-/// Run `program` in the Claude Code panel, in `folder`, ending whatever
-/// ran there before, and show the panel.
+/// Run `program` in the assistant panel, in `folder`, ending whatever ran
+/// there before, and show the panel, named after `agent`.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run_in_panel(
     app: &mut StampApp,
     ctx: &egui::Context,
+    agent: Agent,
     label: &str,
     program: &str,
     args: &[String],
@@ -423,35 +462,43 @@ pub fn run_in_panel(
     let terminal =
         super::terminal::Terminal::spawn(ctx, label, program, args, folder, Default::default())?;
     app.assistant.terminal = Some(terminal);
+    app.assistant.agent = agent;
     app.assistant.show_terminal = true;
     Ok(())
 }
 
-/// Open Claude Code in the computer's own terminal instead of the panel.
+/// Open `agent` in the computer's own terminal instead of the panel.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn open_claude_code_outside(app: &mut StampApp, ctx: &egui::Context) -> Result<(), String> {
+pub fn open_agent_outside(
+    app: &mut StampApp,
+    ctx: &egui::Context,
+    agent: Agent,
+) -> Result<(), String> {
+    let name = agent.name();
     let server = start_sharing(app, ctx)?;
     let (url, token) = (server.url(), server.token().to_string());
     let folder = super::launch::working_folder()
-        .ok_or("STAMP could not find a folder to run Claude Code in.")?;
-    let written = match super::launch::find_claude() {
-        Some(claude) => super::launch::prepare(&folder, &url, &token, &claude),
-        None => super::launch::prepare_install(&folder, &url, &token),
+        .ok_or_else(|| format!("STAMP could not find a folder to run {name} in."))?;
+    let written = match agent.find() {
+        Some(program) => agent.prepare(&folder, &url, &token, &program),
+        None => agent.prepare_install(&folder, &url, &token),
     };
     let script = written.map_err(|e| {
         format!(
-            "Could not prepare Claude Code's folder {}: {e}",
+            "Could not prepare {name}'s folder {}: {e}",
             folder.display()
         )
     })?;
     super::launch::open_terminal(&script)
 }
 
-/// The Claude Code frame (at the bottom of the window to start with, like
-/// the Metadata table; it can be moved).
+/// The assistant panel, which runs Claude Code or OpenCode (at the bottom
+/// of the window to start with, like the Metadata table; it can be moved).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
     let ctx = ui.ctx().clone();
+    let agent = app.assistant.agent;
+    let name = agent.name();
     let mut restart = false;
     let mut stop = false;
     let mut outside = false;
@@ -463,18 +510,18 @@ pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
                     let title = terminal.title();
                     if terminal.has_exited() {
                         ui.label("has ended.");
-                    } else if !title.is_empty() {
+                    } else if !title.is_empty() && title != terminal.label {
                         ui.weak(title);
                     }
                 }
                 None => {
-                    ui.label(egui::RichText::new("Claude Code").strong());
+                    ui.label(egui::RichText::new(name).strong());
                 }
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .small_button("Hide")
-                    .on_hover_text("Hide this panel; Claude Code keeps running")
+                    .on_hover_text(format!("Hide this panel; {name} keeps running"))
                     .clicked()
                 {
                     app.assistant.show_terminal = false;
@@ -495,17 +542,19 @@ pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
                 restart = ui.small_button(again).clicked();
                 outside = ui
                     .small_button("Separate terminal")
-                    .on_hover_text("Open Claude Code in the computer's own terminal instead")
+                    .on_hover_text(format!(
+                        "Open {name} in the computer's own terminal instead"
+                    ))
                     .clicked();
             });
         });
         match &mut app.assistant.terminal {
             Some(terminal) => terminal.show(ui),
             None => {
-                ui.label(
-                    "Claude Code is not running. Choose Start, or Assistant > Open Claude \
-                         Code.",
-                );
+                ui.label(format!(
+                    "{name} is not running. Choose Start, or Assistant > Open Claude Code or \
+                     Open OpenCode."
+                ));
             }
         }
     });
@@ -513,11 +562,11 @@ pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
         app.assistant.terminal = None;
     }
     if restart {
-        open_claude_code_or_ask(app, &ctx);
+        open_agent_or_ask(app, &ctx, agent);
     }
     if outside {
         app.assistant.terminal = None;
-        if let Err(message) = open_claude_code_outside(app, &ctx) {
+        if let Err(message) = open_agent_outside(app, &ctx, agent) {
             app.show_notice(message);
         }
     }
@@ -544,8 +593,9 @@ pub fn start_sharing_with<'a>(
         let waker = ctx.clone();
         let mut server = super::server::Server::start(move || waker.request_repaint())
             .map_err(|e| format!("Could not start sharing: {e}"))?;
-        // For Claude Desktop's bridge. Claude Code is told directly, so
-        // sharing goes on without the file if it cannot be written.
+        // For Claude Desktop's bridge. Claude Code and OpenCode are told
+        // directly, so sharing goes on without the file if it cannot be
+        // written.
         if let Some(path) = connection {
             if let Err(error) = server.publish(path) {
                 eprintln!("could not write {}: {error}", path.display());
@@ -568,7 +618,7 @@ fn activity_window(app: &mut StampApp, ctx: &egui::Context) {
             match &app.assistant.server {
                 Some(server) => {
                     ui.label(format!(
-                        "Sharing this session with Claude at {} ({}).",
+                        "Sharing this session at {} ({}).",
                         server.url(),
                         if server.clients() > 0 {
                             "connected"
@@ -578,13 +628,15 @@ fn activity_window(app: &mut StampApp, ctx: &egui::Context) {
                     ));
                     ui.horizontal(|ui| {
                         stop = ui.button("Stop sharing").clicked();
-                        reopen = ui.button("Open Claude Code again").clicked();
+                        reopen = ui
+                            .button(format!("Open {} again", app.assistant.agent.name()))
+                            .clicked();
                     });
                 }
                 None => {
                     ui.label(
-                        "Not sharing. Use Assistant > Share with Claude Desktop, or Open Claude \
-                         Code, to start.",
+                        "Not sharing. Use Assistant > Share with Claude Desktop, Open Claude \
+                         Code or Open OpenCode, to start.",
                     );
                 }
             }
@@ -621,6 +673,7 @@ fn activity_window(app: &mut StampApp, ctx: &egui::Context) {
         app.assistant.server = None;
     }
     if reopen {
-        open_claude_code_or_ask(app, ctx);
+        let agent = app.assistant.agent;
+        open_agent_or_ask(app, ctx, agent);
     }
 }

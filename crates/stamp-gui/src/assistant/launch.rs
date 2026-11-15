@@ -1,7 +1,8 @@
-//! Starting Claude Code connected to STAMP, in the computer's own terminal.
+//! Starting Claude Code or OpenCode connected to STAMP, in the assistant
+//! panel or the computer's own terminal.
 //!
 //! STAMP prepares a working folder in its data folder, rewritten at each
-//! launch:
+//! launch. For Claude Code:
 //!
 //! - `stamp-mcp.json`: where STAMP's server is and its access token for
 //!   this run, given to Claude Code with `--mcp-config`;
@@ -12,16 +13,122 @@
 //! - `CLAUDE.md`: what STAMP is and how to help its users;
 //! - a script that starts Claude Code there, which a terminal runs.
 //!
-//! Claude Code itself is the user's own installation, signed in with their
-//! own Claude account; STAMP never sees the sign-in. If it is not
-//! installed, STAMP can open a terminal that runs Anthropic's installer
-//! and then starts it.
+//! For OpenCode, `opencode.json` (the server, its token, and rules that
+//! make OpenCode ask before running commands, editing files or fetching
+//! web pages), which OpenCode reads as the configuration of the folder it
+//! starts in, and `AGENTS.md`, its counterpart of `CLAUDE.md`.
+//!
+//! Either program is the user's own installation, signed in with their own
+//! account; STAMP never sees the sign-in. If it is not installed, STAMP can
+//! run its maker's installer and then start it.
 
 use std::path::{Path, PathBuf};
 
 /// Anthropic's installers.
 const INSTALL_SH: &str = "https://claude.ai/install.sh";
 const INSTALL_PS1: &str = "https://claude.ai/install.ps1";
+/// OpenCode's installer (OpenCode 2) for Linux and macOS. For Windows,
+/// which it has no installer for, the version is looked up here and the
+/// program taken from its GitHub release.
+const OPENCODE_INSTALL_SH: &str = "https://opencode.ai/v2/install";
+const OPENCODE_LATEST: &str = "https://opencode.ai/update/api/latest/cli/npm";
+const OPENCODE_RELEASES: &str = "https://github.com/anomalyco/opencode/releases/download";
+/// OpenCode's configuration file in the working folder.
+const OPENCODE_CONFIG: &str = "opencode.json";
+/// How long, in milliseconds, OpenCode waits for one of STAMP's tools:
+/// as long as STAMP's server waits for the window (a slow plot can take a
+/// while).
+const OPENCODE_TOOL_TIMEOUT: u64 = 15 * 60 * 1000;
+
+/// The programs that can run in the assistant panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum Agent {
+    /// Anthropic's Claude Code, with a Claude subscription.
+    #[default]
+    ClaudeCode,
+    /// OpenCode (opencode.ai), with a ChatGPT or GitHub Copilot
+    /// subscription, among others.
+    OpenCode,
+}
+
+impl Agent {
+    pub const ALL: [Agent; 2] = [Agent::ClaudeCode, Agent::OpenCode];
+
+    /// Its name, as shown in menus and on the panel.
+    pub fn name(self) -> &'static str {
+        match self {
+            Agent::ClaudeCode => "Claude Code",
+            Agent::OpenCode => "OpenCode",
+        }
+    }
+
+    /// The accounts it can be used with.
+    pub fn accounts(self) -> &'static str {
+        match self {
+            Agent::ClaudeCode => "a Claude Pro, Max, Team or Enterprise plan",
+            Agent::OpenCode => {
+                "a ChatGPT Plus or Pro plan, GitHub Copilot, OpenCode's own plans, or an API \
+                 key from many providers; it also has a few free models"
+            }
+        }
+    }
+
+    /// Where it is installed, if it is.
+    pub fn find(self) -> Option<PathBuf> {
+        match self {
+            Agent::ClaudeCode => find_claude(),
+            Agent::OpenCode => find_opencode(),
+        }
+    }
+
+    /// The program and arguments that run it, installed at `program`,
+    /// connected to STAMP, in the prepared folder.
+    pub fn command(self, program: &Path) -> (String, Vec<String>) {
+        match self {
+            Agent::ClaudeCode => claude_command(program),
+            Agent::OpenCode => opencode_command(program),
+        }
+    }
+
+    /// Write the working folder for a server at `url` with access `token`,
+    /// and a script that starts the program (installed at `program`) in it.
+    /// Returns the script.
+    pub fn prepare(
+        self,
+        folder: &Path,
+        url: &str,
+        token: &str,
+        program: &Path,
+    ) -> std::io::Result<PathBuf> {
+        match self {
+            Agent::ClaudeCode => prepare(folder, url, token, program),
+            Agent::OpenCode => prepare_opencode(folder, url, token, program),
+        }
+    }
+
+    /// Write the working folder and a script that installs the program
+    /// with its maker's installer and then starts it. Returns the script.
+    pub fn prepare_install(
+        self,
+        folder: &Path,
+        url: &str,
+        token: &str,
+    ) -> std::io::Result<PathBuf> {
+        match self {
+            Agent::ClaudeCode => prepare_install(folder, url, token),
+            Agent::OpenCode => prepare_opencode_install(folder, url, token),
+        }
+    }
+
+    /// Where its installer is, as told to the user.
+    pub fn installer(self) -> &'static str {
+        match self {
+            Agent::ClaudeCode => "Anthropic's installer (claude.ai/install)",
+            Agent::OpenCode if cfg!(windows) => "OpenCode's release on GitHub",
+            Agent::OpenCode => "OpenCode's installer (opencode.ai/v2/install)",
+        }
+    }
+}
 
 /// Name of the MCP configuration file in the working folder.
 const MCP_CONFIG: &str = "stamp-mcp.json";
@@ -35,23 +142,113 @@ fn claude_arguments() -> String {
 /// The program and arguments that run Claude Code (`claude`), connected to
 /// STAMP, in the prepared folder: for the Claude Code panel.
 pub fn claude_command(claude: &Path) -> (String, Vec<String>) {
-    let mut args = vec![
+    let args = vec![
         "--mcp-config".to_string(),
         MCP_CONFIG.to_string(),
         "--settings".to_string(),
         SETTINGS.to_string(),
     ];
-    let program = claude.display().to_string();
-    // npm installs a batch file on Windows, which only cmd can run.
-    let is_batch = claude
+    wrapped(claude, args)
+}
+
+/// `program` with `args`, run through cmd if it is a batch file (which
+/// npm installs on Windows, and only cmd can run).
+fn wrapped(program: &Path, mut args: Vec<String>) -> (String, Vec<String>) {
+    let is_batch = program
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+    let program = program.display().to_string();
     if cfg!(windows) && is_batch {
         let mut cmd = vec!["/c".to_string(), program];
         cmd.append(&mut args);
         return ("cmd".to_string(), cmd);
     }
     (program, args)
+}
+
+/// The arguments that start OpenCode, of major version `major` if known.
+/// OpenCode 2 normally runs one background server shared by all its
+/// windows, which would keep the connection to STAMP of an earlier run;
+/// `--standalone` gives it a server of its own that reads the folder's
+/// configuration afresh. OpenCode 1 always did that and has no such
+/// option.
+fn opencode_arguments(major: Option<u32>) -> Vec<String> {
+    if major == Some(1) {
+        Vec::new()
+    } else {
+        vec!["--standalone".to_string()]
+    }
+}
+
+/// The program and arguments that run OpenCode, installed at `opencode`,
+/// connected to STAMP, in the prepared folder.
+pub fn opencode_command(opencode: &Path) -> (String, Vec<String>) {
+    wrapped(opencode, opencode_arguments(opencode_major(opencode)))
+}
+
+/// The major version of OpenCode installed at `opencode`, from
+/// `opencode --version` ("opencode v2.3.0", or "1.19.5" from OpenCode 1).
+/// Remembered for each installation, so that preparing the folder and
+/// starting it ask once.
+pub fn opencode_major(opencode: &Path) -> Option<u32> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    type Known = HashMap<(PathBuf, Option<std::time::SystemTime>), Option<u32>>;
+    static KNOWN: Mutex<Option<Known>> = Mutex::new(None);
+    let modified = std::fs::metadata(opencode).and_then(|m| m.modified()).ok();
+    let key = (opencode.to_path_buf(), modified);
+    if let Some(&major) = KNOWN.lock().ok()?.get_or_insert_default().get(&key) {
+        return major;
+    }
+    let major = ask_version(opencode).as_deref().and_then(major_version);
+    if let Ok(mut known) = KNOWN.lock() {
+        known.get_or_insert_default().insert(key, major);
+    }
+    major
+}
+
+/// What `program --version` prints, if it answers within a few seconds.
+fn ask_version(program: &Path) -> Option<String> {
+    use std::io::Read;
+    let (name, args) = wrapped(program, vec!["--version".to_string()]);
+    let mut command = std::process::Command::new(name);
+    command
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        /// No console window flashing up.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let mut child = command.spawn().ok()?;
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < end => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+    let mut text = String::new();
+    child.stdout.take()?.read_to_string(&mut text).ok()?;
+    Some(text)
+}
+
+/// The major version in what a program printed for `--version`: its last
+/// word, without a leading "v".
+fn major_version(text: &str) -> Option<u32> {
+    let word = text.split_whitespace().last()?;
+    word.trim_start_matches('v').split('.').next()?.parse().ok()
 }
 
 /// The program and arguments that run the install script written by
@@ -88,6 +285,23 @@ fn executable_name() -> &'static str {
     }
 }
 
+fn opencode_name() -> &'static str {
+    if cfg!(windows) {
+        "opencode.exe"
+    } else {
+        "opencode"
+    }
+}
+
+/// Where OpenCode's installers put it.
+fn opencode_installed_at() -> PathBuf {
+    home()
+        .unwrap_or_default()
+        .join(".opencode")
+        .join("bin")
+        .join(opencode_name())
+}
+
 /// Look for an executable on the `PATH`.
 fn on_path(name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
@@ -100,16 +314,40 @@ fn on_path(name: &str) -> Option<PathBuf> {
 /// desktop (Finder, the Start menu) often have a short `PATH`, so the
 /// places its installer and npm use are looked in too.
 pub fn find_claude() -> Option<PathBuf> {
-    let name = executable_name();
+    find_program(
+        executable_name(),
+        "claude",
+        &[&[".local", "bin"], &[".claude", "local"]],
+    )
+}
+
+/// Where OpenCode is installed, if it is: on the `PATH`, or where its
+/// installers, npm, bun or Homebrew put it.
+pub fn find_opencode() -> Option<PathBuf> {
+    find_program(
+        opencode_name(),
+        "opencode",
+        &[&[".opencode", "bin"], &[".local", "bin"], &[".bun", "bin"]],
+    )
+}
+
+/// The executable `name` on the `PATH`, in one of the folders `in_home`
+/// (each the parts of a path under the home folder), or where npm and
+/// Homebrew install programs; on Windows also `stem.cmd`, npm's wrapper.
+fn find_program(name: &str, stem: &str, in_home: &[&[&str]]) -> Option<PathBuf> {
     if let Some(found) = on_path(name) {
         return Some(found);
     }
     let home = home()?;
-    let mut places = vec![
-        home.join(".local").join("bin"),
-        home.join(".claude").join("local"),
-        home.join(".npm-global").join("bin"),
-    ];
+    let mut places: Vec<PathBuf> = in_home
+        .iter()
+        .map(|parts| {
+            parts
+                .iter()
+                .fold(home.clone(), |path, part| path.join(part))
+        })
+        .collect();
+    places.push(home.join(".npm-global").join("bin"));
     if cfg!(windows) {
         if let Some(appdata) = std::env::var_os("APPDATA") {
             places.push(PathBuf::from(appdata).join("npm"));
@@ -127,7 +365,11 @@ pub fn find_claude() -> Option<PathBuf> {
             cfg!(windows)
                 .then(|| std::env::var_os("APPDATA"))
                 .flatten()
-                .map(|appdata| PathBuf::from(appdata).join("npm").join("claude.cmd"))
+                .map(|appdata| {
+                    PathBuf::from(appdata)
+                        .join("npm")
+                        .join(format!("{stem}.cmd"))
+                })
                 .filter(|candidate| candidate.is_file())
         })
 }
@@ -232,6 +474,138 @@ pub fn prepare_install(folder: &Path, url: &str, token: &str) -> std::io::Result
             claude_arguments()
         );
         write_script(folder, "install-claude", &commands)
+    }
+}
+
+/// OpenCode's configuration for the working folder: STAMP's server, with
+/// OpenCode's own sign-in for servers (OAuth) off since STAMP gives a
+/// token, and rules that make it ask before it runs commands, edits files
+/// or fetches web pages. OpenCode 2 lists STAMP's tools to the model one
+/// by one (`codemode: false`) rather than through code it writes, which
+/// keeps the plot images they return; OpenCode 1 takes the older form,
+/// which OpenCode 2 also reads but without those settings.
+fn opencode_config(url: &str, token: &str, major: Option<u32>) -> serde_json::Value {
+    let authorization = format!("Bearer {token}");
+    if major == Some(1) {
+        return serde_json::json!({
+            "$schema": "https://opencode.ai/config.json",
+            "mcp": {
+                "stamp": {
+                    "type": "remote",
+                    "url": url,
+                    "headers": {"Authorization": authorization},
+                    "oauth": false,
+                    "enabled": true,
+                    "timeout": OPENCODE_TOOL_TIMEOUT
+                }
+            },
+            "permission": {"bash": "ask", "edit": "ask", "webfetch": "ask"}
+        });
+    }
+    let rule = |action: &str, effect: &str| serde_json::json!({"action": action, "resource": "*", "effect": effect});
+    serde_json::json!({
+        "$schema": "https://opencode.ai/config.json",
+        "mcp": {
+            "servers": {
+                "stamp": {
+                    "type": "remote",
+                    "url": url,
+                    "headers": {"Authorization": authorization},
+                    "oauth": false,
+                    "codemode": false,
+                    "timeout": {"execution": OPENCODE_TOOL_TIMEOUT}
+                }
+            }
+        },
+        // The last rule that matches decides.
+        "permissions": [
+            rule("shell", "ask"),
+            rule("edit", "ask"),
+            rule("webfetch", "ask"),
+            rule("stamp_*", "allow"),
+        ]
+    })
+}
+
+/// Write the working folder for OpenCode (installed at `opencode`) and a
+/// script that starts it there. Returns the script.
+pub fn prepare_opencode(
+    folder: &Path,
+    url: &str,
+    token: &str,
+    opencode: &Path,
+) -> std::io::Result<PathBuf> {
+    let major = opencode
+        .is_file()
+        .then(|| opencode_major(opencode))
+        .flatten();
+    write_opencode_folder(folder, url, token, major)?;
+    let arguments = opencode_arguments(major).join(" ");
+    let commands = if cfg!(windows) {
+        format!("\"{}\" {arguments}\r\n", opencode.display())
+    } else {
+        format!(
+            "exec '{}' {arguments}\n",
+            shell_quoted(&opencode.display().to_string())
+        )
+    };
+    write_script(folder, "start-opencode", &commands)
+}
+
+/// The configuration and instructions of OpenCode's working folder.
+fn write_opencode_folder(
+    folder: &Path,
+    url: &str,
+    token: &str,
+    major: Option<u32>,
+) -> std::io::Result<()> {
+    std::fs::create_dir_all(folder)?;
+    write_private(
+        &folder.join(OPENCODE_CONFIG),
+        &serde_json::to_string_pretty(&opencode_config(url, token, major)).unwrap_or_default(),
+    )?;
+    std::fs::write(folder.join("AGENTS.md"), GUIDE)
+}
+
+/// Write OpenCode's working folder and a script that installs OpenCode 2
+/// and then starts it. Returns the script.
+pub fn prepare_opencode_install(folder: &Path, url: &str, token: &str) -> std::io::Result<PathBuf> {
+    write_opencode_folder(folder, url, token, None)?;
+    let installed = opencode_installed_at();
+    let arguments = opencode_arguments(None).join(" ");
+    if cfg!(windows) {
+        let script = folder.join("install-opencode.ps1");
+        let text = format!(
+            "Set-Location -LiteralPath $PSScriptRoot\r\n\
+             $ErrorActionPreference = 'Stop'\r\n\
+             $ProgressPreference = 'SilentlyContinue'\r\n\
+             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\
+             Write-Host 'Installing OpenCode from {OPENCODE_RELEASES} ...'\r\n\
+             $version = (Invoke-RestMethod '{OPENCODE_LATEST}').version\r\n\
+             $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {{ 'arm64' }} else {{ 'x64-baseline' }}\r\n\
+             $zip = Join-Path $env:TEMP \"opencode-$version.zip\"\r\n\
+             Invoke-WebRequest -UseBasicParsing \"{OPENCODE_RELEASES}/v$version/opencode-windows-$arch.zip\" -OutFile $zip\r\n\
+             $dir = Split-Path -Parent '{installed}'\r\n\
+             New-Item -ItemType Directory -Force -Path $dir | Out-Null\r\n\
+             Expand-Archive -Force -Path $zip -DestinationPath $dir\r\n\
+             Remove-Item $zip\r\n\
+             Write-Host \"OpenCode $version is installed in $dir.\"\r\n\
+             if (Test-Path '{installed}') {{ & '{installed}' {arguments} }}\r\n\
+             else {{ Write-Host 'OpenCode was not installed where expected.' }}\r\n",
+            installed = installed.display().to_string().replace('\'', "''"),
+        );
+        std::fs::write(&script, text)?;
+        Ok(script)
+    } else {
+        let commands = format!(
+            "echo 'Installing OpenCode from {OPENCODE_INSTALL_SH} ...'\n\
+             curl -fsSL {OPENCODE_INSTALL_SH} | bash\n\
+             if [ -x '{0}' ]; then exec '{0}' {arguments}; fi\n\
+             echo 'OpenCode was not installed where expected.'\n\
+             exec \"${{SHELL:-/bin/sh}}\"\n",
+            shell_quoted(&installed.display().to_string()),
+        );
+        write_script(folder, "install-opencode", &commands)
     }
 }
 
@@ -447,6 +821,98 @@ mod tests {
                 ("/bin/sh", "/x/install-claude.sh")
             );
         }
+    }
+
+    #[test]
+    fn reads_opencode_versions() {
+        assert_eq!(major_version("opencode v2.3.0\n"), Some(2));
+        assert_eq!(major_version("1.19.5\n"), Some(1));
+        assert_eq!(major_version(""), None);
+        assert_eq!(major_version("unknown"), None);
+        assert_eq!(opencode_arguments(Some(1)), Vec::<String>::new());
+        assert_eq!(opencode_arguments(Some(2)), ["--standalone"]);
+        // Unknown: what STAMP's installer installs.
+        assert_eq!(opencode_arguments(None), ["--standalone"]);
+    }
+
+    #[test]
+    fn prepares_the_folder_for_opencode() {
+        let folder = scratch("opencode");
+        // Not installed there, so not asked its version: OpenCode 2.
+        let script = prepare_opencode(
+            &folder,
+            "http://127.0.0.1:4321/mcp",
+            "secret",
+            Path::new("/opt/it's/opencode"),
+        )
+        .unwrap();
+        let config: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(folder.join(OPENCODE_CONFIG)).unwrap())
+                .unwrap();
+        let stamp = &config["mcp"]["servers"]["stamp"];
+        assert_eq!(stamp["type"], "remote");
+        assert_eq!(stamp["url"], "http://127.0.0.1:4321/mcp");
+        assert_eq!(stamp["headers"]["Authorization"], "Bearer secret");
+        assert_eq!(stamp["oauth"], false);
+        assert_eq!(stamp["codemode"], false);
+        let rules = config["permissions"].as_array().unwrap();
+        let effect = |action: &str| {
+            rules
+                .iter()
+                .rev()
+                .find(|rule| rule["action"] == action)
+                .map(|rule| rule["effect"].as_str().unwrap().to_string())
+        };
+        assert_eq!(effect("shell").as_deref(), Some("ask"));
+        assert_eq!(effect("edit").as_deref(), Some("ask"));
+        assert_eq!(effect("stamp_*").as_deref(), Some("allow"));
+        assert_eq!(
+            std::fs::read_to_string(folder.join("AGENTS.md")).unwrap(),
+            GUIDE
+        );
+        let text = std::fs::read_to_string(&script).unwrap();
+        assert!(text.contains("--standalone"), "{text}");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert!(text.contains("'/opt/it'\\''s/opencode'"), "{text}");
+            let mode = std::fs::metadata(folder.join(OPENCODE_CONFIG))
+                .unwrap()
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o077, 0, "the token must be private");
+        }
+        std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn opencode_1_gets_its_own_form_of_configuration() {
+        let config = opencode_config("http://127.0.0.1:1/mcp", "t", Some(1));
+        let stamp = &config["mcp"]["stamp"];
+        assert_eq!(stamp["type"], "remote");
+        assert_eq!(stamp["headers"]["Authorization"], "Bearer t");
+        assert_eq!(stamp["oauth"], false);
+        assert_eq!(stamp["timeout"], OPENCODE_TOOL_TIMEOUT);
+        assert_eq!(config["permission"]["bash"], "ask");
+        assert!(config.get("permissions").is_none());
+    }
+
+    #[test]
+    fn opencode_install_script() {
+        let folder = scratch("opencode-install");
+        let script = prepare_opencode_install(&folder, "http://127.0.0.1:1/mcp", "t").unwrap();
+        let text = std::fs::read_to_string(&script).unwrap();
+        if cfg!(windows) {
+            assert!(text.contains(OPENCODE_LATEST) && text.contains(OPENCODE_RELEASES));
+        } else {
+            assert!(text.contains(OPENCODE_INSTALL_SH), "{text}");
+            assert!(
+                text.contains(".opencode/bin/opencode' --standalone"),
+                "{text}"
+            );
+        }
+        assert!(folder.join(OPENCODE_CONFIG).is_file());
+        std::fs::remove_dir_all(&folder).unwrap();
     }
 
     #[test]

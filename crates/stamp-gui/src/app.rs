@@ -727,9 +727,12 @@ pub struct Saved {
     /// The [`DEFAULTS_VERSION`] the plot settings were saved under; zero
     /// for settings saved before there was one.
     pub defaults_version: u32,
-    /// Open Claude Code without first showing what it will share ("Don't
-    /// show this again").
+    /// Open Claude Code or OpenCode without first showing what it will
+    /// share ("Don't show this again").
     pub skip_claude_code_dialog: bool,
+    /// The program the assistant panel runs ("Claude Code" or "OpenCode"),
+    /// the last one opened; empty for Claude Code.
+    pub assistant_program: String,
     /// Where the frames of the window are, and the [`layout::LAYOUT_VERSION`]
     /// it was saved under (zero before there was one).
     pub layout: Option<egui_tiles::Tree<Frame>>,
@@ -779,6 +782,7 @@ impl Default for Saved {
             // are taken to be.
             defaults_version: 0,
             skip_claude_code_dialog: false,
+            assistant_program: String::new(),
             layout: None,
             layout_version: 0,
         }
@@ -1471,12 +1475,24 @@ impl StampApp {
             plots: self.plot_settings.clone(),
             defaults_version: DEFAULTS_VERSION,
             skip_claude_code_dialog: self.skip_claude_code_dialog(),
+            assistant_program: self.assistant_program().to_string(),
             layout: Some(self.layout.clone()),
             layout_version: layout::LAYOUT_VERSION,
         }
     }
 
-    /// Whether Assistant > Open Claude Code skips its dialog.
+    /// The name of the program the assistant panel runs: Claude Code, or
+    /// OpenCode once that has been opened.
+    pub fn assistant_program(&self) -> &'static str {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.assistant.agent.name()
+        }
+        #[cfg(target_arch = "wasm32")]
+        "Claude Code"
+    }
+
+    /// Whether Assistant > Open Claude Code (or OpenCode) skips its dialog.
     pub fn skip_claude_code_dialog(&self) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -1511,6 +1527,13 @@ impl StampApp {
         self.session.other_samples_color = saved.other_samples_color;
         self.plot_settings = saved.plots;
         self.set_skip_claude_code_dialog(saved.skip_claude_code_dialog);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(agent) = assistant::launch::Agent::ALL
+            .into_iter()
+            .find(|agent| agent.name() == saved.assistant_program)
+        {
+            self.assistant.agent = agent;
+        }
         // A layout from another version of STAMP, or missing a frame, is
         // replaced by the default.
         self.layout = saved
@@ -1815,8 +1838,18 @@ impl StampApp {
         None
     }
 
-    /// Stop sharing the session with Claude, as Assistant > Stop sharing
-    /// does.
+    /// How many times a program has connected to the session being shared
+    /// (zero when it is not shared).
+    pub fn assistant_connections(&self) -> usize {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.assistant.server.as_ref().map_or(0, |s| s.clients())
+        }
+        #[cfg(target_arch = "wasm32")]
+        0
+    }
+
+    /// Stop sharing the session, as Assistant > Stop sharing does.
     pub fn assistant_stop_sharing(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -2753,11 +2786,13 @@ impl StampApp {
         }
         layout::sync_visibility(&mut tree, |frame| self.frame_shown(frame));
         let plot_tabs = layout::plot_tabs(&tree);
+        let terminal_title = self.assistant_program();
         let mut draw = |frame: Frame, ui: &mut egui::Ui| self.frame_ui(frame, ui);
         let mut behavior = layout::Behavior {
             draw: &mut draw,
             closed: Vec::new(),
             plot_tabs,
+            terminal_title,
         };
         tree.ui(&mut behavior, ui);
         let closed = std::mem::take(&mut behavior.closed);
@@ -2931,13 +2966,16 @@ impl StampApp {
                     Some(&shortcut::METADATA),
                 );
                 #[cfg(not(target_arch = "wasm32"))]
-                toggle(
-                    ui,
-                    &mut self.assistant.show_terminal,
-                    icons::TERMINAL,
-                    "Claude Code",
-                    None,
-                );
+                {
+                    let name = self.assistant_program();
+                    toggle(
+                        ui,
+                        &mut self.assistant.show_terminal,
+                        icons::TERMINAL,
+                        name,
+                        None,
+                    );
+                }
                 ui.separator();
                 toggle(
                     ui,
@@ -4525,7 +4563,7 @@ impl StampApp {
                     if ui
                         .checkbox(
                             &mut ask,
-                            "Explain what is shared before opening Claude Code",
+                            "Explain what is shared before opening Claude Code or OpenCode",
                         )
                         .changed()
                     {

@@ -4,14 +4,16 @@ Asking an AI assistant
 STAMP can share what you are looking at with an AI assistant, so that you
 can ask about your data in plain language: *what does this plot show?*,
 *which genera differ most between these groups?*, *is this difference
-large enough to matter?* There are three ways to do it, all in the
+large enough to matter?* There are four ways to do it, all in the
 **Assistant** menu:
 
 - **Claude Desktop** (desktop application): chat with Claude in Anthropic's
   Claude Desktop app beside STAMP. Claude sees your session and can change
   the analysis and plots for you.
 - **Claude Code** (desktop application): the same, with Claude Code in a
-  terminal.
+  panel of STAMP's window.
+- **OpenCode** (desktop application): the same, with OpenCode in that
+  panel, for a **ChatGPT** plan, **GitHub Copilot** or other providers.
 - **Copy and paste** (desktop and browser): copy a description of the
   session into any chat assistant. It cannot change anything in STAMP.
 
@@ -56,7 +58,7 @@ Claude Code
 
 **Assistant > Open Claude Code** connects `Claude Code
 <https://claude.com/claude-code>`_, Anthropic's assistant for the terminal, in
-the same way. It runs in the **Claude Code panel** along the bottom of STAMP's
+the same way. It runs in the **assistant panel** along the bottom of STAMP's
 window, like the Metadata table (a frame you can move elsewhere; see
 :ref:`arranging-the-window`), and you type your questions there. Claude
 Code needs a Claude **Pro, Max, Team or Enterprise** plan; you sign in with
@@ -74,8 +76,14 @@ this again** to open it straight away in future; **Settings > Preferences >
 Explain what is shared before opening Claude Code** brings the message back.
 STAMP always asks before installing Claude Code.
 
-The Claude Code panel
-~~~~~~~~~~~~~~~~~~~~~
+.. _assistant-panel:
+
+The assistant panel
+~~~~~~~~~~~~~~~~~~~
+
+The panel runs Claude Code or OpenCode, whichever was opened last; its tab
+and the View menu are named after it. Opening the other one ends the one
+running.
 
 - Click in the panel to type into Claude Code. While it has the keyboard,
   every key goes to Claude Code, including STAMP's own shortcuts; click
@@ -88,11 +96,13 @@ The Claude Code panel
   own conversation with the wheel (and *Ctrl+End* returns to the bottom);
   the scroll bar then has nothing to show.
 - **Hide** hides the panel and leaves Claude Code running; **View > Claude
-  Code** shows it again. **Stop** ends Claude Code, **Restart** starts it
+  Code** (or **View > OpenCode**) shows it again. **Stop** ends Claude Code, **Restart** starts it
   again, and **Separate terminal** opens it in your computer's own terminal
   instead.
 - The panel is always dark, whatever STAMP's theme, because Claude Code's
   colours are made for a dark background.
+
+The same goes for OpenCode in the panel.
 
 Claude Code is started in a folder STAMP prepares in its data folder (on Linux
 ``~/.local/share/stamp/assistant``, on macOS ``~/Library/Application
@@ -112,11 +122,50 @@ holding:
 If no terminal program is found on Linux for Separate terminal, run the script
 in that folder yourself.
 
-What Claude can do
-------------------
+OpenCode
+--------
 
-With either Claude Desktop or Claude Code, Claude uses these tools of
-STAMP's:
+**Assistant > Open OpenCode** connects `OpenCode <https://opencode.ai>`_, an
+open-source assistant for the terminal that works with many AI providers, in
+the same way, in the same panel (see :ref:`assistant-panel`). Use it if you
+have a **ChatGPT Plus or Pro** plan, **GitHub Copilot**, OpenCode's own plans,
+or an API key from a provider such as OpenAI or Google, rather than a Claude
+plan.
+
+OpenCode starts with one of its own free models, which needs no sign-in (see
+OpenCode's site for what its free models' providers do with what is sent to
+them). To use your own account instead, type ``/connect`` and choose how to
+sign in: for a ChatGPT plan, **OpenAI** and then **Sign in with ChatGPT**; for
+GitHub Copilot, **GitHub Copilot**, which shows a code to enter on GitHub's
+site. Then type ``/models`` to choose a model, and ask your questions.
+OpenCode remembers the sign-in. STAMP never sees it.
+
+When OpenCode wants to do something other than use STAMP's tools, such as run
+a command, it shows *Permission required* with **Allow once**, **Always
+allow** and **Reject**.
+
+If OpenCode is not installed, STAMP offers to install it, in the panel, and
+then starts it: with OpenCode's installer (``opencode.ai/v2/install``) on
+Linux and macOS, and from OpenCode's release on GitHub on Windows. Both put it
+in ``.opencode/bin`` in your home folder. STAMP works with OpenCode 1 too.
+
+OpenCode runs in the same assistant folder as Claude Code, where STAMP writes:
+
+- ``opencode.json``: STAMP's address and the password for this session,
+  readable only by you, and rules that make OpenCode ask before it runs
+  commands, changes files or fetches web pages (it uses STAMP's tools
+  without asking);
+- ``AGENTS.md``: the same guidance as ``CLAUDE.md``;
+- a script that starts OpenCode, for **Separate terminal**.
+
+OpenCode reads ``opencode.json`` as the settings of that folder, on top of your
+own OpenCode settings.
+
+What the assistant can do
+-------------------------
+
+With Claude Desktop, Claude Code or OpenCode, the assistant uses these tools
+of STAMP's (OpenCode names them ``stamp_get_session`` and so on):
 
 .. list-table::
    :header-rows: 1
@@ -172,21 +221,23 @@ including anything you changed yourself since.
 Seeing what was shared
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The status bar says *Sharing with Claude* while STAMP is sharing, and *Claude
-connected* once Claude has connected. **Assistant > Assistant activity** lists
-every request Claude has made and the first line of each answer, latest
-first.
+The status bar says *Sharing with assistant* while STAMP is sharing, and
+*Assistant connected* once Claude or OpenCode has connected. **Assistant >
+Assistant activity** lists every request the assistant has made and the
+first line of each answer, latest first.
 
 Privacy
 ~~~~~~~
 
-What Claude reads (descriptions of your data, results and plots, and images
-of plots when it asks for them) is sent to Anthropic to answer your
-questions, under your Claude account and its terms. Do not use it with data
-you are not allowed to share with a third party.
+What the assistant reads (descriptions of your data, results and plots, and
+images of plots when it asks for them) is sent to answer your questions:
+with Claude, to Anthropic, under your Claude account and its terms; with
+OpenCode, to the provider you signed in to (OpenAI, GitHub and so on), under
+your account with it. Do not use it with data you are not allowed to share
+with a third party.
 
-Sharing is off until you choose Share with Claude Desktop or Open Claude
-Code, and stops when you choose **Assistant > Stop sharing with Claude** or
+Sharing is off until you choose Share with Claude Desktop, Open Claude Code
+or Open OpenCode, and stops when you choose **Assistant > Stop sharing** or
 close STAMP. STAMP listens for Claude only on your own computer (address
 127.0.0.1), and only answers requests that carry a password made afresh each
 time sharing starts; requests from web pages are refused. While it shares,
@@ -198,7 +249,8 @@ How it works
 ~~~~~~~~~~~~
 
 STAMP answers Claude through the `Model Context Protocol
-<https://modelcontextprotocol.io>`_. Claude Code connects to it directly;
+<https://modelcontextprotocol.io>`_. Claude Code and OpenCode connect to it
+directly;
 Claude Desktop starts ``stamp-mcp``, which answers Claude Desktop itself and
 passes each request on to the STAMP that is sharing.
 

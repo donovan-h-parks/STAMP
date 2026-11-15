@@ -6,7 +6,31 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle. Last task (2026-11-16): two more assistant tools, on `rust-port`,
+Idle. Last task (2026-11-16): **OpenCode in the assistant panel**, on
+`rust-port`, committed and pushed; Windows package built. `launch::Agent {ClaudeCode, OpenCode}` (name,
+accounts, find, command, prepare, prepare_install, installer);
+`find_opencode`, `opencode_major` (`--version`, cached per path+mtime),
+`opencode_config` (v2: `mcp.servers.stamp` with `oauth:false`,
+`codemode:false`, `timeout.execution`; `permissions` ask for shell, edit,
+webfetch, allow `stamp_*`; v1: `mcp.stamp`, `permission`), `--standalone`
+for v2; install: `opencode.ai/v2/install` or the GitHub zip on Windows,
+into ~/.opencode/bin. window.rs: `open_agent_or_ask`, `open_agent`,
+`open_agent_outside`, `Ask::Agent`, menu "Open OpenCode...", "Stop
+sharing"; status bar "Sharing with assistant"/"Assistant connected";
+`State.agent`, `Saved.assistant_program`, tab and View menu named after the
+program (`layout::Behavior.terminal_title`); `assistant_connections()`.
+Tests: launch unit tests; ignored `opencode_in_the_panel`. Both config forms
+validate against opencode.ai/config.json. fmt, clippy (Linux, wasm), all
+tests, sphinx -W pass. Docs: assistant.rst (OpenCode section, "assistant
+panel"), main_window.rst, NEW_FEATURES. Checked with the real OpenCode
+(user's OK; XDG dirs in the scratchpad): v2.3.0 and v1.19.5 both connect,
+answer with get_session/get_current_plot using the free default model
+("Big Pickle"), and v2 shows "Permission required" before a shell command;
+`--standalone` leaves no process behind. `run_in_panel` now takes the
+`Agent` (tab named after it). Not checked: Windows (the zip install,
+ConPTY), macOS, a ChatGPT or Copilot sign-in.
+
+Previous: Idle. Last task (2026-11-16): two more assistant tools, on `rust-port`,
 committed and pushed: `switch_samples` (off or on by names, by a metadata
 `where` {field, relation, value; "=" values matched as the metadata spells
 them}, or `all`) and `set_plot_fonts` (tick, axis label, legend sizes and
