@@ -3065,7 +3065,7 @@ impl StampApp {
                     self.cancel_plot();
                 }
             }
-            if let Some(error) = &self.session.error {
+            if let Some(error) = self.session.error(self.mode) {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(170, 0, 0), error);
             }

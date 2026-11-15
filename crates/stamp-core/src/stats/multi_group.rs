@@ -51,6 +51,9 @@ impl MultiGroupTest {
     }
 }
 
+const ZERO_WITHIN_VARIANCE: &str =
+    "degenerate case: no variance within groups, so any difference between them is taken as real";
+
 /// One-way analysis of variance.
 fn anova(groups: &[&[f64]]) -> (f64, &'static str) {
     if groups.iter().any(|g| g.len() < 2) {
@@ -83,6 +86,12 @@ fn anova(groups: &[&[f64]]) -> (f64, &'static str) {
     let within = total - between;
 
     let (df_between, df_within) = (k - 1.0, n - k);
+    // Groups that are constant within but differ between: the difference
+    // in rounding error decides the sign of `within`, and a negative F used
+    // to give p = 1. Any difference is real, as Welch's test takes it.
+    if total > 0.0 && within <= 1e-12 * total {
+        return (0.0, ZERO_WITHIN_VARIANCE);
+    }
     let f = (between / df_between) / (within / df_within);
     let p = f_sf(f, df_between, df_within);
     if p.is_nan() {
@@ -267,6 +276,13 @@ mod tests {
             (p, note),
             (1.0, "degenerate case: failed to calculate p-value")
         );
+
+        // Constant within each group but different between them, whatever
+        // the rounding error.
+        for (a, b) in [(0.1, 0.3), (0.2, 0.7), (1.0 / 3.0, 0.9), (12.5, 12.75)] {
+            let (p, note) = MultiGroupTest::Anova.run(&[&[a; 3], &[b; 3]]);
+            assert_eq!((p, note), (0.0, ZERO_WITHIN_VARIANCE), "{a} {b}");
+        }
 
         // Fewer than two groups with samples.
         let (p, note) = MultiGroupTest::KruskalWallis.run(&[&[1.0, 2.0, 3.0], &[]]);

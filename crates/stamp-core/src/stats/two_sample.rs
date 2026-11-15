@@ -225,10 +225,13 @@ fn fisher(seq1: f64, seq2: f64, total1: f64, total2: f64) -> TestOutcome {
             if p <= cutoff * (1.0 + 1e-7) {
                 two_sided += p;
             }
-            if ai >= seq1 {
+            // Compared with the rounded count, the table actually tested:
+            // with the unrounded one a count that rounds up left the
+            // observed table out of the left tail.
+            if ai >= a {
                 right += p;
             }
-            if ai <= seq1 {
+            if ai <= a {
                 left += p;
             }
         }
@@ -499,6 +502,12 @@ mod tests {
         let r = run(SampleTest::Fisher, [0.0, 0.0, 920852.999591, 953828.994346]);
         close(r.one_sided, 1.0);
         close(r.two_sided, 1.0);
+        // A fractional count is rounded, and both tails are those of the
+        // rounded table (STAMP v2 left it out of the left tail).
+        let rounded = run(SampleTest::Fisher, [3.0, 10.0, 30.0, 40.0]);
+        let fractional = run(SampleTest::Fisher, [2.6, 10.0, 30.0, 40.0]);
+        close(fractional.one_sided, rounded.one_sided);
+        close(fractional.two_sided, rounded.two_sided);
     }
 
     #[test]

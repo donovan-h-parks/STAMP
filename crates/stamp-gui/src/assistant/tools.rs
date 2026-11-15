@@ -368,7 +368,7 @@ pub fn settled_summary(app: &StampApp) -> String {
     if !summary.is_empty() {
         out.push_str(&format!("\n{summary}"));
     }
-    if let Some(error) = &app.session.error {
+    if let Some(error) = app.session.error(app.mode) {
         out.push_str(&format!("\nThe analysis reported a problem: {error}"));
     }
     if let Some(notice) = app.notice() {

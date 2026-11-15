@@ -141,8 +141,8 @@ pub struct Session {
     pub metadata: Option<Metadata>,
     /// Problems found while loading, for the user to read.
     pub warnings: Vec<String>,
-    /// The most recent error, shown until the next successful analysis.
-    pub error: Option<String>,
+    /// The most recent error of each analysis, shown until it runs again.
+    errors: [Option<String>; 4],
 
     pub profile_level: String,
     /// `None` is the entire sample.
@@ -224,7 +224,7 @@ impl Default for Session {
             tree: None,
             metadata: None,
             warnings: Vec::new(),
-            error: None,
+            errors: Default::default(),
             profile_level: String::new(),
             parent_level: None,
             unclassified: Unclassified::Retain,
@@ -361,7 +361,7 @@ impl Session {
             self.parent_level,
             self.unclassified,
             self.group_field,
-            self.error,
+            self.errors,
             colors,
             self.other_samples_color,
             self.samples.filter,
@@ -648,8 +648,38 @@ impl Session {
         self.jobs[mode_index(mode)].as_ref().map(Job::fraction)
     }
 
+    /// Why the analysis of `mode` has no results, if it failed or was
+    /// cancelled.
+    pub fn error(&self, mode: Mode) -> Option<&str> {
+        self.errors[mode_index(mode)].as_deref()
+    }
+
+    fn set_error(&mut self, mode: Mode, message: impl Into<String>) {
+        self.errors[mode_index(mode)] = Some(message.into());
+    }
+
+    /// Forget the results of `mode`, which no longer match its settings.
+    fn clear_output(&mut self, mode: Mode) {
+        match mode {
+            Mode::TwoSamples => self.samples.output = None,
+            Mode::TwoGroups => self.groups.output = None,
+            Mode::MultipleGroups => self.multi.output = None,
+            Mode::Correlation => self.correlation.output = None,
+        }
+    }
+
+    /// Stop the running analysis of `mode`. Its earlier results are
+    /// cleared too: they were made with settings that have since changed.
     pub fn cancel(&mut self, mode: Mode) {
-        self.jobs[mode_index(mode)] = None;
+        let index = mode_index(mode);
+        if self.jobs[index].take().is_some() {
+            self.clear_output(mode);
+            self.set_error(
+                mode,
+                "The analysis was cancelled. Change a setting to run it again.",
+            );
+            self.generation += 1;
+        }
     }
 
     /// Start any analysis that is out of date for `mode` and collect finished
@@ -659,6 +689,7 @@ impl Session {
         let index = mode_index(mode);
         if self.dirty[index] {
             self.dirty[index] = false;
+            self.errors[index] = None;
             // Dropping a running job cancels it.
             self.jobs[index] = self.start(mode);
             if self.jobs[index].is_none() {
@@ -687,11 +718,18 @@ impl Session {
                 Ok(Finished::Multi(output)) => self.multi.output = output,
                 Ok(Finished::Correlation(output)) => self.correlation.output = output,
                 Err(message) => {
-                    self.error = Some(message);
+                    // The earlier results no longer match the settings.
+                    self.clear_output(mode);
+                    self.set_error(mode, message);
                     return false;
                 }
             }
-            self.error = None;
+            self.errors[index] = None;
+            // The correction may have been changed while the job ran with
+            // the one chosen when it started.
+            if let Some(chosen) = self.output_correction_mismatch(mode) {
+                self.set_correction(mode, chosen);
+            }
             self.keep_selection_valid(mode);
         }
         false
@@ -769,7 +807,7 @@ impl Session {
                         }
                         Err(message) => {
                             self.groups.output = None;
-                            self.error = Some(message);
+                            self.set_error(Mode::TwoGroups, message);
                             return None;
                         }
                     }
@@ -852,11 +890,27 @@ impl Session {
                     self.multi.output = None;
                     return None;
                 };
-                let active = self.multi.active_groups.clone();
+                // A chosen group whose samples are all switched off takes no
+                // part, rather than making every test degenerate.
+                let active: Vec<String> = self
+                    .multi
+                    .active_groups
+                    .iter()
+                    .filter(|g| groups.samples(g).is_some_and(|s| !s.is_empty()))
+                    .cloned()
+                    .collect();
                 let analysis = self.multi.analysis;
                 if active.len() < 2 {
                     self.multi.output = None;
-                    self.error = Some("Select at least two groups.".to_string());
+                    self.set_error(
+                        Mode::MultipleGroups,
+                        if self.multi.active_groups.len() < 2 {
+                            "Select at least two groups."
+                        } else {
+                            "At least two of the selected groups need samples that are \
+                             switched on."
+                        },
+                    );
                     return None;
                 }
                 let mut state = None;
@@ -1013,6 +1067,30 @@ impl Session {
                 self.correlation_rows().len(),
             ),
         }
+    }
+
+    /// The correction chosen for `mode`, if its results were corrected with
+    /// another.
+    fn output_correction_mismatch(&self, mode: Mode) -> Option<Correction> {
+        let (chosen, applied) = match mode {
+            Mode::TwoSamples => (
+                self.samples.analysis.correction,
+                self.samples.output.as_ref()?.1.analysis.correction,
+            ),
+            Mode::TwoGroups => (
+                self.groups.analysis.correction,
+                self.groups.output.as_ref()?.1.analysis.correction,
+            ),
+            Mode::MultipleGroups => (
+                self.multi.analysis.correction,
+                self.multi.output.as_ref()?.1.analysis.correction,
+            ),
+            Mode::Correlation => (
+                self.correlation.analysis.correction,
+                self.correlation.output.as_ref()?.1.analysis.correction,
+            ),
+        };
+        (chosen != applied).then_some(chosen)
     }
 
     /// Change the multiple-test correction of `mode` without re-running the
@@ -1195,7 +1273,7 @@ mod tests {
             assert!(session.update(mode) || !session.is_running(mode));
             session.run_to_completion(mode);
             assert_eq!(session.feature_counts(mode), (3, 3), "{mode:?}");
-            assert!(session.error.is_none(), "{:?}", session.error);
+            assert!(session.error(mode).is_none(), "{:?}", session.error(mode));
         }
         assert_eq!(session.selected_feature.as_deref(), Some("x"));
         let post_hoc = session.post_hoc().unwrap().unwrap();
@@ -1259,7 +1337,7 @@ mod tests {
         session.invalidate(Mode::MultipleGroups);
         session.run_to_completion(Mode::MultipleGroups);
         assert_eq!(
-            session.error.as_deref(),
+            session.error(Mode::MultipleGroups),
             Some("Select at least two groups.")
         );
         assert!(session.multi.output.is_none());
@@ -1267,12 +1345,83 @@ mod tests {
         session.samples.sample2 = "missing".to_string();
         session.invalidate(Mode::TwoSamples);
         session.run_to_completion(Mode::TwoSamples);
-        assert_eq!(session.error.as_deref(), Some("Unknown sample 'missing'."));
+        assert_eq!(
+            session.error(Mode::TwoSamples),
+            Some("Unknown sample 'missing'.")
+        );
+        // Each analysis keeps its own error.
+        assert_eq!(
+            session.error(Mode::MultipleGroups),
+            Some("Select at least two groups.")
+        );
+        assert!(session.error(Mode::TwoGroups).is_none());
 
         let mut empty = Session::default();
         assert!(empty.load_metadata("m", META).is_err());
         assert!(empty.load_profile("bad", "only one line\n").is_err());
         assert!(!empty.update(Mode::TwoSamples));
+    }
+
+    #[test]
+    fn a_group_with_every_sample_switched_off_takes_no_part() {
+        let mut session = loaded();
+        session.profile_level = "Genus".to_string();
+        session.set_group_field("Site");
+        let gut: Vec<String> = session.grouping().unwrap().samples("gut").unwrap().to_vec();
+        session.set_samples_active(&gut, false);
+        session.run_to_completion(Mode::MultipleGroups);
+        // Only one group has samples left.
+        assert!(session.multi.output.is_none());
+        assert!(session
+            .error(Mode::MultipleGroups)
+            .unwrap()
+            .contains("switched on"));
+        // The choice of groups is kept for when the samples come back.
+        assert_eq!(session.multi.active_groups, ["gut", "skin"]);
+        session.set_samples_active(&gut, true);
+        session.run_to_completion(Mode::MultipleGroups);
+        assert_eq!(
+            session.multi.output.as_ref().unwrap().0.group_names,
+            ["gut", "skin"]
+        );
+    }
+
+    #[test]
+    fn cancelling_clears_results_that_no_longer_match() {
+        let mut session = loaded();
+        session.profile_level = "Genus".to_string();
+        session.run_to_completion(Mode::TwoGroups);
+        assert!(session.groups.output.is_some());
+        session.groups.analysis.test = GroupTest::Welch;
+        session.invalidate(Mode::TwoGroups);
+        session.update(Mode::TwoGroups);
+        session.cancel(Mode::TwoGroups);
+        assert!(!session.is_running(Mode::TwoGroups));
+        assert!(session.groups.output.is_none());
+        assert!(session
+            .error(Mode::TwoGroups)
+            .unwrap()
+            .contains("cancelled"));
+        // Cancelling when nothing runs changes nothing.
+        session.run_to_completion(Mode::TwoSamples);
+        session.cancel(Mode::TwoSamples);
+        assert!(session.samples.output.is_some());
+    }
+
+    #[test]
+    fn a_correction_chosen_while_the_tests_run_is_applied_to_their_results() {
+        let mut session = loaded();
+        session.profile_level = "Genus".to_string();
+        session.invalidate(Mode::TwoGroups);
+        session.update(Mode::TwoGroups);
+        session.set_correction(Mode::TwoGroups, Correction::Bonferroni);
+        session.run_to_completion(Mode::TwoGroups);
+        let (_, results) = session.groups.output.as_ref().unwrap();
+        assert_eq!(results.analysis.correction, Correction::Bonferroni);
+        let count = results.rows.len() as f64;
+        for row in &results.rows {
+            assert!((row.p_value_corrected - (row.p_value * count).min(1.0)).abs() < 1e-12);
+        }
     }
 
     #[test]
@@ -1295,12 +1444,15 @@ mod tests {
         // No field chosen yet: nothing is run, and the reason is given.
         session.run_to_completion(Mode::TwoGroups);
         assert!(session.groups.output.is_none());
-        assert!(session.error.as_deref().unwrap().contains("form a pair"));
+        assert!(session
+            .error(Mode::TwoGroups)
+            .unwrap()
+            .contains("form a pair"));
 
         session.groups.pair_field = Some("Subject".to_string());
         session.invalidate(Mode::TwoGroups);
         session.run_to_completion(Mode::TwoGroups);
-        assert!(session.error.is_none(), "{:?}", session.error);
+        assert!(session.error(Mode::TwoGroups).is_none());
         assert_eq!(session.groups.pairing.as_deref(), Some("3 pairs"));
         let (profile, results) = session.groups.output.as_ref().unwrap();
         // Pair by pair: s1, s2, s3.
@@ -1324,8 +1476,7 @@ mod tests {
         session.run_to_completion(Mode::TwoGroups);
         assert!(session.groups.output.is_none());
         assert!(session
-            .error
-            .as_deref()
+            .error(Mode::TwoGroups)
             .unwrap()
             .contains("two named groups"));
 
@@ -1379,9 +1530,16 @@ mod tests {
         let most: Vec<String> = ["A1", "A2", "A3", "B1", "B2", "B3"]
             .map(String::from)
             .to_vec();
+        session.run_to_completion(Mode::Correlation);
+        assert!(session.correlation.output.is_some());
         session.set_samples_active(&most, false);
         session.run_to_completion(Mode::Correlation);
-        assert!(session.error.as_deref().unwrap().contains("at least three"));
+        assert!(session
+            .error(Mode::Correlation)
+            .unwrap()
+            .contains("at least three"));
+        // The earlier results are not left on show beside the error.
+        assert!(session.correlation.output.is_none());
     }
 
     #[test]

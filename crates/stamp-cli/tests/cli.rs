@@ -558,6 +558,89 @@ fn excluding_samples_and_default_second_group() {
 }
 
 #[test]
+fn groups_that_cannot_be_compared_are_refused() {
+    // A group compared with itself.
+    let error = failure(&with(
+        "two-groups",
+        &ENTEROTYPES,
+        &["--group1", "Infant", "--group2", "Infant"],
+    ));
+    assert!(error.contains("cannot be compared with itself"), "{error}");
+    // A named group whose only sample is excluded: it used to be tested,
+    // and every feature came out with p = 1.
+    let error = failure(&with(
+        "multi-groups",
+        &ENTEROTYPES,
+        &[
+            "--group",
+            "Enterotype 1",
+            "--group",
+            "Enterotype 2",
+            "--group",
+            "Enterotype 3 - twin",
+            "--exclude-sample",
+            "AM-F10-T1",
+        ],
+    ));
+    assert!(
+        error.contains("'Enterotype 3 - twin' has no samples"),
+        "{error}"
+    );
+    let error = failure(&with(
+        "two-groups",
+        &ENTEROTYPES,
+        &[
+            "--group1",
+            "Enterotype 3 - twin",
+            "--exclude-sample",
+            "AM-F10-T1",
+        ],
+    ));
+    assert!(error.contains("at least one sample"), "{error}");
+}
+
+#[test]
+fn the_multi_group_seed_reaches_the_community_tests() {
+    let directory = std::env::temp_dir().join(format!("stamp-cli-seed-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let pcoa = |seed: &str| {
+        let svg = svg_plot(
+            "multi-groups",
+            &ENTEROTYPES,
+            &["--plot-type", "pcoa", "--seed", seed],
+            &directory,
+            &format!("pcoa{seed}"),
+        );
+        let start = svg
+            .find("PERMANOVA")
+            .expect("the community tests are reported");
+        svg[start..start + 400].to_string()
+    };
+    let first = pcoa("1");
+    assert_eq!(first, pcoa("1"));
+    assert_ne!(first, pcoa("7"));
+    fs::remove_dir_all(&directory).ok();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_failed_write_to_standard_output_is_an_error() {
+    let full = fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_stamp-cli"))
+        .args(with("two-groups", &ENTEROTYPES, &["--group1", "Infant"]))
+        .current_dir(repo())
+        .stdout(full)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("cannot write to standard output"), "{error}");
+}
+
+#[test]
 fn resampling_is_reproducible_for_a_seed() {
     let args = |seed: &'static str| {
         with(

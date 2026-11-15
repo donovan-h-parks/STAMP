@@ -269,7 +269,13 @@ fn scheffe(groups: &[&[f64]], coverage: f64) -> (PairStats, &'static str) {
             let es = mean(groups[i]) - mean(groups[j]);
             let inverse_sizes = 1.0 / groups[i].len() as f64 + 1.0 / groups[j].len() as f64;
             let f = es * es / (within_var * inverse_sizes);
-            let p = f_sf(f / df_between, df_between, df_within);
+            // Without degrees of freedom within the groups (every group a
+            // single sample) there is no test, as for Tukey-Kramer.
+            let p = if df_within < 1.0 {
+                1.0
+            } else {
+                f_sf(f / df_between, df_between, df_within)
+            };
             let half_width = (critical * inverse_sizes).sqrt() * within_sd;
             stats.push((PostHocP::Value(p), es, es - half_width, es + half_width));
         }
@@ -620,6 +626,22 @@ mod tests {
         assert!(p.is_nan());
         assert!(r.comparisons[0].lower_ci.is_nan());
         assert!(r.comparisons[1].lower_ci.is_finite());
+    }
+
+    #[test]
+    fn every_group_a_single_sample_does_not_crash() {
+        // No degrees of freedom within the groups: Scheffe's F quantile used
+        // to panic in statrs.
+        let groups: [&[f64]; 3] = [&[1.0], &[2.0], &[3.0]];
+        for test in PostHocTest::ALL {
+            let r = test.run(&groups, 0.95, &["a", "b", "c"]).unwrap();
+            assert_eq!(r.comparisons.len(), 3, "{}", test.name());
+        }
+        let r = PostHocTest::Scheffe
+            .run(&groups, 0.95, &["a", "b", "c"])
+            .unwrap();
+        let PostHocP::Value(p) = r.comparisons[0].p_value;
+        assert_eq!(p, 1.0);
     }
 
     #[test]

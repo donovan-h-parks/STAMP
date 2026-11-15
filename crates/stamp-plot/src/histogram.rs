@@ -15,15 +15,18 @@ struct Series {
     color: Color,
 }
 
+/// Edges of bins of `bin_width` from 0 that cover `max`; the last bin ends
+/// at `max` or just past it and includes its upper edge. Edges are
+/// multiples of the width rather than sums of it, whose rounding error put
+/// a value of exactly `max` (a p-value of 1, say) in an extra bin past the
+/// end of the axis, where it was not drawn.
 fn bin_edges(max: f64, bin_width: f64) -> Vec<f64> {
-    let mut edges = vec![0.0];
-    let mut end = bin_width;
     // Guard against a bin width so small that the plot could never be drawn.
-    while end <= max + 1e-12 && edges.len() < 100_000 {
-        edges.push(end);
-        end += bin_width;
+    let bins = ((max / bin_width - 1e-9).ceil().max(1.0) as usize).min(100_000);
+    let mut edges: Vec<f64> = (0..=bins).map(|i| i as f64 * bin_width).collect();
+    if let Some(last) = edges.last_mut() {
+        *last = last.max(max);
     }
-    edges.push(end);
     edges
 }
 
@@ -385,12 +388,33 @@ mod tests {
     #[test]
     fn binning() {
         let edges = bin_edges(1.0, 0.25);
-        assert_eq!(edges.len(), 6);
+        assert_eq!(edges, [0.0, 0.25, 0.5, 0.75, 1.0]);
         assert_eq!(
-            count(&[0.0, 0.1, 0.25, 0.99, 1.0, f64::NAN, -1.0], &edges),
-            [2, 1, 0, 1, 1]
+            count(&[0.0, 0.1, 0.25, 0.99, 1.0, f64::NAN, -1.0, 1.5], &edges),
+            [2, 1, 0, 2]
         );
         assert!(bin_edges(1.0, 1e-9).len() <= 100_001);
+        // A value of exactly the limit is in the last bin, which ends at the
+        // limit, for every bin width the window offers (a p-value of 1 used
+        // to fall into a bin past the axis for widths of 0.1, 0.2, 0.25 and
+        // 0.5, and 0.05 in the inset for 0.025 and 0.05).
+        for (limit, width) in [
+            (1.0, 0.1),
+            (1.0, 0.2),
+            (1.0, 0.25),
+            (1.0, 0.5),
+            (1.0, 0.01),
+            (1.0, 0.03),
+            (0.05, 0.025),
+            (0.05, 0.05),
+            (0.05, 0.002),
+        ] {
+            let edges = bin_edges(limit, width);
+            assert!(*edges.last().unwrap() >= limit);
+            assert!(edges[edges.len() - 2] < limit, "{limit} {width}");
+            let counts = count(&[limit], &edges);
+            assert_eq!(counts.last(), Some(&1), "{limit} {width}");
+        }
     }
 
     #[test]

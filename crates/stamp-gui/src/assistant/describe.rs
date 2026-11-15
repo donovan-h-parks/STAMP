@@ -193,7 +193,7 @@ pub fn session(app: &StampApp) -> String {
     if !summary.is_empty() {
         let _ = writeln!(out, "- {summary}");
     }
-    if let Some(error) = &s.error {
+    if let Some(error) = s.error(app.mode) {
         let _ = writeln!(out, "- Error: {error}");
     }
     out

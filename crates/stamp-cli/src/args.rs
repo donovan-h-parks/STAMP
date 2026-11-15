@@ -478,7 +478,9 @@ pub struct MultiGroupsArgs {
     /// Keep only features with an eta-squared effect size of at least this value
     #[arg(long, value_name = "MINIMUM")]
     pub min_effect_size: Option<f64>,
-    /// Seed of the random number generator (used by the Storey correction)
+    /// Seed of the random number generator (used by the Storey correction
+    /// and by the community tests and rarefying of the PCoA, NMDS and
+    /// distance box plots)
     #[arg(long, default_value_t = 1)]
     pub seed: u64,
     #[command(flatten)]

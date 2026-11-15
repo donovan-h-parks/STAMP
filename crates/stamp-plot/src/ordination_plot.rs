@@ -394,7 +394,7 @@ pub fn plot_ordination(
             top + padding + main_h + if beneath { gap + beneath_h } else { 0.0 } + bottom_labels;
         if height > 6.0 * width {
             return Figure::message(
-                "The PCA plot would be too tall; switch off \"fixed length per unit distance\"",
+                "The plot would be too tall; switch off \"Fixed pixels per unit distance\"",
             );
         }
     } else {
@@ -415,7 +415,7 @@ pub fn plot_ordination(
         beneath_h = inner_height - gap - main_h;
     }
     if main_w < 0.75 * INCH || main_h < 0.75 * INCH {
-        return Figure::message("The figure is too small for a PCA plot");
+        return Figure::message("The figure is too small for this plot");
     }
     // A tall legend makes the figure taller.
     height = height.max(top + legend_height + padding);

@@ -664,7 +664,9 @@ impl ShapePlan {
             kept.truncate(room - 1);
             kept.sort();
         }
-        let other = Marker::ALL[kept.len()];
+        // Only used when categories are lumped; with exactly as many
+        // categories as shapes every shape is taken.
+        let other = Marker::ALL[kept.len().min(MAX_SHAPES - 1)];
         let none = Marker::ALL[(kept.len() + usize::from(lumped)).min(MAX_SHAPES - 1)];
         ShapePlan {
             kept,
@@ -768,6 +770,22 @@ mod tests {
         assert!(ColorSource::parse("Latitude").is_err());
         assert!(ColorSource::parse("field:").is_err());
         assert!(ColorSource::parse("colour:x").is_err());
+    }
+
+    #[test]
+    fn as_many_categories_as_shapes_each_get_their_own() {
+        // Exactly MAX_SHAPES categories used to index past the shapes.
+        let counts: BTreeMap<String, usize> =
+            (0..MAX_SHAPES).map(|i| (format!("c{i:02}"), 1)).collect();
+        let plan = ShapePlan::new(&counts, 0);
+        assert!(!plan.lumped);
+        assert_eq!(plan.kept.len(), MAX_SHAPES);
+        let shapes: Vec<Marker> = counts.keys().map(|k| plan.shape(Some(k))).collect();
+        assert_eq!(shapes, Marker::ALL.to_vec());
+        assert_eq!(plan.legend("Field", &counts, 0).len(), MAX_SHAPES + 1);
+        // One more, or a missing value, lumps the rarest together.
+        let plan = ShapePlan::new(&counts, 1);
+        assert!(plan.lumped);
     }
 
     #[test]

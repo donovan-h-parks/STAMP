@@ -76,7 +76,20 @@ impl Profile {
         self.parents.len()
     }
 
-    /// Relative frequency (%) of a feature in each sample.
+    /// Number of sequences in each sample: the sum over every parent
+    /// category, so the parent count when the parent is the entire sample.
+    pub fn sample_totals(&self) -> Vec<f64> {
+        let mut totals = vec![0.0; self.sample_names.len()];
+        for parent in &self.parents {
+            for (total, count) in totals.iter_mut().zip(parent) {
+                *total += count;
+            }
+        }
+        totals
+    }
+
+    /// Relative frequency (%) of a feature in each sample, against its
+    /// parent category.
     pub fn percentages(&self, feature: &Feature) -> Vec<f64> {
         let parents = self.parent_counts(feature);
         feature
@@ -259,6 +272,11 @@ impl ProfileTree {
             .samples(group1)
             .ok_or_else(|| unknown(group1))?
             .to_vec();
+        if group2 == SecondGroup::Named(group1) {
+            return Err(StampError::new(format!(
+                "Group '{group1}' cannot be compared with itself."
+            )));
+        }
         let (name2, samples2) = match group2 {
             SecondGroup::Named(g) => (
                 g.to_string(),
@@ -285,7 +303,9 @@ impl ProfileTree {
     }
 
     /// Profile of several groups of samples. `active_groups` restricts the
-    /// profile to the named groups; `None` uses every group.
+    /// profile to the named groups, each of which must have samples (a
+    /// group whose samples are all excluded would make every test
+    /// degenerate); `None` uses every group, even one with no samples.
     pub fn multi_group_profile(
         &self,
         groups: &Groups,
@@ -302,6 +322,11 @@ impl ProfileTree {
                 continue;
             }
             let members = groups.samples(name).unwrap_or(&[]);
+            if members.is_empty() && active_groups.is_some() {
+                return Err(StampError::new(format!(
+                    "Group '{name}' has no samples: they are all excluded or switched off."
+                )));
+            }
             group_names.push(name.to_string());
             group_sizes.push(members.len());
             samples.extend(members.iter().map(String::as_str));
@@ -644,6 +669,17 @@ mod tests {
             .unwrap();
         assert_eq!(g.group_name2, ALL_OTHER_SAMPLES);
         assert_eq!(g.samples_in_group2(), ["S2", "S4"]);
+
+        // A group is not compared with itself.
+        let same = t.group_profile(
+            &groups,
+            "Chow",
+            SecondGroup::Named("Chow"),
+            None,
+            "Phylum",
+            Unclassified::Retain,
+        );
+        assert!(same.unwrap_err().to_string().contains("with itself"));
     }
 
     #[test]
@@ -681,5 +717,21 @@ mod tests {
                 Unclassified::Retain
             )
             .is_err());
+
+        // A chosen group whose samples are all switched off is refused.
+        let (mut meta, _) = Metadata::read(META, &t).unwrap();
+        meta.set_active("S4", false);
+        let groups = meta.groups("Diet").unwrap();
+        let empty = t.multi_group_profile(
+            &groups,
+            Some(&["Western", "Chow"]),
+            None,
+            "Phylum",
+            Unclassified::Retain,
+        );
+        assert!(empty
+            .unwrap_err()
+            .to_string()
+            .contains("'Western' has no samples"));
     }
 }

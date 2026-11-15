@@ -112,9 +112,9 @@ fn two_group_analysis_draws_an_extended_error_bar_plot() {
     assert_eq!(harness.app.mode, Mode::TwoGroups);
     harness.settle();
     assert!(
-        harness.app.session.error.is_none(),
+        harness.app.session.error(Mode::TwoGroups).is_none(),
         "{:?}",
-        harness.app.session.error
+        harness.app.session.error(Mode::TwoGroups)
     );
     assert_eq!(harness.app.session.feature_counts(Mode::TwoGroups).0, 17);
     assert_eq!(harness.app.session.multi.active_groups.len(), 5);
@@ -1629,7 +1629,7 @@ fn eggerthellaceae_examples_load_with_their_own_settings() {
         Some("Feral horse (Sable Island)")
     );
     assert_eq!(session.correlation.field.as_deref(), Some("Equivita_relab"));
-    assert!(session.error.is_none(), "{:?}", session.error);
+    assert!(session.error(Mode::MultipleGroups).is_none());
     // The multiple-group test ran over the genera (unclassified rows are
     // features too, as unclassified reads are retained by default).
     let (total, passing) = session.feature_counts(Mode::MultipleGroups);

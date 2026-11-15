@@ -215,6 +215,11 @@ pub struct SampleRun {
     analysis: SampleAnalysis,
     settings: StatsSettings,
     rows: Vec<SampleRow>,
+    /// The random numbers as they were before the first feature, for the
+    /// multiple-test correction: Storey's bootstrap then draws the same
+    /// numbers whether the correction is chosen before the run or applied
+    /// to its results afterwards, and whichever test ran.
+    correction_rng: Option<StampRng>,
 }
 
 impl SampleRun {
@@ -223,6 +228,7 @@ impl SampleRun {
             analysis,
             settings: *settings,
             rows: Vec::new(),
+            correction_rng: None,
         }
     }
 
@@ -234,6 +240,9 @@ impl SampleRun {
         rng: &mut StampRng,
         pace: Pace<'_>,
     ) -> Step<SampleResults> {
+        if self.correction_rng.is_none() {
+            self.correction_rng = Some(rng.clone());
+        }
         let (analysis, settings) = (self.analysis, &self.settings);
         let features = profile.profile.features();
         while self.rows.len() < features.len() {
@@ -284,7 +293,8 @@ impl SampleRun {
             rows,
             correction: no_correction(),
         };
-        results.apply_correction(analysis.correction, rng);
+        let mut correction_rng = self.correction_rng.take().unwrap_or_else(|| rng.clone());
+        results.apply_correction(analysis.correction, &mut correction_rng);
         Step::Done(results)
     }
 }
@@ -514,6 +524,11 @@ pub struct GroupRun {
     outcomes: Vec<GroupOutcome>,
     /// Transformed values, once worked out.
     transformed: Option<Vec<Vec<f64>>>,
+    /// The random numbers as they were before the first feature, for the
+    /// multiple-test correction: Storey's bootstrap then draws the same
+    /// numbers whether the correction is chosen before the run or applied
+    /// to its results afterwards, and whichever test ran.
+    correction_rng: Option<StampRng>,
 }
 
 impl GroupRun {
@@ -523,6 +538,7 @@ impl GroupRun {
             settings: *settings,
             outcomes: Vec::new(),
             transformed: None,
+            correction_rng: None,
         }
     }
 
@@ -534,6 +550,9 @@ impl GroupRun {
         rng: &mut StampRng,
         pace: Pace<'_>,
     ) -> Step<GroupResults> {
+        if self.correction_rng.is_none() {
+            self.correction_rng = Some(rng.clone());
+        }
         let (analysis, settings) = (self.analysis, &self.settings);
         let features = profile.profile.features();
         let counts = |feature| {
@@ -621,7 +640,8 @@ impl GroupRun {
             rows,
             correction: no_correction(),
         };
-        results.apply_correction(analysis.correction, rng);
+        let mut correction_rng = self.correction_rng.take().unwrap_or_else(|| rng.clone());
+        results.apply_correction(analysis.correction, &mut correction_rng);
         Step::Done(results)
     }
 }
@@ -765,6 +785,11 @@ pub struct MultiGroupRun {
     rows: Vec<MultiGroupRow>,
     /// Transformed values, once worked out.
     transformed: Option<Vec<Vec<f64>>>,
+    /// The random numbers as they were before the first feature, for the
+    /// multiple-test correction: Storey's bootstrap then draws the same
+    /// numbers whether the correction is chosen before the run or applied
+    /// to its results afterwards, and whichever test ran.
+    correction_rng: Option<StampRng>,
 }
 
 impl MultiGroupRun {
@@ -773,6 +798,7 @@ impl MultiGroupRun {
             analysis,
             rows: Vec::new(),
             transformed: None,
+            correction_rng: None,
         }
     }
 
@@ -784,6 +810,9 @@ impl MultiGroupRun {
         rng: &mut StampRng,
         pace: Pace<'_>,
     ) -> Step<MultiGroupResults> {
+        if self.correction_rng.is_none() {
+            self.correction_rng = Some(rng.clone());
+        }
         let analysis = self.analysis;
         let features = profile.profile.features();
         if analysis.transform == Transform::CentredLogRatio && self.transformed.is_none() {
@@ -821,7 +850,8 @@ impl MultiGroupRun {
             rows,
             correction: no_correction(),
         };
-        results.apply_correction(analysis.correction, rng);
+        let mut correction_rng = self.correction_rng.take().unwrap_or_else(|| rng.clone());
+        results.apply_correction(analysis.correction, &mut correction_rng);
         Step::Done(results)
     }
 }
@@ -962,6 +992,11 @@ pub struct CorrelationFilter {
 pub struct CorrelationRun {
     analysis: CorrelationAnalysis,
     rows: Vec<CorrelationRow>,
+    /// The random numbers as they were before the first feature, for the
+    /// multiple-test correction: Storey's bootstrap then draws the same
+    /// numbers whether the correction is chosen before the run or applied
+    /// to its results afterwards, and whichever test ran.
+    correction_rng: Option<StampRng>,
 }
 
 impl CorrelationRun {
@@ -969,6 +1004,7 @@ impl CorrelationRun {
         CorrelationRun {
             analysis,
             rows: Vec::new(),
+            correction_rng: None,
         }
     }
 
@@ -980,6 +1016,9 @@ impl CorrelationRun {
         rng: &mut StampRng,
         pace: Pace<'_>,
     ) -> Step<CorrelationResults> {
+        if self.correction_rng.is_none() {
+            self.correction_rng = Some(rng.clone());
+        }
         let analysis = self.analysis;
         let features = profile.profile.features();
         let samples = profile.values.len();
@@ -1016,7 +1055,8 @@ impl CorrelationRun {
             rows,
             correction: no_correction(),
         };
-        results.apply_correction(analysis.correction, rng);
+        let mut correction_rng = self.correction_rng.take().unwrap_or_else(|| rng.clone());
+        results.apply_correction(analysis.correction, &mut correction_rng);
         Step::Done(results)
     }
 }
@@ -1473,6 +1513,25 @@ mod tests {
                 Step::Cancelled => panic!("cancelled"),
             });
             assert_eq!(result.unwrap(), whole, "{test:?}");
+
+            // Storey's bootstrap draws the same random numbers whether it is
+            // chosen before the run or applied afterwards, even after a
+            // test that drew random numbers of its own (White's).
+            let storey = GroupAnalysis {
+                correction: Correction::Storey,
+                ..analysis
+            };
+            let before = run_group_analysis(
+                &profile,
+                storey,
+                &settings,
+                &mut rng_from_seed(3),
+                &mut |_, _| true,
+            )
+            .unwrap();
+            let mut after = whole.clone();
+            after.apply_correction(Correction::Storey, &mut rng_from_seed(3));
+            assert_eq!(before, after, "{test:?}");
         }
 
         // Multiple groups, and cancelling.

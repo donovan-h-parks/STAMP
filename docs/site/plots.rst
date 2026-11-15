@@ -315,7 +315,9 @@ Composition bar plot
 ^^^^^^^^^^^^^^^^^^^^
 
 *All except correlation.* Each sample (or each group's mean) as a stacked
-bar of its most abundant features; the rest are added up as *Other*.
+bar of its most abundant features; the rest are added up as *Other*. The
+bars are percentages of the whole sample, also when a parent level is set,
+so that each adds up to 100%.
 
 .. figure:: images/mg_composition.png
    :width: 100%

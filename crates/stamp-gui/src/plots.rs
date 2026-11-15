@@ -1615,7 +1615,11 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
     match mode {
         Mode::TwoSamples => {
             let Some((profile, results)) = &session.samples.output else {
-                return Figure::message("Running the two-sample analysis...");
+                return Figure::message(
+                    session
+                        .error(Mode::TwoSamples)
+                        .unwrap_or("Running the two-sample analysis..."),
+                );
             };
             let rows = session.sample_rows();
             match kind {
@@ -1737,8 +1741,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
             let Some((profile, results)) = &session.groups.output else {
                 return Figure::message(
                     session
-                        .error
-                        .as_deref()
+                        .error(Mode::TwoGroups)
                         .unwrap_or("Running the two-group analysis..."),
                 );
             };
@@ -1935,8 +1938,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
             let Some((profile, results)) = &session.correlation.output else {
                 return Figure::message(
                     session
-                        .error
-                        .as_deref()
+                        .error(Mode::Correlation)
                         .unwrap_or("Running the correlation analysis..."),
                 );
             };
@@ -2059,8 +2061,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
             let Some((profile, results)) = &session.multi.output else {
                 return Figure::message(
                     session
-                        .error
-                        .as_deref()
+                        .error(Mode::MultipleGroups)
                         .unwrap_or("Running the multiple-group analysis..."),
                 );
             };

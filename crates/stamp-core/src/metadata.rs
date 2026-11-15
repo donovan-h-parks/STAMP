@@ -35,12 +35,20 @@ impl Metadata {
     /// sample name in the first column. Samples that are not in the profile
     /// are ignored. Returns the metadata and any warnings for the user.
     pub fn read(text: &str, tree: &ProfileTree) -> Result<(Metadata, Vec<String>)> {
-        let lines: Vec<&str> = text::lines(text).into_iter().map(text::strip).collect();
+        // Lines are split on tabs before their cells are stripped: stripping
+        // the whole line first would remove the tab before an empty first
+        // cell (as pandas writes a header for an unnamed index), and shift
+        // every field name by one.
+        let lines = text::lines(text);
         if lines.is_empty() {
             return Err(StampError::new("Metadata file is empty."));
         }
 
-        let header = text::cells(lines[0]);
+        let mut header = text::cells(lines[0]);
+        // A tab at the end of the header names no field.
+        while header.len() > 1 && header.last() == Some(&"") {
+            header.pop();
+        }
         let fields: Vec<String> = header.iter().skip(1).map(|s| s.to_string()).collect();
 
         let mut metadata = Metadata {
@@ -56,7 +64,7 @@ impl Metadata {
         let mut unknown = Vec::new();
         let mut duplicated = Vec::new();
         for line in &lines[1..] {
-            if line.is_empty() {
+            if text::strip(line).is_empty() {
                 continue;
             }
             let cells = text::cells(line);
@@ -218,7 +226,8 @@ impl Metadata {
 
     /// Group the active samples by the value of a field. A group whose
     /// samples are all switched off is kept, with no samples; one whose
-    /// samples the sample filter leaves out is not.
+    /// samples the sample filter leaves out is not. Samples with no value
+    /// for the field belong to no group (nor to "all other samples").
     pub fn groups(&self, field: &str) -> Result<Groups> {
         let f = self
             .field_index(field)
@@ -226,7 +235,7 @@ impl Metadata {
 
         let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for (i, sample) in self.samples.iter().enumerate() {
-            if !self.selected[i] {
+            if !self.selected[i] || self.values[i][f].is_empty() {
                 continue;
             }
             let members = groups.entry(self.values[i][f].clone()).or_default();
@@ -466,5 +475,28 @@ mod tests {
     fn pads_short_rows() {
         let (meta, _) = Metadata::read("Id\tA\tB\nS1\tx\n", &tree()).unwrap();
         assert_eq!(meta.value("S1", "B"), Some(""));
+    }
+
+    #[test]
+    fn samples_without_a_value_belong_to_no_group() {
+        let (meta, _) = Metadata::read("Id\tDiet\nS1\tA\nS2\t\nS3\tB\nS4\n", &tree()).unwrap();
+        let groups = meta.groups("Diet").unwrap();
+        assert_eq!(groups.names().collect::<Vec<_>>(), ["A", "B"]);
+        assert_eq!(groups.all_other_samples("A"), ["S3"]);
+    }
+
+    #[test]
+    fn a_header_with_an_empty_first_cell_keeps_its_field_names() {
+        // As pandas writes a table with an unnamed index: the header starts
+        // with a tab, which used to be stripped, shifting every name by one.
+        let text = "\tDiet\tpH\t\r\nS1\tA\t7.1\r\n  S2 \tB\t6.5 \r\n \t \r\n";
+        let (meta, warnings) = Metadata::read(text, &tree()).unwrap();
+        assert_eq!(meta.fields(), ["Diet", "pH"]);
+        assert_eq!(meta.value("S1", "Diet"), Some("A"));
+        assert_eq!(meta.value("S2", "pH"), Some("6.5"));
+        assert_eq!(
+            warnings,
+            ["Missing metadata for the following samples: S3, S4"]
+        );
     }
 }

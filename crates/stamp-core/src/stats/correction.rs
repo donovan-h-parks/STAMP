@@ -120,9 +120,14 @@ impl Correction {
                 values
             }
             Correction::Storey => {
-                let (values, pi0) = storey(p_values, rng);
+                let (values, pi0, estimate_was_zero) = storey(p_values, rng);
                 extra = Some(("Estimated pi_0", pi0));
-                if pi0 < 0.01 {
+                if estimate_was_zero {
+                    warning = Some(
+                        "No p-value is above the lambda chosen to estimate pi_0, so pi_0 = 1 \
+                         was used: the q-values are those of Benjamini-Hochberg.",
+                    );
+                } else if pi0 < 0.01 {
                     warning = Some(
                         "P-values do not appear to be uniformly distributed. Consider using \
                          the Benjamini-Hochberg FDR approach.",
@@ -152,11 +157,12 @@ fn ascending_order(p_values: &[f64]) -> Vec<usize> {
 
 /// Storey's q-values (Storey and Tibshirani, 2003), with the proportion of
 /// true null hypotheses (pi_0) estimated by the bootstrap procedure of
-/// Storey, Taylor and Siegmund (2004). Returns the q-values and pi_0.
-fn storey(p_values: &[f64], rng: &mut StampRng) -> (Vec<f64>, f64) {
+/// Storey, Taylor and Siegmund (2004). Returns the q-values, pi_0, and
+/// whether the estimate of pi_0 was zero (and one was used instead).
+fn storey(p_values: &[f64], rng: &mut StampRng) -> (Vec<f64>, f64, bool) {
     let count = p_values.len();
     if count == 0 {
-        return (Vec::new(), 1.0);
+        return (Vec::new(), 1.0, false);
     }
     let n = count as f64;
     let lambdas: Vec<f64> = (0..20).map(|i| i as f64 * 0.05).collect();
@@ -192,7 +198,13 @@ fn storey(p_values: &[f64], rng: &mut StampRng) -> (Vec<f64>, f64) {
     }
     // A proportion cannot exceed one; R's qvalue caps it the same way.
     let pi0 = pi0_at(p_values, best_lambda).min(1.0);
-    (q_values(p_values, pi0), pi0)
+    // No p-value above the chosen lambda estimates that no null hypothesis
+    // is true, which would make every q-value zero. R's qvalue refuses such
+    // an estimate; here every hypothesis is taken to be null instead (pi_0
+    // = 1, the Benjamini-Hochberg q-values), which errs on the safe side.
+    let estimate_was_zero = pi0 <= 0.0;
+    let pi0 = if estimate_was_zero { 1.0 } else { pi0 };
+    (q_values(p_values, pi0), pi0, estimate_was_zero)
 }
 
 /// Storey's q-values for a given proportion of true null hypotheses:
@@ -386,5 +398,18 @@ mod tests {
             .correct(&tiny, 0.05, &mut rng_from_seed(3))
             .warning
             .is_some());
+    }
+
+    #[test]
+    fn storey_never_estimates_that_no_hypothesis_is_null() {
+        // No p-value above 0.95 used to give pi_0 = 0 and every q-value 0,
+        // so that every feature was called significant.
+        let spread: Vec<f64> = (1..=200).map(|i| i as f64 * 0.9 / 200.0).collect();
+        for p_values in [vec![0.01, 0.2, 0.3, 0.4, 0.5], spread] {
+            let r = Correction::Storey.correct(&p_values, 0.05, &mut rng_from_seed(3));
+            assert_eq!(r.info[1].1, 1.0);
+            assert_eq!(r.values, correct(Correction::BenjaminiHochberg, &p_values));
+            assert!(r.warning.unwrap().contains("pi_0 = 1"));
+        }
     }
 }

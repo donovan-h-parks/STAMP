@@ -96,7 +96,9 @@ slower). Its progress is shown in the status bar at the bottom of the window,
 with a **Cancel** button:
 
 * **Analyses.** While the test of every feature runs, the status bar shows
-  *Running test...* with a progress bar.
+  *Running test...* with a progress bar. **Cancel** stops it and clears
+  the earlier results, which were made with other settings; change a
+  setting to run the test again.
 * **Slow plots.** The PCoA (with its community tests), NMDS, distance
   box, Mantel and ANCOM plots compute distances, ordinations and
   permutation tests that take several seconds for hundreds of samples (NMDS

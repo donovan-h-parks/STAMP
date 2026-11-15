@@ -980,6 +980,14 @@ fn storey_q_values_are_consistent_with_python() {
             .unwrap()
             .1;
         let python_pi0 = case.estimated_pi0.unwrap();
+        if python_pi0 == 0.0 {
+            // STAMP v2 estimated that no hypothesis was null and gave every
+            // feature q = 0; the port takes pi_0 = 1 instead (bug fix in
+            // CHANGES_FROM_PYTHON.md).
+            assert_eq!(pi0, 1.0, "{}", case.id);
+            checked += 1;
+            continue;
+        }
 
         // The estimate of pi_0 depends on a bootstrap choice of lambda, so it
         // varies between runs; q-values are proportional to it.

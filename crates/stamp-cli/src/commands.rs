@@ -79,11 +79,18 @@ fn write_output(path: Option<&Path>, text: &str) -> CliResult {
         Some(path) => {
             fs::write(path, text).map_err(|e| format!("cannot write {}: {e}", path.display()))
         }
-        None => {
-            // A closed pipe (for example `| head`) is not an error.
-            let _ = std::io::stdout().lock().write_all(text.as_bytes());
-            Ok(())
+        None => stdout_result(std::io::stdout().lock().write_all(text.as_bytes())),
+    }
+}
+
+/// The outcome of writing to standard output. A closed pipe (for example
+/// `| head`) is not an error; any other failure, such as a full disk, is.
+fn stdout_result(result: std::io::Result<()>) -> CliResult {
+    match result {
+        Err(e) if e.kind() != std::io::ErrorKind::BrokenPipe => {
+            Err(format!("cannot write to standard output: {e}"))
         }
+        _ => Ok(()),
     }
 }
 
@@ -575,6 +582,9 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
         args.profile.unclassified.into(),
     ))
     .map_err(|e| with_group_names(e, &groups))?;
+    if profile.samples_in_group1().is_empty() || profile.samples_in_group2().is_empty() {
+        return Err("both groups need at least one sample".to_string());
+    }
 
     let analysis = GroupAnalysis {
         test,
@@ -1090,7 +1100,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                     .collect(),
                 profile.group_names.clone(),
                 plot,
-                COMMUNITY_SEED,
+                args.seed,
                 &args.ordination,
                 ordination_styling(
                     &args.ordination,
@@ -1874,9 +1884,6 @@ fn unavailable(kind: PlotTypeArg, context: &str) -> String {
     format!("the {name} plot is not available for {context}")
 }
 
-/// Seed of the community tests where the command has no seed option.
-const COMMUNITY_SEED: u64 = 1;
-
 /// One of the plots of whole communities. The outcome of the community
 /// tests is also reported for the PCoA plot.
 #[allow(clippy::too_many_arguments)]
@@ -2362,9 +2369,7 @@ fn write_streamed(
         }
         None => {
             let mut out = std::io::BufWriter::new(std::io::stdout().lock());
-            // A closed pipe (for example `| head`) is not an error.
-            let _ = write(&mut out, &mut progress).and_then(|()| out.flush());
-            Ok(())
+            stdout_result(write(&mut out, &mut progress).and_then(|()| out.flush()))
         }
     }
 }

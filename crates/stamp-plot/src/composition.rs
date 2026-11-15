@@ -25,16 +25,25 @@ pub struct Data {
 }
 
 impl Data {
-    /// The relative frequencies of every feature of a profile, where sample
-    /// `i` belongs to group `sample_groups[i]`.
+    /// The relative frequencies of every feature of a profile in each whole
+    /// sample, where sample `i` belongs to group `sample_groups[i]`. They
+    /// are percentages of the sample even when the profile has a parent
+    /// level, so that a sample's features add up to 100%.
     pub fn from_profile(profile: &Profile, sample_groups: Vec<usize>, groups: Vec<String>) -> Data {
+        let totals = profile.sample_totals();
         Data {
             features: profile.features().iter().map(|f| f.name.clone()).collect(),
             samples: profile.sample_names.clone(),
             values: profile
                 .features()
                 .iter()
-                .map(|f| profile.percentages(f))
+                .map(|f| {
+                    f.counts
+                        .iter()
+                        .zip(&totals)
+                        .map(|(&count, &total)| stamp_core::profile::percent(count, total))
+                        .collect()
+                })
                 .collect(),
             sample_groups,
             groups,
@@ -395,6 +404,40 @@ mod tests {
             sample_groups: vec![0, 0, 1],
             groups: vec!["A".into(), "B".into()],
             group_colors: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_parent_level_does_not_change_the_whole_sample_percentages() {
+        // Percentages of the parent would add up to 100% per parent, so a
+        // stack of every feature would pass 100%.
+        let tree = stamp_core::ProfileTree::read(
+            "Phylum\tGenus\ts1\ts2\n\
+             P1\tg1\t30\t10\n\
+             P1\tg2\t10\t30\n\
+             P2\tg3\t60\t20\n",
+        )
+        .unwrap();
+        let samples = ["s1", "s2"];
+        let whole = tree
+            .profile(&samples, None, "Genus", stamp_core::Unclassified::Retain)
+            .unwrap();
+        let within = tree
+            .profile(
+                &samples,
+                Some("Phylum"),
+                "Genus",
+                stamp_core::Unclassified::Retain,
+            )
+            .unwrap();
+        let groups = vec!["G".to_string()];
+        let a = Data::from_profile(&whole, vec![0, 0], groups.clone());
+        let b = Data::from_profile(&within, vec![0, 0], groups);
+        assert_eq!(a.values, b.values);
+        assert_eq!(b.values[0], [30.0, 10.0 * 100.0 / 60.0]);
+        for sample in 0..2 {
+            let sum: f64 = b.values.iter().map(|v| v[sample]).sum();
+            assert!((sum - 100.0).abs() < 1e-9);
         }
     }
 

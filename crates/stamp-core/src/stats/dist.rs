@@ -5,7 +5,7 @@
 
 use std::f64::consts::SQRT_2;
 
-use statrs::function::beta::inv_beta_reg;
+use statrs::function::beta::inv_beta_reg as statrs_inv_beta_reg;
 use statrs::function::gamma::{gamma_lr, gamma_ur};
 
 /// Natural logarithm of the gamma function.
@@ -15,6 +15,16 @@ pub fn ln_gamma(x: f64) -> f64 {
 
 /// Regularized incomplete beta function I_x(a, b), by continued fraction
 /// (modified Lentz algorithm). Accurate to a few units in the last place.
+/// The inverse of the regularised incomplete beta function, or NaN when a
+/// shape parameter is not a positive number (statrs panics on those, and
+/// loops for ever on NaN), as happens with zero degrees of freedom.
+fn inv_beta_reg(a: f64, b: f64, p: f64) -> f64 {
+    if !(a > 0.0 && b > 0.0 && a.is_finite() && b.is_finite()) || p.is_nan() {
+        return f64::NAN;
+    }
+    statrs_inv_beta_reg(a, b, p)
+}
+
 pub fn beta_reg(a: f64, b: f64, x: f64) -> f64 {
     if x.is_nan() || a.is_nan() || b.is_nan() {
         return f64::NAN;
@@ -663,5 +673,13 @@ mod tests {
             }
         }
         assert_eq!(checked, 5 * 6 * 7);
+    }
+
+    #[test]
+    fn quantiles_without_degrees_of_freedom_are_nan() {
+        assert!(f_ppf(0.95, 2.0, 0.0).is_nan());
+        assert!(f_ppf(0.95, 0.0, 3.0).is_nan());
+        assert!(f_ppf(0.95, f64::NAN, 3.0).is_nan());
+        assert!(t_isf(0.05, 0.0).is_nan());
     }
 }
