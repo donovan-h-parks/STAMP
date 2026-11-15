@@ -94,8 +94,8 @@ Account for testing many features
 
 STAMP tests every genus at once, so some small p-values are expected by
 chance alone. Set **Multiple test correction** to *Benjamini-Hochberg FDR*.
-The p-values become q-values (corrected p-values), and the p-value filter
-now keeps features whose q-value is 0.05 or less. See
+The plots now show corrected p-values, and the p-value filter keeps
+features whose corrected p-value is 0.05 or less. See
 :ref:`multiple-testing` for what this means.
 
 Save the results

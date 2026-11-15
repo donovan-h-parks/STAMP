@@ -33,6 +33,7 @@ pub mod histogram;
 pub mod map_plot;
 pub mod multi_box;
 pub mod ordination_style;
+pub mod p_values;
 pub mod pca_plot;
 pub mod post_hoc;
 pub mod prevalence_plot;

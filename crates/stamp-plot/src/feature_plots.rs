@@ -9,6 +9,7 @@ use crate::axes::{
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, Stroke};
+use crate::p_values::PValueKind;
 use crate::text;
 
 /// What is plotted for each sample.
@@ -44,6 +45,9 @@ pub struct FeatureData {
     pub groups: Vec<Group>,
     /// Formatted p-value to show in the corner, if any.
     pub p_value: Option<String>,
+    /// What the p-value is, which names it; `None` for the p-value of a
+    /// single test, written as "p".
+    pub p_value_kind: Option<PValueKind>,
     /// Label of the value axis, where it is not one of the fields of a
     /// profile.
     pub value_label: Option<String>,
@@ -94,6 +98,7 @@ impl FeatureData {
                 ),
             ],
             p_value: None,
+            p_value_kind: None,
             value_label: None,
         })
     }
@@ -127,6 +132,7 @@ impl FeatureData {
             field,
             groups,
             p_value: None,
+            p_value_kind: None,
             value_label: None,
         })
     }
@@ -319,7 +325,7 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         corner_note(
             &mut figure,
             &frame,
-            &crate::multi_box::p_text(p),
+            &crate::multi_box::p_text(p, data.p_value_kind),
             options.title_font_size,
         );
     }
@@ -510,6 +516,7 @@ mod tests {
                 },
             ],
             p_value: Some("0.012".to_string()),
+            p_value_kind: None,
             value_label: None,
         }
     }
@@ -554,6 +561,14 @@ mod tests {
                 "missing {expected} in {texts:?}"
             );
         }
+        // A p-value of the analysis is named by its correction.
+        let mut storey = data();
+        storey.p_value_kind = Some(PValueKind::QValue);
+        assert!(
+            super::tests::texts(&bar_plot(&storey, &BarOptions::default()))
+                .iter()
+                .any(|t| t == "q-value = 0.012")
+        );
         // Width grows with the number of samples.
         let mut more = data();
         more.groups[0].samples.push("L4".into());

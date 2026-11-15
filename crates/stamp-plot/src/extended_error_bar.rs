@@ -9,6 +9,7 @@ use stamp_core::{GroupProfile, SampleProfile};
 
 use crate::axis::{LinearScale, Ticks};
 use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
+use crate::p_values::PValueKind;
 use crate::text;
 
 const INCH: f64 = 72.0;
@@ -55,10 +56,8 @@ pub struct Data {
     pub is_ratio: bool,
     /// Coverage of the confidence intervals, for example 0.95.
     pub coverage: f64,
-    /// Whether the correction controls the false discovery rate (q-values).
-    pub false_discovery_rate: bool,
-    /// Whether any multiple-test correction was applied.
-    pub corrected: bool,
+    /// What the corrected p-values of the rows are, which names them.
+    pub corrected_kind: PValueKind,
     /// Heading drawn in the top-left corner, such as a feature name.
     pub heading: Option<String>,
 }
@@ -194,8 +193,7 @@ impl Data {
             effect_label: ci.plot_label().to_string(),
             is_ratio: ci.is_ratio(),
             coverage: results.analysis.coverage,
-            false_discovery_rate: results.correction.method.is_false_discovery_rate(),
-            corrected: results.correction.method != stamp_core::stats::correction::Correction::None,
+            corrected_kind: PValueKind::of(results.correction.method),
             heading: None,
         }
     }
@@ -247,8 +245,7 @@ impl Data {
             effect_label: "Difference in mean proportions (%)".to_string(),
             is_ratio: false,
             coverage: results.analysis.coverage,
-            false_discovery_rate: results.correction.method.is_false_discovery_rate(),
-            corrected: results.correction.method != stamp_core::stats::correction::Correction::None,
+            corrected_kind: PValueKind::of(results.correction.method),
             heading: None,
         }
     }
@@ -633,16 +630,13 @@ fn p_text(row: &Row, options: &Options) -> String {
 }
 
 fn p_value_title(data: &Data, options: &Options) -> String {
-    let mut title = if data.false_discovery_rate {
-        "q-value"
+    if options.show_corrected_p_values {
+        data.corrected_kind
     } else {
-        "p-value"
+        PValueKind::Uncorrected
     }
-    .to_string();
-    if options.show_corrected_p_values && data.corrected {
-        title.push_str(" (corrected)");
-    }
-    title
+    .label()
+    .to_string()
 }
 
 /// `95` for 95.0, `99.9` for 99.9.
@@ -726,8 +720,7 @@ mod tests {
             effect_label: "Difference between proportions (%)".to_string(),
             is_ratio: false,
             coverage: 0.95,
-            false_discovery_rate: false,
-            corrected: true,
+            corrected_kind: PValueKind::Corrected,
             heading: None,
         }
     }
@@ -781,7 +774,7 @@ mod tests {
             "95% confidence intervals",
             "Proportion (%)",
             "Difference between proportions (%)",
-            "p-value (corrected)",
+            "Corrected p-value",
             "< 1e-15",
             "0.060",
             "0.0",
@@ -794,17 +787,24 @@ mod tests {
             );
         }
 
-        let mut fdr = data();
-        fdr.false_discovery_rate = true;
-        assert!(
-            texts_of(&plot(&fdr, &Options::default())).contains(&"q-value (corrected)".to_string())
-        );
+        // Storey's q-values, and no correction at all.
+        let mut storey = data();
+        storey.corrected_kind = PValueKind::QValue;
+        assert!(texts_of(&plot(&storey, &Options::default())).contains(&"q-value".to_string()));
+        let mut none = data();
+        none.corrected_kind = PValueKind::Uncorrected;
+        assert!(texts_of(&plot(&none, &Options::default()))
+            .contains(&"Uncorrected p-value".to_string()));
+        // Uncorrected values shown although a correction was applied.
         let uncorrected = Options {
             show_corrected_p_values: false,
             ..Options::default()
         };
-        let texts = texts_of(&plot(&data(), &uncorrected));
-        assert!(texts.contains(&"p-value".to_string()) && texts.contains(&"0.020".to_string()));
+        let texts = texts_of(&plot(&storey, &uncorrected));
+        assert!(
+            texts.contains(&"Uncorrected p-value".to_string())
+                && texts.contains(&"0.020".to_string())
+        );
     }
 
     fn texts_of(figure: &Figure) -> Vec<String> {

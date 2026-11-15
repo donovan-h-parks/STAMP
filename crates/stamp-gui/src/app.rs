@@ -527,11 +527,11 @@ impl FilterUi {
         count_kinds: &[&str],
         second_label: &str,
         active_features: (usize, usize),
-        false_discovery_rate: bool,
+        q_values: bool,
     ) -> bool {
         let before = self.clone();
-        // Under a false discovery rate correction the values are q-values.
-        let p_label = if false_discovery_rate {
+        // Storey's correction gives q-values; the plots name them so too.
+        let p_label = if q_values {
             "q-value filter (>):"
         } else {
             "p-value filter (>):"
@@ -3442,13 +3442,12 @@ impl StampApp {
             return;
         }
         let counts = self.session.feature_counts(mode);
-        let fdr = match mode {
+        let q_values = match mode {
             Mode::TwoSamples => self.session.samples.analysis.correction,
             Mode::TwoGroups => self.session.groups.analysis.correction,
             Mode::MultipleGroups => self.session.multi.analysis.correction,
             Mode::Correlation => self.session.correlation.analysis.correction,
-        }
-        .is_false_discovery_rate();
+        } == stamp_core::stats::correction::Correction::Storey;
         let selection = &mut self.selections[mode_slot(mode)];
         let mut open_dialog = false;
         let mut selection_changed = false;
@@ -3476,7 +3475,7 @@ impl StampApp {
                         &SAMPLE_COUNT_KINDS,
                         "Sample 2 (<):",
                         counts,
-                        fdr,
+                        q_values,
                     )
                 }
                 Mode::TwoGroups => {
@@ -3489,11 +3488,11 @@ impl StampApp {
                         &GROUP_COUNT_KINDS,
                         "Group 2 (<):",
                         counts,
-                        fdr,
+                        q_values,
                     )
                 }
                 Mode::MultipleGroups => {
-                    filter.show(ui, "multi", &["Eta-squared"], &[], "", counts, fdr)
+                    filter.show(ui, "multi", &["Eta-squared"], &[], "", counts, q_values)
                 }
                 Mode::Correlation => filter.show(
                     ui,
@@ -3502,7 +3501,7 @@ impl StampApp {
                     &[],
                     "",
                     counts,
-                    fdr,
+                    q_values,
                 ),
             };
         if changed {

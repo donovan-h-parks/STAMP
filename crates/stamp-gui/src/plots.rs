@@ -8,6 +8,7 @@ use stamp_plot::axes::LegendPosition;
 use stamp_plot::axes::AXES_COLOR;
 use stamp_plot::community_plots::{self, Community};
 use stamp_plot::extended_error_bar::{self, SAMPLE1_COLOR, SAMPLE2_COLOR};
+use stamp_plot::p_values::{p_value_text, PValueKind};
 use stamp_plot::{
     ancom_plot, co_occurrence_plot, composition, correlation_plot, feature_plots, group_heatmap,
     heatmap, histogram, map_plot, multi_box, pca_plot, post_hoc, prevalence_plot, rank_abundance,
@@ -1691,6 +1692,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                 ),
                 PlotKind::ProfileBar => sample_plots::profile_bar(
                     profile,
+                    PValueKind::of(results.correction.method),
                     if settings.profile_bar_only_active {
                         rows
                     } else {
@@ -1703,7 +1705,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                 ),
                 PlotKind::Scatter => {
                     let mut data = scatter::Data::from_sample_profile(profile);
-                    data.add_p_values(|feature| {
+                    data.add_p_values(PValueKind::of(results.correction.method), |feature| {
                         let row = results.rows.iter().find(|r| r.feature == feature)?;
                         Some((p_text(row.p_value), p_text(row.p_value_corrected)))
                     });
@@ -1725,11 +1727,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                             }
                         })
                         .collect();
-                    let label = if corrected {
-                        "p-value (corrected)"
-                    } else {
-                        "p-value"
-                    };
+                    let label = PValueKind::shown(results.correction.method, corrected).label();
                     histogram::p_value_histogram(
                         &p,
                         &histogram::PValueOptions {
@@ -1808,6 +1806,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     .iter()
                     .find(|r| r.feature == name)
                     .map(|r| format_p_value(r.p_value_corrected, settings.min_p_exponent));
+                data.p_value_kind = Some(PValueKind::of(results.correction.method));
                 Some(data)
             };
             let feature_data = || data_of(feature?);
@@ -1849,7 +1848,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         y_color: color2,
                         ..scatter::Data::from_group_profile(profile, settings.group_spread)
                     };
-                    data.add_p_values(|feature| {
+                    data.add_p_values(PValueKind::of(results.correction.method), |feature| {
                         let row = results.rows.iter().find(|r| r.feature == feature)?;
                         Some((p_text(row.p_value), p_text(row.p_value_corrected)))
                     });
@@ -2032,10 +2031,13 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                             .find(|r| r.feature == data.feature)
                             .map(|r| {
                                 format!(
-                                    "{} = {:.3}, p = {} (n = {})",
+                                    "{} = {:.3}, {} (n = {})",
                                     results.analysis.method.coefficient_name(),
                                     r.coefficient,
-                                    p_text(r.p_value_corrected),
+                                    p_value_text(
+                                        &p_text(r.p_value_corrected),
+                                        Some(PValueKind::of(results.correction.method))
+                                    ),
                                     profile.values.len()
                                 )
                             });
@@ -2052,11 +2054,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     } else {
                         results.rows.iter().map(|r| r.p_value).collect()
                     };
-                    let label = if corrected {
-                        "p-value (corrected)"
-                    } else {
-                        "p-value"
-                    };
+                    let label = PValueKind::shown(results.correction.method, corrected).label();
                     histogram::p_value_histogram(
                         &values,
                         &histogram::PValueOptions {
@@ -2147,6 +2145,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     .iter()
                     .find(|r| r.feature == name)
                     .map(|r| format_p_value(r.p_value_corrected, settings.min_p_exponent));
+                data.p_value_kind = Some(PValueKind::of(results.correction.method));
                 Some(data)
             };
             let feature_data = || data_of(feature?);

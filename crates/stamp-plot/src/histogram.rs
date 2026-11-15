@@ -117,7 +117,8 @@ pub struct PValueOptions {
     pub height: f64,
     pub bin_width: f64,
     pub log_scale: bool,
-    /// Label of the x axis, such as `p-value (corrected)`.
+    /// Label of the x axis: a [`crate::p_values::PValueKind`] label, such as
+    /// `Corrected p-value`.
     pub label: String,
     /// A second, zoomed histogram of the smallest p-values in the top-right.
     pub inset: Option<Inset>,
@@ -141,7 +142,7 @@ impl Default for PValueOptions {
             height: 7.0,
             bin_width: 0.01,
             log_scale: false,
-            label: "p-value (corrected)".to_string(),
+            label: crate::p_values::PValueKind::Corrected.label().to_string(),
             inset: Some(Inset {
                 width_percent: 60.0,
                 height_percent: 60.0,
@@ -411,7 +412,7 @@ mod tests {
                 .any(|s| matches!(s, Shape::Text { text, .. } if text == needle))
         };
         assert!(
-            labelled(&without, "p-value (corrected)") && labelled(&without, "Number of features")
+            labelled(&without, "Corrected p-value") && labelled(&without, "Number of features")
         );
 
         let log = p_value_histogram(

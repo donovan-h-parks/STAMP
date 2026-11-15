@@ -11,6 +11,7 @@ use crate::axes::{
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
+use crate::p_values::PValueKind;
 use crate::text;
 
 const NOTHING: &str = "No active features or degenerate plot";
@@ -70,9 +71,10 @@ impl Default for ProfileBarOptions {
 
 /// Profile bar plot: the abundance of the most abundant features in both
 /// samples. `rows` selects the features considered, typically the filtered
-/// results.
+/// results; `corrected_kind` names their corrected p-values.
 pub fn profile_bar<'a>(
     profile: &SampleProfile,
+    corrected_kind: PValueKind,
     rows: impl IntoIterator<Item = &'a SampleRow>,
     options: &ProfileBarOptions,
 ) -> Figure {
@@ -190,12 +192,13 @@ pub fn profile_bar<'a>(
             frame.height(),
             &row.feature,
             format!(
-                "{}\n{}: {:.3}\n{}: {:.3}\np-value (corrected): {:.3e}",
+                "{}\n{}: {:.3}\n{}: {:.3}\n{}: {:.3e}",
                 row.feature,
                 profile.profile.sample_names[0],
                 pair[0].0,
                 profile.profile.sample_names[1],
                 pair[1].0,
+                corrected_kind.label(),
                 row.p_value_corrected
             ),
         );
@@ -316,8 +319,10 @@ pub fn stat_bar<'a>(
         BarField::Sequences => "Number of sequences".to_string(),
         BarField::ParentSequences => "Number of parental sequences".to_string(),
         BarField::Proportions => "Proportion of sequences (%)".to_string(),
-        BarField::PValues => "p-values".to_string(),
-        BarField::CorrectedPValues => "p-values (corrected)".to_string(),
+        BarField::PValues => PValueKind::Uncorrected.plural().to_string(),
+        BarField::CorrectedPValues => PValueKind::of(results.correction.method)
+            .plural()
+            .to_string(),
         BarField::EffectSize if log => format!("log({})", ci.plot_label()),
         BarField::EffectSize => ci.plot_label().to_string(),
     };
@@ -500,11 +505,7 @@ pub fn multiple_comparison(results: &SampleResults, options: &MultCompOptions) -
         return Figure::message(NOTHING);
     }
     pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let x_label = if results.correction.method.is_false_discovery_rate() {
-        "q-value"
-    } else {
-        "corrected p-value"
-    };
+    let x_label = PValueKind::of(results.correction.method).label();
 
     let mut figure = Figure::with_size_inches(options.width, options.height);
     let (left_margin, gap) = (0.55 * INCH, 0.6 * INCH);
@@ -622,7 +623,7 @@ pub fn multiple_comparison(results: &SampleResults, options: &MultCompOptions) -
         &mut figure,
         &frame,
         &scaled_ticks(&y_ticks, &y),
-        Some("p-value"),
+        Some(PValueKind::Uncorrected.label()),
         AXES_COLOR,
     );
 
@@ -723,6 +724,7 @@ mod tests {
         let (profile, results) = setup(SampleCi::DiffBetweenPropAsymptotic);
         let figure = profile_bar(
             &profile,
+            PValueKind::Corrected,
             &results.rows,
             &ProfileBarOptions {
                 legend: LegendPosition::None,
@@ -734,9 +736,12 @@ mod tests {
         // Most abundant in the first sample comes first.
         assert_eq!(figure.regions[0].item, "feature 12");
         assert!(has_text(&figure, "*") && has_text(&figure, "Proportion of sequences (%)"));
+        // Benjamini-Hochberg values are corrected p-values.
+        assert!(figure.regions[0].tooltip.contains("\nCorrected p-value: "));
 
         let top3 = profile_bar(
             &profile,
+            PValueKind::Corrected,
             &results.rows,
             &ProfileBarOptions {
                 features_to_show: 3,
@@ -748,6 +753,7 @@ mod tests {
         assert!(top3.width < figure.width);
         let counts = profile_bar(
             &profile,
+            PValueKind::Corrected,
             &results.rows,
             &ProfileBarOptions {
                 sequence_counts: true,
@@ -758,9 +764,14 @@ mod tests {
         );
         assert!(has_text(&counts, "Number of sequences") && !has_text(&counts, "*"));
         assert_eq!(
-            profile_bar(&profile, [], &ProfileBarOptions::default())
-                .shapes
-                .len(),
+            profile_bar(
+                &profile,
+                PValueKind::Corrected,
+                [],
+                &ProfileBarOptions::default()
+            )
+            .shapes
+            .len(),
             1
         );
     }
@@ -796,7 +807,7 @@ mod tests {
             },
         );
         assert_eq!(rects(&p, Color::grey(0.5)), 12);
-        assert!(has_text(&p, "p-values (corrected)"));
+        assert!(has_text(&p, "Corrected p-values"));
         // Smallest p-value at the top.
         assert_eq!(p.regions[0].item, results.rows[0].feature);
 
@@ -829,9 +840,10 @@ mod tests {
         let figure = multiple_comparison(&results, &MultCompOptions::default());
         for label in [
             "Number of features",
-            "p-value",
+            "Uncorrected p-value",
             "# significant features",
-            "q-value",
+            // Benjamini-Hochberg, which is not Storey's q-value.
+            "Corrected p-value",
         ] {
             assert!(has_text(&figure, label), "missing {label}");
         }

@@ -811,7 +811,8 @@ fn plots_are_written_in_each_format() {
         );
     }
     assert!(svg.contains(">95% confidence intervals</text>"));
-    assert!(svg.contains(">p-value (corrected)</text>"));
+    // Bonferroni: corrected p-values.
+    assert!(svg.contains(">Corrected p-value</text>"));
     assert!(svg.contains(">Difference between proportions (%)</text>"));
     // 7 inches wide; 8 rows of 0.2 inches plus margins.
     assert!(svg.contains("width=\"504pt\" height=\"162pt\""));
@@ -904,7 +905,8 @@ fn every_plot_type_can_be_drawn() {
         ("profile-bar", "Proportion of sequences (%)"),
         ("scatter", "Black (%)"),
         ("sequence-histogram", "Sequences"),
-        ("p-value-histogram", "p-value (corrected)"),
+        // Benjamini-Hochberg: corrected p-values (q-values are Storey's).
+        ("p-value-histogram", "Corrected p-value"),
         ("multiple-comparison", "# significant features"),
     ] {
         let svg = svg_plot(
@@ -994,6 +996,8 @@ fn every_plot_type_can_be_drawn() {
     );
     // p-values are computed; STAMP v2 showed bounds such as "< 0.001".
     assert!(has(&post_hoc, "Enterotype 1 : Enterotype 2") && !has(&post_hoc, "&lt; 0.001"));
+    // Tukey-Kramer allows for the number of pairs.
+    assert!(has(&post_hoc, "Corrected p-value"));
 
     // The volcano and composition plots, for groups and for samples.
     let volcano = svg_plot(
@@ -1003,7 +1007,8 @@ fn every_plot_type_can_be_drawn() {
         &directory,
         "m-volcano",
     );
-    assert!(has(&volcano, "Eta-squared") && has(&volcano, "\u{2212}log10(corrected p-value)"));
+    // No correction was chosen.
+    assert!(has(&volcano, "Eta-squared") && has(&volcano, "\u{2212}log10(Uncorrected p-value)"));
     let composition = svg_plot(
         "multi-groups",
         &multi,

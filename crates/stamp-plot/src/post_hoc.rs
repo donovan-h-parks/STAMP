@@ -8,6 +8,7 @@ use stamp_core::MultiGroupProfile;
 use crate::axes::group_color;
 use crate::extended_error_bar::{self, Data, Options, Row};
 use crate::figure::{Color, Figure};
+use crate::p_values::PValueKind;
 
 /// Build the post-hoc plot for a feature. `result` must come from a post-hoc
 /// test on the same profile and feature.
@@ -109,8 +110,13 @@ pub fn plot_with_colors(
         effect_label: "Difference in mean proportions (%)".to_string(),
         is_ratio: false,
         coverage,
-        false_discovery_rate: false,
-        corrected: false,
+        // The p-values are those of the post-hoc test, which allows for the
+        // number of pairs unless it is Welch's.
+        corrected_kind: if result.test.corrects_for_pairs() {
+            PValueKind::Corrected
+        } else {
+            PValueKind::Uncorrected
+        },
         heading: Some(crate::text::truncate(
             feature,
             options.truncate_labels.unwrap_or(usize::MAX - 3),
@@ -167,10 +173,16 @@ mod tests {
         let figure = plot(&profile, "x", &result, 0.95, false, &Options::default());
         let texts = texts(&figure);
         for expected in [
-            "x", "A : B", "A : C", "B : C",
+            "x",
+            "A : B",
+            "A : C",
+            "B : C",
             // Computed p-values, where STAMP v2 showed "< 0.001" and
             // ">= 0.1".
-            "2.04e-6", "1.000", "p-value",
+            "2.04e-6",
+            "1.000",
+            // Tukey-Kramer allows for the number of pairs.
+            "Corrected p-value",
         ] {
             assert!(
                 texts.iter().any(|t| t == expected),
@@ -209,5 +221,13 @@ mod tests {
         assert_eq!(texts(&none), ["No pair of groups differs significantly"]);
         let missing = plot(&profile, "nope", &result, 0.95, false, &Options::default());
         assert_eq!(texts(&missing), ["No feature is selected"]);
+    }
+
+    #[test]
+    fn welch_p_values_are_labelled_uncorrected() {
+        let profile = profile();
+        let result = run_post_hoc(&profile, "x", PostHocTest::WelchUncorrected, 0.95).unwrap();
+        let figure = plot(&profile, "x", &result, 0.95, false, &Options::default());
+        assert!(texts(&figure).contains(&"Uncorrected p-value".to_string()));
     }
 }

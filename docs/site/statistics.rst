@@ -149,7 +149,9 @@ false positives among the features called significant. A cut-off of 0.05
 means that, on average, about 5% of the features kept are false
 discoveries. This is the usual choice for exploratory studies of many
 features, where some false leads are acceptable if most findings are real.
-The corrected values are called **q-values**.
+Their corrected values are often called q-values; STAMP's plots keep that
+name for Storey's values and call Benjamini-Hochberg's *corrected p-values*
+(see :ref:`how plots name p-values <p-value-labels>`).
 
 * **Benjamini-Hochberg FDR**: the standard method.
 * **Storey FDR**: estimates the proportion of features that truly do not
@@ -465,7 +467,8 @@ The :ref:`co-occurrence heatmap <plot-co-occurrence>` and ``stamp-cli
 co-occurrence`` correlate features with each other across samples, with the
 same Pearson and Spearman coefficients and p-values as above (computed as in
 SciPy's ``pearsonr`` and ``spearmanr``, against which they are tested). The
-q-values are Benjamini-Hochberg over the n(n − 1)/2 pairs of the n features
+corrected p-values (the ``q-value`` column of the table) are
+Benjamini-Hochberg over the n(n − 1)/2 pairs of the n features
 shown (or over the correlations of one feature with all others).
 
 .. warning::
@@ -487,7 +490,7 @@ shown (or over the correlations of one feature with all others).
      features typical of each environment; correlate within one group to
      look for associations within an environment;
    * with many samples, even very weak correlations are significant: judge
-     the coefficient, not only the q-value;
+     the coefficient, not only the corrected p-value;
    * a correlation is not an interaction between the features.
 
 Whole communities

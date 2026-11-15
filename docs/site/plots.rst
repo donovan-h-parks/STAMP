@@ -15,6 +15,24 @@ current analysis under six headings, by the question they answer:
 Every plot can be changed with **Configure plot** and saved with **File >
 Save plot as**. Point at any part of a plot to see what it stands for.
 
+.. _p-value-labels:
+
+.. note::
+
+   Plots name the p-values they show by the multiple test correction:
+
+   * **Uncorrected p-value** when no correction is chosen, or when the plot
+     is set to show the values before correction;
+   * **Corrected p-value** after Bonferroni, Holm-Bonferroni, Sidak or
+     Benjamini-Hochberg;
+   * **q-value** after Storey's FDR.
+
+   The p-values of a post-hoc plot allow for the number of pairs of groups
+   (they are *Corrected p-values*), except those of *Welch's
+   (uncorrected)*. A plot of a single test, such as the Kruskal-Wallis test
+   of the alpha diversity plot or the community tests, writes its p-value as
+   *p*.
+
 Groups are coloured in order from a palette of twenty colours: the ten of
 STAMP v2 and then ten stronger ones, so that up to twenty groups can be told
 apart (STAMP v2 drew every group after the tenth black). Beyond twenty the
@@ -54,7 +72,8 @@ Each row is a feature that passed the filters.
   confidence interval. The marker takes the colour of the sample or group
   in which the feature is more abundant. The dashed line marks zero: no
   difference.
-* **Right**: the p-value (or q-value, under an FDR correction).
+* **Right**: the p-value, labelled by the multiple test correction (see
+  :ref:`how plots name p-values <p-value-labels>`).
 
 **What to look for.**
 
@@ -72,7 +91,7 @@ Rows can be sorted by p-value, effect size or name in *Configure plot*.
    :width: 100%
 
    Subsystems that differ between the *Red* and *Black* iron mine samples,
-   with Benjamini-Hochberg q-values.
+   with Benjamini-Hochberg corrected p-values.
 
 Volcano plot
 ^^^^^^^^^^^^
@@ -86,7 +105,7 @@ line marks the significance threshold.
    :width: 80%
 
    Volcano plot of the genera of Enterotype 1 against Enterotype 3, with
-   Benjamini-Hochberg q-values.
+   Benjamini-Hochberg corrected p-values.
 
 **What to look for.** The interesting features are in the **upper
 corners**: large and significant. Points high up but near the middle are
@@ -144,7 +163,7 @@ and the number of features that would be significant at each threshold.
    The Benjamini-Hochberg correction of the iron mine subsystems.
 
 **What to look for.** The right-hand panel helps choose a threshold: here
-about 50 features are significant at a q-value of 0.02, and few more are
+about 50 features are significant at a corrected p-value of 0.02, and few more are
 added until about 0.06. The middle panel shows how much the correction
 raised the p-values.
 
@@ -459,7 +478,7 @@ the chosen features across the samples of the analysis (or of one of its
 groups): which features rise and fall together. Red cells are positive
 correlations, blue negative; features are clustered so that those that
 co-vary sit together, in the same order along both axes. An asterisk marks
-correlations whose Benjamini-Hochberg q-value (over all the pairs shown) is
+correlations whose Benjamini-Hochberg corrected p-value (over all the pairs shown) is
 below 0.05, optionally only those at least a chosen distance from zero.
 
 The features are the 30 of highest mean abundance (or prevalence), plus any

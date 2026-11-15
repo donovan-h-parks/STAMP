@@ -22,6 +22,7 @@ use stamp_core::{Groups, Metadata, MultiGroupProfile, ProfileTree, SampleSelecti
 
 use stamp_plot::export::{export, Format};
 use stamp_plot::extended_error_bar::{self, Legend, SortBy};
+use stamp_plot::p_values::{p_value_text, PValueKind};
 
 use crate::args::*;
 use crate::progress::Task;
@@ -393,6 +394,7 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
             ),
             PlotTypeArg::ProfileBar => sample_plots::profile_bar(
                 &profile,
+                PValueKind::of(results.correction.method),
                 rows.iter().copied(),
                 &sample_plots::ProfileBarOptions {
                     height: size(6.0),
@@ -431,12 +433,9 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
                 histogram::p_value_histogram(
                     &p,
                     &histogram::PValueOptions {
-                        label: if uncorrected {
-                            "p-value"
-                        } else {
-                            "p-value (corrected)"
-                        }
-                        .to_string(),
+                        label: PValueKind::shown(results.correction.method, !uncorrected)
+                            .label()
+                            .to_string(),
                         width: plot.plot_width,
                         height: size(7.0),
                         ..Default::default()
@@ -618,6 +617,7 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                 .iter()
                 .find(|r| r.feature == name)
                 .map(|r| stamp_core::stats::results::format_p_value(r.p_value_corrected, -15));
+            data.p_value_kind = Some(PValueKind::of(results.correction.method));
             Ok(data)
         };
         let group_samples = [
@@ -927,6 +927,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                 .iter()
                 .find(|r| r.feature == name)
                 .map(|r| stamp_core::stats::results::format_p_value(r.p_value_corrected, -15));
+            data.p_value_kind = Some(PValueKind::of(results.correction.method));
             Ok(data)
         };
         let group_samples: Vec<Vec<String>> = profile
@@ -1254,10 +1255,13 @@ fn correlation(args: CorrelationArgs) -> CliResult {
                 }
                 data.statistics = results.rows.iter().find(|r| r.feature == name).map(|r| {
                     format!(
-                        "{} = {:.3}, p = {} (n = {})",
+                        "{} = {:.3}, {} (n = {})",
                         analysis.method.coefficient_name(),
                         r.coefficient,
-                        stamp_core::stats::results::format_p_value(r.p_value_corrected, -15),
+                        p_value_text(
+                            &stamp_core::stats::results::format_p_value(r.p_value_corrected, -15),
+                            Some(PValueKind::of(results.correction.method))
+                        ),
                         profile.values.len()
                     )
                 });
@@ -1295,12 +1299,9 @@ fn correlation(args: CorrelationArgs) -> CliResult {
                 histogram::p_value_histogram(
                     &p,
                     &histogram::PValueOptions {
-                        label: if uncorrected {
-                            "p-value"
-                        } else {
-                            "p-value (corrected)"
-                        }
-                        .to_string(),
+                        label: PValueKind::shown(results.correction.method, !uncorrected)
+                            .label()
+                            .to_string(),
                         width: plot.plot_width,
                         height: plot.plot_height.unwrap_or(7.0),
                         ..Default::default()

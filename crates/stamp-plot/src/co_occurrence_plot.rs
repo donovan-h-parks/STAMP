@@ -14,6 +14,7 @@ use crate::axes::{fonts, INCH, NOTE_SIZE};
 use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::group_heatmap::{color_bar, color_bar_height, text_color_on};
 use crate::heatmap::{arrange, dendrogram, ColorMap, Order};
+use crate::p_values::{tooltip_lines, PValueKind};
 use crate::text;
 
 /// What is shown.
@@ -313,7 +314,7 @@ fn significance_note(settings: &Settings, tests: usize) -> String {
         String::new()
     };
     format!(
-        "* q < {}{strength} (Benjamini-Hochberg over {tests} correlations)",
+        "* Corrected p-value < {}{strength} (Benjamini-Hochberg over {tests} correlations)",
         settings.q_threshold
     )
 }
@@ -435,12 +436,15 @@ pub fn matrix_plot(data: &Data, settings: &Settings, options: &Options) -> Figur
                 cell,
                 &result.features[i],
                 format!(
-                    "{} and {}\n{}: {value:.3}\np = {}, q = {}",
+                    "{} and {}\n{}: {value:.3}\n{}",
                     result.features[i],
                     result.features[j],
                     result.method.coefficient_name(),
-                    crate::group_heatmap::format_significant(result.p_values[i][j], 3),
-                    crate::group_heatmap::format_significant(q, 3),
+                    tooltip_lines(
+                        &crate::group_heatmap::format_significant(result.p_values[i][j], 3),
+                        &crate::group_heatmap::format_significant(q, 3),
+                        PValueKind::Corrected,
+                    ),
                 ),
             );
         }
@@ -656,12 +660,15 @@ pub fn partner_plot(
             row,
             &partner.feature,
             format!(
-                "{}\n{}: {:.3}\np = {}, q = {}",
+                "{}\n{}: {:.3}\n{}",
                 partner.feature,
                 settings.method.coefficient_name(),
                 partner.coefficient,
-                crate::group_heatmap::format_significant(partner.p_value, 3),
-                crate::group_heatmap::format_significant(partner.q_value, 3),
+                tooltip_lines(
+                    &crate::group_heatmap::format_significant(partner.p_value, 3),
+                    &crate::group_heatmap::format_significant(partner.q_value, 3),
+                    PValueKind::Corrected,
+                ),
             ),
         );
     }
@@ -785,7 +792,9 @@ mod tests {
         let shown = texts(&figure);
         assert!(shown.iter().any(|t| t == "*"));
         assert!(shown.contains(&"Spearman rho (proportions)".to_string()));
-        assert!(shown.iter().any(|t| t.starts_with("* q < 0.05")));
+        assert!(shown
+            .iter()
+            .any(|t| t.starts_with("* Corrected p-value < 0.05")));
         assert!(shown.iter().any(|t| t.starts_with("6 samples;")));
         // Rows and columns follow the same order: each label twice.
         for name in ["a", "b", "c", "d", "e"] {

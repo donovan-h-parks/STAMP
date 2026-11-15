@@ -13,6 +13,7 @@ use crate::axes::{
 use crate::axis::Ticks;
 use crate::extended_error_bar::{SAMPLE1_COLOR, SAMPLE2_COLOR};
 use crate::figure::{Color, Figure, Stroke};
+use crate::p_values::{tooltip_lines, PValueKind};
 
 /// One feature.
 #[derive(Debug, Clone, PartialEq)]
@@ -35,8 +36,8 @@ pub struct Data {
     /// that is more abundant in the first lies to the right. `None` when
     /// the effect size has no direction, as for several groups.
     pub sides: Option<[(String, Color); 2]>,
-    /// Whether the corrected values are q-values (a false discovery rate).
-    pub false_discovery_rate: bool,
+    /// What the corrected p-values are, which names them.
+    pub corrected_kind: PValueKind,
 }
 
 impl Data {
@@ -60,7 +61,7 @@ impl Data {
                 (names[0].clone(), SAMPLE1_COLOR),
                 (names[1].clone(), SAMPLE2_COLOR),
             ]),
-            false_discovery_rate: results.correction.method.is_false_discovery_rate(),
+            corrected_kind: PValueKind::of(results.correction.method),
         }
     }
 
@@ -82,7 +83,7 @@ impl Data {
                 (profile.group_name1.clone(), group_color(0)),
                 (profile.group_name2.clone(), group_color(1)),
             ]),
-            false_discovery_rate: results.correction.method.is_false_discovery_rate(),
+            corrected_kind: PValueKind::of(results.correction.method),
         }
     }
 
@@ -110,7 +111,7 @@ impl Data {
                 (format!("samples with a high {field}"), POSITIVE),
                 (format!("samples with a low {field}"), NEGATIVE),
             ]),
-            false_discovery_rate: results.correction.method.is_false_discovery_rate(),
+            corrected_kind: PValueKind::of(results.correction.method),
         }
     }
 
@@ -129,7 +130,7 @@ impl Data {
             effect_label: results.analysis.effect_size.name().to_string(),
             no_effect: 0.0,
             sides: None,
-            false_discovery_rate: results.correction.method.is_false_discovery_rate(),
+            corrected_kind: PValueKind::of(results.correction.method),
         }
     }
 }
@@ -271,11 +272,12 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                 .min_effect
                 .is_none_or(|minimum| (point.effect_size - data.no_effect).abs() >= minimum)
     };
-    let p_name = match (options.corrected, data.false_discovery_rate) {
-        (false, _) => "p-value",
-        (true, true) => "q-value",
-        (true, false) => "corrected p-value",
-    };
+    let p_name = if options.corrected {
+        data.corrected_kind
+    } else {
+        PValueKind::Uncorrected
+    }
+    .label();
     let radius = options.marker_size.max(0.0).sqrt() / 2.0;
     // Features that are not significant first, so that those that are lie
     // on top where they crowd together.
@@ -310,12 +312,15 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             2.0 * radius + 2.0,
             &point.feature,
             format!(
-                "{}\n\n{}: {:.3}\np-value: {}\nCorrected p-value: {}",
+                "{}\n\n{}: {:.3}\n{}",
                 point.feature,
                 data.effect_label,
                 point.effect_size,
-                format_p_value(point.p_value, options.min_p_value_exponent),
-                format_p_value(point.p_value_corrected, options.min_p_value_exponent),
+                tooltip_lines(
+                    &format_p_value(point.p_value, options.min_p_value_exponent),
+                    &format_p_value(point.p_value_corrected, options.min_p_value_exponent),
+                    data.corrected_kind,
+                ),
             ),
         );
     }
@@ -376,7 +381,7 @@ mod tests {
                 ("Lean".to_string(), group_color(0)),
                 ("Obese".to_string(), group_color(1)),
             ]),
-            false_discovery_rate: false,
+            corrected_kind: PValueKind::Corrected,
         }
     }
 
@@ -443,7 +448,7 @@ mod tests {
             .collect();
         for expected in [
             "Difference in mean proportions (%)",
-            "\u{2212}log10(corrected p-value)",
+            "\u{2212}log10(Corrected p-value)",
             "More in Lean",
             "More in Obese",
         ] {
@@ -456,7 +461,7 @@ mod tests {
             .unwrap()
             .tooltip;
         assert!(
-            tooltip.contains("p-value: 1.00e-4\nCorrected p-value: 1.00e-3"),
+            tooltip.contains("Uncorrected p-value: 1.00e-4\nCorrected p-value: 1.00e-3"),
             "{tooltip}"
         );
     }
@@ -482,7 +487,7 @@ mod tests {
         assert!(figure
             .shapes
             .iter()
-            .any(|s| matches!(s, Shape::Text { text, .. } if text == "\u{2212}log10(p-value)")));
+            .any(|s| matches!(s, Shape::Text { text, .. } if text == "\u{2212}log10(Uncorrected p-value)")));
         // Without a level everything is coloured, and no line is drawn for it.
         let dashes = |figure: &Figure| {
             figure
@@ -519,7 +524,7 @@ mod tests {
         let mut several = data();
         several.sides = None;
         several.effect_label = "Eta-squared".to_string();
-        several.false_discovery_rate = true;
+        several.corrected_kind = PValueKind::QValue;
         for point in &mut several.points {
             point.effect_size = point.effect_size.abs() / 5.0;
         }

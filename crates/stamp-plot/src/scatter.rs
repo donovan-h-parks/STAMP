@@ -11,6 +11,7 @@ use crate::axes::{
 use crate::axis::{LinearScale, Ticks};
 use crate::figure::TextStyle;
 use crate::figure::{Color, Figure, HAlign, Stroke, VAlign};
+use crate::p_values::{tooltip_lines, PValueKind};
 
 /// One feature.
 #[derive(Debug, Clone, PartialEq)]
@@ -189,15 +190,21 @@ impl Data {
 }
 
 impl Data {
-    /// Add each feature's p-value and corrected p-value to its tooltip.
-    /// `p_values` gives the two, already formatted, for a feature that was
-    /// tested.
-    pub fn add_p_values(&mut self, p_values: impl Fn(&str) -> Option<(String, String)>) {
+    /// Add each feature's p-value, and its corrected p-value if a
+    /// correction was applied, to its tooltip. `p_values` gives the two,
+    /// already formatted, for a feature that was tested; `corrected_kind`
+    /// names the corrected values.
+    pub fn add_p_values(
+        &mut self,
+        corrected_kind: PValueKind,
+        p_values: impl Fn(&str) -> Option<(String, String)>,
+    ) {
         for point in &mut self.points {
             if let Some((p, corrected)) = p_values(&point.feature) {
+                point.tooltip.push_str("\n\n");
                 point
                     .tooltip
-                    .push_str(&format!("\n\np-value: {p}\nCorrected p-value: {corrected}"));
+                    .push_str(&tooltip_lines(&p, &corrected, corrected_kind));
             }
         }
     }

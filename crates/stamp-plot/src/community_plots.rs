@@ -152,6 +152,8 @@ pub fn alpha_plot(community: &Community, metric: AlphaMetric, options: &BoxOptio
         field: Field::Proportion,
         groups,
         p_value,
+        // One test, of the groups' diversity: no correction applies.
+        p_value_kind: None,
         value_label: Some(metric.name().to_string()),
     };
     feature_plots::box_plot(&data, options)
@@ -545,6 +547,7 @@ pub fn draw_distance_box(
         field: Field::Proportion,
         groups,
         p_value: None,
+        p_value_kind: None,
         value_label: Some(label),
     };
     feature_plots::box_plot(&data, options)

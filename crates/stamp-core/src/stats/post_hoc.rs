@@ -47,6 +47,8 @@ pub struct Comparison {
 /// All pairwise comparisons for one feature.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PostHocResult {
+    /// The test that made the comparisons.
+    pub test: PostHocTest,
     pub comparisons: Vec<Comparison>,
     pub note: &'static str,
 }
@@ -65,6 +67,12 @@ impl PostHocTest {
         PostHocTest::TukeyKramer,
         PostHocTest::WelchUncorrected,
     ];
+
+    /// True if the p-values allow for the number of pairs compared; false
+    /// only for Welch's test, which leaves each pair uncorrected.
+    pub fn corrects_for_pairs(self) -> bool {
+        self != PostHocTest::WelchUncorrected
+    }
 
     pub fn name(self) -> &'static str {
         match self {
@@ -117,7 +125,11 @@ impl PostHocTest {
                 });
             }
         }
-        Ok(PostHocResult { comparisons, note })
+        Ok(PostHocResult {
+            test: self,
+            comparisons,
+            note,
+        })
     }
 }
 

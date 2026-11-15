@@ -296,15 +296,7 @@ fn drawn_values(feature: &FeatureData) -> Vec<f64> {
     values
 }
 
-/// A p-value as written on a plot: "p = 0.012", or "p < 1e-15" for a
-/// bound.
-pub(crate) fn p_text(p: &str) -> String {
-    if p.starts_with('<') || p.starts_with('>') {
-        format!("p {p}")
-    } else {
-        format!("p = {p}")
-    }
-}
+pub(crate) use crate::p_values::p_value_text as p_text;
 
 /// How category labels fit along an axis with slots of width `slot`:
 /// level if the widest fits, otherwise at 45 degrees; and the depth they
@@ -542,7 +534,7 @@ fn panels(
             .p_value
             .as_ref()
             .filter(|_| options.show_p_value)
-            .map(|p| p_text(p));
+            .map(|p| p_text(p, feature.p_value_kind));
         let size = options.title_font_size;
         let centre = (frame.left + frame.right) / 2.0;
         let style = TextStyle::new(size).align(HAlign::Center, VAlign::Baseline);
@@ -592,16 +584,30 @@ fn grouped(
         .iter()
         .map(|f| shorten(&f.feature, options.truncate_labels))
         .collect();
+    // Side by side, the slots are too narrow for "Corrected p-value = ..."
+    // above each feature: the name of the values is written once above
+    // them, and each slot shows its value. Beside the features (horizontal)
+    // there is room for the whole text.
+    let kinds: Vec<_> = features.iter().filter_map(|f| f.p_value_kind).collect();
+    let shared_kind = (!options.horizontal
+        && !kinds.is_empty()
+        && kinds.len() == features.len()
+        && kinds.iter().all(|k| *k == kinds[0]))
+    .then(|| kinds[0]);
     let p_values: Vec<Option<String>> = features
         .iter()
         .map(|f| {
             f.p_value
                 .as_ref()
                 .filter(|_| options.show_p_value)
-                .map(|p| p_text(p))
+                .map(|p| match shared_kind {
+                    Some(_) => p.clone(),
+                    None => p_text(p, f.p_value_kind),
+                })
         })
         .collect();
     let has_p = p_values.iter().any(Option::is_some);
+    let p_heading = shared_kind.filter(|_| has_p).map(|kind| kind.plural());
     let p_size = options.title_font_size;
     let p_width = p_values
         .iter()
@@ -633,7 +639,13 @@ fn grouped(
             widest(&names, sizes.tick),
             (right - left) / features.len() as f64,
         );
-        let top = padding + if has_p { p_size * 1.5 } else { 0.0 };
+        let top = padding
+            + if has_p { p_size * 1.5 } else { 0.0 }
+            + if p_heading.is_some() {
+                p_size * 1.3
+            } else {
+                0.0
+            };
         Frame {
             left,
             top,
@@ -661,6 +673,14 @@ fn grouped(
     } else {
         axis
     };
+    if let Some(heading) = p_heading {
+        figure.text(
+            frame.left,
+            frame.top - 5.0 - p_size * 1.3,
+            heading,
+            TextStyle::new(p_size).align(HAlign::Left, VAlign::Baseline),
+        );
+    }
     let slot = (category_end - category_start) / k as f64;
     let spacing = slot * 0.8 / order.len() as f64;
     let half = spacing * 0.38;
@@ -914,6 +934,7 @@ mod tests {
     use crate::axes::group_color;
     use crate::feature_plots::{Field, Group};
     use crate::figure::Shape;
+    use crate::p_values::PValueKind;
 
     /// Number of the shapes that are points of samples.
     fn point_count(figure: &Figure) -> usize {
@@ -952,6 +973,7 @@ mod tests {
                 },
             ],
             p_value: Some("0.01".to_string()),
+            p_value_kind: None,
             value_label: None,
         }
     }
@@ -1076,6 +1098,37 @@ mod tests {
         }
         // Zeros are counted in the tooltip.
         assert!(figure.regions[0].tooltip.contains("Zeros: 1"));
+        // p-values of an analysis: their name once above the features, the
+        // value above each; lying down, the whole text beside each.
+        let named: Vec<FeatureData> = data
+            .iter()
+            .map(|f| FeatureData {
+                p_value_kind: Some(PValueKind::Corrected),
+                ..f.clone()
+            })
+            .collect();
+        let texts = texts_of(&plot(&named, None, &options));
+        assert_eq!(
+            texts.iter().filter(|t| *t == "Corrected p-values").count(),
+            1
+        );
+        // Each feature's value (one more "0.01" is a tick of the axis), and no
+        // value with its name.
+        assert_eq!(
+            texts.iter().filter(|t| *t == "0.01").count(),
+            data.len() + 1
+        );
+        assert!(!texts.iter().any(|t| t.ends_with("p-value = 0.01")));
+        let lying = texts_of(&plot(
+            &named,
+            None,
+            &BoxOptions {
+                horizontal: true,
+                ..options.clone()
+            },
+        ));
+        assert!(lying.iter().any(|t| t == "Corrected p-value = 0.01"));
+        assert!(!lying.iter().any(|t| t == "Corrected p-values"));
         // Lying down, the same boxes.
         let lying = plot(
             &data,

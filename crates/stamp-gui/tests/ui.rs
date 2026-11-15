@@ -875,7 +875,7 @@ fn new_plot_options_change_the_plots() {
     assert!(texts(harness.app.figure()).contains(&"Sequences".to_string()));
     harness.app.set_plot_kind(PlotKind::PValueHistogram);
     harness.settle();
-    assert!(texts(harness.app.figure()).contains(&"p-value".to_string()));
+    assert!(texts(harness.app.figure()).contains(&"Uncorrected p-value".to_string()));
     harness.app.set_plot_kind(PlotKind::MultipleComparison);
     harness.settle();
     assert!(texts(harness.app.figure()).contains(&"10".to_string()));
@@ -1272,14 +1272,25 @@ fn unticked_groups_and_inactive_samples_leave_the_lists() {
 }
 
 #[test]
-fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
+fn filter_is_named_for_q_values_under_storeys_correction() {
     // The label is drawn text; its width shows which one is in use.
     let mut harness = Harness::enterotypes();
     harness.settle();
     let before = harness.screenshot("p_value_filter_label");
+    // Benjamini-Hochberg values are corrected p-values: the name stays.
     harness.app.session.set_correction(
         Mode::TwoGroups,
         stamp_core::stats::correction::Correction::BenjaminiHochberg,
+    );
+    harness.settle();
+    let corrected = harness.screenshot("corrected_p_value_filter_label");
+    let same = (985..1110)
+        .flat_map(|x| (380..403).map(move |y| (x, y)))
+        .all(|(x, y)| before.pixel(x, y) == corrected.pixel(x, y));
+    assert!(same, "the filter label changed under Benjamini-Hochberg");
+    harness.app.session.set_correction(
+        Mode::TwoGroups,
+        stamp_core::stats::correction::Correction::Storey,
     );
     harness.settle();
     let after = harness.screenshot("q_value_filter_label");
@@ -1354,13 +1365,26 @@ fn scatter_plot_tooltips_say_what_stamp_v2_did() {
         "Enterotype 2 mean proportion: ",
         "Difference between mean proportions (%): 6.511",
         "Ratio of mean proportions: ",
-        "p-value: 0.165\nCorrected p-value: 0.165",
+        // No correction: the one value, named as uncorrected.
+        "Uncorrected p-value: 0.165",
     ] {
         assert!(
             groups.contains(expected),
             "missing {expected:?} in {groups:?}"
         );
     }
+    assert!(!groups.contains("Corrected p-value"), "{groups:?}");
+    // Under Storey's FDR, the q-value follows.
+    harness.app.session.set_correction(
+        Mode::TwoGroups,
+        stamp_core::stats::correction::Correction::Storey,
+    );
+    harness.settle();
+    let storey = tooltip(&harness.app);
+    assert!(
+        storey.contains("Uncorrected p-value: 0.165\nq-value: "),
+        "{storey:?}"
+    );
 
     harness.app.set_mode(Mode::TwoSamples);
     harness.app.set_plot_kind(PlotKind::Scatter);
@@ -1376,7 +1400,7 @@ fn scatter_plot_tooltips_say_what_stamp_v2_did() {
         format!("{s1} percentage: "),
         "Difference between proportions (%): ".to_string(),
         "Ratio of proportions: ".to_string(),
-        "Corrected p-value: ".to_string(),
+        "Uncorrected p-value: ".to_string(),
     ] {
         assert!(
             samples.contains(&expected),
