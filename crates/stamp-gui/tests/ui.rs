@@ -321,7 +321,10 @@ fn plot_is_centred_in_its_space() {
     harness.settle();
     let (plot, space) = harness.app.plot_placement.expect("the plot was drawn");
     // Smaller than its space: equal margins on both sides, in both directions.
-    assert!(plot.width() < space.width() && plot.height() < space.height());
+    assert!(
+        plot.width() < space.width() && plot.height() < space.height(),
+        "{plot:?} in {space:?}"
+    );
     assert!(
         (plot.center().x - space.center().x).abs() <= 1.0,
         "{plot:?} in {space:?}"
@@ -1284,8 +1287,14 @@ fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
             .set_correction(Mode::TwoGroups, correction);
         harness.settle();
         let shot = harness.screenshot(name);
-        (985..1110)
-            .flat_map(|x| (380..403).map(move |y| (x, y)))
+        // The label's place in the Properties frame, wherever that is.
+        let layout = harness.app.layout();
+        let tile = stamp_gui::layout::tile_of(layout, stamp_gui::layout::Frame::Properties)
+            .expect("the Properties frame");
+        let frame = layout.tiles.rect(tile).expect("the frame was laid out");
+        let (left, top) = (frame.min.x as usize, frame.min.y as usize);
+        (left + 42..left + 140)
+            .flat_map(|x| (top + 358..top + 380).map(move |y| (x, y)))
             .map(|(x, y)| shot.pixel(x, y))
             .collect::<Vec<_>>()
     };
@@ -3370,4 +3379,123 @@ fn a_plot_part_way_through_its_community_tests() {
     }
     assert!(!seen.is_empty(), "no progress was shown");
     harness.app.cancel_plot();
+}
+
+/// Where a frame was drawn in the last frame.
+fn frame_rect(harness: &Harness, frame: stamp_gui::layout::Frame) -> egui::Rect {
+    let layout = harness.app.layout();
+    let tile = stamp_gui::layout::tile_of(layout, frame).expect("every frame is in the layout");
+    layout.tiles.rect(tile).expect("the frame was laid out")
+}
+
+#[test]
+fn frames_can_be_moved_and_the_layout_is_remembered() {
+    use stamp_gui::layout::Frame;
+    let mut harness = Harness::enterotypes();
+    harness.app.show_metadata_table(true);
+    harness.settle();
+    // To start with, the Metadata table is beneath the plot.
+    assert!(
+        frame_rect(&harness, Frame::Metadata).min.y > frame_rect(&harness, Frame::Plot).max.y - 1.0
+    );
+
+    // Dragging its tab to the far left of the top row, as egui_tiles does.
+    let layout = harness.app.layout();
+    let metadata = stamp_gui::layout::tile_of(layout, Frame::Metadata).unwrap();
+    let plot_tabs = layout
+        .tiles
+        .parent_of(stamp_gui::layout::tile_of(layout, Frame::Plot).unwrap())
+        .unwrap();
+    let top_row = layout.tiles.parent_of(plot_tabs).unwrap();
+    harness
+        .app
+        .layout_mut()
+        .move_tile_to_container(metadata, top_row, 0, false);
+    harness.settle();
+    let moved = frame_rect(&harness, Frame::Metadata);
+    assert!(
+        moved.max.x <= frame_rect(&harness, Frame::Profile).min.x + 1.0,
+        "{moved:?}"
+    );
+    // A frame dropped into a row gets an ordinary width.
+    assert!(moved.width() > 150.0, "{moved:?}");
+    harness.screenshot("metadata_moved_left");
+
+    // A new window restores the arrangement.
+    let ctx = harness.renderer.ctx.clone();
+    let saved = harness.app.saved(&ctx);
+    let mut again = Harness::enterotypes();
+    let ctx = again.renderer.ctx.clone();
+    again.app.restore(&ctx, saved.clone());
+    again.app.show_metadata_table(true);
+    again.settle();
+    assert!(
+        frame_rect(&again, Frame::Metadata).max.x <= frame_rect(&again, Frame::Profile).min.x + 1.0
+    );
+
+    // View > Reset layout puts it back beneath the plot.
+    again.app.reset_layout();
+    again.settle();
+    assert!(
+        frame_rect(&again, Frame::Metadata).min.y > frame_rect(&again, Frame::Plot).max.y - 1.0
+    );
+
+    // A layout saved by another version of STAMP, or missing a frame, is
+    // replaced by the default.
+    let mut old = saved.clone();
+    old.layout_version = 0;
+    again.app.restore(&ctx, old);
+    assert_eq!(*again.app.layout(), stamp_gui::layout::default_tree());
+    let mut broken = saved;
+    let mut tree = broken.layout.clone().unwrap();
+    let results = stamp_gui::layout::tile_of(&tree, Frame::Results).unwrap();
+    tree.remove_recursively(results);
+    broken.layout = Some(tree);
+    again.app.restore(&ctx, broken);
+    assert!(stamp_gui::layout::is_complete(again.app.layout()));
+}
+
+#[test]
+fn frames_are_hidden_and_shown_and_open_where_they_belong() {
+    use stamp_gui::layout::Frame;
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let plot = frame_rect(&harness, Frame::Plot);
+    let visible = |harness: &Harness, frame| {
+        let layout = harness.app.layout();
+        layout
+            .tiles
+            .is_visible(stamp_gui::layout::tile_of(layout, frame).unwrap())
+    };
+    // Hidden (as its tab's × does), the feature table gives its room to
+    // the plot.
+    assert!(visible(&harness, Frame::Features));
+    harness.app.show_frame(Frame::Features, false);
+    harness.settle();
+    assert!(!visible(&harness, Frame::Features));
+    assert!(frame_rect(&harness, Frame::Plot).width() > plot.width() + 200.0);
+    harness.app.show_frame(Frame::Features, true);
+    harness.settle();
+    assert!(visible(&harness, Frame::Features));
+    assert!((frame_rect(&harness, Frame::Plot).width() - plot.width()).abs() < 1.0);
+
+    // Configure plot opens beside the plot, in front of Properties.
+    assert!(!visible(&harness, Frame::ConfigurePlot));
+    harness.app.show_plot_config(true);
+    harness.settle();
+    assert!(visible(&harness, Frame::ConfigurePlot));
+    let configure = frame_rect(&harness, Frame::ConfigurePlot);
+    assert!(configure.min.x > plot.max.x, "{configure:?}");
+    harness.screenshot("configure_plot_docked");
+
+    // The results table opens along the bottom.
+    harness.app.show_results_table(true);
+    harness.settle();
+    let results = frame_rect(&harness, Frame::Results);
+    assert!(
+        results.min.y > frame_rect(&harness, Frame::Plot).max.y - 1.0,
+        "{results:?}"
+    );
+    assert!(harness.app.frame_shown(Frame::Results));
+    harness.screenshot("results_table_docked");
 }

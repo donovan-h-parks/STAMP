@@ -9,6 +9,14 @@ Add an entry here whenever a feature is added that v2 did not have.
 
 ## Running STAMP
 
+- **Movable frames** (`crates/stamp-gui/src/layout.rs`, `egui_tiles`).
+  Profile and groups, Properties, the Feature table, the Metadata table,
+  the Results table, Configure plot and Claude Code are frames that can
+  be dragged by their tabs to any side of the plot or of each other, or
+  tabbed together; the plot stays in the middle. Configure plot and the
+  Results table, windows in v2, are frames. A closed frame's room goes to
+  the plot; the View menu brings it back where it was. The arrangement is
+  remembered between runs; View > Reset layout restores the default.
 - **Asking an AI assistant** (Assistant menu, `crates/stamp-gui/src/assistant/`,
   `docs/site/assistant.rst`). "Copy description for AI" copies the data,
   the analysis settings, a description of the plot on screen (its text and

@@ -7,6 +7,10 @@ The main window
    The STAMP window: profile and groups (left), plot and feature table
    (centre), properties (right).
 
+The plot is always in the middle. The other parts of the window are frames
+that can be moved around it (see `Arranging the window`_); the sections
+below describe them where STAMP first puts them.
+
 Profile and groups (left)
 -------------------------
 
@@ -36,8 +40,11 @@ Beneath the plot are:
 * the **plot selector**, listing the plots available for the current kind of
   analysis under six headings, by the question they answer (see
   :doc:`plots`);
-* **Configure plot**, which opens the options of the current plot: its size,
-  what it shows, its legend and the font sizes of its own text;
+* **Configure plot**, which opens the options of the current plot in a frame
+  of their own (beside the properties to start with): its size, what it
+  shows, its legend and the font sizes of its own text. Changes apply at
+  once; **Restore defaults** returns this plot's options to STAMP's, and
+  **Close** (or the × of its tab) closes the frame;
 * **Zoom**, which enlarges the plot on screen without changing its size when
   saved;
 * **Highlight**, which draws chosen features in red, in the plots that can:
@@ -120,10 +127,11 @@ with a **Cancel** button:
 Tables
 ------
 
-* **View > Results table** shows the full results: every feature with its
-  hierarchy, statistics and the counts of every sample, as saved by **File >
-  Save results table**. *Show only active features* hides those removed by
-  the filters.
+* **View > Results table** shows the full results along the bottom of the
+  window: every feature with its hierarchy, statistics and the counts of
+  every sample, as saved by **File > Save results table**. *Show only active
+  features* hides those removed by the filters; **Download** saves the
+  table.
 * **View > Metadata table** shows the metadata along the bottom of the
   window. Untick a sample to leave it out of every analysis, or use the
   filter to tick or untick all samples matching a condition (for example,
@@ -132,10 +140,41 @@ Tables
 * **View > Claude Code** (desktop application) shows or hides the Claude
   Code panel along the bottom of the window; see :doc:`assistant`.
 
+The tables along the bottom share the room as tabs: click a tab to bring
+its table to the front.
+
 .. figure:: images/gui_metadata_table.png
    :width: 100%
 
    The metadata table along the bottom of the window.
+
+.. _arranging-the-window:
+
+Arranging the window
+--------------------
+
+Seven parts of the window are frames you can move: *Profile and groups*,
+*Properties*, the *Feature table*, the *Metadata table*, the *Results
+table*, *Configure plot* and, in the desktop application, *Claude Code*.
+Each has a tab with its name.
+
+* **Move a frame** by dragging its tab. While you drag, STAMP shows where
+  the frame would go: drop it at the left, right, top or bottom edge of the
+  plot or of another frame to put it beside that one, or on another frame's
+  tabs to share its place as a tab.
+* **Resize** frames by dragging the gap between them.
+* **Close a frame** with the × on its tab; the View menu (or the button that
+  opens it) brings it back in the same place. The room of a closed frame
+  goes to the plot.
+* **View > Reset layout** puts every frame back where STAMP first put it.
+
+STAMP remembers the arrangement from one run to the next.
+
+.. figure:: images/gui_frames.png
+   :width: 100%
+
+   Configure plot open beside the properties, and the results table along
+   the bottom with the metadata table and Claude Code.
 
 Saving plots
 ------------
@@ -176,8 +215,8 @@ Ctrl+O (Cmd+O on macOS)   Load profile
 Ctrl+S                    Save the plot as a PNG image
 Ctrl+T                    Show or hide the results table
 Ctrl+M                    Show or hide the metadata table
-Ctrl+L                    Show or hide the profile and groups panel
-Ctrl+P                    Show or hide the properties panel
+Ctrl+L                    Show or hide the profile and groups frame
+Ctrl+P                    Show or hide the properties frame
 Ctrl+W                    Send the plot to a window of its own
 Ctrl+Q                    Exit
 ========================  =========================================

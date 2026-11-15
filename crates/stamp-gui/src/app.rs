@@ -29,6 +29,7 @@ use crate::assistant;
 use crate::figure_painter;
 use crate::icons;
 use crate::jobs::Job;
+use crate::layout::{self, Frame};
 use crate::platform::{self, Auxiliary, Event, OpenedFile, Platform, Request};
 use crate::plot_config;
 use crate::plots::{self, PlotKind, PlotSettings};
@@ -729,6 +730,10 @@ pub struct Saved {
     /// Open Claude Code without first showing what it will share ("Don't
     /// show this again").
     pub skip_claude_code_dialog: bool,
+    /// Where the frames of the window are, and the [`layout::LAYOUT_VERSION`]
+    /// it was saved under (zero before there was one).
+    pub layout: Option<egui_tiles::Tree<Frame>>,
+    pub layout_version: u32,
 }
 
 /// Identifies the starting values of the plot settings. Remembered plot
@@ -774,6 +779,8 @@ impl Default for Saved {
             // are taken to be.
             defaults_version: 0,
             skip_claude_code_dialog: false,
+            layout: None,
+            layout_version: 0,
         }
     }
 }
@@ -924,6 +931,8 @@ pub struct StampApp {
     /// How things were before each change the assistant made, most recent
     /// last.
     assistant_undo: Vec<AssistantSnapshot>,
+    /// Where the frames of the window are.
+    layout: egui_tiles::Tree<Frame>,
 }
 
 /// What the assistant's tools can change, as it was before a change, so
@@ -1130,6 +1139,7 @@ impl StampApp {
             plot_placement: None,
             assistant: assistant::State::default(),
             assistant_undo: Vec::new(),
+            layout: layout::default_tree(),
         }
     }
 
@@ -1460,6 +1470,8 @@ impl StampApp {
             plots: self.plot_settings.clone(),
             defaults_version: DEFAULTS_VERSION,
             skip_claude_code_dialog: self.skip_claude_code_dialog(),
+            layout: Some(self.layout.clone()),
+            layout_version: layout::LAYOUT_VERSION,
         }
     }
 
@@ -1498,6 +1510,14 @@ impl StampApp {
         self.session.other_samples_color = saved.other_samples_color;
         self.plot_settings = saved.plots;
         self.set_skip_claude_code_dialog(saved.skip_claude_code_dialog);
+        // A layout from another version of STAMP, or missing a frame, is
+        // replaced by the default.
+        self.layout = saved
+            .layout
+            .filter(|tree| {
+                saved.layout_version == layout::LAYOUT_VERSION && layout::is_complete(tree)
+            })
+            .unwrap_or_else(layout::default_tree);
         self.session.invalidate_all();
         self.view_dirty = true;
     }
@@ -2656,30 +2676,129 @@ impl StampApp {
 
         egui::Panel::top("menu").show(ui, |ui| self.menu(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
-        #[cfg(not(target_arch = "wasm32"))]
-        assistant::window::terminal_panel(self, ui);
-        if self.show_metadata_table {
-            egui::Panel::bottom("metadata")
-                .resizable(true)
-                .default_size(220.0)
-                .show(ui, |ui| self.metadata_panel(ui));
+        if self.view_dirty {
+            self.refresh_view();
         }
-        if self.show_profile_panel {
-            egui::Panel::left("profile")
-                .default_size(215.0)
-                .show(ui, |ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| self.profile_panel(ui));
-                });
-        }
-        if self.show_properties_panel {
-            egui::Panel::right("properties")
-                .default_size(285.0)
-                .show(ui, |ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| self.properties_panel(ui));
-                });
-        }
-        egui::CentralPanel::default().show(ui, |ui| self.plot_panel(ui));
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
+            .show(ui, |ui| self.frames(ui));
         self.windows(ui.ctx());
+    }
+
+    /// Whether a frame is shown, as the View menu (and the buttons that
+    /// open frames) set it.
+    pub fn frame_shown(&self, frame: Frame) -> bool {
+        match frame {
+            Frame::Plot => true,
+            Frame::Profile => self.show_profile_panel,
+            Frame::Properties => self.show_properties_panel,
+            Frame::Features => self.show_feature_table && self.session.tree.is_some(),
+            Frame::Metadata => self.show_metadata_table,
+            Frame::Results => self.show_table,
+            Frame::ConfigurePlot => self.show_plot_config,
+            #[cfg(not(target_arch = "wasm32"))]
+            Frame::ClaudeCode => self.assistant.show_terminal,
+            #[cfg(target_arch = "wasm32")]
+            Frame::ClaudeCode => false,
+        }
+    }
+
+    /// Show or hide a frame, as the View menu and a frame's tab do.
+    pub fn show_frame(&mut self, frame: Frame, shown: bool) {
+        match frame {
+            Frame::Plot => {}
+            Frame::Profile => self.show_profile_panel = shown,
+            Frame::Properties => self.show_properties_panel = shown,
+            Frame::Features => self.show_feature_table = shown,
+            Frame::Metadata => self.show_metadata_table = shown,
+            Frame::Results => self.show_table = shown,
+            Frame::ConfigurePlot => self.show_plot_config = shown,
+            #[cfg(not(target_arch = "wasm32"))]
+            Frame::ClaudeCode => self.assistant.show_terminal = shown,
+            #[cfg(target_arch = "wasm32")]
+            Frame::ClaudeCode => {}
+        }
+    }
+
+    /// The arrangement of the frames.
+    pub fn layout(&self) -> &egui_tiles::Tree<Frame> {
+        &self.layout
+    }
+
+    /// Change the arrangement of the frames, as dragging their tabs does.
+    pub fn layout_mut(&mut self) -> &mut egui_tiles::Tree<Frame> {
+        &mut self.layout
+    }
+
+    /// Put the frames back where STAMP starts with them, as View > Reset
+    /// layout does. Which frames are shown does not change.
+    pub fn reset_layout(&mut self) {
+        self.layout = layout::default_tree();
+    }
+
+    /// The frames around the plot, where the user has put them.
+    fn frames(&mut self, ui: &mut egui::Ui) {
+        // The tree is taken out while it is drawn, so that the frames can
+        // change the window.
+        let mut tree = std::mem::replace(
+            &mut self.layout,
+            egui_tiles::Tree::empty(egui::Id::unique("stamp-layout")),
+        );
+        if !layout::is_complete(&tree) {
+            tree = layout::default_tree();
+        }
+        layout::sync_visibility(&mut tree, |frame| self.frame_shown(frame));
+        let plot_tabs = layout::plot_tabs(&tree);
+        let mut draw = |frame: Frame, ui: &mut egui::Ui| self.frame_ui(frame, ui);
+        let mut behavior = layout::Behavior {
+            draw: &mut draw,
+            closed: Vec::new(),
+            plot_tabs,
+        };
+        tree.ui(&mut behavior, ui);
+        let closed = std::mem::take(&mut behavior.closed);
+        self.layout = tree;
+        for frame in closed {
+            self.show_frame(frame, false);
+        }
+    }
+
+    /// Draw one frame's contents.
+    fn frame_ui(&mut self, frame: Frame, ui: &mut egui::Ui) {
+        let padded = egui::Frame::new().inner_margin(egui::Margin::symmetric(6, 4));
+        match frame {
+            Frame::Plot => self.plot_panel(ui),
+            Frame::Profile => {
+                padded.show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| self.profile_panel(ui));
+                });
+            }
+            Frame::Properties => {
+                padded.show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| self.properties_panel(ui));
+                });
+            }
+            Frame::Features => {
+                padded.show(ui, |ui| self.feature_panel(ui));
+            }
+            Frame::Metadata => {
+                padded.show(ui, |ui| self.metadata_panel(ui));
+            }
+            Frame::Results => {
+                padded.show(ui, |ui| self.results_table_ui(ui));
+            }
+            Frame::ConfigurePlot => {
+                padded.show(ui, |ui| self.plot_config_ui(ui));
+            }
+            Frame::ClaudeCode => {
+                #[cfg(not(target_arch = "wasm32"))]
+                assistant::window::terminal_frame(self, ui);
+            }
+        }
     }
 
     fn menu(&mut self, ui: &mut egui::Ui) {
@@ -2823,6 +2942,14 @@ impl StampApp {
                     "Results table",
                     Some(&shortcut::RESULTS),
                 );
+                if ui
+                    .add(item(icons::SIDEBAR, "Reset layout", None))
+                    .on_hover_text("Put the frames back where STAMP starts with them")
+                    .clicked()
+                {
+                    self.reset_layout();
+                }
+                ui.separator();
                 let window = item(
                     icons::WINDOW_OUT,
                     "Send plot to window",
@@ -3705,15 +3832,7 @@ impl StampApp {
     /// The middle of the window: the plot, the choice of plot beneath it,
     /// and the table of features beside it for plots of a single feature.
     fn plot_panel(&mut self, ui: &mut egui::Ui) {
-        if self.view_dirty {
-            self.refresh_view();
-        }
         egui::Panel::bottom("plot-bar").show(ui, |ui| self.plot_bar(ui));
-        if self.show_feature_table && self.session.tree.is_some() {
-            egui::Panel::right("features")
-                .default_size(270.0)
-                .show(ui, |ui| self.feature_panel(ui));
-        }
 
         egui::CentralPanel::default().show(ui, |ui| {
             // The plot is centred in the room left for it.
@@ -4125,102 +4244,132 @@ impl StampApp {
         }
     }
 
-    fn windows(&mut self, ctx: &egui::Context) {
+    /// The Results table frame: the rows that pass the filters, with
+    /// Download and "Show only active features".
+    fn results_table_ui(&mut self, ui: &mut egui::Ui) {
         let mut select = None;
         let mut download = false;
         let mut sort = self.table_sort;
         let order = self.results_table_order();
         let mut only_active_changed = false;
-        egui::Window::new("Results table")
-            .open(&mut self.show_table)
-            .default_size([760.0, 320.0])
-            .show(ctx, |ui| {
+        egui::Frame::NONE.show(ui, |ui| {
+            ui.horizontal(|ui| {
+                download = ui
+                    .add_enabled(!self.table.rows.is_empty(), egui::Button::new("Download"))
+                    .on_hover_text("Save this table as a tab-separated file")
+                    .clicked();
+                only_active_changed = ui
+                    .checkbox(&mut self.results_only_active, "Show only active features")
+                    .changed();
+                ui.label(format!("{} features", self.table.rows.len()));
+            });
+            if let Some(pending) = &self.table_pending {
                 ui.horizontal(|ui| {
-                    download = ui
-                        .add_enabled(!self.table.rows.is_empty(), egui::Button::new("Download"))
-                        .on_hover_text("Save this table as a tab-separated file")
-                        .clicked();
-                    only_active_changed = ui
-                        .checkbox(&mut self.results_only_active, "Show only active features")
-                        .changed();
-                    ui.label(format!("{} features", self.table.rows.len()));
+                    ui.add(egui::Spinner::new());
+                    ui.label(format!(
+                        "Building the table: {} of {} rows",
+                        pending.next, pending.total
+                    ));
                 });
-                if let Some(pending) = &self.table_pending {
-                    ui.horizontal(|ui| {
-                        ui.add(egui::Spinner::new());
-                        ui.label(format!(
-                            "Building the table: {} of {} rows",
-                            pending.next, pending.total
-                        ));
-                    });
-                    ui.add(
-                        egui::ProgressBar::new(pending.next as f32 / pending.total.max(1) as f32)
-                            .desired_width(300.0),
-                    );
+                ui.add(
+                    egui::ProgressBar::new(pending.next as f32 / pending.total.max(1) as f32)
+                        .desired_width(300.0),
+                );
+            }
+            if self.table.rows.is_empty() {
+                if self.table_pending.is_none() {
+                    ui.label("No features pass the filters.");
                 }
-                if self.table.rows.is_empty() {
-                    if self.table_pending.is_none() {
-                        ui.label("No features pass the filters.");
-                    }
-                    return;
-                }
-                ui.separator();
-                use egui_extras::{Column, TableBuilder};
-                let selected = self.session.selected_feature.as_deref();
-                egui::ScrollArea::horizontal().show(ui, |ui| {
-                    TableBuilder::new(ui)
-                        .id_salt("results-table")
-                        .striped(true)
-                        .sense(egui::Sense::click())
-                        .columns(
-                            Column::auto().at_least(70.0).clip(true).resizable(true),
-                            self.table.headings.len(),
-                        )
-                        // Only cells in view are drawn: a table of a thousand
-                        // samples has thousands of columns, and laying out
-                        // the text of all of them in every row slows every
-                        // frame.
-                        .header(20.0, |mut header| {
-                            for (column, heading) in self.table.headings.iter().enumerate() {
-                                header.col(|ui| {
+                return;
+            }
+            ui.separator();
+            use egui_extras::{Column, TableBuilder};
+            let selected = self.session.selected_feature.as_deref();
+            egui::ScrollArea::horizontal().show(ui, |ui| {
+                TableBuilder::new(ui)
+                    .id_salt("results-table")
+                    .striped(true)
+                    .sense(egui::Sense::click())
+                    .columns(
+                        Column::auto().at_least(70.0).clip(true).resizable(true),
+                        self.table.headings.len(),
+                    )
+                    // Only cells in view are drawn: a table of a thousand
+                    // samples has thousands of columns, and laying out
+                    // the text of all of them in every row slows every
+                    // frame.
+                    .header(20.0, |mut header| {
+                        for (column, heading) in self.table.headings.iter().enumerate() {
+                            header.col(|ui| {
+                                if ui.is_rect_visible(ui.max_rect()) {
+                                    sort.heading(ui, column, heading);
+                                }
+                            });
+                        }
+                    })
+                    .body(|body| {
+                        body.rows(18.0, self.table.rows.len(), |mut row| {
+                            let index = order[row.index()];
+                            row.set_selected(
+                                selected == self.table_features.get(index).map(String::as_str),
+                            );
+                            for cell in &self.table.rows[index] {
+                                row.col(|ui| {
                                     if ui.is_rect_visible(ui.max_rect()) {
-                                        sort.heading(ui, column, heading);
+                                        plain_label(ui, shorten_number(cell));
                                     }
                                 });
                             }
-                        })
-                        .body(|body| {
-                            body.rows(18.0, self.table.rows.len(), |mut row| {
-                                let index = order[row.index()];
-                                row.set_selected(
-                                    selected == self.table_features.get(index).map(String::as_str),
-                                );
-                                for cell in &self.table.rows[index] {
-                                    row.col(|ui| {
-                                        if ui.is_rect_visible(ui.max_rect()) {
-                                            plain_label(ui, shorten_number(cell));
-                                        }
-                                    });
-                                }
-                                let response = row
-                                    .response()
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                if response.clicked() {
-                                    select = self.table_features.get(index).cloned();
-                                }
-                            });
+                            let response = row
+                                .response()
+                                .on_hover_cursor(egui::CursorIcon::PointingHand);
+                            if response.clicked() {
+                                select = self.table_features.get(index).cloned();
+                            }
                         });
-                });
+                    });
             });
+        });
         if let Some(feature) = select {
             self.select_feature(&feature);
         }
         self.table_sort = sort;
         self.view_dirty |= only_active_changed;
         if download {
-            self.download_table(ctx);
+            let ctx = ui.ctx().clone();
+            self.download_table(&ctx);
         }
+    }
 
+    /// The Configure plot frame: the options of the plot shown.
+    fn plot_config_ui(&mut self, ui: &mut egui::Ui) {
+        let (mode, kind) = (self.mode, self.plot_kind());
+        let context = self.plot_config_context();
+        let (mut changed, mut reset, mut close) = (false, false, false);
+        ui.strong(kind.name());
+        ui.separator();
+        let room = (ui.available_height() - 40.0).max(80.0);
+        egui::ScrollArea::vertical()
+            .max_height(room)
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                changed = plot_config::show(ui, mode, kind, &mut self.plot_settings, &context);
+            });
+        ui.separator();
+        ui.horizontal(|ui| {
+            reset = ui.button("Restore defaults").clicked();
+            close = ui.button("Close").clicked();
+        });
+        if reset {
+            self.plot_settings.reset(mode, kind);
+        }
+        self.view_dirty |= changed || reset;
+        if close {
+            self.show_plot_config = false;
+        }
+    }
+
+    fn windows(&mut self, ctx: &egui::Context) {
         let mut outcome = Outcome::Open;
         if let Some((_, selection)) = &mut self.select_dialog {
             let mut open = true;
@@ -4286,36 +4435,6 @@ impl StampApp {
                 self.png_dpi = None;
             }
         }
-
-        let (mode, kind) = (self.mode, self.plot_kind());
-        let context = self.plot_config_context();
-        let max_height = (ctx.content_rect().height() - 160.0).max(200.0);
-        let mut open = self.show_plot_config;
-        let (mut changed, mut reset, mut close) = (false, false, false);
-        egui::Window::new("Configure plot")
-            .open(&mut open)
-            .default_pos([300.0, 90.0])
-            .resizable(false)
-            .show(ctx, |ui| {
-                ui.strong(kind.name());
-                ui.separator();
-                egui::ScrollArea::vertical()
-                    .max_height(max_height)
-                    .show(ui, |ui| {
-                        changed =
-                            plot_config::show(ui, mode, kind, &mut self.plot_settings, &context);
-                    });
-                ui.separator();
-                ui.horizontal(|ui| {
-                    reset = ui.button("Restore defaults").clicked();
-                    close = ui.button("Close").clicked();
-                });
-            });
-        if reset {
-            self.plot_settings.reset(mode, kind);
-        }
-        self.view_dirty |= changed || reset;
-        self.show_plot_config = open && !close;
 
         let mut changed = false;
         let (mut redraw, mut restore_defaults) = (false, false);

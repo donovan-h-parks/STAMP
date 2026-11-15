@@ -35,6 +35,8 @@ eframe = { version = "0.37", default-features = false, features = [
     "x11",
 ] }
 egui_extras = "0.37"
+# Frames of the main window that can be moved around the plot.
+egui_tiles = "0.18"
 rfd = "0.17"
 png = "0.17"
 statrs = { version = "0.19", default-features = false, features = ["std"] }

@@ -9,6 +9,7 @@ pub mod figure_painter;
 pub mod headless;
 pub mod icons;
 pub mod jobs;
+pub mod layout;
 pub mod platform;
 pub mod plot_config;
 pub mod plots;

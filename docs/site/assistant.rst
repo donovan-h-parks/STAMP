@@ -57,7 +57,8 @@ Claude Code
 **Assistant > Open Claude Code** connects `Claude Code
 <https://claude.com/claude-code>`_, Anthropic's assistant for the terminal, in
 the same way. It runs in the **Claude Code panel** along the bottom of STAMP's
-window, like the Metadata table, and you type your questions there. Claude
+window, like the Metadata table (a frame you can move elsewhere; see
+:ref:`arranging-the-window`), and you type your questions there. Claude
 Code needs a Claude **Pro, Max, Team or Enterprise** plan; you sign in with
 your own Claude account the first time it starts, and STAMP never sees your
 sign-in. If Claude Code is not installed, STAMP offers to install it with

@@ -447,75 +447,68 @@ pub fn open_claude_code_outside(app: &mut StampApp, ctx: &egui::Context) -> Resu
     super::launch::open_terminal(&script)
 }
 
-/// The Claude Code panel, at the bottom of the window like the Metadata
-/// table.
+/// The Claude Code frame (at the bottom of the window to start with, like
+/// the Metadata table; it can be moved).
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn terminal_panel(app: &mut StampApp, ui: &mut egui::Ui) {
-    if !app.assistant.show_terminal {
-        return;
-    }
+pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
     let ctx = ui.ctx().clone();
     let mut restart = false;
     let mut stop = false;
     let mut outside = false;
-    egui::Panel::bottom("claude-code")
-        .resizable(true)
-        .default_size(320.0)
-        .min_size(120.0)
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                match &app.assistant.terminal {
-                    Some(terminal) => {
-                        ui.label(egui::RichText::new(&terminal.label).strong());
-                        let title = terminal.title();
-                        if terminal.has_exited() {
-                            ui.label("has ended.");
-                        } else if !title.is_empty() {
-                            ui.weak(title);
-                        }
-                    }
-                    None => {
-                        ui.label(egui::RichText::new("Claude Code").strong());
+    egui::Frame::NONE.show(ui, |ui| {
+        ui.horizontal(|ui| {
+            match &app.assistant.terminal {
+                Some(terminal) => {
+                    ui.label(egui::RichText::new(&terminal.label).strong());
+                    let title = terminal.title();
+                    if terminal.has_exited() {
+                        ui.label("has ended.");
+                    } else if !title.is_empty() {
+                        ui.weak(title);
                     }
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui
-                        .small_button("Hide")
-                        .on_hover_text("Hide this panel; Claude Code keeps running")
-                        .clicked()
-                    {
-                        app.assistant.show_terminal = false;
-                    }
-                    let running = app
-                        .assistant
-                        .terminal
-                        .as_ref()
-                        .is_some_and(|t| !t.has_exited());
-                    if running && ui.small_button("Stop").clicked() {
-                        stop = true;
-                    }
-                    let again = if app.assistant.terminal.is_some() {
-                        "Restart"
-                    } else {
-                        "Start"
-                    };
-                    restart = ui.small_button(again).clicked();
-                    outside = ui
-                        .small_button("Separate terminal")
-                        .on_hover_text("Open Claude Code in the computer's own terminal instead")
-                        .clicked();
-                });
-            });
-            match &mut app.assistant.terminal {
-                Some(terminal) => terminal.show(ui),
                 None => {
-                    ui.label(
-                        "Claude Code is not running. Choose Start, or Assistant > Open Claude \
-                         Code.",
-                    );
+                    ui.label(egui::RichText::new("Claude Code").strong());
                 }
             }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .small_button("Hide")
+                    .on_hover_text("Hide this panel; Claude Code keeps running")
+                    .clicked()
+                {
+                    app.assistant.show_terminal = false;
+                }
+                let running = app
+                    .assistant
+                    .terminal
+                    .as_ref()
+                    .is_some_and(|t| !t.has_exited());
+                if running && ui.small_button("Stop").clicked() {
+                    stop = true;
+                }
+                let again = if app.assistant.terminal.is_some() {
+                    "Restart"
+                } else {
+                    "Start"
+                };
+                restart = ui.small_button(again).clicked();
+                outside = ui
+                    .small_button("Separate terminal")
+                    .on_hover_text("Open Claude Code in the computer's own terminal instead")
+                    .clicked();
+            });
         });
+        match &mut app.assistant.terminal {
+            Some(terminal) => terminal.show(ui),
+            None => {
+                ui.label(
+                    "Claude Code is not running. Choose Start, or Assistant > Open Claude \
+                         Code.",
+                );
+            }
+        }
+    });
     if stop {
         app.assistant.terminal = None;
     }

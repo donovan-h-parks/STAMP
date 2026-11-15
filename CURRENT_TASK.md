@@ -6,7 +6,28 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Also (2026-11-15, another session in this checkout): **p-value labels of
+Idle. Last task: **movable frames** (2026-11-15), on `rust-port`, committed
+and pushed. Plan `docs/LAYOUT_PLAN.md`. Done: `crates/stamp-gui/src/
+layout.rs` (egui_tiles 0.18: `Frame` enum, default tree with v2's widths as
+shares around 1.0, `sync_visibility` (a hidden frame's room goes to the
+plot and comes back), `Behavior`: plot fixed without tab bar, × hides,
+no keyboard tab cycling); `app.rs` draws the frames in the central panel,
+`frame_shown`/`show_frame`, `layout`/`layout_mut`/`reset_layout`, Results
+table and Configure plot are frame functions (`results_table_ui`,
+`plot_config_ui`), `Saved.layout` + `layout_version` (LAYOUT_VERSION 1;
+incomplete or other-version layouts fall back to the default), View >
+Reset layout; Claude Code is `assistant::window::terminal_frame`. Tests:
+layout unit tests; GUI tests `frames_can_be_moved_and_the_layout_is_
+remembered`, `frames_are_hidden_and_shown_and_open_where_they_belong`; the
+q-value label test finds its pixels relative to the Properties frame. All
+tests, fmt, clippy (Linux, wasm), sphinx -W, trunk build (wasm 16.2 MB,
+6.4 MB gzipped) pass. Docs: main_window.rst "Arranging the window",
+images gui_main_window/gui_metadata_table regenerated, new gui_frames.png;
+NEW_FEATURES; CHANGES_FROM_PYTHON behaviour change 63. Dragging with the
+mouse itself is not covered by a test (moves are made through egui_tiles'
+API) and has not been tried by hand.
+
+Previous: Also (2026-11-15, another session in this checkout): **p-value labels of
 plots**, committed and pushed (`7df19f7`, `cb59fac`): "Uncorrected
 p-value", "Corrected p-value" (Bonferroni, Holm, Sidak), "q-value"
 (Benjamini-Hochberg, Storey), via `stamp-plot/src/p_values.rs`; change 61.
