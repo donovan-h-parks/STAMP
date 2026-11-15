@@ -56,12 +56,34 @@ Claude Code
 
 **Assistant > Open Claude Code** connects `Claude Code
 <https://claude.com/claude-code>`_, Anthropic's assistant for the terminal, in
-the same way. It opens in a terminal beside STAMP and you type your questions
-there. Claude Code needs a Claude **Pro, Max, Team or Enterprise** plan; you
-sign in with your own Claude account the first time it starts, and STAMP never
-sees your sign-in. If Claude Code is not installed, STAMP offers to open a
-terminal that installs it with Anthropic's installer (``claude.ai/install.sh``,
-or ``claude.ai/install.ps1`` on Windows) and then starts it.
+the same way. It runs in the **Claude Code panel** along the bottom of STAMP's
+window, like the Metadata table, and you type your questions there. Claude
+Code needs a Claude **Pro, Max, Team or Enterprise** plan; you sign in with
+your own Claude account the first time it starts, and STAMP never sees your
+sign-in. If Claude Code is not installed, STAMP offers to install it with
+Anthropic's installer (``claude.ai/install.sh``, or ``claude.ai/install.ps1``
+on Windows), in the same panel, and then starts it.
+
+The first time, Claude Code also asks whether you trust the folder it runs in
+(STAMP's assistant folder, below): choose **Yes, I trust this folder** with
+the arrow keys and Enter.
+
+The Claude Code panel
+~~~~~~~~~~~~~~~~~~~~~
+
+- Click in the panel to type into Claude Code. While it has the keyboard,
+  every key goes to Claude Code, including STAMP's own shortcuts; click
+  elsewhere in the window to use those again.
+- **Ctrl+C** copies selected text (drag over it with the mouse); with nothing
+  selected it interrupts Claude Code, as in any terminal. **Ctrl+V** pastes.
+  **Shift+Enter** starts a new line without sending.
+- Scroll with the mouse wheel to see earlier output.
+- **Hide** hides the panel and leaves Claude Code running; **View > Claude
+  Code** shows it again. **Stop** ends Claude Code, **Restart** starts it
+  again, and **Separate terminal** opens it in your computer's own terminal
+  instead.
+- The panel is always dark, whatever STAMP's theme, because Claude Code's
+  colours are made for a dark background.
 
 Claude Code is started in a folder STAMP prepares in its data folder (on Linux
 ``~/.local/share/stamp/assistant``, on macOS ``~/Library/Application
@@ -75,10 +97,11 @@ holding:
   files, still asks first);
 - ``CLAUDE.md``: tells Claude Code what STAMP is and that its users are
   mostly biologists;
-- a script that starts Claude Code with the first two.
+- a script that starts Claude Code with the first two, for **Separate
+  terminal**.
 
-If no terminal program is found on Linux, run the script in that folder
-yourself.
+If no terminal program is found on Linux for Separate terminal, run the script
+in that folder yourself.
 
 What Claude can do
 ------------------

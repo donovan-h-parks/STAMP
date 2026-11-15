@@ -32,6 +32,44 @@ fn claude_arguments() -> String {
     format!("--mcp-config {MCP_CONFIG} --settings {SETTINGS}")
 }
 
+/// The program and arguments that run Claude Code (`claude`), connected to
+/// STAMP, in the prepared folder: for the Claude Code panel.
+pub fn claude_command(claude: &Path) -> (String, Vec<String>) {
+    let mut args = vec![
+        "--mcp-config".to_string(),
+        MCP_CONFIG.to_string(),
+        "--settings".to_string(),
+        SETTINGS.to_string(),
+    ];
+    let program = claude.display().to_string();
+    // npm installs a batch file on Windows, which only cmd can run.
+    let is_batch = claude
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+    if cfg!(windows) && is_batch {
+        let mut cmd = vec!["/c".to_string(), program];
+        cmd.append(&mut args);
+        return ("cmd".to_string(), cmd);
+    }
+    (program, args)
+}
+
+/// The program and arguments that run the install script written by
+/// [`prepare_install`], in the Claude Code panel.
+pub fn script_command(script: &Path) -> (String, Vec<String>) {
+    let script = script.display().to_string();
+    if cfg!(windows) {
+        let args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]
+            .iter()
+            .map(|a| a.to_string())
+            .chain([script])
+            .collect();
+        ("powershell".to_string(), args)
+    } else {
+        ("/bin/sh".to_string(), vec![script])
+    }
+}
+
 /// The folder Claude Code runs in.
 pub fn working_folder() -> Option<PathBuf> {
     eframe::storage_dir("STAMP").map(|dir| dir.join("assistant"))
@@ -390,6 +428,25 @@ mod tests {
             INSTALL_SH
         }));
         std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn commands_for_the_panel() {
+        let (program, args) = claude_command(Path::new("/x/claude"));
+        assert_eq!(program, "/x/claude");
+        assert_eq!(
+            args,
+            ["--mcp-config", MCP_CONFIG, "--settings", SETTINGS].map(String::from)
+        );
+        let (program, args) = script_command(Path::new("/x/install-claude.sh"));
+        if cfg!(windows) {
+            assert_eq!(program, "powershell");
+        } else {
+            assert_eq!(
+                (program.as_str(), args[0].as_str()),
+                ("/bin/sh", "/x/install-claude.sh")
+            );
+        }
     }
 
     #[test]

@@ -23,6 +23,8 @@ pub fn install_plot_font(ctx: &egui::Context) {
         fonts.families.insert(plot_font_family(font), vec![name]);
     }
     crate::icons::add_to_fonts(&mut fonts);
+    #[cfg(not(target_arch = "wasm32"))]
+    crate::assistant::terminal::add_to_fonts(&mut fonts);
     ctx.set_fonts(fonts);
 }
 

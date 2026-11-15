@@ -1,4 +1,7 @@
-DejaVu Sans (Version 2.35)
+DejaVu Sans and DejaVu Sans Mono (Version 2.35)
+
+DejaVu Sans Mono (crates/stamp-gui/assets/DejaVuSansMono.ttf) is used for
+the Claude Code panel of the desktop application.
 
 Copyright notice embedded in the font:
 Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved.

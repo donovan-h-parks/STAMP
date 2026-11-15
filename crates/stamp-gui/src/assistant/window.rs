@@ -227,9 +227,11 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
                     match &claude {
                         Some(path) => {
                             ui.label(format!(
-                                "Claude Code opens in a terminal. Sign in with your Claude \
-                                 account the first time, then ask your questions there.\n\n\
-                                 Claude Code: {}",
+                                "Claude Code opens in a panel at the bottom of this window. \
+                                 The first time, sign in with your Claude account, and when \
+                                 Claude Code asks whether you trust STAMP's folder, choose \
+                                 \"Yes, I trust this folder\" (with the arrow keys and Enter). \
+                                 Then ask your questions there.\n\nClaude Code: {}",
                                 path.display()
                             ));
                             ui.add_space(6.0);
@@ -242,11 +244,11 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
                         }
                         None => {
                             ui.label(
-                                "Claude Code is not installed. STAMP can open a terminal that \
-                                 installs it with Anthropic's installer (claude.ai/install) and \
-                                 then starts it. Claude Code needs a Claude Pro, Max, Team or \
-                                 Enterprise plan; sign in with your Claude account when it \
-                                 starts.",
+                                "Claude Code is not installed. STAMP can install it with \
+                                 Anthropic's installer (claude.ai/install), in a panel at the \
+                                 bottom of this window, and then start it. Claude Code needs a \
+                                 Claude Pro, Max, Team or Enterprise plan; sign in with your \
+                                 Claude account when it starts.",
                             );
                             ui.add_space(6.0);
                             ui.horizontal(|ui| {
@@ -362,9 +364,141 @@ pub fn open_claude_code(
             folder.display()
         )
     })?;
-    super::launch::open_terminal(&script)?;
-    app.assistant.show_window = true;
+    let (program, args) = if install {
+        super::launch::script_command(&script)
+    } else {
+        let claude = super::launch::find_claude().ok_or("Claude Code was not found.")?;
+        super::launch::claude_command(&claude)
+    };
+    let label = if install {
+        "Installing Claude Code"
+    } else {
+        "Claude Code"
+    };
+    run_in_panel(app, ctx, label, &program, &args, &folder)
+        .map_err(|e| format!("Could not start Claude Code: {e}"))
+}
+
+/// Run `program` in the Claude Code panel, in `folder`, ending whatever
+/// ran there before, and show the panel.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn run_in_panel(
+    app: &mut StampApp,
+    ctx: &egui::Context,
+    label: &str,
+    program: &str,
+    args: &[String],
+    folder: &std::path::Path,
+) -> std::io::Result<()> {
+    app.assistant.terminal = None;
+    let terminal =
+        super::terminal::Terminal::spawn(ctx, label, program, args, folder, Default::default())?;
+    app.assistant.terminal = Some(terminal);
+    app.assistant.show_terminal = true;
     Ok(())
+}
+
+/// Open Claude Code in the computer's own terminal instead of the panel.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn open_claude_code_outside(app: &mut StampApp, ctx: &egui::Context) -> Result<(), String> {
+    let server = start_sharing(app, ctx)?;
+    let (url, token) = (server.url(), server.token().to_string());
+    let folder = super::launch::working_folder()
+        .ok_or("STAMP could not find a folder to run Claude Code in.")?;
+    let written = match super::launch::find_claude() {
+        Some(claude) => super::launch::prepare(&folder, &url, &token, &claude),
+        None => super::launch::prepare_install(&folder, &url, &token),
+    };
+    let script = written.map_err(|e| {
+        format!(
+            "Could not prepare Claude Code's folder {}: {e}",
+            folder.display()
+        )
+    })?;
+    super::launch::open_terminal(&script)
+}
+
+/// The Claude Code panel, at the bottom of the window like the Metadata
+/// table.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn terminal_panel(app: &mut StampApp, ui: &mut egui::Ui) {
+    if !app.assistant.show_terminal {
+        return;
+    }
+    let ctx = ui.ctx().clone();
+    let mut restart = false;
+    let mut stop = false;
+    let mut outside = false;
+    egui::Panel::bottom("claude-code")
+        .resizable(true)
+        .default_size(320.0)
+        .min_size(120.0)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                match &app.assistant.terminal {
+                    Some(terminal) => {
+                        ui.label(egui::RichText::new(&terminal.label).strong());
+                        let title = terminal.title();
+                        if terminal.has_exited() {
+                            ui.label("has ended.");
+                        } else if !title.is_empty() {
+                            ui.weak(title);
+                        }
+                    }
+                    None => {
+                        ui.label(egui::RichText::new("Claude Code").strong());
+                    }
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .small_button("Hide")
+                        .on_hover_text("Hide this panel; Claude Code keeps running")
+                        .clicked()
+                    {
+                        app.assistant.show_terminal = false;
+                    }
+                    let running = app
+                        .assistant
+                        .terminal
+                        .as_ref()
+                        .is_some_and(|t| !t.has_exited());
+                    if running && ui.small_button("Stop").clicked() {
+                        stop = true;
+                    }
+                    let again = if app.assistant.terminal.is_some() {
+                        "Restart"
+                    } else {
+                        "Start"
+                    };
+                    restart = ui.small_button(again).clicked();
+                    outside = ui
+                        .small_button("Separate terminal")
+                        .on_hover_text("Open Claude Code in the computer's own terminal instead")
+                        .clicked();
+                });
+            });
+            match &mut app.assistant.terminal {
+                Some(terminal) => terminal.show(ui),
+                None => {
+                    ui.label(
+                        "Claude Code is not running. Choose Start, or Assistant > Open Claude \
+                         Code.",
+                    );
+                }
+            }
+        });
+    if stop {
+        app.assistant.terminal = None;
+    }
+    if restart {
+        app.assistant.asking = Some(super::Ask::ClaudeCode);
+    }
+    if outside {
+        app.assistant.terminal = None;
+        if let Err(message) = open_claude_code_outside(app, &ctx) {
+            app.show_notice(message);
+        }
+    }
 }
 
 /// Start the server if it is not running, and return it. It writes the

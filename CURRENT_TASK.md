@@ -6,7 +6,23 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle. Last task: **Claude Desktop connection** (2026-11-15), branch
+Idle. Last task: **Claude Code panel inside STAMP** (phase D2,
+2026-11-15), committed on `rust-port` and pushed. Done:
+`assistant/terminal.rs` (alacritty_terminal 0.26, desktop-only dependency;
+egui drawing; keys, paste, Ctrl+C/copy, scrollback, selection; look-alikes
+for ⏺⏵⎿⏸⏹), bundled `assets/DejaVuSansMono.ttf` (licence note in
+`crates/stamp-plot/fonts/LICENSE-DejaVu.txt`), `icons::TERMINAL`, bottom
+panel `window::terminal_panel` with Hide/Stop/Restart/Separate terminal,
+View > Claude Code, shortcuts skipped while it has focus,
+`launch::claude_command`/`script_command`, `headless::send_events`. Tests:
+`the_claude_code_panel_runs_a_terminal`; ignored `claude_code_in_the_panel`
+ran the real Claude Code 2.1.325 here (answered via 4 STAMP tools,
+switched to the volcano plot). Whole suite, fmt, clippy (Linux, wasm,
+Windows via cargo-xwin) and sphinx -W pass. Not tried on Windows/macOS.
+Docs: assistant.rst (panel section), main_window.rst, NEW_FEATURES,
+ASSISTANT_PLAN.
+
+Previous: Idle. Last task: **Claude Desktop connection** (2026-11-15), branch
 `rust-port-llm`. Done: bridge `stamp-mcp` (`src/bridge_main.rs`,
 `assistant/bridge.rs`); connection file while sharing
 (`Server::publish`, `window::start_sharing_with`); Assistant menu: Share

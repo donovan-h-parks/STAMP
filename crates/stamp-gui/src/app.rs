@@ -1501,6 +1501,10 @@ impl StampApp {
 
     /// Act on the keyboard shortcuts pressed this frame.
     fn handle_shortcuts(&mut self, ctx: &egui::Context) {
+        // Keys typed into Claude Code are Claude Code's.
+        if self.assistant_terminal_has_focus() {
+            return;
+        }
         let pressed =
             |shortcut: &egui::KeyboardShortcut| ctx.input_mut(|i| i.consume_shortcut(shortcut));
         let loaded = self.session.tree.is_some();
@@ -1727,6 +1731,31 @@ impl StampApp {
     /// Hand the window a request from the assistant, as the server does.
     pub fn assistant_request(&mut self, request: assistant::Request) {
         self.assistant.queue.push_back((request, None));
+    }
+
+    /// Whether the Claude Code panel has the keyboard.
+    pub fn assistant_terminal_has_focus(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.assistant.show_terminal
+                && self
+                    .assistant
+                    .terminal
+                    .as_ref()
+                    .is_some_and(|t| t.has_focus())
+        }
+        #[cfg(target_arch = "wasm32")]
+        false
+    }
+
+    /// The text on the screen of the Claude Code panel, if it is running.
+    pub fn assistant_terminal_text(&self) -> Option<String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.assistant.terminal.as_ref().map(|t| t.screen_text())
+        }
+        #[cfg(target_arch = "wasm32")]
+        None
     }
 
     /// Stop sharing the session with Claude, as Assistant > Stop sharing
@@ -2594,6 +2623,8 @@ impl StampApp {
 
         egui::Panel::top("menu").show(ui, |ui| self.menu(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
+        #[cfg(not(target_arch = "wasm32"))]
+        assistant::window::terminal_panel(self, ui);
         if self.show_metadata_table {
             egui::Panel::bottom("metadata")
                 .resizable(true)
@@ -2742,6 +2773,14 @@ impl StampApp {
                     icons::ROWS,
                     "Metadata table",
                     Some(&shortcut::METADATA),
+                );
+                #[cfg(not(target_arch = "wasm32"))]
+                toggle(
+                    ui,
+                    &mut self.assistant.show_terminal,
+                    icons::TERMINAL,
+                    "Claude Code",
+                    None,
                 );
                 ui.separator();
                 toggle(

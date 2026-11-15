@@ -171,6 +171,13 @@ impl Renderer {
         self.frame(vec![event(false)], &mut ui);
     }
 
+    /// Run one frame with these input events (typed text, keys, pastes),
+    /// then one without, as when a user types.
+    pub fn send_events(&mut self, events: Vec<egui::Event>, mut ui: impl FnMut(&mut egui::Ui)) {
+        self.frame(events, &mut ui);
+        self.frame(Vec::new(), &mut ui);
+    }
+
     /// Run one frame of `ui` and paint it.
     pub fn render(&mut self, mut ui: impl FnMut(&mut egui::Ui)) -> Image {
         let primitives = self.frame(Vec::new(), &mut ui);

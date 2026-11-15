@@ -26,7 +26,12 @@ Add an entry here whenever a feature is added that v2 did not have.
   Claude Desktop starts (stdio MCP) and that forwards tool calls to the
   STAMP that is sharing (Assistant > Share with Claude Desktop), found
   through a connection file; Assistant > Install in Claude Desktop builds
-  and opens a Claude Desktop extension (`.mcpb`) holding it. Plan:
+  and opens a Claude Desktop extension (`.mcpb`) holding it. **Claude
+  Code runs inside STAMP**, in a panel along the bottom of the window like
+  the Metadata table (View > Claude Code): a terminal built on
+  `alacritty_terminal` (ConPTY on Windows) drawn with egui
+  (`assistant/terminal.rs`), with keys, paste, Ctrl+C, scrollback and
+  mouse selection; the computer's own terminal remains available. Plan:
   `docs/ASSISTANT_PLAN.md`.
 - **In the browser.** STAMP runs as a web page (WebAssembly), entirely on the
   user's computer: files are read with the browser's file picker and saved as

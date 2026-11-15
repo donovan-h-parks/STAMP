@@ -24,9 +24,10 @@ pub const WINDOW_OUT: &str = "\u{E5DE}";
 pub const MOON: &str = "\u{E330}";
 pub const GEAR: &str = "\u{E270}";
 pub const INFO: &str = "\u{E2CE}";
+pub const TERMINAL: &str = "\u{EAE8}";
 
 /// Every icon, for checking that the font has them all.
-pub const ALL: [&str; 18] = [
+pub const ALL: [&str; 19] = [
     FOLDER_OPEN,
     TAG,
     FLASK,
@@ -45,6 +46,7 @@ pub const ALL: [&str; 18] = [
     MOON,
     GEAR,
     INFO,
+    TERMINAL,
 ];
 
 /// The text of a menu item: an icon, then its label.

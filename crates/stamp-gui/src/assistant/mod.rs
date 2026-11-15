@@ -23,6 +23,8 @@ pub mod bundle;
 pub mod launch;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod terminal;
 
 use std::collections::VecDeque;
 
@@ -48,6 +50,12 @@ pub struct State {
     /// The dialog being shown, if any.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) asking: Option<Ask>,
+    /// Claude Code (or its installer) running in the Claude Code panel.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) terminal: Option<terminal::Terminal>,
+    /// The Claude Code panel is shown.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) show_terminal: bool,
 }
 
 /// The assistant's dialogs.

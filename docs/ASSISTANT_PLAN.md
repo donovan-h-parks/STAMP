@@ -1,8 +1,7 @@
 # Plan: a STAMP assistant built on Claude Code
 
-Status: phases A, B, C and D1 implemented on branch `rust-port-llm`,
-merged into `rust-port`
-(2026-11-15); D2 not started.
+Status: phases A, B, C, D1 and D2 implemented (2026-11-15); A to D1 on
+branch `rust-port-llm`, merged into `rust-port`; D2 on `rust-port`.
 
 ## Goal
 
@@ -215,4 +214,27 @@ real Claude Code configured to start it as a stdio server. Not checked:
 Claude Desktop itself (no display on the development machine), the macOS
 Gatekeeper treatment of an unsigned `stamp-mcp`, and Claude Desktop's
 tool-call time limit for long analyses.
+
+## D2 as built: the Claude Code panel
+
+- `assistant/terminal.rs`: `alacritty_terminal` 0.26 runs the program in a
+  pseudo-terminal (ConPTY on Windows) and keeps the screen; STAMP draws each
+  cell with egui in DejaVu Sans Mono (bundled, desktop only; the few
+  symbols it lacks, ⏺ ⏵ ⎿ ⏸ ⏹, are drawn as look-alikes because egui 0.37
+  has no emoji fonts by default). Keys follow xterm; egui's Copy (Ctrl+C)
+  copies a selection or sends ^C; pastes are bracketed when asked for; the
+  wheel scrolls the scrollback. The widget has a fixed id, so that its
+  focus survives the panel's heading changing (Claude Code sets a title).
+- Shown as a bottom panel (`window::terminal_panel`), View > Claude Code;
+  STAMP's shortcuts are not taken while it has the keyboard.
+- Assistant > Open Claude Code runs Claude Code there
+  (`launch::claude_command`), or the installer (`launch::script_command`);
+  "Separate terminal" keeps the D1 route.
+- Found while testing with the real Claude Code: its first-run folder-trust
+  question defaults to "No, exit" and ignores keys for a moment after it is
+  drawn; STAMP's dialog tells the user to choose "Yes, I trust this folder".
+- Tests: `the_claude_code_panel_runs_a_terminal` (a shell: typing, Enter,
+  Ctrl+C, paste, key encodings via `cat -v`, symbols), and the ignored
+  `claude_code_in_the_panel` (the real Claude Code answering a question
+  through STAMP's tools, with screenshots). Not tried on Windows or macOS.
 

@@ -460,3 +460,255 @@ fn serve_for_claude_code() {
         println!("{} {} -> {}", entry.tool, entry.args, entry.answer);
     }
 }
+
+/// The Claude Code panel is a real terminal: a shell started in it shows
+/// its output, takes typed commands, and is interrupted by Ctrl+C.
+#[cfg(unix)]
+#[test]
+fn the_claude_code_panel_runs_a_terminal() {
+    use eframe::egui;
+
+    let renderer = Renderer::new(1280.0, 800.0, 1.0);
+    let app = StampApp::new(&renderer.ctx);
+    let mut h = Harness { renderer, app };
+    let folder = std::env::temp_dir();
+    let ctx = h.renderer.ctx.clone();
+    stamp_gui::assistant::window::run_in_panel(&mut h.app, &ctx, "Shell", "/bin/sh", &[], &folder)
+        .unwrap();
+    // Wait until the screen shows `wanted`.
+    let wait_for = |h: &mut Harness, wanted: &str| {
+        for _ in 0..1500 {
+            h.frames(1);
+            if h.app.assistant_terminal_text().unwrap().contains(wanted) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        panic!(
+            "the terminal never showed {wanted}:\n{}",
+            h.app.assistant_terminal_text().unwrap()
+        );
+    };
+    let typed = |h: &mut Harness, events: Vec<egui::Event>| {
+        let app = &mut h.app;
+        h.renderer.send_events(events, |ui| app.draw(ui));
+    };
+    let key = |key: egui::Key, modifiers: egui::Modifiers| egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers,
+    };
+    h.frames(3);
+    // The panel is at the bottom of the window; clicking it gives it the
+    // keyboard.
+    let app = &mut h.app;
+    h.renderer
+        .click(egui::pos2(640.0, 700.0), |ui| app.draw(ui));
+    assert!(h.app.assistant_terminal_has_focus());
+
+    typed(
+        &mut h,
+        vec![
+            egui::Event::Text("echo stamp-$((6*7))".to_string()),
+            key(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+    );
+    wait_for(&mut h, "stamp-42");
+
+    // Ctrl+C (which egui reports as Copy with nothing selected) interrupts
+    // a command that would otherwise run for a minute.
+    typed(
+        &mut h,
+        vec![
+            egui::Event::Text("sleep 60; echo too-late".to_string()),
+            key(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+    );
+    h.frames(20);
+    typed(&mut h, vec![egui::Event::Copy]);
+    typed(
+        &mut h,
+        vec![
+            egui::Event::Text("echo interrupted".to_string()),
+            key(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+    );
+    wait_for(&mut h, "\ninterrupted");
+    assert!(!h
+        .app
+        .assistant_terminal_text()
+        .unwrap()
+        .contains("\ntoo-late"));
+
+    // A paste arrives as typed text.
+    typed(
+        &mut h,
+        vec![egui::Event::Paste("echo pasted-text\n".to_string())],
+    );
+    wait_for(&mut h, "\npasted-text");
+
+    // Keys send what a terminal sends: `cat -v` shows them.
+    typed(
+        &mut h,
+        vec![
+            egui::Event::Text("cat -v".to_string()),
+            key(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+    );
+    h.frames(10);
+    typed(
+        &mut h,
+        vec![
+            key(egui::Key::ArrowDown, egui::Modifiers::NONE),
+            egui::Event::Text("x".to_string()),
+            key(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+    );
+    wait_for(&mut h, "^[[Bx");
+    typed(&mut h, vec![key(egui::Key::D, egui::Modifiers::CTRL)]);
+
+    // Claude Code's symbols: ⏵ ⏺ ✻ ⎿ and box drawing.
+    typed(
+        &mut h,
+        vec![
+            egui::Event::Text(
+                "printf 'A\\342\\217\\265\\342\\217\\272\\342\\234\\273\\342\\216\\277\\342\\224\\200Z\\n'"
+                    .to_string(),
+            ),
+            key(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+    );
+    wait_for(&mut h, "A\u{23f5}\u{23fa}\u{273b}\u{23bf}\u{2500}Z");
+
+    if let Ok(directory) = std::env::var("STAMP_SCREENSHOTS") {
+        let app = &mut h.app;
+        let image = h.renderer.render(|ui| app.draw(ui));
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            PathBuf::from(directory).join("terminal.png"),
+            image.to_png(),
+        )
+        .unwrap();
+    }
+}
+
+/// Not a test: runs the real Claude Code in the panel against the
+/// Enterotypes example, asks it `STAMP_CLAUDE_PROMPT`, and keeps
+/// screenshots in `STAMP_SCREENSHOTS`. Needs Claude Code installed and
+/// signed in; uses the signed-in account. Run with `--ignored --nocapture`.
+#[cfg(unix)]
+#[test]
+#[ignore]
+fn claude_code_in_the_panel() {
+    use eframe::egui;
+
+    let folder = PathBuf::from(std::env::var("STAMP_ASSISTANT_FOLDER").expect("a folder"));
+    let prompt = std::env::var("STAMP_CLAUDE_PROMPT")
+        .unwrap_or_else(|_| "What does the plot in STAMP show? One sentence.".to_string());
+    let shots = std::env::var("STAMP_SCREENSHOTS").ok().map(PathBuf::from);
+    let mut h = Harness::enterotypes();
+    let ctx = h.renderer.ctx.clone();
+    let server = stamp_gui::assistant::window::start_sharing_with(&mut h.app, &ctx, None).unwrap();
+    let claude = stamp_gui::assistant::launch::find_claude().expect("Claude Code is installed");
+    stamp_gui::assistant::launch::prepare(&folder, &server.url(), server.token(), &claude).unwrap();
+    let (mut program, mut args) = stamp_gui::assistant::launch::claude_command(&claude);
+    // With STAMP_CLAUDE_LOG set, `script` records what passes each way.
+    if let Ok(log) = std::env::var("STAMP_CLAUDE_LOG") {
+        let command = format!("{program} {}", args.join(" "));
+        args = ["-q", "-f", "-c", &command, &log]
+            .iter()
+            .map(|a| a.to_string())
+            .collect();
+        program = "script".to_string();
+    }
+    stamp_gui::assistant::window::run_in_panel(
+        &mut h.app,
+        &ctx,
+        "Claude Code",
+        &program,
+        &args,
+        &folder,
+    )
+    .unwrap();
+    let shoot = |h: &mut Harness, name: &str| {
+        if let Some(directory) = &shots {
+            let app = &mut h.app;
+            let image = h.renderer.render(|ui| app.draw(ui));
+            std::fs::create_dir_all(directory).unwrap();
+            std::fs::write(directory.join(format!("{name}.png")), image.to_png()).unwrap();
+        }
+    };
+    let run_for = |h: &mut Harness, seconds: u64, until: &dyn Fn(&str) -> bool| {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+        while std::time::Instant::now() < end {
+            h.frames(1);
+            if until(&h.app.assistant_terminal_text().unwrap_or_default()) {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        false
+    };
+    let enter = egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    // The panel is drawn before it can be clicked.
+    h.frames(3);
+    let app = &mut h.app;
+    h.renderer
+        .click(egui::pos2(640.0, 700.0), |ui| app.draw(ui));
+    assert!(h.app.assistant_terminal_has_focus());
+    // Claude Code's first question in a new folder is whether to trust it;
+    // the user answers it (Down, then Enter, for "Yes").
+    let ready = |text: &str| text.contains("trust this folder") || text.contains("for shortcuts");
+    run_for(&mut h, 30, &ready);
+    shoot(&mut h, "claude-start");
+    if h.app
+        .assistant_terminal_text()
+        .unwrap_or_default()
+        .contains("trust this folder")
+    {
+        let down = egui::Event::Key {
+            key: egui::Key::ArrowDown,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        // As a person would, read the question before answering it:
+        // Claude Code may not take keys the moment it first draws.
+        run_for(&mut h, 2, &|_| false);
+        let app = &mut h.app;
+        h.renderer.send_events(vec![down], |ui| app.draw(ui));
+        run_for(&mut h, 1, &|_| false);
+        let app = &mut h.app;
+        h.renderer
+            .send_events(vec![enter.clone()], |ui| app.draw(ui));
+        run_for(&mut h, 30, &|text| text.contains("for shortcuts"));
+    }
+    run_for(&mut h, 5, &|_| false);
+    shoot(&mut h, "claude-ready");
+    let app = &mut h.app;
+    h.renderer
+        .send_events(vec![egui::Event::Text(prompt)], |ui| app.draw(ui));
+    let app = &mut h.app;
+    h.renderer.send_events(vec![enter], |ui| app.draw(ui));
+    // The answer is in once Claude Code has used a STAMP tool and is idle
+    // again.
+    let wait: u64 = std::env::var("STAMP_CLAUDE_WAIT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(120);
+    run_for(&mut h, wait, &|_| false);
+    shoot(&mut h, "claude-answer");
+    println!("{}", h.app.assistant_terminal_text().unwrap_or_default());
+    for entry in h.app.assistant_log() {
+        println!("tool: {} {}", entry.tool, entry.args);
+    }
+}
