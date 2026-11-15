@@ -88,13 +88,24 @@ pub fn session(app: &StampApp) -> String {
     if let Some(groups) = s.grouping() {
         let sizes: Vec<String> = groups
             .names()
-            .map(|g| format!("{g} ({})", groups.samples(g).map_or(0, <[String]>::len)))
+            .map(|g| {
+                format!(
+                    "{g} ({} samples, colour {})",
+                    groups.samples(g).map_or(0, <[String]>::len),
+                    s.group_color(g).to_hex()
+                )
+            })
             .collect();
         let _ = writeln!(
             out,
-            "- Group field: {}; groups (samples switched on): {}",
+            "- Group field: {}; groups (samples switched on, colour in plots): {}",
             groups.field,
             sizes.join(", ")
+        );
+        let _ = writeln!(
+            out,
+            "- Colour of \"All other samples\": {}",
+            s.other_samples_color.to_hex()
         );
     }
 

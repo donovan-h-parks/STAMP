@@ -30,8 +30,12 @@ Add an entry here whenever a feature is added that v2 did not have.
   Code runs inside STAMP**, in a panel along the bottom of the window like
   the Metadata table (View > Claude Code): a terminal built on
   `alacritty_terminal` (ConPTY on Windows) drawn with egui
-  (`assistant/terminal.rs`), with keys, paste, Ctrl+C, scrollback and
-  mouse selection; the computer's own terminal remains available. Plan:
+  (`assistant/terminal.rs`), with keys, paste, Ctrl+C, mouse selection,
+  a scroll bar, and the mouse wheel scrolling the scrollback or, for
+  Claude Code's full-screen view, sent to it as mouse reports; the
+  computer's own terminal remains available. Its dialog has "Don't show
+  this again" (Preferences turns it back on). The tools include
+  `set_group_colors` for the colour of any group. Plan:
   `docs/ASSISTANT_PLAN.md`.
 - **In the browser.** STAMP runs as a web page (WebAssembly), entirely on the
   user's computer: files are read with the browser's file picker and saved as

@@ -726,6 +726,9 @@ pub struct Saved {
     /// The [`DEFAULTS_VERSION`] the plot settings were saved under; zero
     /// for settings saved before there was one.
     pub defaults_version: u32,
+    /// Open Claude Code without first showing what it will share ("Don't
+    /// show this again").
+    pub skip_claude_code_dialog: bool,
 }
 
 /// Identifies the starting values of the plot settings. Remembered plot
@@ -770,6 +773,7 @@ impl Default for Saved {
             // What settings read from an older store, lacking the field,
             // are taken to be.
             defaults_version: 0,
+            skip_claude_code_dialog: false,
         }
     }
 }
@@ -932,6 +936,8 @@ struct AssistantSnapshot {
     selected_feature: Option<String>,
     filters: [FilterUi; 4],
     analysis: AnalysisSettings,
+    group_colors: std::collections::HashMap<String, stamp_plot::Color>,
+    other_samples_color: stamp_plot::Color,
 }
 
 /// The settings of the analyses that the assistant can change.
@@ -1453,7 +1459,29 @@ impl StampApp {
             other_samples_color: self.session.other_samples_color,
             plots: self.plot_settings.clone(),
             defaults_version: DEFAULTS_VERSION,
+            skip_claude_code_dialog: self.skip_claude_code_dialog(),
         }
+    }
+
+    /// Whether Assistant > Open Claude Code skips its dialog.
+    pub fn skip_claude_code_dialog(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.assistant.skip_claude_code_dialog
+        }
+        #[cfg(target_arch = "wasm32")]
+        false
+    }
+
+    /// Skip (or show again) the dialog of Assistant > Open Claude Code, as
+    /// its "Don't show this again" box and Preferences do.
+    pub fn set_skip_claude_code_dialog(&mut self, skip: bool) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.assistant.skip_claude_code_dialog = skip;
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = skip;
     }
 
     /// Return to what was remembered from an earlier run.
@@ -1469,6 +1497,7 @@ impl StampApp {
         self.session.stats.pseudocount = saved.pseudocount.clamp(0.0, 10.0);
         self.session.other_samples_color = saved.other_samples_color;
         self.plot_settings = saved.plots;
+        self.set_skip_claude_code_dialog(saved.skip_claude_code_dialog);
         self.session.invalidate_all();
         self.view_dirty = true;
     }
@@ -1691,6 +1720,8 @@ impl StampApp {
             selected_feature: self.session.selected_feature.clone(),
             filters: self.filters.clone(),
             analysis: AnalysisSettings::of(&self.session),
+            group_colors: self.session.chosen_group_colors(),
+            other_samples_color: self.session.other_samples_color,
         };
         self.assistant_undo.push(snapshot);
         if self.assistant_undo.len() > MAX_ASSISTANT_UNDO {
@@ -1723,6 +1754,8 @@ impl StampApp {
             self.session.invalidate_all();
         }
         self.filters = snapshot.filters;
+        self.session.set_chosen_group_colors(snapshot.group_colors);
+        self.session.other_samples_color = snapshot.other_samples_color;
         self.apply_filters();
         self.view_dirty = true;
         true
@@ -4362,6 +4395,20 @@ impl StampApp {
                         redraw |= row(ui, "Legend font size:", |ui| font(ui, &mut fonts.legend));
                     });
                 ui.label("Font sizes particular to a plot are set in its Configure plot window.");
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    ui.separator();
+                    let mut ask = !self.assistant.skip_claude_code_dialog;
+                    if ui
+                        .checkbox(
+                            &mut ask,
+                            "Explain what is shared before opening Claude Code",
+                        )
+                        .changed()
+                    {
+                        self.assistant.skip_claude_code_dialog = !ask;
+                    }
+                }
                 if ui.button("Restore defaults").clicked() {
                     restore_defaults = true;
                 }

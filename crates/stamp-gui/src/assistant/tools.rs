@@ -231,6 +231,28 @@ pub fn list() -> Vec<ToolInfo> {
             changes: true,
         },
         ToolInfo {
+            name: "set_group_colors",
+            description: "Change the colours of groups in every plot that colours by group \
+                          (any group of the group field, and \"All other samples\"). 'colors' \
+                          maps group names to colours: \"#rrggbb\" or a common name such as \
+                          red, blue, green, orange, purple, grey. get_session lists the groups \
+                          and their colours now. (The two samples of a two-sample analysis are \
+                          coloured by the plot option sample_colors instead.)",
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "colors": {
+                        "type": "object",
+                        "additionalProperties": {"type": "string"},
+                        "description": "Group name to colour, for example {\"Produced water\": \"red\"}."
+                    }
+                },
+                "required": ["colors"],
+                "additionalProperties": false
+            }),
+            changes: true,
+        },
+        ToolInfo {
             name: "undo",
             description: "Undo the last change made with show_plot or set_analysis.",
             input_schema: empty,
@@ -262,6 +284,7 @@ pub fn call(app: &mut StampApp, name: &str, args: &Value) -> Outcome {
         "get_plot_options" => get_plot_options(app, args),
         "show_plot" => show_plot(app, args),
         "set_analysis" => set_analysis(app, args),
+        "set_group_colors" => set_group_colors(app, args),
         "undo" => Ok(Outcome::text(if app.undo_assistant_change() {
             "Undone."
         } else {
@@ -455,6 +478,86 @@ fn show_plot(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, S
         app.select_feature(feature);
     }
     Ok(Outcome::text("Done."))
+}
+
+fn set_group_colors(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, String> {
+    let Some(Value::Object(colors)) = args.get("colors") else {
+        return Err("'colors' must be an object of group names and colours.".to_string());
+    };
+    if colors.is_empty() {
+        return Err("Give at least one group and its colour.".to_string());
+    }
+    let mut groups: Vec<String> = app
+        .session
+        .grouping()
+        .map(|g| g.names().map(str::to_string).collect())
+        .unwrap_or_default();
+    if groups.is_empty() {
+        return Err(
+            "There are no groups: load metadata and choose a group field first.".to_string(),
+        );
+    }
+    groups.push(stamp_core::ALL_OTHER_SAMPLES.to_string());
+    // Everything is checked before anything is changed.
+    let mut chosen = Vec::new();
+    for (name, color) in colors {
+        let group = choose_string("group", name, &groups)?;
+        let color = color.as_str().and_then(parse_color).ok_or_else(|| {
+            format!(
+                "'{color}' is not a colour: use #rrggbb or a name such as red, blue, green, \
+                     orange, purple or grey."
+            )
+        })?;
+        chosen.push((group, color));
+    }
+    app.remember_for_undo("set_group_colors");
+    let mut done = Vec::new();
+    for (group, color) in chosen {
+        if group == stamp_core::ALL_OTHER_SAMPLES {
+            app.session.other_samples_color = color;
+            app.redraw_plot();
+        } else {
+            app.session.set_group_color(&group, color);
+        }
+        done.push(format!("{group}: {}", color.to_hex()));
+    }
+    Ok(Outcome::text(format!("Colours set: {}.", done.join(", "))))
+}
+
+/// A colour from `#rrggbb`, `rrggbb` or a common colour name.
+pub fn parse_color(text: &str) -> Option<stamp_plot::Color> {
+    if let Some(color) = stamp_plot::Color::from_hex(text.trim()) {
+        return Some(color);
+    }
+    let hex = match simplified(text).as_str() {
+        "red" => "#e41a1c",
+        "blue" => "#377eb8",
+        "green" => "#4daf4a",
+        "purple" => "#984ea3",
+        "orange" => "#ff7f00",
+        "yellow" => "#ffd92f",
+        "brown" => "#a65628",
+        "pink" => "#f781bf",
+        "grey" | "gray" => "#999999",
+        "lightgrey" | "lightgray" => "#d9d9d9",
+        "darkgrey" | "darkgray" => "#555555",
+        "black" => "#000000",
+        "white" => "#ffffff",
+        "cyan" => "#17becf",
+        "magenta" => "#e7298a",
+        "teal" => "#1b9e77",
+        "navy" => "#1f3a93",
+        "olive" => "#808000",
+        "maroon" => "#800000",
+        "gold" => "#d4a017",
+        "lightblue" => "#a6cee3",
+        "darkblue" => "#08519c",
+        "lightgreen" => "#b2df8a",
+        "darkgreen" => "#1a7a1a",
+        "darkred" => "#a50f15",
+        _ => return None,
+    };
+    stamp_plot::Color::from_hex(hex)
 }
 
 /// The plot settings with a JSON patch merged in (RFC 7386: objects are
@@ -1005,6 +1108,24 @@ mod tests {
         assert_eq!(test, Ok(GroupTest::Welch));
         let error = choose("test", "magic", &GroupTest::ALL, |t| t.name().to_string());
         assert!(error.unwrap_err().contains("Choices"));
+    }
+
+    #[test]
+    fn colours_by_hex_or_name() {
+        assert_eq!(
+            parse_color("#ff0000"),
+            Some(stamp_plot::Color::rgb(255, 0, 0))
+        );
+        assert_eq!(
+            parse_color("00ff00"),
+            Some(stamp_plot::Color::rgb(0, 255, 0))
+        );
+        assert_eq!(parse_color("Red"), stamp_plot::Color::from_hex("#e41a1c"));
+        assert_eq!(
+            parse_color("light grey"),
+            stamp_plot::Color::from_hex("#d9d9d9")
+        );
+        assert_eq!(parse_color("sparkly"), None);
     }
 
     #[test]

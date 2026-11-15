@@ -6,7 +6,26 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle. Last task: **Claude Code panel inside STAMP** (phase D2,
+Also (2026-11-15, another session in this checkout): **p-value labels of
+plots**, committed and pushed (`7df19f7`, `cb59fac`): "Uncorrected
+p-value", "Corrected p-value" (Bonferroni, Holm, Sidak), "q-value"
+(Benjamini-Hochberg, Storey), via `stamp-plot/src/p_values.rs`; change 61.
+
+Idle. Last task (2026-11-15, after testing on Windows), on `rust-port`,
+committed and pushed: the Claude Code panel's mouse wheel did nothing because
+Claude Code runs a full-screen view that asks for mouse reports, which the
+panel ignored. Now `terminal::wheel_input` sends wheel reports (SGR or
+X10) to programs in mouse mode, arrows on the alternate screen, and
+scrolls the scrollback otherwise (3 lines a notch, from raw MouseWheel
+events); a scroll bar beside the terminal (drag/click). Dialog "Don't
+show this again" (`Saved::skip_claude_code_dialog`, Preferences turns it
+back on; `window::open_claude_code_or_ask`). New tool `set_group_colors`
+(names or #rrggbb; colours listed in get_session; undoable via
+`Session::chosen_group_colors`). Checked with the real Claude Code here:
+the wheel scrolled its view, and "make Enterotype 2 red" worked. Tests,
+fmt, clippy (Linux, wasm, Windows) pass.
+
+Previous: Idle. Last task: **Claude Code panel inside STAMP** (phase D2,
 2026-11-15), committed on `rust-port` and pushed. Done:
 `assistant/terminal.rs` (alacritty_terminal 0.26, desktop-only dependency;
 egui drawing; keys, paste, Ctrl+C/copy, scrollback, selection; look-alikes

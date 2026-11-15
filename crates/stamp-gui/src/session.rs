@@ -394,6 +394,23 @@ impl Session {
         self.generation += 1;
     }
 
+    /// The colours chosen for groups (others take the palette's), for
+    /// undoing a change.
+    pub fn chosen_group_colors(&self) -> std::collections::HashMap<String, stamp_plot::Color> {
+        self.group_colors.clone()
+    }
+
+    /// Put back colours returned by [`Session::chosen_group_colors`].
+    pub fn set_chosen_group_colors(
+        &mut self,
+        colors: std::collections::HashMap<String, stamp_plot::Color>,
+    ) {
+        if colors != self.group_colors {
+            self.group_colors = colors;
+            self.generation += 1;
+        }
+    }
+
     /// Group the samples by another metadata field.
     pub fn set_group_field(&mut self, field: &str) {
         self.group_field = Some(field.to_string());

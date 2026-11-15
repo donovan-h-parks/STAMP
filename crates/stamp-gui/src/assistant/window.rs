@@ -59,12 +59,13 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
         if ui
             .button("Open Claude Code...")
             .on_hover_text(
-                "Ask Claude Code, in a terminal, about your data and plots, and have it change \
-                 them. Needs a Claude Pro, Max, Team or Enterprise plan.",
+                "Ask Claude Code, in a panel at the bottom of the window, about your data and \
+                 plots, and have it change them. Needs a Claude Pro, Max, Team or Enterprise \
+                 plan.",
             )
             .clicked()
         {
-            app.assistant.asking = Some(super::Ask::ClaudeCode);
+            open_claude_code_or_ask(app, ui.ctx());
         }
         if ui
             .add_enabled(sharing, egui::Button::new("Stop sharing with Claude"))
@@ -235,11 +236,25 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
                                 path.display()
                             ));
                             ui.add_space(6.0);
+                            ui.checkbox(
+                                &mut app.assistant.skip_claude_code_dialog,
+                                "Don't show this again",
+                            )
+                            .on_hover_text(
+                                "Open Claude Code straight away next time. Settings > \
+                                 Preferences turns this message back on.",
+                            );
+                            ui.add_space(6.0);
                             ui.horizontal(|ui| {
                                 if ui.button("Open Claude Code").clicked() {
                                     chosen = Some(Choice::OpenClaudeCode { install: false });
                                 }
-                                close = ui.button("Cancel").clicked();
+                                if ui.button("Cancel").clicked() {
+                                    // Cancelling does not stop the dialog
+                                    // from being shown next time.
+                                    app.assistant.skip_claude_code_dialog = false;
+                                    close = true;
+                                }
                             });
                         }
                         None => {
@@ -338,6 +353,20 @@ fn install_in_claude_desktop() -> Result<super::Ask, String> {
         .map_err(|e| format!("Could not write {}: {e}", bundle.display()))?;
     let opened = super::bundle::open(&bundle)?;
     Ok(super::Ask::Installed { bundle, opened })
+}
+
+/// Assistant > Open Claude Code: the dialog that says what will be shared,
+/// or, if the user chose not to see it again and Claude Code is installed,
+/// Claude Code at once. Installing it always asks first.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn open_claude_code_or_ask(app: &mut StampApp, ctx: &egui::Context) {
+    if app.assistant.skip_claude_code_dialog && super::launch::find_claude().is_some() {
+        if let Err(message) = open_claude_code(app, ctx, false) {
+            app.show_notice(message);
+        }
+    } else {
+        app.assistant.asking = Some(super::Ask::ClaudeCode);
+    }
 }
 
 /// Start sharing (if not already), prepare Claude Code's folder and open
@@ -491,7 +520,7 @@ pub(crate) fn terminal_panel(app: &mut StampApp, ui: &mut egui::Ui) {
         app.assistant.terminal = None;
     }
     if restart {
-        app.assistant.asking = Some(super::Ask::ClaudeCode);
+        open_claude_code_or_ask(app, &ctx);
     }
     if outside {
         app.assistant.terminal = None;
@@ -599,6 +628,6 @@ fn activity_window(app: &mut StampApp, ctx: &egui::Context) {
         app.assistant.server = None;
     }
     if reopen {
-        app.assistant.asking = Some(super::Ask::ClaudeCode);
+        open_claude_code_or_ask(app, ctx);
     }
 }

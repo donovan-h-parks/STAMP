@@ -34,6 +34,10 @@ const FAMILY: &str = "stamp-terminal";
 const FONT_SIZE: f32 = 13.0;
 /// Lines kept above the screen.
 const SCROLLBACK: usize = 10_000;
+/// Lines one notch of a mouse wheel scrolls.
+const LINES_PER_NOTCH: f32 = 3.0;
+/// Width of the scroll bar, in points.
+const SCROLL_BAR_WIDTH: f32 = 12.0;
 
 /// Add the terminal's font family: DejaVu Sans Mono, then egui's own
 /// fonts. The few symbols of Claude Code's that DejaVu Sans Mono lacks are
@@ -304,7 +308,8 @@ impl Terminal {
         // A fixed id, so that the keyboard focus stays with the terminal
         // whatever is drawn before it (the heading shows the program's
         // title once it sets one).
-        let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+        let (whole, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+        let (rect, bar) = whole.split_left_right_at_x(whole.max.x - SCROLL_BAR_WIDTH);
         let response = ui.interact(
             rect,
             egui::Id::unique("stamp-claude-code-terminal"),
@@ -344,6 +349,7 @@ impl Terminal {
             ui.ctx().copy_text(text);
         }
         self.mouse(ui, &response, rect);
+        self.scroll_bar(ui, bar);
         if response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
         }
@@ -367,15 +373,26 @@ impl Terminal {
 
     /// Scrolling and selecting text with the mouse.
     fn mouse(&mut self, ui: &egui::Ui, response: &egui::Response, rect: Rect) {
+        let lines = if response.hovered() {
+            self.wheel_lines(ui, self.size.lines)
+        } else {
+            0
+        };
         let mut term = self.term.lock();
-        if response.hovered() {
-            // Whole lines at a time; what is left over waits for the next
-            // frame.
-            self.scrolled += ui.input(|i| i.smooth_scroll_delta.y) / self.cell.y;
-            let lines = self.scrolled.trunc() as i32;
-            self.scrolled -= lines as f32;
-            if lines != 0 && !term.mode().contains(TermMode::ALT_SCREEN) {
-                term.scroll_display(Scroll::Delta(lines));
+        {
+            if lines != 0 {
+                let pointer = response.hover_pos().unwrap_or(rect.center());
+                let mode = *term.mode();
+                let column = ((pointer.x - rect.min.x) / self.cell.x).max(0.0) as usize;
+                let row = ((pointer.y - rect.min.y) / self.cell.y).max(0.0) as usize;
+                match wheel_input(lines, mode, column.min(self.size.columns - 1), row) {
+                    Some(bytes) => {
+                        drop(term);
+                        self.write(bytes);
+                        term = self.term.lock();
+                    }
+                    None => term.scroll_display(Scroll::Delta(lines)),
+                }
             }
         }
         let offset = term.grid().display_offset();
@@ -391,6 +408,70 @@ impl Terminal {
         }
         if response.clicked() {
             term.selection = None;
+        }
+    }
+
+    /// Lines the mouse wheel moved this frame, upwards (into the
+    /// scrollback) positive: three to a notch, as terminals scroll, and
+    /// fractions of a line from touchpads kept for the next frame.
+    fn wheel_lines(&mut self, ui: &egui::Ui, page: usize) -> i32 {
+        let events = ui.input(|i| i.events.clone());
+        for event in events {
+            if let egui::Event::MouseWheel { unit, delta, .. } = event {
+                self.scrolled += match unit {
+                    egui::MouseWheelUnit::Line => delta.y * LINES_PER_NOTCH,
+                    egui::MouseWheelUnit::Point => delta.y / self.cell.y,
+                    egui::MouseWheelUnit::Page => delta.y * page as f32,
+                };
+            }
+        }
+        let lines = self.scrolled.trunc() as i32;
+        self.scrolled -= lines as f32;
+        lines
+    }
+
+    /// The scroll bar beside the terminal: where the screen is in the
+    /// scrollback, and dragging or clicking it to move there.
+    fn scroll_bar(&mut self, ui: &egui::Ui, bar: Rect) {
+        let response = ui.interact(
+            bar,
+            egui::Id::unique("stamp-claude-code-scroll-bar"),
+            Sense::click_and_drag(),
+        );
+        let lines = if response.hovered() {
+            self.wheel_lines(ui, self.size.lines)
+        } else {
+            0
+        };
+        let mut term = self.term.lock();
+        if lines != 0 {
+            term.scroll_display(Scroll::Delta(lines));
+        }
+        let screen = term.grid().screen_lines();
+        let history = term.grid().total_lines() - screen;
+        let offset = term.grid().display_offset();
+        if let Some(pos) = response.interact_pointer_pos() {
+            if history > 0 && (response.dragged() || response.clicked()) {
+                let wanted = scroll_offset_at(pos.y, bar, history, screen);
+                term.scroll_display(Scroll::Delta(wanted as i32 - offset as i32));
+            }
+        }
+        let offset = term.grid().display_offset();
+        drop(term);
+        let painter = ui.painter_at(bar);
+        painter.rect_filled(bar, 0.0, Color32::from_gray(0x2b));
+        if history > 0 {
+            let thumb = scroll_thumb(bar, history, screen, offset);
+            let shade = if response.dragged() || response.hovered() {
+                0xb0
+            } else {
+                0x80
+            };
+            painter.rect_filled(
+                thumb.shrink2(Vec2::new(2.5, 1.0)),
+                3.0,
+                Color32::from_gray(shade),
+            );
         }
     }
 
@@ -555,6 +636,59 @@ impl Terminal {
             }
         }
     }
+}
+
+/// What the mouse wheel sends to the program for `lines` (upwards
+/// positive) with the pointer over cell `column`, `row` (from 0), or `None`
+/// when the terminal should scroll its own scrollback instead. A program
+/// that asked for mouse reports (Claude Code's full-screen view does) gets
+/// wheel buttons 64 and 65, as xterm sends them; on the alternate screen
+/// without mouse reports, the arrow keys.
+pub fn wheel_input(lines: i32, mode: TermMode, column: usize, row: usize) -> Option<Vec<u8>> {
+    let count = lines.unsigned_abs().min(50) as usize;
+    if mode.intersects(TermMode::MOUSE_MODE) {
+        let button: u8 = if lines > 0 { 64 } else { 65 };
+        let (x, y) = (column + 1, row + 1);
+        let report = if mode.contains(TermMode::SGR_MOUSE) {
+            format!("\x1b[<{button};{x};{y}M").into_bytes()
+        } else if x < 223 && y < 223 {
+            vec![0x1b, b'[', b'M', 32 + button, 32 + x as u8, 32 + y as u8]
+        } else {
+            return Some(Vec::new());
+        };
+        return Some(report.repeat(count));
+    }
+    if mode.contains(TermMode::ALT_SCREEN) && mode.contains(TermMode::ALTERNATE_SCROLL) {
+        let letter = if lines > 0 { 'A' } else { 'B' };
+        let arrow = if mode.contains(TermMode::APP_CURSOR) {
+            format!("\x1bO{letter}")
+        } else {
+            format!("\x1b[{letter}")
+        };
+        return Some(arrow.repeat(count).into_bytes());
+    }
+    None
+}
+
+/// The scroll bar's thumb: the part of the scrollback (`history` lines
+/// above a screen of `screen` lines) that is shown, `offset` lines up.
+fn scroll_thumb(bar: Rect, history: usize, screen: usize, offset: usize) -> Rect {
+    let total = (history + screen) as f32;
+    let height = (bar.height() * screen as f32 / total)
+        .max(16.0)
+        .min(bar.height());
+    let room = bar.height() - height;
+    let top = bar.min.y + room * (history - offset.min(history)) as f32 / history.max(1) as f32;
+    Rect::from_min_size(Pos2::new(bar.min.x, top), Vec2::new(bar.width(), height))
+}
+
+/// The scroll offset that puts the middle of the thumb at `y`.
+fn scroll_offset_at(y: f32, bar: Rect, history: usize, screen: usize) -> usize {
+    let thumb = scroll_thumb(bar, history, screen, 0);
+    let room = (bar.height() - thumb.height()).max(1.0);
+    let fraction = ((y - bar.min.y - thumb.height() / 2.0) / room).clamp(0.0, 1.0);
+    // The top of the bar is the oldest line.
+    ((1.0 - fraction) * history as f32).round() as usize
 }
 
 /// The character drawn for `c`: itself, or for the symbols Claude Code
@@ -833,6 +967,38 @@ mod tests {
         assert_eq!(keys(Key::Escape, Modifiers::NONE), Some(vec![0x1b]));
         // Letters without Ctrl arrive as text.
         assert_eq!(keys(Key::C, Modifiers::NONE), None);
+    }
+
+    #[test]
+    fn the_wheel_goes_to_programs_that_ask_for_the_mouse() {
+        assert_eq!(wheel_input(3, TermMode::empty(), 0, 0), None);
+        let sgr = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE;
+        assert_eq!(
+            wheel_input(2, sgr, 4, 9),
+            Some(b"\x1b[<64;5;10M\x1b[<64;5;10M".to_vec())
+        );
+        assert_eq!(wheel_input(-1, sgr, 0, 0), Some(b"\x1b[<65;1;1M".to_vec()));
+        assert_eq!(
+            wheel_input(1, TermMode::MOUSE_REPORT_CLICK, 0, 0),
+            Some(vec![0x1b, b'[', b'M', 96, 33, 33])
+        );
+        let alternate = TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL;
+        assert_eq!(
+            wheel_input(-2, alternate, 0, 0),
+            Some(b"\x1b[B\x1b[B".to_vec())
+        );
+    }
+
+    #[test]
+    fn the_scroll_bar_follows_the_scrollback() {
+        let bar = Rect::from_min_size(Pos2::ZERO, Vec2::new(12.0, 100.0));
+        // At the bottom, the thumb is at the bottom; at the top, the top.
+        let bottom = scroll_thumb(bar, 300, 100, 0);
+        assert_eq!(bottom.max.y, 100.0);
+        assert_eq!(bottom.height(), 25.0);
+        assert_eq!(scroll_thumb(bar, 300, 100, 300).min.y, 0.0);
+        assert_eq!(scroll_offset_at(0.0, bar, 300, 100), 300);
+        assert_eq!(scroll_offset_at(100.0, bar, 300, 100), 0);
     }
 
     #[test]

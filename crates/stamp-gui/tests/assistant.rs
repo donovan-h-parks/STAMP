@@ -194,6 +194,47 @@ fn show_plot_changes_the_plot_and_can_be_undone() {
 }
 
 #[test]
+fn group_colours_can_be_changed_and_undone() {
+    let mut h = Harness::enterotypes();
+    let before = h.app.session.group_color("Enterotype 3");
+    let outcome = h.call(
+        "set_group_colors",
+        json!({"colors": {"enterotype 3": "red", "Enterotype 1": "#123456"}}),
+    );
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert_eq!(
+        h.app.session.group_color("Enterotype 3"),
+        stamp_plot::Color::from_hex("#e41a1c").unwrap()
+    );
+    assert_eq!(
+        h.app.session.group_color("Enterotype 1"),
+        stamp_plot::Color::rgb(0x12, 0x34, 0x56)
+    );
+    let session = text(&h.call("get_session", json!({})));
+    assert!(
+        session.contains("Enterotype 3 (18 samples, colour #e41a1c)"),
+        "{session}"
+    );
+    for (args, expected) in [
+        (json!({"colors": {"Martians": "red"}}), "Unknown group"),
+        (
+            json!({"colors": {"Enterotype 2": "sparkly"}}),
+            "not a colour",
+        ),
+    ] {
+        let outcome = h.call("set_group_colors", args);
+        assert!(
+            outcome.is_error && text(&outcome).contains(expected),
+            "{}",
+            text(&outcome)
+        );
+    }
+    h.app.undo_assistant_change();
+    h.settle();
+    assert_eq!(h.app.session.group_color("Enterotype 3"), before);
+}
+
+#[test]
 fn mistakes_are_explained_and_change_nothing() {
     let mut h = Harness::enterotypes();
     for (tool, args, expected) in [
@@ -582,6 +623,71 @@ fn the_claude_code_panel_runs_a_terminal() {
     );
     wait_for(&mut h, "A\u{23f5}\u{23fa}\u{273b}\u{23bf}\u{2500}Z");
 
+    // The mouse wheel scrolls back through the output.
+    typed(
+        &mut h,
+        vec![
+            egui::Event::Text("seq 1 200".to_string()),
+            key(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+    );
+    wait_for(&mut h, "\n200\n");
+    let wheel = |lines: f32| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, lines),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+        modifiers: egui::Modifiers::NONE,
+    };
+    h.renderer.move_pointer(egui::pos2(640.0, 650.0));
+    // Ten notches, three lines each.
+    typed(&mut h, vec![wheel(10.0)]);
+    h.frames(5);
+    let screen = h.app.assistant_terminal_text().unwrap();
+    assert!(
+        !screen.contains("\n200\n") && screen.contains("\n170\n"),
+        "scrolled up 30 lines:\n{screen}"
+    );
+    // Typing returns to the bottom.
+    typed(&mut h, vec![egui::Event::Text(" ".to_string())]);
+    h.frames(5);
+    assert!(h.app.assistant_terminal_text().unwrap().contains("\n200\n"));
+    typed(
+        &mut h,
+        vec![key(egui::Key::Backspace, egui::Modifiers::NONE)],
+    );
+
+    // A program that asks for mouse reports (Claude Code's full-screen
+    // view) gets the wheel as SGR mouse buttons 64 (up) and 65 (down).
+    typed(
+        &mut h,
+        vec![
+            egui::Event::Text("clear; printf '\\033[?1000h\\033[?1006h'; cat -v".to_string()),
+            key(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+    );
+    h.frames(10);
+    typed(&mut h, vec![wheel(1.0)]);
+    typed(&mut h, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+    wait_for(&mut h, "^[[<64;");
+    let screen = h.app.assistant_terminal_text().unwrap();
+    // One notch, three lines (the line appears twice: as typed, and as
+    // `cat` prints it).
+    let line = screen.lines().find(|l| l.contains("^[[<64;")).unwrap();
+    assert_eq!(line.matches("^[[<64;").count(), 3, "{screen}");
+    typed(&mut h, vec![key(egui::Key::D, egui::Modifiers::CTRL)]);
+    typed(
+        &mut h,
+        vec![
+            egui::Event::Text("printf '\\033[?1000l\\033[?1006l'; seq 1 200".to_string()),
+            key(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+    );
+    wait_for(&mut h, "\n200\n");
+    h.renderer.move_pointer(egui::pos2(640.0, 650.0));
+    typed(&mut h, vec![wheel(10.0)]);
+    h.frames(3);
+
     if let Ok(directory) = std::env::var("STAMP_SCREENSHOTS") {
         let app = &mut h.app;
         let image = h.renderer.render(|ui| app.draw(ui));
@@ -707,7 +813,23 @@ fn claude_code_in_the_panel() {
         .unwrap_or(120);
     run_for(&mut h, wait, &|_| false);
     shoot(&mut h, "claude-answer");
-    println!("{}", h.app.assistant_terminal_text().unwrap_or_default());
+    let before = h.app.assistant_terminal_text().unwrap_or_default();
+    println!("{before}");
+    // The mouse wheel over the panel scrolls what Claude Code shows.
+    h.renderer.move_pointer(egui::pos2(640.0, 600.0));
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, 5.0),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let app = &mut h.app;
+    h.renderer.send_events(vec![wheel], |ui| app.draw(ui));
+    run_for(&mut h, 2, &|_| false);
+    shoot(&mut h, "claude-scrolled");
+    let after = h.app.assistant_terminal_text().unwrap_or_default();
+    println!("wheel changed the screen: {}", before != after);
     for entry in h.app.assistant_log() {
         println!("tool: {} {}", entry.tool, entry.args);
     }

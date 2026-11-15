@@ -68,6 +68,11 @@ The first time, Claude Code also asks whether you trust the folder it runs in
 (STAMP's assistant folder, below): choose **Yes, I trust this folder** with
 the arrow keys and Enter.
 
+Before opening Claude Code, STAMP says what will be shared. Tick **Don't show
+this again** to open it straight away in future; **Settings > Preferences >
+Explain what is shared before opening Claude Code** brings the message back.
+STAMP always asks before installing Claude Code.
+
 The Claude Code panel
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -77,7 +82,10 @@ The Claude Code panel
 - **Ctrl+C** copies selected text (drag over it with the mouse); with nothing
   selected it interrupts Claude Code, as in any terminal. **Ctrl+V** pastes.
   **Shift+Enter** starts a new line without sending.
-- Scroll with the mouse wheel to see earlier output.
+- Scroll with the mouse wheel to see earlier output, or drag the scroll bar
+  on the right. When Claude Code uses its full-screen view it scrolls its
+  own conversation with the wheel (and *Ctrl+End* returns to the bottom);
+  the scroll bar then has nothing to show.
 - **Hide** hides the panel and leaves Claude Code running; **View > Claude
   Code** shows it again. **Stop** ends Claude Code, **Restart** starts it
   again, and **Separate terminal** opens it in your computer's own terminal
@@ -133,6 +141,9 @@ STAMP's:
      - Change the analysis: its type, the profile level, the samples or
        groups compared, the test, confidence interval, correction and the
        p-value filter.
+   * - ``set_group_colors``
+     - Change the colour of any group (and of *All other samples*) in every
+       plot, by name (*red*, *blue*, ...) or as ``#rrggbb``.
    * - ``undo``
      - Undo its last change.
 

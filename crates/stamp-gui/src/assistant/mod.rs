@@ -56,6 +56,9 @@ pub struct State {
     /// The Claude Code panel is shown.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) show_terminal: bool,
+    /// Open Claude Code without its dialog (remembered between runs).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) skip_claude_code_dialog: bool,
 }
 
 /// The assistant's dialogs.
