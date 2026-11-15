@@ -682,6 +682,13 @@ direction in which the samples vary most; PC2 the next, at right angles to
 it; and so on. Three panels show PC1 against PC2, PC3 against PC2 and PC1
 against PC3. Each axis gives the share of all variation it captures.
 
+With all three panels shown, the legend of the groups is drawn in the empty
+space at the bottom right, below the PC3 against PC2 panel, so that it never
+covers a sample; *Legend position* in Configure plot then places it within
+that space (upper left, lower right and so on). If one of the two smaller
+panels is switched off there is no such space, and the legend is placed
+within the main panel. The PCoA plot does the same.
+
 .. figure:: images/mg_pca.png
    :width: 90%
 

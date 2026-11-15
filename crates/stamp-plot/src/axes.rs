@@ -649,23 +649,35 @@ pub fn marker_styled(
     }
 }
 
-/// A vertical list of colour swatches with names, in a corner of a frame.
-pub fn legend(
-    figure: &mut Figure,
+/// Width of a swatch, the space between it and its name, and the height
+/// of a line of a legend of colour swatches.
+fn swatch_legend_metrics() -> (f64, f64, f64) {
+    (14.0, 5.0, fonts().legend + 4.0)
+}
+
+/// Width and height of the legend [`legend`] draws for `entries`.
+pub fn swatch_legend_size(entries: &[(String, Color)]) -> (f64, f64) {
+    let (swatch_w, pad, line) = swatch_legend_metrics();
+    let widest = entries
+        .iter()
+        .map(|(name, _)| text::width(name, fonts().legend))
+        .fold(0.0, f64::max);
+    (swatch_w + pad + widest, line * entries.len() as f64)
+}
+
+/// Top-left corner of a legend of colour swatches at `position` in
+/// `frame`; `None` if there is no legend to draw. "Best" is the place that
+/// covers the least of what has been drawn so far.
+pub fn swatch_legend_origin(
+    figure: &Figure,
     frame: &Frame,
     entries: &[(String, Color)],
     position: LegendPosition,
-) {
+) -> Option<(f64, f64)> {
     if position == LegendPosition::None || entries.is_empty() {
-        return;
+        return None;
     }
-    let size = fonts().legend;
-    let (swatch_w, swatch_h, pad, line) = (14.0, 6.0, 5.0, size + 4.0);
-    let widest = entries
-        .iter()
-        .map(|(name, _)| text::width(name, size))
-        .fold(0.0, f64::max);
-    let (width, height) = (swatch_w + pad + widest, line * entries.len() as f64);
+    let (width, height) = swatch_legend_size(entries);
     let place = match position {
         // The clearest place, taking the first of those equally clear.
         LegendPosition::Best => LegendPosition::PLACES
@@ -677,7 +689,14 @@ pub fn legend(
             .unwrap_or(LegendPosition::UpperRight),
         fixed => fixed,
     };
-    let (x, y) = place.origin(frame, width, height);
+    Some(place.origin(frame, width, height))
+}
+
+/// A vertical list of colour swatches with names, its top-left corner at
+/// (`x`, `y`).
+pub fn swatch_legend_at(figure: &mut Figure, entries: &[(String, Color)], x: f64, y: f64) {
+    let (swatch_w, pad, line) = swatch_legend_metrics();
+    let swatch_h = 6.0;
     for (i, (name, color)) in entries.iter().enumerate() {
         let centre = y + line * (i as f64 + 0.5);
         figure.rect(
@@ -694,6 +713,18 @@ pub fn legend(
             name.clone(),
             legend_style().align(HAlign::Left, VAlign::Middle),
         );
+    }
+}
+
+/// A vertical list of colour swatches with names, in a corner of a frame.
+pub fn legend(
+    figure: &mut Figure,
+    frame: &Frame,
+    entries: &[(String, Color)],
+    position: LegendPosition,
+) {
+    if let Some((x, y)) = swatch_legend_origin(figure, frame, entries, position) {
+        swatch_legend_at(figure, entries, x, y);
     }
 }
 

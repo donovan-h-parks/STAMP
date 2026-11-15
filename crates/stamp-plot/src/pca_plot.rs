@@ -4,8 +4,9 @@ use stamp_core::stats::pca::{pca_leading, Pca};
 use stamp_core::{GroupProfile, MultiGroupProfile, Profile};
 
 use crate::axes::{
-    group_color, legend, marker_styled, repeated_colors_note, scaled_ticks, x_axis, y_axis,
-    y_axis_width, Frame, LabelRotation, LegendPosition, Marker, AXES_COLOR, INCH,
+    group_color, legend, marker_styled, repeated_colors_note, scaled_ticks, swatch_legend_at,
+    swatch_legend_origin, swatch_legend_size, x_axis, y_axis, y_axis_width, Frame, LabelRotation,
+    LegendPosition, Marker, AXES_COLOR, INCH,
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, Stroke};
@@ -527,13 +528,15 @@ pub fn plot_ordination(
     }
 
     let dashed = Stroke::dashed(AXES_COLOR, 1.0, 5.0, 4.0);
+    // Draws one panel and returns the y coordinate below its x axis.
     let panel = |figure: &mut Figure,
                  frame: Frame,
                  cx: usize,
                  cy: usize,
                  x_label: bool,
                  y_label: bool,
-                 rotate: bool| {
+                 rotate: bool|
+     -> f64 {
         let (x, y) = (
             frame.x_scale(ticks[cx].min, ticks[cx].max),
             frame.y_scale(ticks[cy].min, ticks[cy].max),
@@ -588,7 +591,7 @@ pub fn plot_ordination(
                 figure.line(&[(*p, frame.bottom), (*p, frame.bottom - 4.0)], stroke);
             }
         }
-        x_axis(
+        let below = x_axis(
             figure,
             &frame,
             &x_ticks,
@@ -613,11 +616,16 @@ pub fn plot_ordination(
                 figure.line(&[(frame.left, p), (frame.left + 4.0, p)], stroke);
             }
         }
+        below
     };
 
     // Neighbouring panels share an axis: PC2 with the panel beside the main
     // one, PC1 with the panel beneath it.
     panel(&mut figure, main, 0, 1, !beneath, true, false);
+    // With all three panels the cell at the bottom right is empty, and the
+    // legend of the groups goes there: `spare` is that cell, from below the
+    // x axis of the panel above it.
+    let mut spare = None;
     if beside {
         let frame = Frame {
             left: main.right + gap,
@@ -625,7 +633,7 @@ pub fn plot_ordination(
             right: main.right + gap + beside_w,
             bottom: main.bottom,
         };
-        panel(
+        let below = panel(
             &mut figure,
             frame,
             2,
@@ -634,6 +642,14 @@ pub fn plot_ordination(
             false,
             options.rotate_pc3_labels,
         );
+        if beneath {
+            spare = Some(Frame {
+                left: frame.left,
+                top: below,
+                right: frame.right,
+                bottom: (main.bottom + gap + beneath_h).max(below),
+            });
+        }
     }
     if beneath {
         let frame = Frame {
@@ -655,7 +671,23 @@ pub fn plot_ordination(
             .enumerate()
             .map(|(i, g)| (g.clone(), data.group_color(i)))
             .collect();
-        legend(&mut figure, &main, &entries, options.legend);
+        match spare {
+            // The place is taken within the empty cell. A legend larger
+            // than the cell is kept below the axis above it and clear of
+            // the panel to its left where the figure has the room, and
+            // the figure grows downwards to hold it.
+            Some(cell) => {
+                if let Some((x, y)) = swatch_legend_origin(&figure, &cell, &entries, options.legend)
+                {
+                    let (legend_width, legend_height) = swatch_legend_size(&entries);
+                    let x = x.max(main.right + 8.0).min(width - 4.0 - legend_width);
+                    let y = y.max(cell.top);
+                    swatch_legend_at(&mut figure, &entries, x, y);
+                    figure.height = figure.height.max(y + legend_height + 4.0);
+                }
+            }
+            None => legend(&mut figure, &main, &entries, options.legend),
+        }
     }
     figure
 }
@@ -731,6 +763,76 @@ mod tests {
         );
         assert_eq!(two.regions.len(), 5);
         assert!(self::texts(&two).contains(&"A".to_string()));
+    }
+
+    #[test]
+    fn the_legend_of_three_panels_is_in_the_empty_cell() {
+        // Where a group's name is written in the legend.
+        let name_at = |figure: &Figure, name: &str| {
+            figure
+                .shapes
+                .iter()
+                .find_map(|s| match s {
+                    Shape::Text { x, y, text, .. } if text == name => Some((*x, *y)),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let with = |legend: LegendPosition, panels: bool| {
+            plot(
+                &data(6),
+                &Options {
+                    legend,
+                    show_pc3_vs_pc2: panels,
+                    show_pc1_vs_pc3: panels,
+                    ..Options::default()
+                },
+            )
+        };
+        // The panels are drawn main, beside, beneath, five samples each:
+        // the cell is right of the main panel's samples and below those of
+        // the panel beside it.
+        let edges = |figure: &Figure| {
+            let right = figure.regions[..5]
+                .iter()
+                .map(|r| r.x + r.width)
+                .fold(0.0, f64::max);
+            let bottom = figure.regions[5..10]
+                .iter()
+                .map(|r| r.y + r.height)
+                .fold(0.0, f64::max);
+            (right, bottom)
+        };
+        for position in [
+            LegendPosition::Best,
+            LegendPosition::UpperLeft,
+            LegendPosition::LowerRight,
+        ] {
+            let figure = with(position, true);
+            let (right, bottom) = edges(&figure);
+            for name in ["A", "B"] {
+                let (x, y) = name_at(&figure, name);
+                assert!(x > right && y > bottom, "{position:?} {name}");
+                assert!(y < figure.height);
+            }
+        }
+        // The position is taken within the cell.
+        let upper = name_at(&with(LegendPosition::UpperLeft, true), "A");
+        let lower = name_at(&with(LegendPosition::LowerRight, true), "A");
+        assert!(upper.0 < lower.0 && upper.1 < lower.1);
+        // No legend when none is asked for.
+        assert!(!texts(&with(LegendPosition::None, true)).contains(&"A".to_string()));
+
+        // Without the three panels there is no empty cell, and the legend
+        // stays in the main panel.
+        let single = with(LegendPosition::UpperLeft, false);
+        let (x, _) = name_at(&single, "A");
+        let right = single
+            .regions
+            .iter()
+            .map(|r| r.x + r.width)
+            .fold(0.0, f64::max);
+        assert!(x < right);
     }
 
     #[test]
