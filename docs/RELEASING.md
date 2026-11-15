@@ -29,6 +29,25 @@ cd crates/stamp-gui && trunk build --release             # writes crates/stamp-g
 The compiler version is pinned in `rust-toolchain.toml`; `rustup` installs it
 on first use.
 
+### Windows executables from Linux
+
+The Windows programs can be cross-compiled on Linux with
+[cargo-xwin](https://github.com/rust-cross/cargo-xwin), which downloads
+Microsoft's C runtime and Windows SDK on first use (accepting Microsoft's
+licence) and caches them in `~/.cache/cargo-xwin`. The icon and version
+details are embedded with `llvm-rc` (from LLVM), which must be on the `PATH`;
+without it the build still succeeds, with a warning and a generic icon.
+
+```bash
+rustup target add x86_64-pc-windows-msvc
+cargo install cargo-xwin --locked
+cargo xwin build --release --target x86_64-pc-windows-msvc -p stamp-gui -p stamp-cli
+scripts/package.sh windows target/x86_64-pc-windows-msvc/release windows-x86_64
+```
+
+The executables cannot be run on Linux (without Wine); try them on Windows
+before release.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every push to `master` or `rust-port` and
