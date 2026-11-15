@@ -277,7 +277,7 @@ of the profile, or with ``--metadata`` those that ``--where``,
    every correlation, strongest first, and the plot shows the N strongest
    (default 30) as bars.
 ``--q-threshold Q``, ``--mark-min-coefficient R``, ``--no-marks``
-   Asterisks mark correlations with a Benjamini-Hochberg corrected p-value below Q (default 0.05) and,
+   Asterisks mark correlations with a Benjamini-Hochberg q-value below Q (default 0.05) and,
    optionally, at least R from zero; or none.
 ``--order``, ``--no-dendrograms``, ``--show-values``, ``--color-map``
    Order of the features (``cluster``, default, or ``original``), the

@@ -1066,7 +1066,7 @@ pub struct CoOccurrenceArgs {
     /// With --with: number of correlations shown in the plot
     #[arg(long, default_value_t = 30, value_name = "N")]
     pub partners: usize,
-    /// Mark correlations with a Benjamini-Hochberg corrected p-value below this level
+    /// Mark correlations with a Benjamini-Hochberg q-value below this level
     #[arg(long, default_value_t = 0.05, value_name = "Q")]
     pub q_threshold: f64,
     /// Mark only correlations at least this far from zero (with a large number

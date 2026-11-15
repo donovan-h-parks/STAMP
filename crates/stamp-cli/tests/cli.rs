@@ -905,8 +905,8 @@ fn every_plot_type_can_be_drawn() {
         ("profile-bar", "Proportion of sequences (%)"),
         ("scatter", "Black (%)"),
         ("sequence-histogram", "Sequences"),
-        // Benjamini-Hochberg: corrected p-values (q-values are Storey's).
-        ("p-value-histogram", "Corrected p-value"),
+        // Benjamini-Hochberg: q-values.
+        ("p-value-histogram", "q-value"),
         ("multiple-comparison", "# significant features"),
     ] {
         let svg = svg_plot(

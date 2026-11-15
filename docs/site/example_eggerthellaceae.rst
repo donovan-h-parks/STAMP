@@ -180,7 +180,7 @@ correlations::
 
 Most of the strongest correlations are negative: samples rich in
 *Equivita* tend to have less of these genera. With this many samples even
-weak correlations have tiny corrected p-values, so look at the size of rho (see
+weak correlations have tiny q-values, so look at the size of rho (see
 :ref:`co-occurrence`); and because most of the samples are from one
 population of feral horses, a correlation here may describe that
 population rather than horses in general. Adding

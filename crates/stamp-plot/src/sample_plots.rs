@@ -736,7 +736,7 @@ mod tests {
         // Most abundant in the first sample comes first.
         assert_eq!(figure.regions[0].item, "feature 12");
         assert!(has_text(&figure, "*") && has_text(&figure, "Proportion of sequences (%)"));
-        // Benjamini-Hochberg values are corrected p-values.
+        // The corrected values are named as the caller says.
         assert!(figure.regions[0].tooltip.contains("\nCorrected p-value: "));
 
         let top3 = profile_bar(
@@ -807,7 +807,8 @@ mod tests {
             },
         );
         assert_eq!(rects(&p, Color::grey(0.5)), 12);
-        assert!(has_text(&p, "Corrected p-values"));
+        // Benjamini-Hochberg q-values.
+        assert!(has_text(&p, "q-values"));
         // Smallest p-value at the top.
         assert_eq!(p.regions[0].item, results.rows[0].feature);
 
@@ -842,8 +843,8 @@ mod tests {
             "Number of features",
             "Uncorrected p-value",
             "# significant features",
-            // Benjamini-Hochberg, which is not Storey's q-value.
-            "Corrected p-value",
+            // Benjamini-Hochberg q-values.
+            "q-value",
         ] {
             assert!(has_text(&figure, label), "missing {label}");
         }

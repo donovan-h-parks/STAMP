@@ -39,7 +39,7 @@ STAMP 3 fixes a number of STAMP 2 bugs and changes some methods to the
 standard ones. The most noticeable are:
 
 * the **Benjamini-Hochberg** correction follows the published method, so its
-  corrected p-values can be lower than STAMP 2's;
+  q-values can be lower than STAMP 2's;
 * the **Kruskal-Wallis** test is run for groups of any size, as in R;
 * the **Tukey-Kramer** and **Games-Howell** tests report computed p-values,
   where STAMP 2 reported a bound read from tables (such as "< 0.05").

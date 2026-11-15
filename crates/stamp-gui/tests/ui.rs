@@ -1272,32 +1272,49 @@ fn unticked_groups_and_inactive_samples_leave_the_lists() {
 }
 
 #[test]
-fn filter_is_named_for_q_values_under_storeys_correction() {
-    // The label is drawn text; its width shows which one is in use.
+fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
+    use stamp_core::stats::correction::Correction;
+    // The label is drawn text; its pixels show which one is in use.
     let mut harness = Harness::enterotypes();
     harness.settle();
-    let before = harness.screenshot("p_value_filter_label");
-    // Benjamini-Hochberg values are corrected p-values: the name stays.
-    harness.app.session.set_correction(
-        Mode::TwoGroups,
-        stamp_core::stats::correction::Correction::BenjaminiHochberg,
+    let label = |harness: &mut Harness, correction, name| {
+        harness
+            .app
+            .session
+            .set_correction(Mode::TwoGroups, correction);
+        harness.settle();
+        let shot = harness.screenshot(name);
+        (985..1110)
+            .flat_map(|x| (380..403).map(move |y| (x, y)))
+            .map(|(x, y)| shot.pixel(x, y))
+            .collect::<Vec<_>>()
+    };
+    let none = label(&mut harness, Correction::None, "p_value_filter_label");
+    let bonferroni = label(
+        &mut harness,
+        Correction::Bonferroni,
+        "bonferroni_filter_label",
     );
-    harness.settle();
-    let corrected = harness.screenshot("corrected_p_value_filter_label");
-    let same = (985..1110)
-        .flat_map(|x| (380..403).map(move |y| (x, y)))
-        .all(|(x, y)| before.pixel(x, y) == corrected.pixel(x, y));
-    assert!(same, "the filter label changed under Benjamini-Hochberg");
-    harness.app.session.set_correction(
-        Mode::TwoGroups,
-        stamp_core::stats::correction::Correction::Storey,
+    let bh = label(
+        &mut harness,
+        Correction::BenjaminiHochberg,
+        "q_value_filter_label",
     );
-    harness.settle();
-    let after = harness.screenshot("q_value_filter_label");
-    let differs = (985..1110)
-        .flat_map(|x| (380..403).map(move |y| (x, y)))
-        .any(|(x, y)| before.pixel(x, y) != after.pixel(x, y));
-    assert!(differs, "the filter label did not change");
+    let storey = label(&mut harness, Correction::Storey, "storey_filter_label");
+    // "p-value filter" with no correction and under Bonferroni; "q-value
+    // filter" under both false discovery rates.
+    assert!(
+        none == bonferroni,
+        "the filter label changed under Bonferroni"
+    );
+    assert!(
+        none != bh,
+        "the filter label did not change under Benjamini-Hochberg"
+    );
+    assert!(
+        bh == storey,
+        "the filter labels of the two FDR methods differ"
+    );
 }
 
 #[test]

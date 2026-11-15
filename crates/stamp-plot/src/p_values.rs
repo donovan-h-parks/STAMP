@@ -1,5 +1,5 @@
 //! How plots name the p-values they show: uncorrected, corrected for
-//! testing many features, or Storey's q-values.
+//! testing many features, or q-values of a false discovery rate.
 
 use stamp_core::stats::correction::Correction;
 
@@ -10,9 +10,10 @@ pub enum PValueKind {
     /// chosen or because the plot shows the values before correction.
     #[default]
     Uncorrected,
-    /// Corrected by a method other than Storey's.
+    /// Corrected for the family-wise error rate (Bonferroni,
+    /// Holm-Bonferroni, Sidak).
     Corrected,
-    /// Storey's q-values.
+    /// q-values of a false discovery rate (Benjamini-Hochberg, Storey).
     QValue,
 }
 
@@ -21,7 +22,7 @@ impl PValueKind {
     pub fn of(correction: Correction) -> PValueKind {
         match correction {
             Correction::None => PValueKind::Uncorrected,
-            Correction::Storey => PValueKind::QValue,
+            _ if correction.is_false_discovery_rate() => PValueKind::QValue,
             _ => PValueKind::Corrected,
         }
     }
@@ -91,14 +92,15 @@ mod tests {
             "Uncorrected p-value"
         );
         for c in [
-            Correction::BenjaminiHochberg,
             Correction::Bonferroni,
             Correction::HolmBonferroni,
             Correction::Sidak,
         ] {
             assert_eq!(PValueKind::of(c).label(), "Corrected p-value", "{c:?}");
         }
-        assert_eq!(PValueKind::of(Correction::Storey).label(), "q-value");
+        for c in [Correction::BenjaminiHochberg, Correction::Storey] {
+            assert_eq!(PValueKind::of(c).label(), "q-value", "{c:?}");
+        }
         // Values shown before correction are uncorrected, whatever the
         // correction.
         assert_eq!(

@@ -1756,7 +1756,7 @@ pub fn show(
                 );
                 rows.number_if(
                     co.mark_significant,
-                    "Corrected p-value below (Benjamini-Hochberg):",
+                    "q-value below (Benjamini-Hochberg):",
                     &mut co.q_threshold,
                     0.005,
                     0.0001..=1.0,

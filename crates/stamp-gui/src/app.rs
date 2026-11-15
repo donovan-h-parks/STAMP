@@ -530,7 +530,7 @@ impl FilterUi {
         q_values: bool,
     ) -> bool {
         let before = self.clone();
-        // Storey's correction gives q-values; the plots name them so too.
+        // A false discovery rate gives q-values; the plots name them so too.
         let p_label = if q_values {
             "q-value filter (>):"
         } else {
@@ -3486,7 +3486,8 @@ impl StampApp {
             Mode::TwoGroups => self.session.groups.analysis.correction,
             Mode::MultipleGroups => self.session.multi.analysis.correction,
             Mode::Correlation => self.session.correlation.analysis.correction,
-        } == stamp_core::stats::correction::Correction::Storey;
+        }
+        .is_false_discovery_rate();
         let selection = &mut self.selections[mode_slot(mode)];
         let mut open_dialog = false;
         let mut selection_changed = false;
