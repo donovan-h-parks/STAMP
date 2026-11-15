@@ -25,6 +25,7 @@ use stamp_core::stats::TestType;
 use stamp_core::Unclassified;
 use stamp_plot::Figure;
 
+use crate::assistant;
 use crate::figure_painter;
 use crate::icons;
 use crate::jobs::Job;
@@ -914,7 +915,107 @@ pub struct StampApp {
     /// Where the plot was drawn in the last frame, and the area it was
     /// centred in.
     pub plot_placement: Option<(egui::Rect, egui::Rect)>,
+    /// The assistant: its requests, log and (on the desktop) server.
+    pub(crate) assistant: assistant::State,
+    /// How things were before each change the assistant made, most recent
+    /// last.
+    assistant_undo: Vec<AssistantSnapshot>,
 }
+
+/// What the assistant's tools can change, as it was before a change, so
+/// that the change can be undone.
+#[derive(Clone)]
+struct AssistantSnapshot {
+    mode: Mode,
+    plot_kinds: [PlotKind; 4],
+    plot_settings: PlotSettings,
+    selected_feature: Option<String>,
+    filters: [FilterUi; 4],
+    analysis: AnalysisSettings,
+}
+
+/// The settings of the analyses that the assistant can change.
+#[derive(Clone, PartialEq)]
+struct AnalysisSettings {
+    profile_level: String,
+    parent_level: Option<String>,
+    group_field: Option<String>,
+    samples: (String, String, stamp_core::stats::results::SampleAnalysis),
+    groups: (
+        String,
+        Option<String>,
+        Option<String>,
+        stamp_core::stats::results::GroupAnalysis,
+    ),
+    multi: (
+        Vec<String>,
+        stamp_core::stats::results::MultiGroupAnalysis,
+        PostHocTest,
+        f64,
+    ),
+    correlation: (
+        Option<String>,
+        stamp_core::stats::results::CorrelationAnalysis,
+    ),
+}
+
+impl AnalysisSettings {
+    fn of(session: &Session) -> AnalysisSettings {
+        AnalysisSettings {
+            profile_level: session.profile_level.clone(),
+            parent_level: session.parent_level.clone(),
+            group_field: session.group_field.clone(),
+            samples: (
+                session.samples.sample1.clone(),
+                session.samples.sample2.clone(),
+                session.samples.analysis,
+            ),
+            groups: (
+                session.groups.group1.clone(),
+                session.groups.group2.clone(),
+                session.groups.pair_field.clone(),
+                session.groups.analysis,
+            ),
+            multi: (
+                session.multi.active_groups.clone(),
+                session.multi.analysis,
+                session.multi.post_hoc_test,
+                session.multi.post_hoc_coverage,
+            ),
+            correlation: (
+                session.correlation.field.clone(),
+                session.correlation.analysis,
+            ),
+        }
+    }
+
+    fn restore(self, session: &mut Session) {
+        session.profile_level = self.profile_level;
+        session.parent_level = self.parent_level;
+        session.group_field = self.group_field;
+        (
+            session.samples.sample1,
+            session.samples.sample2,
+            session.samples.analysis,
+        ) = self.samples;
+        (
+            session.groups.group1,
+            session.groups.group2,
+            session.groups.pair_field,
+            session.groups.analysis,
+        ) = self.groups;
+        (
+            session.multi.active_groups,
+            session.multi.analysis,
+            session.multi.post_hoc_test,
+            session.multi.post_hoc_coverage,
+        ) = self.multi;
+        (session.correlation.field, session.correlation.analysis) = self.correlation;
+    }
+}
+
+/// Most changes by the assistant that can be undone.
+const MAX_ASSISTANT_UNDO: usize = 50;
 
 fn mode_slot(mode: Mode) -> usize {
     Mode::ALL.iter().position(|m| *m == mode).unwrap_or(0)
@@ -1021,6 +1122,8 @@ impl StampApp {
             platform: Platform::default(),
             hovered: None,
             plot_placement: None,
+            assistant: assistant::State::default(),
+            assistant_undo: Vec::new(),
         }
     }
 
@@ -1550,6 +1653,93 @@ impl StampApp {
         self.view_dirty = true;
     }
 
+    /// Draw the plot again, after a change to something it is drawn from.
+    pub fn redraw_plot(&mut self) {
+        self.view_dirty = true;
+    }
+
+    /// Change the profile level and the parent level (`None` for the
+    /// entire sample), as the Profile panel does.
+    pub fn set_profile_level(&mut self, level: &str, parent: Option<&str>) {
+        self.session.profile_level = level.to_string();
+        self.session.parent_level = parent.map(str::to_string);
+        // Features chosen by hand belong to one profile level.
+        self.selections = Default::default();
+        self.select_dialog = None;
+        self.apply_filters();
+        self.session.invalidate_all();
+        self.view_dirty = true;
+    }
+
+    /// True when nothing is being computed and the plot and tables are up
+    /// to date: what the assistant waits for before answering.
+    pub fn is_settled(&self) -> bool {
+        !self.is_busy() && !self.view_dirty
+    }
+
+    /// Remember how things are, so that the change about to be made by
+    /// the assistant can be undone.
+    pub fn remember_for_undo(&mut self, _what: &str) {
+        let snapshot = AssistantSnapshot {
+            mode: self.mode,
+            plot_kinds: self.plot_kinds,
+            plot_settings: self.plot_settings.clone(),
+            selected_feature: self.session.selected_feature.clone(),
+            filters: self.filters.clone(),
+            analysis: AnalysisSettings::of(&self.session),
+        };
+        self.assistant_undo.push(snapshot);
+        if self.assistant_undo.len() > MAX_ASSISTANT_UNDO {
+            self.assistant_undo.remove(0);
+        }
+    }
+
+    /// Whether there is a change by the assistant to undo.
+    pub fn can_undo_assistant_change(&self) -> bool {
+        !self.assistant_undo.is_empty()
+    }
+
+    /// Undo the last change the assistant made. False if there was none.
+    pub fn undo_assistant_change(&mut self) -> bool {
+        let Some(snapshot) = self.assistant_undo.pop() else {
+            return false;
+        };
+        self.mode = snapshot.mode;
+        self.plot_kinds = snapshot.plot_kinds;
+        self.plot_settings = snapshot.plot_settings;
+        self.session.selected_feature = snapshot.selected_feature;
+        if snapshot.analysis != AnalysisSettings::of(&self.session) {
+            if snapshot.analysis.profile_level != self.session.profile_level
+                || snapshot.analysis.parent_level != self.session.parent_level
+            {
+                self.selections = Default::default();
+                self.select_dialog = None;
+            }
+            snapshot.analysis.restore(&mut self.session);
+            self.session.invalidate_all();
+        }
+        self.filters = snapshot.filters;
+        self.apply_filters();
+        self.view_dirty = true;
+        true
+    }
+
+    /// Hand the window a request from the assistant, as the server does.
+    pub fn assistant_request(&mut self, request: assistant::Request) {
+        self.assistant.queue.push_back((request, None));
+    }
+
+    /// The assistant's tool calls so far, oldest first.
+    pub fn assistant_log(&self) -> &[assistant::LogEntry] {
+        &self.assistant.log
+    }
+
+    /// Answer the assistant's requests that can be answered now. Called
+    /// each frame, and while the window is hidden.
+    pub fn serve_assistant(&mut self, ctx: &egui::Context) {
+        assistant::serve(self, ctx);
+    }
+
     /// The profile of the analysis being shown.
     fn current_profile(&self) -> Option<&stamp_core::profile::Profile> {
         let s = &self.session;
@@ -1811,6 +2001,11 @@ impl StampApp {
         self.notice.as_deref()
     }
 
+    /// Show a message for the user, until dismissed.
+    pub fn show_notice(&mut self, text: impl Into<String>) {
+        self.notice = Some(text.into());
+    }
+
     /// Load a profile from the text of a file.
     pub fn load_profile(&mut self, name: &str, text: &str) {
         let tree = stamp_core::ProfileTree::read(text).map_err(|e| e.to_string());
@@ -1821,6 +2016,8 @@ impl StampApp {
     fn use_profile(&mut self, name: &str, tree: Result<stamp_core::ProfileTree, String>) {
         match tree.map(|tree| self.session.load_tree(name, tree)) {
             Ok(()) => {
+                // Changes to another dataset cannot be undone in this one.
+                self.assistant_undo.clear();
                 self.filters = starting_filters();
                 self.selections = Default::default();
                 self.select_dialog = None;
@@ -2364,6 +2561,7 @@ impl StampApp {
     pub fn draw(&mut self, ui: &mut egui::Ui) {
         self.handle_file_events();
         self.handle_shortcuts(ui.ctx());
+        self.serve_assistant(&ui.ctx().clone());
         if self.session.update(self.mode) {
             // On the desktop the work is on another thread and is looked in
             // on now and then. In the browser each frame does a slice of
@@ -2569,6 +2767,7 @@ impl StampApp {
                     self.show_preferences = true;
                 }
             });
+            ui.menu_button("Assistant", |ui| assistant::window::menu(self, ui));
             ui.menu_button("Help", |ui| {
                 if ui.add(item(icons::INFO, "About STAMP", None)).clicked() {
                     self.show_about = true;
@@ -2579,6 +2778,7 @@ impl StampApp {
 
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
+            assistant::window::status(self, ui);
             if let Some(label) = self.loading().map(str::to_string) {
                 ui.add(egui::Spinner::new());
                 ui.label(format!("{label}..."));
@@ -4173,6 +4373,8 @@ impl StampApp {
         self.plot_windows
             .retain(|window| !closed.contains(&window.id));
 
+        assistant::window::windows(self, ctx);
+
         egui::Window::new("About STAMP")
             .open(&mut self.show_about)
             .resizable(false)
@@ -4220,6 +4422,12 @@ fn shorten_number(cell: &str) -> String {
 }
 
 impl eframe::App for StampApp {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Also called while the window is hidden, so that the assistant's
+        // questions are still answered.
+        self.serve_assistant(ctx);
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // The frame just drawn decides what `save` stores.
         self.saved_theme_is_dark = ui.ctx().theme() == egui::Theme::Dark;

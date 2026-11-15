@@ -6,7 +6,31 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle.
+Idle. Last task: **LLM assistant built on Claude Code** (2026-11-15), branch
+`rust-port-llm` (from `rust-port`). Plan in `docs/ASSISTANT_PLAN.md`
+(phases A, B, C, D1 now; D2 later). Code in
+`crates/stamp-gui/src/assistant/`. Progress:
+
+- [x] A: `assistant/describe.rs`, Assistant menu (copy description/image)
+- [x] B: `assistant/server.rs` (hand-written MCP over HTTP), `tools.rs`
+- [x] C: show_plot, set_analysis, undo (snapshots in `app.rs`)
+- [x] D1: `assistant/launch.rs`, `assistant/window.rs`
+- [x] Unit tests, `tests/assistant.rs`, whole workspace suite pass; fmt,
+      clippy (desktop and wasm) clean; `sphinx-build -W` passes
+- [x] Checked against the real Claude Code 2.1.325 (ignored test
+      `serve_for_claude_code` + `claude -p`): it connected, read the plot,
+      switched to the volcano plot and explained both. Permissions had to be
+      passed with `--settings stamp-settings.json`; a project
+      `.claude/settings.json` was not applied in an untrusted folder.
+- [x] Docs: `docs/site/assistant.rst` (in index), NEW_FEATURES entry, plan
+      status updated.
+
+Not done / not verified: the terminal launch on macOS and Windows (only the
+Linux terminal choice is unit-tested; no display here to open one); the
+interactive (non `-p`) first run of Claude Code with its folder-trust
+prompt; Phase D2 (terminal inside STAMP). Known limit: while STAMP's window
+is hidden, read tools are answered (`App::logic`) but changes wait for the
+window to redraw. Committed on `rust-port-llm` (not pushed, not merged into `rust-port`).
 
 ## Last completed
 

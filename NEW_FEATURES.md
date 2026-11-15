@@ -9,6 +9,19 @@ Add an entry here whenever a feature is added that v2 did not have.
 
 ## Running STAMP
 
+- **Asking an AI assistant** (Assistant menu, `crates/stamp-gui/src/assistant/`,
+  `docs/site/assistant.rst`). "Copy description for AI" copies the data,
+  the analysis settings, a description of the plot on screen (its text and
+  every item with its tooltip values) and the top results, to paste into
+  any chat assistant; "Copy plot image" copies the plot. On the desktop,
+  "Open Claude Code" connects Anthropic's Claude Code (with the user's own
+  Claude subscription) to the window through a Model Context Protocol
+  server on 127.0.0.1 with a per-session token: it can read the session,
+  results, samples and plot, show any plot, change plot options and the
+  analysis, and undo; STAMP answers changes once the analysis and plot have
+  caught up. Every change can be undone from the status bar; Assistant
+  activity lists every request. STAMP installs Claude Code with
+  Anthropic's installer if asked. Plan: `docs/ASSISTANT_PLAN.md`.
 - **In the browser.** STAMP runs as a web page (WebAssembly), entirely on the
   user's computer: files are read with the browser's file picker and saved as
   downloads, and nothing is uploaded [25]. Long tests are carried out in

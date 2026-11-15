@@ -4,6 +4,7 @@
 //! later, as WebAssembly for the browser.
 
 pub mod app;
+pub mod assistant;
 pub mod figure_painter;
 pub mod headless;
 pub mod icons;

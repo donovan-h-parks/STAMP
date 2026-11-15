@@ -1,6 +1,7 @@
 # Plan: a STAMP assistant built on Claude Code
 
-Status: planned, not started (2026-11-15).
+Status: phases A, B, C and D1 implemented on branch `rust-port-llm`
+(2026-11-15); D2 not started.
 
 ## Goal
 
@@ -130,9 +131,11 @@ can't run in a browser are compiled only for the desktop
   - `.mcp.json`: the address of STAMP's server and the token for this run;
   - `CLAUDE.md`: STAMP's tools, how to explain statistics to a biologist,
     and a reminder to use STAMP's built-in plots when one fits;
-  - `.claude/settings.json`: pre-approves STAMP's own tools
-    (`mcp__stamp__*`), so users aren't asked at each step; anything else
-    still asks first.
+  - `stamp-settings.json`, given with `--settings`: pre-approves STAMP's
+    own tools (`mcp__stamp`), so users aren't asked at each step; anything
+    else still asks first. (A project's `.claude/settings.json` is not used:
+    Claude Code reads it only once the folder is trusted, and in testing its
+    allowance was not applied.)
 - **Opens a terminal running `claude` in that folder:**
   - macOS: a `.command` script opened with `open`;
   - Windows: `wt`, or `cmd /c start` if `wt` isn't there;
