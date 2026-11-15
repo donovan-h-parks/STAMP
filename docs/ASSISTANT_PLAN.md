@@ -184,3 +184,34 @@ and Gemini users.
 - Claude Code needs Pro, Max, Team or Enterprise; it isn't on the Free
   plan.
 - The browser version gets Phase A only.
+
+## Added after the plan: Claude Desktop
+
+Claude Code in a terminal proved awkward, so Claude Desktop is now the main
+route. Its custom connectors are reached from Anthropic's servers and cannot
+reach 127.0.0.1, but it starts local MCP servers itself, installed as
+extensions (`.mcpb`). So:
+
+- `stamp-mcp` (`src/bridge_main.rs`, `assistant/bridge.rs`): a stdio MCP
+  server that Claude Desktop starts. It answers `initialize` and
+  `tools/list` itself (Claude Desktop starts it before STAMP is open) and
+  forwards each `tools/call` to the STAMP that is sharing, over the same
+  HTTP server, reading the port and token from `connection.json` in STAMP's
+  assistant folder for each call. When nothing is sharing, the call is an
+  error telling Claude to ask the user to share.
+- STAMP writes `connection.json` (owner-only) while sharing
+  (`Server::publish`) and removes it when sharing stops.
+- Assistant > Install in Claude Desktop builds `stamp.mcpb` (`assistant/
+  bundle.rs`: manifest 0.3, `binary` server with command
+  `${__dirname}/server/stamp-mcp`, as the MCPB `calculator-rust` example)
+  from the `stamp-mcp` beside the running STAMP, and opens it (macOS:
+  `open`; Windows: `start`; Linux: the user picks it in Claude Desktop).
+- `scripts/package.sh` ships `stamp-mcp` beside `stamp` (inside
+  `STAMP.app` on macOS).
+
+Checked: the bridge as a subprocess in `tests/assistant.rs`, and with the
+real Claude Code configured to start it as a stdio server. Not checked:
+Claude Desktop itself (no display on the development machine), the macOS
+Gatekeeper treatment of an unsigned `stamp-mcp`, and Claude Desktop's
+tool-call time limit for long analyses.
+

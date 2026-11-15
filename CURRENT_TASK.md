@@ -6,7 +6,23 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle. Last task: **LLM assistant built on Claude Code** (2026-11-15), branch
+Idle. Last task: **Claude Desktop connection** (2026-11-15), branch
+`rust-port-llm`. Done: bridge `stamp-mcp` (`src/bridge_main.rs`,
+`assistant/bridge.rs`); connection file while sharing
+(`Server::publish`, `window::start_sharing_with`); Assistant menu: Share
+with Claude Desktop, Install in Claude Desktop (`assistant/bundle.rs`
+builds `stamp.mcpb`), Open Claude Code, Stop sharing with Claude;
+`scripts/package.sh` ships `stamp-mcp`; docs (`assistant.rst` rewritten,
+RELEASING, NEW_FEATURES, ASSISTANT_PLAN). Tests: bridge subprocess test in
+`tests/assistant.rs`; whole suite, fmt, clippy (both targets) and
+`sphinx-build -W` pass. Checked with the real Claude Code starting
+`stamp-mcp` as a stdio server. Not checked: Claude Desktop itself, macOS
+Gatekeeper on the unsigned bridge, Claude Desktop's tool-call time limit.
+Committed on `rust-port-llm`, in the commit after the Windows icon change
+(`023f7a7`: build.rs, build-dependency, RELEASING "Windows executables from
+Linux"). Not pushed, not merged into `rust-port`.
+
+Previous task: **LLM assistant built on Claude Code** (2026-11-15), branch
 `rust-port-llm` (from `rust-port`). Plan in `docs/ASSISTANT_PLAN.md`
 (phases A, B, C, D1 now; D2 later). Code in
 `crates/stamp-gui/src/assistant/`. Progress:
@@ -34,6 +50,13 @@ window to redraw. Committed on `rust-port-llm` (not pushed, not merged into `rus
 
 ## Last completed
 
+- **Windows icon when cross-compiling** (2026-11-15), on `rust-port-llm`:
+  `winresource` is now a build-dependency on every host and `build.rs`
+  embeds the icon and version details whenever the target is Windows
+  (llvm-rc on Linux). Checked with `cargo xwin build` on Page:
+  ICON/GROUP_ICON/VERSIONINFO present; `scripts/package.sh windows`
+  works. `docs/RELEASING.md` has a "Windows executables from Linux"
+  section. Not run on Windows. Not committed.
 - **Eggerthellaceae built-in example dataset** (2026-11-15), on top of
   HEAD 5352966. `examples/Eggerthellaceae/` (eggerthellaceae.spf 1,289 x
   544 Domain..Genus, eggerthellaceae_mgr_species.spf, metadata, readme.txt

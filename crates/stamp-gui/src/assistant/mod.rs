@@ -5,7 +5,9 @@
 //! - [`tools`] is what a model may ask of STAMP.
 //! - On the desktop, `server` answers those requests over the Model Context
 //!   Protocol on this computer only, and `launch` starts Claude Code
-//!   connected to it.
+//!   connected to it. `bridge` is the `stamp-mcp` program that Claude
+//!   Desktop starts to reach the server, and `bundle` packs it as a Claude
+//!   Desktop extension.
 //!
 //! See `docs/ASSISTANT_PLAN.md`.
 
@@ -13,6 +15,10 @@ pub mod describe;
 pub mod tools;
 pub mod window;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod bridge;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod bundle;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod launch;
 #[cfg(not(target_arch = "wasm32"))]
@@ -39,9 +45,25 @@ pub struct State {
     /// The Assistant window is open.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) show_window: bool,
-    /// The window asking before Claude Code is opened, while it is open.
+    /// The dialog being shown, if any.
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) asking: bool,
+    pub(crate) asking: Option<Ask>,
+}
+
+/// The assistant's dialogs.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Ask {
+    /// Asking before sharing with Claude Desktop.
+    ClaudeDesktop,
+    /// Asking before opening Claude Code (and sharing with it).
+    ClaudeCode,
+    /// The Claude Desktop extension has been written to `bundle`, and
+    /// handed to Claude Desktop if `opened`.
+    Installed {
+        bundle: std::path::PathBuf,
+        opened: bool,
+    },
 }
 
 /// Answer the requests waiting, in order, as far as the window is up to

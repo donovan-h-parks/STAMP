@@ -8,6 +8,7 @@
 # <target-dir> is the directory holding the built binaries, for example
 # target/release or target/aarch64-apple-darwin/release. Build first with
 #   cargo build --release -p stamp-gui -p stamp-cli
+# (stamp-gui builds both `stamp` and `stamp-mcp`).
 set -euo pipefail
 
 platform="${1:?platform: linux, macos or windows}"
@@ -48,7 +49,9 @@ assets="$root/crates/stamp-gui/assets"
 
 case "$platform" in
   linux)
-    cp "$bin_dir/stamp" "$bin_dir/stamp-cli" "$stage/"
+    # stamp-mcp is the bridge Claude Desktop starts; STAMP builds its
+    # extension from the copy beside it.
+    cp "$bin_dir/stamp" "$bin_dir/stamp-cli" "$bin_dir/stamp-mcp" "$stage/"
     cp "$assets/stamp.desktop" "$stage/"
     cp "$assets/icon.png" "$stage/stamp.png"
     (cd "$out" && tar -czf "$name.tar.gz" "$name")
@@ -57,7 +60,7 @@ case "$platform" in
   macos)
     app="$stage/STAMP.app/Contents"
     mkdir -p "$app/MacOS" "$app/Resources"
-    cp "$bin_dir/stamp" "$app/MacOS/"
+    cp "$bin_dir/stamp" "$bin_dir/stamp-mcp" "$app/MacOS/"
     cp "$assets/STAMP.icns" "$app/Resources/"
     sed "s/@VERSION@/$version/g" "$assets/Info.plist" > "$app/Info.plist"
     cp "$bin_dir/stamp-cli" "$stage/"
@@ -65,7 +68,7 @@ case "$platform" in
     archive="$out/$name.zip"
     ;;
   windows)
-    cp "$bin_dir/stamp.exe" "$bin_dir/stamp-cli.exe" "$stage/"
+    cp "$bin_dir/stamp.exe" "$bin_dir/stamp-cli.exe" "$bin_dir/stamp-mcp.exe" "$stage/"
     if command -v zip >/dev/null 2>&1; then
       (cd "$out" && zip -qr "$name.zip" "$name")
     else

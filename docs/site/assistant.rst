@@ -4,58 +4,87 @@ Asking an AI assistant
 STAMP can share what you are looking at with an AI assistant, so that you
 can ask about your data in plain language: *what does this plot show?*,
 *which genera differ most between these groups?*, *is this difference
-large enough to matter?* There are two ways to do it, both in the
-**Assistant** menu.
+large enough to matter?* There are three ways to do it, all in the
+**Assistant** menu:
 
-Copy and paste, with any assistant
-----------------------------------
+- **Claude Desktop** (desktop application): chat with Claude in Anthropic's
+  Claude Desktop app beside STAMP. Claude sees your session and can change
+  the analysis and plots for you.
+- **Claude Code** (desktop application): the same, with Claude Code in a
+  terminal.
+- **Copy and paste** (desktop and browser): copy a description of the
+  session into any chat assistant. It cannot change anything in STAMP.
 
-**Assistant > Copy description for AI** puts a description of the session on
-the clipboard:
-
-- the loaded profile and metadata, the samples and groups;
-- the analysis: its type, the samples or groups compared, the statistical
-  test, confidence interval, multiple test correction and filters;
-- the plot on screen: its title, axis labels and legend, every item it draws
-  with the values shown in its tooltip, and its options;
-- the top 50 rows of the results table, smallest corrected p-value first.
-
-Paste it into a chat with Claude, ChatGPT, Gemini or another assistant, and
-ask your question below it. **Assistant > Copy plot image** copies the plot
-itself, for assistants that read images; paste it into the same message.
-
-This works in the desktop application and in the browser version, with any
-subscription. The assistant sees only what you paste, and cannot change
-anything in STAMP.
-
-Claude Code: an assistant that works in STAMP
----------------------------------------------
-
-In the desktop application, **Assistant > Open Claude Code** connects
-`Claude Code <https://claude.com/claude-code>`_, Anthropic's assistant, to
-the STAMP window. Claude Code opens in a terminal beside STAMP; you type your
-questions there. It can look at the data, the results and the plot on
-screen, and it can change the analysis and the plot for you: *show me the
-volcano plot*, *compare enterotype 1 with enterotype 3 using the
-Mann-Whitney U test*, *make the points larger and only label significant
-genera*. Each change appears in STAMP's window as it is made.
+Claude Desktop
+--------------
 
 What you need
 ~~~~~~~~~~~~~
 
-- A Claude **Pro, Max, Team or Enterprise** plan. Claude Code is not part of
-  the free plan. You sign in with your own Claude account the first time
-  Claude Code starts; STAMP never sees your sign-in.
-- Claude Code installed. If it is not, STAMP offers to open a terminal that
-  installs it with Anthropic's installer (``claude.ai/install.sh``, or
-  ``claude.ai/install.ps1`` on Windows) and then starts it.
+- The `Claude Desktop <https://claude.com/download>`_ app, signed in with
+  your Claude account. It runs on macOS and Windows; on Linux it is in beta.
+- STAMP's extension in Claude Desktop, added once (below).
 
-Before connecting, STAMP says what will be shared and asks you to confirm.
+Adding STAMP to Claude Desktop (once)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-What Claude Code can do
-~~~~~~~~~~~~~~~~~~~~~~~
+Choose **Assistant > Install in Claude Desktop**. STAMP writes its extension
+(``stamp.mcpb``) to its data folder and hands it to Claude Desktop, which asks
+whether to install it: choose **Install**. If Claude Desktop does not ask (on
+Linux it cannot be handed the file), open Claude Desktop's settings, choose
+**Extensions**, then **Install Extension**, and pick the file STAMP names.
 
-Claude Code uses these tools of STAMP's:
+The extension holds ``stamp-mcp``, a small program from STAMP's package that
+Claude Desktop starts to reach STAMP. On its own it shares nothing.
+
+Asking Claude
+~~~~~~~~~~~~~
+
+1. Load your data in STAMP and choose **Assistant > Share with Claude
+   Desktop**. STAMP says what will be shared and asks you to confirm.
+2. In Claude Desktop, ask about your session: *What does the plot in STAMP
+   show?*, *Show me the volcano plot*, *Compare enterotype 1 with enterotype
+   3 using the Mann-Whitney U test*, *Make the points larger and label only
+   the significant genera*. Each change appears in STAMP's window as it is
+   made.
+
+If you ask Claude about STAMP while STAMP is not sharing, Claude is told to
+ask you to share first.
+
+Claude Code
+-----------
+
+**Assistant > Open Claude Code** connects `Claude Code
+<https://claude.com/claude-code>`_, Anthropic's assistant for the terminal, in
+the same way. It opens in a terminal beside STAMP and you type your questions
+there. Claude Code needs a Claude **Pro, Max, Team or Enterprise** plan; you
+sign in with your own Claude account the first time it starts, and STAMP never
+sees your sign-in. If Claude Code is not installed, STAMP offers to open a
+terminal that installs it with Anthropic's installer (``claude.ai/install.sh``,
+or ``claude.ai/install.ps1`` on Windows) and then starts it.
+
+Claude Code is started in a folder STAMP prepares in its data folder (on Linux
+``~/.local/share/stamp/assistant``, on macOS ``~/Library/Application
+Support/STAMP/assistant``, on Windows ``%APPDATA%\STAMP\data\assistant``),
+holding:
+
+- ``stamp-mcp.json``: STAMP's address and the password for this session,
+  readable only by you;
+- ``stamp-settings.json``: lets Claude Code use STAMP's tools without asking
+  each time (anything else it wants to do, such as reading or changing your
+  files, still asks first);
+- ``CLAUDE.md``: tells Claude Code what STAMP is and that its users are
+  mostly biologists;
+- a script that starts Claude Code with the first two.
+
+If no terminal program is found on Linux, run the script in that folder
+yourself.
+
+What Claude can do
+------------------
+
+With either Claude Desktop or Claude Code, Claude uses these tools of
+STAMP's:
 
 .. list-table::
    :header-rows: 1
@@ -84,60 +113,69 @@ Claude Code uses these tools of STAMP's:
    * - ``undo``
      - Undo its last change.
 
-Claude Code waits for an analysis to finish and the plot to be drawn before
-it is told the outcome of a change, so it describes what you see.
+Claude waits for an analysis to finish and the plot to be drawn before it is
+told the outcome of a change, so it describes what you see.
 
 Undoing a change
 ~~~~~~~~~~~~~~~~
 
-Every change Claude Code makes can be undone: click **Undo assistant's
-change** in the status bar, choose **Assistant > Undo assistant's last
-change**, or ask Claude Code to undo it. Each click undoes one change, most
-recent first. Undoing puts back the analysis and plot settings as they were
-before that change, including anything you changed yourself since.
+Every change Claude makes can be undone: click **Undo assistant's change** in
+the status bar, choose **Assistant > Undo assistant's last change**, or ask
+Claude to undo it. Each click undoes one change, most recent first. Undoing
+puts back the analysis and plot settings as they were before that change,
+including anything you changed yourself since.
 
 Seeing what was shared
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The status bar says *Claude Code connected* while it is. **Assistant >
-Assistant activity** lists every request Claude Code has made and the first
-line of each answer, latest first.
+The status bar says *Sharing with Claude* while STAMP is sharing, and *Claude
+connected* once Claude has connected. **Assistant > Assistant activity** lists
+every request Claude has made and the first line of each answer, latest
+first.
 
 Privacy
 ~~~~~~~
 
-What Claude Code reads (descriptions of your data, results and plots, and
-images of plots when it asks for them) is sent to Anthropic to answer your
+What Claude reads (descriptions of your data, results and plots, and images
+of plots when it asks for them) is sent to Anthropic to answer your
 questions, under your Claude account and its terms. Do not use it with data
 you are not allowed to share with a third party.
 
-Sharing is off until you choose Open Claude Code, and stops when you choose
-**Assistant > Stop sharing with Claude Code** or close STAMP. STAMP listens
-for Claude Code only on your own computer (address 127.0.0.1), and only
-answers requests that carry a password made afresh each time sharing starts;
-requests from web pages are refused.
+Sharing is off until you choose Share with Claude Desktop or Open Claude
+Code, and stops when you choose **Assistant > Stop sharing with Claude** or
+close STAMP. STAMP listens for Claude only on your own computer (address
+127.0.0.1), and only answers requests that carry a password made afresh each
+time sharing starts; requests from web pages are refused. While it shares,
+STAMP writes that password and its address to ``connection.json`` in the
+folder above, readable only by you, for Claude Desktop's ``stamp-mcp``; the
+file is removed when sharing stops.
 
 How it works
 ~~~~~~~~~~~~
 
-STAMP answers Claude Code through the `Model Context Protocol
-<https://modelcontextprotocol.io>`_. When you choose Open Claude Code, STAMP
-writes a folder for Claude Code in its data folder (on Linux
-``~/.local/share/stamp/assistant``, on macOS ``~/Library/Application
-Support/STAMP/assistant``, on Windows ``%APPDATA%\STAMP\data\assistant``)
-holding:
+STAMP answers Claude through the `Model Context Protocol
+<https://modelcontextprotocol.io>`_. Claude Code connects to it directly;
+Claude Desktop starts ``stamp-mcp``, which answers Claude Desktop itself and
+passes each request on to the STAMP that is sharing.
 
-- ``stamp-mcp.json``: STAMP's address and the password for this session,
-  readable only by you;
-- ``stamp-settings.json``: lets Claude Code use STAMP's tools without asking
-  each time (anything else it wants to do, such as reading or changing your
-  files, still asks first);
-- ``CLAUDE.md``: tells Claude Code what STAMP is and that its users are
-  mostly biologists;
-- a script that starts Claude Code with the first two.
+Copy and paste, with any assistant
+----------------------------------
 
-It then opens your computer's terminal running that script. If no terminal
-program is found on Linux, run the script in that folder yourself.
+**Assistant > Copy description for AI** puts a description of the session on
+the clipboard:
 
-The browser version cannot start programs on your computer, so it offers
-only the copy and paste route.
+- the loaded profile and metadata, the samples and groups;
+- the analysis: its type, the samples or groups compared, the statistical
+  test, confidence interval, multiple test correction and filters;
+- the plot on screen: its title, axis labels and legend, every item it draws
+  with the values shown in its tooltip, and its options;
+- the top 50 rows of the results table, smallest corrected p-value first.
+
+Paste it into a chat with Claude, ChatGPT, Gemini or another assistant, and
+ask your question below it. **Assistant > Copy plot image** copies the plot
+itself, for assistants that read images; paste it into the same message.
+
+This works in the desktop application and in the browser version, with any
+subscription. The assistant sees only what you paste, and cannot change
+anything in STAMP. The browser version cannot reach programs on your
+computer, so it offers only this route.

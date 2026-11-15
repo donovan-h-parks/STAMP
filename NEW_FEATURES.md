@@ -21,7 +21,13 @@ Add an entry here whenever a feature is added that v2 did not have.
   analysis, and undo; STAMP answers changes once the analysis and plot have
   caught up. Every change can be undone from the status bar; Assistant
   activity lists every request. STAMP installs Claude Code with
-  Anthropic's installer if asked. Plan: `docs/ASSISTANT_PLAN.md`.
+  Anthropic's installer if asked. **Claude Desktop** reaches the same
+  tools through `stamp-mcp`, a small bridge shipped beside `stamp` that
+  Claude Desktop starts (stdio MCP) and that forwards tool calls to the
+  STAMP that is sharing (Assistant > Share with Claude Desktop), found
+  through a connection file; Assistant > Install in Claude Desktop builds
+  and opens a Claude Desktop extension (`.mcpb`) holding it. Plan:
+  `docs/ASSISTANT_PLAN.md`.
 - **In the browser.** STAMP runs as a web page (WebAssembly), entirely on the
   user's computer: files are read with the browser's file picker and saved as
   downloads, and nothing is uploaded [25]. Long tests are carried out in

@@ -296,7 +296,7 @@ fn claude_code_reaches_the_tools_over_http() {
 
     let mut h = Harness::enterotypes();
     let ctx = h.renderer.ctx.clone();
-    let server = stamp_gui::assistant::window::start_sharing(&mut h.app, &ctx).unwrap();
+    let server = stamp_gui::assistant::window::start_sharing_with(&mut h.app, &ctx, None).unwrap();
     let (port, token) = (server.port(), server.token().to_string());
 
     let client = std::thread::spawn(move || {
@@ -333,6 +333,98 @@ fn claude_code_reaches_the_tools_over_http() {
     assert_eq!(h.app.plot_kind(), PlotKind::Pca);
 }
 
+/// Claude Desktop's side: it starts `stamp-mcp` and talks to it over
+/// standard input and output; the bridge answers by itself until STAMP
+/// shares, and then passes tool calls on to the window.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn claude_desktop_reaches_the_tools_through_the_bridge() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Command, Stdio};
+
+    let folder = std::env::temp_dir().join(format!("stamp-bridge-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    let connection = folder.join("connection.json");
+    let mut bridge = Command::new(env!("CARGO_BIN_EXE_stamp-mcp"))
+        .env("STAMP_ASSISTANT_CONNECTION", &connection)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut input = bridge.stdin.take().unwrap();
+    let mut output = BufReader::new(bridge.stdout.take().unwrap());
+    // Each message is answered on a line of its own, on a thread so that
+    // the window can run frames meanwhile.
+    let (to_bridge, messages) = channel::<String>();
+    let (from_bridge, answers) = channel::<Value>();
+    let talker = std::thread::spawn(move || {
+        for message in messages {
+            writeln!(input, "{message}").unwrap();
+            input.flush().unwrap();
+            let mut line = String::new();
+            output.read_line(&mut line).unwrap();
+            from_bridge
+                .send(serde_json::from_str(&line).unwrap())
+                .unwrap();
+        }
+    });
+
+    let mut h = Harness::enterotypes();
+    let ask = |h: &mut Harness, message: Value| -> Value {
+        to_bridge.send(message.to_string()).unwrap();
+        for _ in 0..4000 {
+            h.frames(1);
+            if let Ok(answer) = answers.try_recv() {
+                return answer;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        panic!("the bridge did not answer {message}");
+    };
+    let call = |id: u32, name: &str, arguments: Value| {
+        json!({"jsonrpc": "2.0", "id": id, "method": "tools/call",
+               "params": {"name": name, "arguments": arguments}})
+    };
+
+    let reply = ask(
+        &mut h,
+        json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+               "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                          "clientInfo": {"name": "test", "version": "1"}}}),
+    );
+    assert_eq!(reply["result"]["serverInfo"]["name"], "stamp");
+
+    // Not sharing yet: Claude is told what to ask the user.
+    let reply = ask(&mut h, call(2, "get_session", json!({})));
+    assert_eq!(reply["result"]["isError"], true);
+    let said = reply["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(said.contains("Share with Claude Desktop"), "{said}");
+
+    // Sharing: the connection file appears, and calls reach the window.
+    let ctx = h.renderer.ctx.clone();
+    stamp_gui::assistant::window::start_sharing_with(&mut h.app, &ctx, Some(&connection)).unwrap();
+    assert!(connection.is_file());
+    let reply = ask(&mut h, call(3, "show_plot", json!({"plot": "Volcano"})));
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    assert_eq!(h.app.plot_kind(), PlotKind::Volcano);
+    let reply = ask(
+        &mut h,
+        call(4, "get_current_plot", json!({"format": "png"})),
+    );
+    assert_eq!(reply["result"]["content"][1]["type"], "image", "{reply}");
+
+    // Stopping removes the file, and the bridge says so again.
+    h.app.assistant_stop_sharing();
+    assert!(!connection.exists());
+    let reply = ask(&mut h, call(5, "get_session", json!({})));
+    assert_eq!(reply["result"]["isError"], true);
+
+    drop(to_bridge);
+    talker.join().unwrap();
+    assert!(bridge.wait().unwrap().success());
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
 /// Not a test: serves the Enterotypes example to a real Claude Code for
 /// `STAMP_ASSISTANT_SECONDS` seconds, with its working folder written to
 /// `STAMP_ASSISTANT_FOLDER`. Run with `--ignored --nocapture`, then run
@@ -349,7 +441,11 @@ fn serve_for_claude_code() {
     let folder = PathBuf::from(std::env::var("STAMP_ASSISTANT_FOLDER").expect("a folder"));
     let mut h = Harness::enterotypes();
     let ctx = h.renderer.ctx.clone();
-    let server = stamp_gui::assistant::window::start_sharing(&mut h.app, &ctx).unwrap();
+    // The bridge finds this session through STAMP_ASSISTANT_CONNECTION, if set.
+    let connection = std::env::var_os("STAMP_ASSISTANT_CONNECTION").map(PathBuf::from);
+    let server =
+        stamp_gui::assistant::window::start_sharing_with(&mut h.app, &ctx, connection.as_deref())
+            .unwrap();
     let claude = stamp_gui::assistant::launch::find_claude().expect("Claude Code is installed");
     let script =
         stamp_gui::assistant::launch::prepare(&folder, &server.url(), server.token(), &claude)

@@ -1729,6 +1729,15 @@ impl StampApp {
         self.assistant.queue.push_back((request, None));
     }
 
+    /// Stop sharing the session with Claude, as Assistant > Stop sharing
+    /// does.
+    pub fn assistant_stop_sharing(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.assistant.server = None;
+        }
+    }
+
     /// The assistant's tool calls so far, oldest first.
     pub fn assistant_log(&self) -> &[assistant::LogEntry] {
         &self.assistant.log

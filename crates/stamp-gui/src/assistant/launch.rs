@@ -198,7 +198,7 @@ pub fn prepare_install(folder: &Path, url: &str, token: &str) -> std::io::Result
 }
 
 /// A file only its owner can read: it holds the access token.
-fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
+pub(crate) fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
     std::fs::write(path, text)?;
     #[cfg(unix)]
     {
