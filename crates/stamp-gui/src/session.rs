@@ -565,6 +565,42 @@ impl Session {
         }
     }
 
+    /// The samples switched off by hand (unticked in the metadata table),
+    /// for undoing a change.
+    pub fn switched_off_samples(&self) -> Vec<String> {
+        let Some(metadata) = &self.metadata else {
+            return Vec::new();
+        };
+        metadata
+            .samples()
+            .iter()
+            .filter(|s| !metadata.is_switched_on(s))
+            .cloned()
+            .collect()
+    }
+
+    /// Switch off exactly `off`, and every other sample on, as returned by
+    /// [`Session::switched_off_samples`].
+    pub fn set_switched_off_samples(&mut self, off: &[String]) {
+        let Some(metadata) = &mut self.metadata else {
+            return;
+        };
+        let mut changed = false;
+        for sample in metadata.samples().to_vec() {
+            let on = !off.contains(&sample);
+            if metadata.is_switched_on(&sample) != on {
+                metadata.set_active(&sample, on);
+                changed = true;
+            }
+        }
+        if changed {
+            self.invalidate(Mode::TwoGroups);
+            self.invalidate(Mode::MultipleGroups);
+            self.invalidate(Mode::Correlation);
+            self.generation += 1;
+        }
+    }
+
     /// Samples whose value of a metadata field stands in `relation` to
     /// `value`. Numbers are compared as numbers when the whole field is
     /// numeric, and as text otherwise.

@@ -947,6 +947,7 @@ struct AssistantSnapshot {
     analysis: AnalysisSettings,
     group_colors: std::collections::HashMap<String, stamp_plot::Color>,
     other_samples_color: stamp_plot::Color,
+    switched_off: Vec<String>,
 }
 
 /// The settings of the analyses that the assistant can change.
@@ -1742,6 +1743,7 @@ impl StampApp {
             analysis: AnalysisSettings::of(&self.session),
             group_colors: self.session.chosen_group_colors(),
             other_samples_color: self.session.other_samples_color,
+            switched_off: self.session.switched_off_samples(),
         };
         self.assistant_undo.push(snapshot);
         if self.assistant_undo.len() > MAX_ASSISTANT_UNDO {
@@ -1775,6 +1777,8 @@ impl StampApp {
         }
         self.filters = snapshot.filters;
         self.session.set_chosen_group_colors(snapshot.group_colors);
+        self.session
+            .set_switched_off_samples(&snapshot.switched_off);
         self.session.other_samples_color = snapshot.other_samples_color;
         self.apply_filters();
         self.view_dirty = true;

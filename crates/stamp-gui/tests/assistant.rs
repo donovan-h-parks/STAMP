@@ -43,6 +43,20 @@ impl Harness {
         harness
     }
 
+    /// The coal seam gas data, with the company of each sample.
+    fn coal() -> Harness {
+        let renderer = Renderer::new(1280.0, 800.0, 1.0);
+        let mut app = StampApp::new(&renderer.ctx);
+        app.load_profile("coal.spf", &example("CoalSeamGas/coal.spf"));
+        app.load_metadata(
+            "coal.metadata.tsv",
+            &example("CoalSeamGas/coal.metadata.tsv"),
+        );
+        let mut harness = Harness { renderer, app };
+        harness.settle();
+        harness
+    }
+
     fn frames(&mut self, n: usize) {
         let app = &mut self.app;
         self.renderer.run(n, |ui| app.draw(ui));
@@ -191,6 +205,127 @@ fn show_plot_changes_the_plot_and_can_be_undone() {
     assert_eq!(h.app.plot_kind(), PlotKind::ExtendedErrorBar);
     assert_eq!(*h.app.plot_settings(), before);
     assert!(!h.app.can_undo_assistant_change());
+}
+
+#[test]
+fn samples_are_switched_off_by_metadata_and_undone() {
+    // The coal seam gas data, whose metadata names the company of each
+    // sample.
+    let mut h = Harness::coal();
+    let on = |h: &Harness| {
+        h.app
+            .session
+            .metadata
+            .as_ref()
+            .unwrap()
+            .active_samples()
+            .len()
+    };
+    assert_eq!(on(&h), 44);
+
+    // "Remove samples from the QS company": the value is matched however
+    // it is written.
+    let outcome = h.call(
+        "switch_samples",
+        json!({"where": {"field": "company", "relation": "=", "value": "qs"}}),
+    );
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert!(
+        text(&outcome).contains("Switched off 4 sample(s); 40 of 44"),
+        "{}",
+        text(&outcome)
+    );
+    assert_eq!(on(&h), 40);
+    let samples = text(&h.call("get_samples", json!({})));
+    let qs_off = samples
+        .lines()
+        .filter(|l| l.split('\t').nth(6) == Some("QS"))
+        .all(|l| l.split('\t').nth(1) == Some("no"));
+    assert!(qs_off, "{samples}");
+
+    // By name, and all back on.
+    let first = samples
+        .lines()
+        .nth(1)
+        .unwrap()
+        .split('\t')
+        .next()
+        .unwrap()
+        .to_string();
+    let outcome = h.call("switch_samples", json!({"samples": [first]}));
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert_eq!(on(&h), 39);
+    let outcome = h.call("switch_samples", json!({"all": true, "active": true}));
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert_eq!(on(&h), 44);
+
+    for (args, expected) in [
+        (
+            json!({"where": {"field": "Company", "value": "Acme"}}),
+            "Unknown value of Company",
+        ),
+        (
+            json!({"where": {"field": "Planet", "value": "Mars"}}),
+            "Unknown metadata field",
+        ),
+        (json!({"samples": ["no-such-sample"]}), "Unknown sample"),
+        (json!({"all": true, "samples": []}), "exactly one of"),
+    ] {
+        let outcome = h.call("switch_samples", args);
+        assert!(
+            outcome.is_error && text(&outcome).contains(expected),
+            "{}",
+            text(&outcome)
+        );
+    }
+
+    // Undone in turn: all on, one off, then the four of QS off, then none.
+    h.app.undo_assistant_change();
+    h.settle();
+    assert_eq!(on(&h), 39);
+    h.app.undo_assistant_change();
+    h.settle();
+    assert_eq!(on(&h), 40);
+    h.app.undo_assistant_change();
+    h.settle();
+    assert_eq!(on(&h), 44);
+}
+
+#[test]
+fn plot_fonts_are_changed_and_undone() {
+    let mut h = Harness::enterotypes();
+    let before = h.app.plot_settings().fonts;
+    let outcome = h.call(
+        "set_plot_fonts",
+        json!({"tick_labels": 12, "axis_labels": 14, "legend": 10, "font": "times new roman"}),
+    );
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    let fonts = h.app.plot_settings().fonts;
+    assert_eq!(
+        (fonts.tick, fonts.axis_label, fonts.legend),
+        (12.0, 14.0, 10.0)
+    );
+    assert_eq!(fonts.family, stamp_plot::text::PlotFont::TimesNewRoman);
+    // The figure is drawn in it.
+    assert_eq!(
+        h.app.figure().font,
+        stamp_plot::text::PlotFont::TimesNewRoman
+    );
+    for (args, expected) in [
+        (json!({"tick_labels": 100}), "between 4 and 36"),
+        (json!({"font": "Comic Sans"}), "Unknown font"),
+        (json!({}), "at least one"),
+    ] {
+        let outcome = h.call("set_plot_fonts", args);
+        assert!(
+            outcome.is_error && text(&outcome).contains(expected),
+            "{}",
+            text(&outcome)
+        );
+    }
+    h.app.undo_assistant_change();
+    h.settle();
+    assert_eq!(h.app.plot_settings().fonts, before);
 }
 
 #[test]
@@ -743,7 +878,11 @@ fn claude_code_in_the_panel() {
     let prompt = std::env::var("STAMP_CLAUDE_PROMPT")
         .unwrap_or_else(|_| "What does the plot in STAMP show? One sentence.".to_string());
     let shots = std::env::var("STAMP_SCREENSHOTS").ok().map(PathBuf::from);
-    let mut h = Harness::enterotypes();
+    // STAMP_CLAUDE_DATA=coal uses the coal seam gas data instead.
+    let mut h = match std::env::var("STAMP_CLAUDE_DATA").as_deref() {
+        Ok("coal") => Harness::coal(),
+        _ => Harness::enterotypes(),
+    };
     let ctx = h.renderer.ctx.clone();
     let server = stamp_gui::assistant::window::start_sharing_with(&mut h.app, &ctx, None).unwrap();
     let claude = stamp_gui::assistant::launch::find_claude().expect("Claude Code is installed");

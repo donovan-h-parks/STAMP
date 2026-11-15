@@ -43,7 +43,10 @@ Add an entry here whenever a feature is added that v2 did not have.
   Claude Code's full-screen view, sent to it as mouse reports; the
   computer's own terminal remains available. Its dialog has "Don't show
   this again" (Preferences turns it back on). The tools include
-  `set_group_colors` for the colour of any group. Plan:
+  `set_group_colors` for the colour of any group, `switch_samples` to
+  leave samples out by name or metadata value ("remove the samples from
+  the QS company"), and `set_plot_fonts` for the text sizes and font of
+  every plot. Plan:
   `docs/ASSISTANT_PLAN.md`.
 - **In the browser.** STAMP runs as a web page (WebAssembly), entirely on the
   user's computer: files are read with the browser's file picker and saved as

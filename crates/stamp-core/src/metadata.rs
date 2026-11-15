@@ -158,6 +158,14 @@ impl Metadata {
             .is_some_and(|&i| self.active[i] && self.selected[i])
     }
 
+    /// True if a sample is switched on (ticked in the metadata table),
+    /// whether or not the sample filter keeps it.
+    pub fn is_switched_on(&self, sample: &str) -> bool {
+        self.sample_index
+            .get(sample)
+            .is_some_and(|&i| self.active[i])
+    }
+
     /// True if the sample filter keeps a sample (whether or not it is
     /// switched on).
     pub fn is_selected(&self, sample: &str) -> bool {

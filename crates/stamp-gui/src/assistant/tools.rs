@@ -231,6 +231,59 @@ pub fn list() -> Vec<ToolInfo> {
             changes: true,
         },
         ToolInfo {
+            name: "switch_samples",
+            description: "Switch samples off (leave them out of every analysis and plot) or back \
+                          on, as the Metadata table does. Give either 'samples' (names, from \
+                          get_samples) or 'where' (a metadata field, a relation and a value: \
+                          for example {\"field\": \"Company\", \"relation\": \"=\", \
+                          \"value\": \"QS\"} for every sample of the QS company), or 'all': \
+                          true. 'active' false switches them off (the default), true on. \
+                          Answers once the analyses have run again, with how many samples \
+                          are switched on.",
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "active": {"type": "boolean",
+                               "description": "false (default) switches off, true on."},
+                    "samples": {"type": "array", "items": {"type": "string"}},
+                    "where": {
+                        "type": "object",
+                        "properties": {
+                            "field": {"type": "string"},
+                            "relation": {"type": "string", "enum": ["=", "<", ">"]},
+                            "value": {"type": "string"}
+                        },
+                        "required": ["field", "value"],
+                        "additionalProperties": false
+                    },
+                    "all": {"type": "boolean",
+                            "description": "Every sample (for example, to switch all back on)."}
+                },
+                "additionalProperties": false
+            }),
+            changes: true,
+        },
+        ToolInfo {
+            name: "set_plot_fonts",
+            description: "Change the text of every plot: the size in points of tick labels, \
+                          axis labels and legends, and the font (Arial, Times New Roman, \
+                          Courier New or DejaVu Sans). Give only what should change. Text \
+                          particular to one plot (titles, feature names, p-values, labels of \
+                          points) has its own *_font_size options: change those with \
+                          show_plot (get_plot_options lists them).",
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "tick_labels": {"type": "number", "minimum": 4, "maximum": 36},
+                    "axis_labels": {"type": "number", "minimum": 4, "maximum": 36},
+                    "legend": {"type": "number", "minimum": 4, "maximum": 36},
+                    "font": {"type": "string"}
+                },
+                "additionalProperties": false
+            }),
+            changes: true,
+        },
+        ToolInfo {
             name: "set_group_colors",
             description: "Change the colours of groups in every plot that colours by group \
                           (any group of the group field, and \"All other samples\"). 'colors' \
@@ -285,6 +338,8 @@ pub fn call(app: &mut StampApp, name: &str, args: &Value) -> Outcome {
         "show_plot" => show_plot(app, args),
         "set_analysis" => set_analysis(app, args),
         "set_group_colors" => set_group_colors(app, args),
+        "switch_samples" => switch_samples(app, args),
+        "set_plot_fonts" => set_plot_fonts(app, args),
         "undo" => Ok(Outcome::text(if app.undo_assistant_change() {
             "Undone."
         } else {
@@ -478,6 +533,150 @@ fn show_plot(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, S
         app.select_feature(feature);
     }
     Ok(Outcome::text("Done."))
+}
+
+fn switch_samples(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, String> {
+    let active = match args.get("active") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return Err("'active' must be true or false.".to_string()),
+    };
+    let Some(metadata) = &app.session.metadata else {
+        return Err(
+            "Samples are switched on and off through the metadata: the user has to load a \
+             metadata file first."
+                .to_string(),
+        );
+    };
+    let all_samples: Vec<String> = metadata.samples().to_vec();
+    let fields: Vec<String> = metadata.fields().to_vec();
+    let given = [
+        args.contains_key("samples"),
+        args.contains_key("where"),
+        matches!(args.get("all"), Some(Value::Bool(true))),
+    ];
+    if given.iter().filter(|g| **g).count() != 1 {
+        return Err("Give exactly one of 'samples', 'where' or 'all'.".to_string());
+    }
+    let chosen: Vec<String> = if given[2] {
+        all_samples.clone()
+    } else if let Some(samples) = args.get("samples") {
+        let Some(samples) = samples.as_array() else {
+            return Err("'samples' must be a list of sample names.".to_string());
+        };
+        let mut chosen = Vec::new();
+        for sample in samples {
+            let name = sample
+                .as_str()
+                .ok_or("'samples' must be a list of names.")?;
+            chosen.push(choose_string("sample", name, &all_samples)?);
+        }
+        chosen
+    } else {
+        let Some(Value::Object(rule)) = args.get("where") else {
+            return Err("'where' must be an object with field, relation and value.".to_string());
+        };
+        let field = rule
+            .get("field")
+            .and_then(Value::as_str)
+            .ok_or("'where' needs a 'field'.")?;
+        let field = choose_string("metadata field", field, &fields)?;
+        let value = match rule.get("value") {
+            Some(Value::String(s)) => s.clone(),
+            Some(Value::Number(n)) => n.to_string(),
+            _ => return Err("'where' needs a 'value'.".to_string()),
+        };
+        let relation = match rule.get("relation").and_then(Value::as_str).unwrap_or("=") {
+            "=" | "==" => crate::session::Relation::Equal,
+            "<" => crate::session::Relation::Less,
+            ">" => crate::session::Relation::Greater,
+            other => return Err(format!("Unknown relation '{other}': use =, < or >.")),
+        };
+        // "=" takes the value as the metadata spells it, if it only differs
+        // in case or punctuation.
+        let value = if relation == crate::session::Relation::Equal {
+            let values: Vec<String> = metadata
+                .unique_values(&field)
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+            choose_string(&format!("value of {field}"), &value, &values)?
+        } else {
+            value
+        };
+        let chosen = app.session.samples_matching(&field, relation, &value);
+        if chosen.is_empty() {
+            return Err(format!(
+                "No sample has {field} {} {value}.",
+                relation.name()
+            ));
+        }
+        chosen
+    };
+    app.remember_for_undo("switch_samples");
+    app.session.set_samples_active(&chosen, active);
+    app.redraw_plot();
+    let on = app
+        .session
+        .metadata
+        .as_ref()
+        .map_or(0, |m| m.active_samples().len());
+    Ok(Outcome::text(format!(
+        "{} {} sample(s); {on} of {} samples are now switched on.",
+        if active {
+            "Switched on"
+        } else {
+            "Switched off"
+        },
+        chosen.len(),
+        all_samples.len()
+    )))
+}
+
+fn set_plot_fonts(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, String> {
+    if args.is_empty() {
+        return Err("Give at least one of tick_labels, axis_labels, legend or font.".to_string());
+    }
+    let mut settings = app.plot_settings().clone();
+    let size = |key: &str| -> Result<Option<f64>, String> {
+        match args.get(key) {
+            None | Some(Value::Null) => Ok(None),
+            Some(value) => {
+                let size = value
+                    .as_f64()
+                    .ok_or_else(|| format!("'{key}' must be a size in points."))?;
+                if !(4.0..=36.0).contains(&size) {
+                    return Err(format!("'{key}' must be between 4 and 36 points."));
+                }
+                Ok(Some(size))
+            }
+        }
+    };
+    let fonts = &mut settings.fonts;
+    if let Some(size) = size("tick_labels")? {
+        fonts.tick = size;
+    }
+    if let Some(size) = size("axis_labels")? {
+        fonts.axis_label = size;
+    }
+    if let Some(size) = size("legend")? {
+        fonts.legend = size;
+    }
+    if let Some(font) = optional_str(args, "font")? {
+        fonts.family = choose("font", font, &stamp_plot::text::PlotFont::ALL, |f| {
+            f.name().to_string()
+        })?;
+    }
+    let text = format!(
+        "Plot text: ticks {} pt, axis labels {} pt, legends {} pt, font {}.",
+        fonts.tick,
+        fonts.axis_label,
+        fonts.legend,
+        fonts.family.name()
+    );
+    app.remember_for_undo("set_plot_fonts");
+    app.set_plot_settings(settings);
+    Ok(Outcome::text(text))
 }
 
 fn set_group_colors(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, String> {

@@ -142,6 +142,15 @@ STAMP's:
      - Change the analysis: its type, the profile level, the samples or
        groups compared, the test, confidence interval, correction and the
        p-value filter.
+   * - ``switch_samples``
+     - Switch samples off (leave them out of every analysis) or back on, by
+       name or by a metadata value, as the metadata table does: *Remove the
+       samples from the QS company*.
+   * - ``set_plot_fonts``
+     - Change the size of the tick labels, axis labels and legends of every
+       plot, and their font (Arial, Times New Roman, Courier New, DejaVu
+       Sans). Text particular to one plot, such as its title or feature
+       names, is changed with ``show_plot``.
    * - ``set_group_colors``
      - Change the colour of any group (and of *All other samples*) in every
        plot, by name (*red*, *blue*, ...) or as ``#rrggbb``.

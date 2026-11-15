@@ -6,7 +6,20 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle. Last task: **movable frames** (2026-11-15), on `rust-port`, committed
+Idle. Last task (2026-11-16): two more assistant tools, on `rust-port`,
+committed and pushed: `switch_samples` (off or on by names, by a metadata
+`where` {field, relation, value; "=" values matched as the metadata spells
+them}, or `all`) and `set_plot_fonts` (tick, axis label, legend sizes and
+font). Undo restores switched-off samples (`Session::switched_off_samples`,
+`set_switched_off_samples`, `Metadata::is_switched_on` in stamp-core).
+Tests `samples_are_switched_off_by_metadata_and_undone` (coal data),
+`plot_fonts_are_changed_and_undone`; the ignored panel test takes
+`STAMP_CLAUDE_DATA=coal`. Checked with the real Claude Code: "Remove
+samples from the QS Company. Then make the tick labels 12 point and the
+axis labels 14 point" worked. Tests, fmt, clippy (Linux, wasm), sphinx -W
+pass. Untracked `examples/GlacierFedStreams/` is another session's.
+
+Previous: Idle. Last task: **movable frames** (2026-11-15), on `rust-port`, committed
 and pushed. Plan `docs/LAYOUT_PLAN.md`. Done: `crates/stamp-gui/src/
 layout.rs` (egui_tiles 0.18: `Frame` enum, default tree with v2's widths as
 shares around 1.0, `sync_visibility` (a hidden frame's room goes to the
