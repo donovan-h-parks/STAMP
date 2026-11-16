@@ -371,6 +371,9 @@ pub fn settled_summary(app: &StampApp) -> String {
     if let Some(error) = app.session.error(app.mode) {
         out.push_str(&format!("\nThe analysis reported a problem: {error}"));
     }
+    if let Some(warning) = app.correction_warning() {
+        out.push_str(&format!("\nCaution about the correction: {warning}"));
+    }
     if let Some(notice) = app.notice() {
         out.push_str(&format!("\nSTAMP says: {notice}"));
     }

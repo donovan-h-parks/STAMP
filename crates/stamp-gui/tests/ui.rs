@@ -1348,9 +1348,11 @@ fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
         Correction::BenjaminiHochberg,
         "q_value_filter_label",
     );
-    let storey = label(&mut harness, Correction::Storey, "storey_filter_label");
     // "p-value filter" with no correction and under Bonferroni; "q-value
-    // filter" under both false discovery rates.
+    // filter" under both false discovery rates. (Storey's correction is not
+    // compared by its pixels: with the 17 genera here its estimate of pi_0
+    // is too uncertain to use, and the caution written under the
+    // correction moves the filter down.)
     assert!(
         none == bonferroni,
         "the filter label changed under Bonferroni"
@@ -1359,10 +1361,7 @@ fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
         none != bh,
         "the filter label did not change under Benjamini-Hochberg"
     );
-    assert!(
-        bh == storey,
-        "the filter labels of the two FDR methods differ"
-    );
+    assert!(Correction::Storey.is_false_discovery_rate());
 }
 
 #[test]
@@ -1634,6 +1633,61 @@ fn both_built_in_examples_load() {
     harness.settle();
     assert_eq!(harness.app.session.profile_name, "Enterotypes.profile.spf");
     assert_eq!(harness.app.session.tree.as_ref().unwrap().num_samples(), 39);
+}
+
+#[test]
+fn an_uncertain_storey_estimate_is_not_used_and_says_so() {
+    use stamp_core::stats::correction::Correction;
+    // 41 phyla, Core against every other coal seam gas sample: Storey's
+    // estimate of pi_0 (0.12, from 2 p-values) would put 34 phyla below
+    // q = 0.05 where Benjamini-Hochberg finds none.
+    let mut harness = Harness::new();
+    harness
+        .app
+        .load_example_data(stamp_gui::app::Example::CoalSeamGas);
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.app.set_p_value_filter(None);
+    let session = &mut harness.app.session;
+    session.profile_level = "Phylum".to_string();
+    session.set_group_field("Environment");
+    session.groups.group1 = "Core".to_string();
+    session.groups.group2 = None;
+    session.groups.analysis.test = stamp_core::stats::two_group::GroupTest::Welch;
+    session.invalidate_all();
+    harness.settle();
+    harness
+        .app
+        .session
+        .set_correction(Mode::TwoGroups, Correction::Storey);
+    harness.settle();
+    let storey: Vec<f64> = harness
+        .app
+        .session
+        .group_rows()
+        .iter()
+        .map(|r| r.p_value_corrected)
+        .collect();
+    // Written under the correction in the Properties frame.
+    harness.screenshot("storey_caution");
+    let warning = harness.app.correction_warning().expect("a caution");
+    assert!(warning.contains("Benjamini-Hochberg"), "{warning}");
+    let info = harness.app.correction_info().join("\n");
+    assert!(info.contains("pi_0 used: 1\n"), "{info}");
+    harness
+        .app
+        .session
+        .set_correction(Mode::TwoGroups, Correction::BenjaminiHochberg);
+    harness.settle();
+    let bh: Vec<f64> = harness
+        .app
+        .session
+        .group_rows()
+        .iter()
+        .map(|r| r.p_value_corrected)
+        .collect();
+    assert_eq!(storey.len(), 41);
+    assert_eq!(storey, bh);
+    assert!(harness.app.correction_warning().is_none());
 }
 
 #[test]

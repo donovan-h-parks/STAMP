@@ -1713,6 +1713,20 @@ impl StampApp {
         lines
     }
 
+    /// The caution about the multiple test correction of the current
+    /// results, if there is one (Storey's estimate of pi_0 too uncertain to
+    /// use, for example). It is shown under the correction, not only in the
+    /// correction information window.
+    pub fn correction_warning(&self) -> Option<&'static str> {
+        let s = &self.session;
+        match self.mode {
+            Mode::TwoSamples => s.samples.output.as_ref()?.1.correction.warning,
+            Mode::TwoGroups => s.groups.output.as_ref()?.1.correction.warning,
+            Mode::MultipleGroups => s.multi.output.as_ref()?.1.correction.warning,
+            Mode::Correlation => s.correlation.output.as_ref()?.1.correction.warning,
+        }
+    }
+
     /// The summary of the profile shown in the status bar, as in STAMP v2:
     /// parent categories, features and the sequences being compared.
     pub fn status_summary(&self) -> String {
@@ -3766,6 +3780,12 @@ impl StampApp {
                         ui.end_row();
                     });
             }
+        }
+        if let Some(warning) = self.correction_warning() {
+            ui.add(
+                egui::Label::new(egui::RichText::new(warning).color(ui.visuals().warn_fg_color))
+                    .wrap(),
+            );
         }
         if rerun {
             self.session.invalidate(mode);

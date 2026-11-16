@@ -973,18 +973,14 @@ fn storey_q_values_are_consistent_with_python() {
         let p_values: Vec<f64> = rows.iter().map(|r| number(&r[c_p])).collect();
 
         let corrected = Correction::Storey.correct(&p_values, 0.05, &mut rng_from_seed(42));
-        let pi0 = corrected
-            .info
-            .iter()
-            .find(|(name, _)| *name == "Estimated pi_0")
-            .unwrap()
-            .1;
+        let info = |name: &str| corrected.info.iter().find(|(n, _)| *n == name).unwrap().1;
+        let (pi0, used) = (info("Estimated pi_0"), info("pi_0 used"));
         let python_pi0 = case.estimated_pi0.unwrap();
         if python_pi0 == 0.0 {
             // STAMP v2 estimated that no hypothesis was null and gave every
-            // feature q = 0; the port takes pi_0 = 1 instead (bug fix in
-            // CHANGES_FROM_PYTHON.md).
-            assert_eq!(pi0, 1.0, "{}", case.id);
+            // feature q = 0; the port does not use such an estimate and takes
+            // pi_0 = 1 instead (bug fix in CHANGES_FROM_PYTHON.md).
+            assert_eq!(used, 1.0, "{}", case.id);
             checked += 1;
             continue;
         }
@@ -998,12 +994,13 @@ fn storey_q_values_are_consistent_with_python() {
         );
         for (row, q) in rows.iter().zip(&corrected.values) {
             let python_q = number(&row[c_q]);
-            if python_pi0 > 0.0 && pi0 > 0.0 {
+            // An estimate too uncertain to use is replaced by one.
+            if python_pi0 > 0.0 {
                 check(
                     &case.id,
                     "q-value",
                     python_q / python_pi0,
-                    q / pi0,
+                    q / used,
                     1e-9,
                     1e-13,
                 );

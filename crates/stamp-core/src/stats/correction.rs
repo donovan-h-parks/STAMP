@@ -69,16 +69,16 @@ impl Correction {
     pub fn correct(self, p_values: &[f64], alpha: f64, rng: &mut StampRng) -> Corrected {
         let n = p_values.len() as f64;
         let mut warning = None;
-        let mut extra: Option<(&'static str, f64)> = None;
+        let mut extra: Vec<(&'static str, f64)> = Vec::new();
 
         let values = match self {
             Correction::None => p_values.to_vec(),
             Correction::Bonferroni => {
-                extra = Some(("Corrected error rate", alpha / n));
+                extra = vec![("Corrected error rate", alpha / n)];
                 p_values.iter().map(|p| (p * n).min(1.0)).collect()
             }
             Correction::Sidak => {
-                extra = Some(("Corrected error rate", 1.0 - (1.0 - alpha).powf(1.0 / n)));
+                extra = vec![("Corrected error rate", 1.0 - (1.0 - alpha).powf(1.0 / n))];
                 // 1 - (1 - p)^n, without losing the digits of a small p.
                 p_values
                     .iter()
@@ -120,14 +120,21 @@ impl Correction {
                 values
             }
             Correction::Storey => {
-                let (values, pi0, estimate_was_zero) = storey(p_values, rng);
-                extra = Some(("Estimated pi_0", pi0));
-                if estimate_was_zero {
+                let (values, estimate) = storey(p_values, rng);
+                extra = vec![
+                    ("Estimated pi_0", estimate.pi0),
+                    ("pi_0 used", estimate.used()),
+                    ("Lambda", estimate.lambda),
+                    ("P-values above lambda", estimate.above as f64),
+                    ("Standard error of pi_0", estimate.standard_error),
+                ];
+                if !estimate.reliable {
                     warning = Some(
-                        "No p-value is above the lambda chosen to estimate pi_0, so pi_0 = 1 \
-                         was used: the q-values are those of Benjamini-Hochberg.",
+                        "Storey's estimate of pi_0 is too uncertain to use: too few p-values \
+                         lie above lambda, or none reaches 0.95. pi_0 = 1 was used instead, so \
+                         the q-values are those of Benjamini-Hochberg.",
                     );
-                } else if pi0 < 0.01 {
+                } else if estimate.pi0 < 0.01 {
                     warning = Some(
                         "P-values do not appear to be uniformly distributed. Consider using \
                          the Benjamini-Hochberg FDR approach.",
@@ -155,20 +162,71 @@ fn ascending_order(p_values: &[f64]) -> Vec<usize> {
     order
 }
 
+/// Storey's estimate of the proportion of true null hypotheses, pi_0, and
+/// how far it can be trusted.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Pi0Estimate {
+    /// The estimate, at most one.
+    pi0: f64,
+    /// The lambda it was taken at: pi_0 is the share of p-values above
+    /// lambda, divided by 1 - lambda.
+    lambda: f64,
+    /// How many p-values lie above lambda.
+    above: usize,
+    /// Standard error of the estimate (binomial, for the number above).
+    standard_error: f64,
+    /// Whether the estimate is sound enough to use (see [`storey`]).
+    reliable: bool,
+}
+
+impl Pi0Estimate {
+    /// The pi_0 the q-values are computed with: one when the estimate
+    /// cannot be trusted, which gives the Benjamini-Hochberg q-values.
+    fn used(&self) -> f64 {
+        if self.reliable {
+            self.pi0
+        } else {
+            1.0
+        }
+    }
+}
+
+/// The largest standard error of pi_0, relative to the estimate, at which
+/// it is used. With few p-values above lambda the relative error is about
+/// one over the square root of their number, so this asks for roughly 16 or
+/// more of them.
+const MAX_RELATIVE_ERROR_OF_PI0: f64 = 0.25;
+
 /// Storey's q-values (Storey and Tibshirani, 2003), with the proportion of
 /// true null hypotheses (pi_0) estimated by the bootstrap procedure of
-/// Storey, Taylor and Siegmund (2004). Returns the q-values, pi_0, and
-/// whether the estimate of pi_0 was zero (and one was used instead).
-fn storey(p_values: &[f64], rng: &mut StampRng) -> (Vec<f64>, f64, bool) {
+/// Storey, Taylor and Siegmund (2004).
+///
+/// An estimate of pi_0 below one makes every q-value smaller than
+/// Benjamini-Hochberg's, so it is used only when it can be trusted;
+/// otherwise pi_0 = 1. It cannot be trusted when no p-value reaches 0.95
+/// (R's qvalue refuses to estimate pi_0 then), when no p-value lies above
+/// the chosen lambda (an estimate of 0, which made every q-value 0), or
+/// when its standard error is more than [`MAX_RELATIVE_ERROR_OF_PI0`] of
+/// it: with few features the estimate rests on a handful of p-values (2 of
+/// 41 in one data set, which put 34 of the 41 features below q = 0.05
+/// where Benjamini-Hochberg found none).
+fn storey(p_values: &[f64], rng: &mut StampRng) -> (Vec<f64>, Pi0Estimate) {
     let count = p_values.len();
     if count == 0 {
-        return (Vec::new(), 1.0, false);
+        let none = Pi0Estimate {
+            pi0: 1.0,
+            lambda: 0.0,
+            above: 0,
+            standard_error: 0.0,
+            reliable: true,
+        };
+        return (Vec::new(), none);
     }
     let n = count as f64;
-    let lambdas: Vec<f64> = (0..20).map(|i| i as f64 * 0.05).collect();
-    let pi0_at = |values: &[f64], lambda: f64| {
-        values.iter().filter(|p| **p > lambda).count() as f64 / (n * (1.0 - lambda))
-    };
+    // 0, 0.05, ..., 0.95, as exactly as they can be written.
+    let lambdas: Vec<f64> = (0..20).map(|i| i as f64 / 20.0).collect();
+    let above = |values: &[f64], lambda: f64| values.iter().filter(|p| **p > lambda).count();
+    let pi0_at = |values: &[f64], lambda: f64| above(values, lambda) as f64 / (n * (1.0 - lambda));
 
     let min_pi0 = lambdas
         .iter()
@@ -196,15 +254,25 @@ fn storey(p_values: &[f64], rng: &mut StampRng) -> (Vec<f64>, f64, bool) {
             best_lambda = lambda;
         }
     }
-    // A proportion cannot exceed one; R's qvalue caps it the same way.
-    let pi0 = pi0_at(p_values, best_lambda).min(1.0);
-    // No p-value above the chosen lambda estimates that no null hypothesis
-    // is true, which would make every q-value zero. R's qvalue refuses such
-    // an estimate; here every hypothesis is taken to be null instead (pi_0
-    // = 1, the Benjamini-Hochberg q-values), which errs on the safe side.
-    let estimate_was_zero = pi0 <= 0.0;
-    let pi0 = if estimate_was_zero { 1.0 } else { pi0 };
-    (q_values(p_values, pi0), pi0, estimate_was_zero)
+    let lambda = best_lambda;
+    let raw = pi0_at(p_values, lambda);
+    let w = above(p_values, lambda);
+    let share = w as f64 / n;
+    let standard_error = (share * (1.0 - share) / n).sqrt() / (1.0 - lambda);
+    let highest = p_values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    // An estimate of one or more gives the Benjamini-Hochberg q-values
+    // anyway, so only one below needs to be sound.
+    let reliable = raw >= 1.0
+        || (w > 0 && highest >= 0.95 && standard_error <= MAX_RELATIVE_ERROR_OF_PI0 * raw);
+    let estimate = Pi0Estimate {
+        // A proportion cannot exceed one; R's qvalue caps it the same way.
+        pi0: raw.min(1.0),
+        lambda,
+        above: w,
+        standard_error,
+        reliable,
+    };
+    (q_values(p_values, estimate.used()), estimate)
 }
 
 /// Storey's q-values for a given proportion of true null hypotheses:
@@ -382,6 +450,7 @@ mod tests {
         assert_eq!(r.info[1].0, "Estimated pi_0");
         assert!((0.8..=1.05).contains(&pi0), "pi0 = {pi0}");
         assert!(r.warning.is_none());
+        assert_eq!(info(&r, "pi_0 used"), pi0);
 
         // q-values are monotonic in the p-values and scale with pi_0.
         for pair in r.values.windows(2) {
@@ -407,9 +476,88 @@ mod tests {
         let spread: Vec<f64> = (1..=200).map(|i| i as f64 * 0.9 / 200.0).collect();
         for p_values in [vec![0.01, 0.2, 0.3, 0.4, 0.5], spread] {
             let r = Correction::Storey.correct(&p_values, 0.05, &mut rng_from_seed(3));
-            assert_eq!(r.info[1].1, 1.0);
+            assert_eq!(info(&r, "pi_0 used"), 1.0);
             assert_eq!(r.values, correct(Correction::BenjaminiHochberg, &p_values));
             assert!(r.warning.unwrap().contains("pi_0 = 1"));
         }
     }
+
+    fn info(r: &Corrected, name: &str) -> f64 {
+        r.info.iter().find(|(n, _)| *n == name).unwrap().1
+    }
+
+    #[test]
+    fn an_uncertain_estimate_of_pi_0_is_not_used() {
+        // Welch's test of 41 phyla, Core against all other coal seam gas
+        // samples: pi_0 was estimated at 0.12 from the 2 p-values above
+        // lambda = 0.6, which put 34 phyla below q = 0.05 where
+        // Benjamini-Hochberg finds none (R's qvalue bootstrap gives the
+        // same estimate; its smoother gives 0.28).
+        let coal = COAL_P;
+        let r = Correction::Storey.correct(&coal, 0.05, &mut rng_from_seed(1));
+        assert!(info(&r, "Estimated pi_0") < 0.3);
+        assert_eq!(info(&r, "pi_0 used"), 1.0);
+        assert!(info(&r, "Standard error of pi_0") > 0.25 * info(&r, "Estimated pi_0"));
+        assert_eq!(r.values, correct(Correction::BenjaminiHochberg, &coal));
+        assert_eq!(info(&r, "Number of significant features"), 0.0);
+        assert!(r.warning.unwrap().contains("too uncertain"));
+
+        // Many features, a fifth of them truly different: a sound estimate,
+        // used, and smaller q-values than Benjamini-Hochberg's.
+        let nulls = (0..1600).map(|i| (i as f64 + 0.5) / 1600.0);
+        let different = (0..400).map(|i| 1e-4 * (i as f64 + 1.0) / 400.0);
+        let many: Vec<f64> = nulls.chain(different).collect();
+        let r = Correction::Storey.correct(&many, 0.05, &mut rng_from_seed(1));
+        let pi0 = info(&r, "pi_0 used");
+        assert!((0.7..=0.9).contains(&pi0), "{pi0}");
+        assert_eq!(pi0, info(&r, "Estimated pi_0"));
+        assert!(r.warning.is_none());
+        let bh = correct(Correction::BenjaminiHochberg, &many);
+        assert!(r.values.iter().zip(&bh).all(|(q, b)| q <= b));
+    }
+
+    /// The coal seam gas p-values of the test above.
+    const COAL_P: [f64; 41] = [
+        0.00444526066756679,
+        0.010935203872333616,
+        0.014735557046800055,
+        0.027634552999519935,
+        0.029351990796787835,
+        0.04151476112595319,
+        0.0447927975651355,
+        0.06112020363238413,
+        0.06584704480206283,
+        0.07095636672610536,
+        0.07329164817284192,
+        0.0774062135375917,
+        0.08025387864838035,
+        0.09490444987070784,
+        0.10993282588118247,
+        0.11316239972130138,
+        0.12603324423546658,
+        0.12937481802189787,
+        0.1525215355561158,
+        0.15309701458228742,
+        0.16906822869642446,
+        0.1727585400219187,
+        0.1759126187497151,
+        0.19112630907174522,
+        0.19793982561998635,
+        0.19882875403298395,
+        0.2322928770619993,
+        0.2478083761519806,
+        0.2771764980837538,
+        0.28260135844250656,
+        0.3241743423860389,
+        0.3241743423860389,
+        0.3241743423860389,
+        0.3241743423860389,
+        0.35061666282020787,
+        0.42034517161675555,
+        0.49619719184531397,
+        0.5782501344694972,
+        0.5851019302733544,
+        0.8046407476444865,
+        0.9942598100562496,
+    ];
 }

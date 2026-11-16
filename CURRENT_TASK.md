@@ -6,7 +6,16 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle. Last task (2026-11-16): **code review fixes**, on `rust-port`
+Idle. Last task (2026-11-16): **Storey FDR reliability**: pi_0 is used only
+when its standard error is at most a quarter of it, some p-value reaches
+0.95 and some lies above lambda; otherwise pi_0 = 1 (BH q-values) with a
+warning (Properties frame under the correction, CLI, assistant). Correction
+info adds pi_0 used, lambda, p-values above lambda, standard error.
+Prompted by the coal seam gas data (41 phyla, pi_0 = 0.12 from 2
+p-values). Committed and pushed ("Fall back to Benjamini-Hochberg when
+Storey's pi_0 is too uncertain").
+
+Previous task (2026-11-16): **code review fixes**, on `rust-port`
 (commits "Fix crashes and wrong results found in the code review" and "Fix
 plot labels, speed up tests and the window, shrink the web build"). Crashes
 (10 shapes, Scheffé with single-sample groups), stale GUI results (per-mode

@@ -193,6 +193,12 @@ pub fn session(app: &StampApp) -> String {
     if !summary.is_empty() {
         let _ = writeln!(out, "- {summary}");
     }
+    // What the correction found, and any caution about it (such as
+    // Storey's estimate of pi_0 being too uncertain to use).
+    let correction = app.correction_info();
+    if correction.len() > 1 {
+        let _ = writeln!(out, "- Correction info: {}", correction[1..].join("; "));
+    }
     if let Some(error) = s.error(app.mode) {
         let _ = writeln!(out, "- Error: {error}");
     }

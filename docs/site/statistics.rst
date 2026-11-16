@@ -156,9 +156,16 @@ p-values <p-value-labels>`).
 * **Storey FDR**: estimates the proportion of features that truly do not
   differ (*pi_0*, shown under *Correction info*) and uses it to gain power.
   When many features really differ, it finds more of them than
-  Benjamini-Hochberg. If no p-value is high enough to estimate *pi_0*
-  (none above the cut-off the method chooses), STAMP takes *pi_0* = 1,
-  which gives the Benjamini-Hochberg q-values, and says so.
+  Benjamini-Hochberg. The estimate is the share of p-values above a
+  cut-off (*lambda*), so it needs many features with a flat run of high
+  p-values; with a few dozen features it rests on a handful of p-values
+  and can be far too low, which makes every q-value too small. STAMP uses
+  the estimate only when its standard error is at most a quarter of it
+  (roughly, when 16 or more p-values lie above *lambda*) and some p-value
+  reaches 0.95, as R's *qvalue* requires. Otherwise it takes *pi_0* = 1,
+  which gives the Benjamini-Hochberg q-values, and says so under the
+  correction. *Correction info* shows the estimate, *lambda*, how many
+  p-values lie above it, the standard error and the *pi_0* used.
 
 .. tip::
 
