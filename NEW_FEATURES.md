@@ -49,6 +49,14 @@ Add an entry here whenever a feature is added that v2 did not have.
   its assistant folder, in OpenCode 2's form or OpenCode 1's after asking
   `opencode --version`, and installs OpenCode 2 if asked. Plan:
   `docs/ASSISTANT_PLAN.md`.
+- **Paired samples joined in the box plot.** After a paired test (paired
+  t-test or Wilcoxon signed-rank, two groups) the box plot can draw a line
+  between the two boxes for every pair of samples, with a point at each
+  end, coloured by the group in which the value is higher (grey for a tie);
+  the tooltip between the boxes counts the pairs each way. It shows what
+  the paired test tests, which two boxes cannot. Several features get a
+  panel each. *Configure plot > Samples > Join paired samples with lines*;
+  command line: `--box-pairs`.
 - **In the browser.** STAMP runs as a web page (WebAssembly), entirely on the
   user's computer: files are read with the browser's file picker and saved as
   downloads, and nothing is uploaded [25]. Long tests are carried out in

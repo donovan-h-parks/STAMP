@@ -936,6 +936,12 @@ pub struct BoxArgs {
     /// Box plot: horizontal boxes (groups or features down the side)
     #[arg(long)]
     pub box_horizontal: bool,
+    /// Box plot of a paired test (two-groups with --pair-field): join the
+    /// two samples of each pair with a line between the boxes, coloured by
+    /// the group in which the value is higher; several features get a panel
+    /// each
+    #[arg(long)]
+    pub box_pairs: bool,
     /// Box plot: order of the groups [default: field with --box-order-field,
     /// otherwise given]
     #[arg(long, value_enum)]

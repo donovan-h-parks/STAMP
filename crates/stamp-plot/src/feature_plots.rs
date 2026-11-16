@@ -51,6 +51,10 @@ pub struct FeatureData {
     /// Label of the value axis, where it is not one of the fields of a
     /// profile.
     pub value_label: Option<String>,
+    /// The two groups hold paired samples: sample `i` of the first group
+    /// belongs with sample `i` of the second (as in the profile of a paired
+    /// test). Set by the caller.
+    pub paired: bool,
 }
 
 impl FeatureData {
@@ -100,6 +104,7 @@ impl FeatureData {
             p_value: None,
             p_value_kind: None,
             value_label: None,
+            paired: false,
         })
     }
 
@@ -134,6 +139,7 @@ impl FeatureData {
             p_value: None,
             p_value_kind: None,
             value_label: None,
+            paired: false,
         })
     }
 
@@ -395,6 +401,11 @@ pub struct BoxOptions {
     /// With one panel per feature, the same value axis in every panel.
     pub shared_axis: bool,
     pub group_order: GroupOrder,
+    /// For two groups of paired samples ([`FeatureData::paired`]): join the
+    /// two samples of each pair with a line between the boxes, coloured by
+    /// the group in which the value is higher. Several features are then
+    /// drawn one panel each.
+    pub show_pairs: bool,
 }
 
 impl Default for BoxOptions {
@@ -414,6 +425,7 @@ impl Default for BoxOptions {
             layout: BoxLayout::Grouped,
             shared_axis: true,
             group_order: GroupOrder::AsGiven,
+            show_pairs: false,
         }
     }
 }
@@ -521,6 +533,7 @@ mod tests {
             p_value: Some("0.012".to_string()),
             p_value_kind: None,
             value_label: None,
+            paired: false,
         }
     }
 

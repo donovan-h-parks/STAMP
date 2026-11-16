@@ -256,6 +256,16 @@ highest median (of the first feature) first, or by a coarser metadata field
 (each group taking the value most common among its samples, host order for
 host groups, say), with dashed lines between its categories.
 
+After a **paired test** (the paired t-test or the Wilcoxon signed-rank test
+of two groups), *Join paired samples with lines* draws a line between the
+two boxes for every pair, from the pair's sample in the first group to its
+sample in the second, with a point at each end. A line has the colour of
+the group in which the value is higher (grey if the two are equal), so the
+plot shows how many pairs go each way and by how much, which the two boxes
+alone cannot: they show the two distributions, not which sample belongs
+with which. Pointing between the boxes gives the number of pairs each way.
+With this option several features are drawn one panel each.
+
 .. figure:: images/mg_box_features.png
    :width: 90%
 

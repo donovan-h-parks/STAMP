@@ -988,8 +988,13 @@ pub fn show(
             });
             dialog.group("Samples", |rows| {
                 rows.check("Show every sample as a point", &mut o.show_points);
+                rows.check_if(
+                    mode == Mode::TwoGroups,
+                    "Join paired samples with lines (paired tests)",
+                    &mut o.show_pairs,
+                );
                 rows.number_if(
-                    o.show_points,
+                    o.show_points || o.show_pairs,
                     "Point size:",
                     &mut o.point_size,
                     0.1,

@@ -414,6 +414,11 @@ every sample as a point, the groups ordered by their median::
 ``--box-points``, ``--box-counts``, ``--box-horizontal``
    Every sample as a point; the number of samples after each group's name;
    horizontal boxes.
+``--box-pairs``
+   For ``two-groups`` with a paired test (``--test paired-t`` or
+   ``wilcoxon`` and ``--pair-field``): a line between the boxes for every
+   pair of samples, coloured by the group in which the value is higher.
+   Several features get a panel each.
 ``--box-group-order``, ``--box-order-field FIELD``
    The order of the groups: ``given`` (default), ``alphabetical``,
    ``median`` (highest median of the first feature first) or ``field``, by

@@ -6,6 +6,19 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-17, the glacier-fed stream session):
+**paired samples joined in the box plot**. `BoxOptions::show_pairs` and
+`FeatureData::paired` (`stamp-plot/src/feature_plots.rs`), drawn by
+`draw_pairs` in `multi_box.rs` (panels layout); CLI `--box-pairs`
+(two-groups with a paired test, an error otherwise); GUI checkbox "Join
+paired samples with lines (paired tests)" in the box plot's Configure plot;
+tests in `multi_box.rs`, `stamp-cli/tests/cli.rs` and
+`stamp-gui/tests/ui.rs` (screenshot `box_plot_pairs`); NEW_FEATURES.md,
+plots.rst, command_line.rst. fmt, clippy (both targets) and the whole test
+suite pass. No figure of it in the documentation yet. Other uncommitted
+changes in the checkout (assistant, app.rs, layout.rs, main_window.rst)
+belong to another session.
+
 Idle. Last task (2026-11-16): **Claude Desktop removed, Assistant menu
 icons**. Deleted `assistant/bridge.rs`, `assistant/bundle.rs`,
 `src/bridge_main.rs` and the `stamp-mcp` binary; the server no longer

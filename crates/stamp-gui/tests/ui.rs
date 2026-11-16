@@ -2292,6 +2292,32 @@ fn paired_tests_and_the_log_ratio_transform() {
     assert!(results.rows.iter().any(|r| r.p_value < 1.0));
     harness.screenshot("paired_test");
 
+    // The box plot can join the two samples of each pair with a line.
+    harness.app.set_plot_kind(PlotKind::Box);
+    harness.settle();
+    let plain = harness.app.figure().clone();
+    let mut settings = harness.app.plot_settings().clone();
+    settings.box_plot.show_pairs = true;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    let joined = harness.app.figure().clone();
+    assert_eq!(joined.regions.len(), plain.regions.len() + 1);
+    assert!(joined
+        .regions
+        .iter()
+        .any(|r| r.tooltip.contains("15 pairs")));
+    let points = |figure: &stamp_plot::Figure| {
+        figure
+            .shapes
+            .iter()
+            .filter(|s| matches!(s, stamp_plot::Shape::Circle { stroke: None, .. }))
+            .count()
+    };
+    assert_eq!(points(&joined), points(&plain) + 30);
+    harness.screenshot("box_plot_pairs");
+    harness.app.set_plot_kind(PlotKind::ExtendedErrorBar);
+    harness.settle();
+
     // The transform changes p-values and nothing else.
     harness.app.session.groups.analysis.test = GroupTest::Welch;
     harness.app.session.groups.analysis.transform = Transform::CentredLogRatio;

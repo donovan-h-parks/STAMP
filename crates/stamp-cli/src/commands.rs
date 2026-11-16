@@ -630,6 +630,8 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                 .find(|r| r.feature == name)
                 .map(|r| stamp_core::stats::results::format_p_value(r.p_value_corrected, -15));
             data.p_value_kind = Some(PValueKind::of(results.correction.method));
+            // A paired test's profile holds the samples pair by pair.
+            data.paired = test.is_paired();
             Ok(data)
         };
         let group_samples = [
@@ -1468,6 +1470,13 @@ fn box_figure(
     args: &BoxArgs,
 ) -> CliResult<stamp_plot::Figure> {
     use stamp_plot::feature_plots::{BoxLayout, BoxOptions, GroupOrder};
+    if args.box_pairs && !data.iter().all(|d| d.paired) {
+        return Err(
+            "--box-pairs joins the pairs of a paired test: use two-groups with --test \
+             paired-t or wilcoxon and --pair-field"
+                .to_string(),
+        );
+    }
     let group_order = match (args.box_group_order, &args.box_order_field) {
         (Some(GroupOrderArg::Field), None) => {
             return Err(
@@ -1527,6 +1536,7 @@ fn box_figure(
         },
         shared_axis: !args.box_independent_axes,
         group_order,
+        show_pairs: args.box_pairs,
         ..Default::default()
     };
     Ok(stamp_plot::multi_box::plot(

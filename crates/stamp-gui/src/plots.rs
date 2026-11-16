@@ -1766,6 +1766,8 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     .find(|r| r.feature == name)
                     .map(|r| format_p_value(r.p_value_corrected, settings.min_p_exponent));
                 data.p_value_kind = Some(PValueKind::of(results.correction.method));
+                // A paired test's profile holds the samples pair by pair.
+                data.paired = results.analysis.test.is_paired();
                 Some(data)
             };
             let feature_data = || data_of(feature?);

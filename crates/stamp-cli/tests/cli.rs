@@ -1348,8 +1348,33 @@ fn paired_tests_and_the_transform() {
         p_of(&multi(&[]), "y")
     );
 
+    // The box plot of a paired test can join each pair with a line: three
+    // pairs, so six more points than without.
+    let boxes = |name: &str, extra: &[&str]| {
+        let mut args = vec![
+            "--test",
+            "wilcoxon",
+            "--pair-field",
+            "Subject",
+            "--plot-type",
+            "box",
+            "--plot-feature",
+            "x",
+        ];
+        args.extend_from_slice(extra);
+        svg_plot("two-groups", &base, &args, &directory, name)
+    };
+    let joined = boxes("pairs", &["--box-pairs"]);
+    let plain = boxes("no-pairs", &[]);
+    assert_eq!(
+        joined.matches("<circle").count(),
+        plain.matches("<circle").count() + 6
+    );
+    assert!(joined.contains("stroke-opacity"));
+
     // What cannot be done is said plainly.
     let fails = |extra: &[&str]| failure(&with("two-groups", &base, extra));
+    assert!(fails(&["--plot", "x.svg", "--plot-type", "box", "--box-pairs"]).contains("paired"));
     assert!(fails(&["--test", "paired-t"]).contains("--pair-field"));
     assert!(fails(&["--pair-field", "Subject"]).contains("paired tests"));
     assert!(fails(&["--test", "white", "--transform", "clr"]).contains("White"));

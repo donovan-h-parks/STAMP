@@ -264,7 +264,13 @@ pub fn plot(
             }
         })
         .collect();
-    if features.len() == 1 || options.layout == BoxLayout::Panels {
+    // Pairs are joined between the two boxes of a panel.
+    let pairs = options.show_pairs
+        && groups == 2
+        && features
+            .iter()
+            .all(|f| f.paired && f.groups[0].values.len() == f.groups[1].values.len());
+    if features.len() == 1 || options.layout == BoxLayout::Panels || pairs {
         // Lines between the categories of groups ordered by category.
         let breaks: Vec<usize> = match categories {
             Some(c) if options.group_order == GroupOrder::Category && c.len() == groups => (1
@@ -273,7 +279,7 @@ pub fn plot(
                 .collect(),
             _ => Vec::new(),
         };
-        panels(features, &order, &labels, &breaks, options)
+        panels(features, &order, &labels, &breaks, pairs, options)
     } else {
         grouped(features, &order, &labels, options)
     }
@@ -341,6 +347,7 @@ fn panels(
     order: &[usize],
     labels: &[String],
     breaks: &[usize],
+    pairs: bool,
     options: &BoxOptions,
 ) -> Figure {
     let n = features.len();
@@ -489,6 +496,22 @@ fn panels(
             figure.line(&points, between);
         }
         let mut ticks = Vec::new();
+        if pairs {
+            draw_pairs(
+                &mut figure,
+                &BoxPlace {
+                    centre: categories.map(1.0),
+                    half,
+                    frame: *frame,
+                    axis,
+                    scale: &values,
+                },
+                categories.map(2.0),
+                feature,
+                order,
+                options,
+            );
+        }
         for (k, &g) in order.iter().enumerate() {
             let centre = categories.map(k as f64 + 1.0);
             ticks.push((centre, labels[k].clone()));
@@ -824,6 +847,87 @@ fn jitter(seed: u64, k: usize) -> f64 {
     2.0 * x - 1.0
 }
 
+/// The lines of a paired box plot: one per pair of samples, from beside the
+/// first box (`place`) to beside the second (centred on `second_centre`),
+/// coloured by the group whose value is higher, with a point at each end.
+/// The space between the boxes gets a tooltip counting the pairs each way.
+fn draw_pairs(
+    figure: &mut Figure,
+    place: &BoxPlace,
+    second_centre: f64,
+    feature: &FeatureData,
+    order: &[usize],
+    options: &BoxOptions,
+) {
+    let (first, second) = (&feature.groups[order[0]], &feature.groups[order[1]]);
+    let horizontal = options.horizontal;
+    let inset = place.half + (place.half * 0.3).clamp(2.0, 8.0);
+    let (from, to) = (place.centre + inset, second_centre - inset);
+    let faded = |color: Color| Color { a: 215, ..color };
+    let radius = options.point_size.max(0.5) / 2.0;
+    let dot = Color {
+        a: 190,
+        ..Color::rgb(40, 40, 40)
+    };
+    let (mut higher_first, mut higher_second, mut equal) = (0usize, 0usize, 0usize);
+    let mut ends = Vec::new();
+    for (&a, &b) in first.values.iter().zip(&second.values) {
+        if !a.is_finite() || !b.is_finite() {
+            continue;
+        }
+        let color = if a > b {
+            higher_first += 1;
+            first.color
+        } else if b > a {
+            higher_second += 1;
+            second.color
+        } else {
+            equal += 1;
+            Color::grey(0.5)
+        };
+        let (start, end) = (
+            place.point(from, a, horizontal),
+            place.point(to, b, horizontal),
+        );
+        figure.line(&[start, end], Stroke::solid(faded(color), 0.9));
+        ends.extend([start, end]);
+    }
+    // The points over the lines.
+    for (x, y) in ends {
+        figure.circle(x, y, radius, Some(dot), None);
+    }
+    let mut tooltip = format!(
+        "{}\n{} pairs\nHigher in {}: {higher_first}\nHigher in {}: {higher_second}",
+        feature.feature,
+        higher_first + higher_second + equal,
+        first.name,
+        second.name,
+    );
+    if equal > 0 {
+        tooltip.push_str(&format!("\nEqual: {equal}"));
+    }
+    let frame = place.frame;
+    if horizontal {
+        figure.region(
+            frame.left,
+            from,
+            frame.width(),
+            to - from,
+            &feature.feature,
+            tooltip,
+        );
+    } else {
+        figure.region(
+            from,
+            frame.top,
+            to - from,
+            frame.height(),
+            &feature.feature,
+            tooltip,
+        );
+    }
+}
+
 /// One box, with whiskers, median, outliers or points, mean and tooltip.
 fn draw_box(
     figure: &mut Figure,
@@ -978,6 +1082,7 @@ mod tests {
             p_value: Some("0.01".to_string()),
             p_value_kind: None,
             value_label: None,
+            paired: false,
         }
     }
 
@@ -1232,6 +1337,100 @@ mod tests {
                 ..
             }
         )));
+    }
+
+    #[test]
+    fn paired_samples_are_joined_between_the_boxes() {
+        let paired = |name: &str| FeatureData {
+            feature: name.to_string(),
+            field: Field::Proportion,
+            groups: vec![
+                Group {
+                    name: "Downstream".to_string(),
+                    color: group_color(0),
+                    samples: (0..4).map(|i| format!("D{i}")).collect(),
+                    values: vec![2.0, 3.0, 1.0, 5.0],
+                },
+                Group {
+                    name: "Upstream".to_string(),
+                    color: group_color(1),
+                    samples: (0..4).map(|i| format!("U{i}")).collect(),
+                    values: vec![1.0, 1.5, 4.0, 5.0],
+                },
+            ],
+            p_value: None,
+            p_value_kind: None,
+            value_label: None,
+            paired: true,
+        };
+        let options = BoxOptions {
+            show_pairs: true,
+            ..BoxOptions::default()
+        };
+        let lines_of = |figure: &Figure, color: Color| {
+            figure
+                .shapes
+                .iter()
+                .filter(
+                    |s| matches!(s, Shape::Line { stroke, .. } if stroke.color == Color { a: 215, ..color }),
+                )
+                .count()
+        };
+        let figure = plot(&[paired("Nitrospiraceae")], None, &options);
+        // A line per pair in the colour of the higher group; grey for a tie.
+        assert_eq!(lines_of(&figure, group_color(0)), 2);
+        assert_eq!(lines_of(&figure, group_color(1)), 1);
+        assert_eq!(lines_of(&figure, Color::grey(0.5)), 1);
+        assert_eq!(point_count(&figure), 8);
+        let between = figure
+            .regions
+            .iter()
+            .find(|r| r.item == "Nitrospiraceae")
+            .expect("a region between the boxes");
+        assert_eq!(
+            between.tooltip,
+            "Nitrospiraceae\n4 pairs\nHigher in Downstream: 2\nHigher in Upstream: 1\nEqual: 1"
+        );
+        // The lines lie between the boxes, which keep their own regions.
+        let boxes: Vec<&crate::figure::Region> = figure
+            .regions
+            .iter()
+            .filter(|r| r.item != "Nitrospiraceae")
+            .collect();
+        assert_eq!(boxes.len(), 2);
+        assert!(boxes[0].x + boxes[0].width < between.x);
+        assert!(between.x + between.width < boxes[1].x);
+
+        // Without the option, or for samples that are not paired, the plot
+        // is the ordinary box plot.
+        let plain = plot(&[paired("Nitrospiraceae")], None, &BoxOptions::default());
+        assert_eq!(point_count(&plain), 0);
+        assert_eq!(plain.regions.len(), 2);
+        let mut unpaired = paired("Nitrospiraceae");
+        unpaired.paired = false;
+        assert_eq!(plot(&[unpaired], None, &options), plain);
+
+        // Several features get a panel each, whatever the layout, and the
+        // lines follow the boxes when they lie down.
+        let two = [paired("Nitrospiraceae"), paired("Hyphomicrobiaceae")];
+        let figure = plot(&two, None, &options);
+        assert_eq!(point_count(&figure), 16);
+        assert_eq!(figure.regions.len(), 6);
+        let lying = plot(
+            &two[..1],
+            None,
+            &BoxOptions {
+                horizontal: true,
+                ..options.clone()
+            },
+        );
+        let between = lying
+            .regions
+            .iter()
+            .find(|r| r.item == "Nitrospiraceae")
+            .unwrap();
+        assert!(between.height < between.width);
+        assert_eq!(point_count(&lying), 8);
     }
 
     #[test]
