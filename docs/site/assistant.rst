@@ -132,9 +132,10 @@ have a **ChatGPT Plus or Pro** plan, **GitHub Copilot**, OpenCode's own plans,
 or an API key from a provider such as OpenAI or Google, rather than a Claude
 plan.
 
-OpenCode starts with one of its own free models, which needs no sign-in (see
-OpenCode's site for what its free models' providers do with what is sent to
-them). To use your own account instead, type ``/connect`` and choose how to
+OpenCode starts with one of its own free models, which needs no sign-in. The
+free models run on OpenCode's servers, not on your computer, so what OpenCode
+reads from STAMP is sent there (see OpenCode's site for what is done with
+it). To use your own account instead, type ``/connect`` and choose how to
 sign in: for a ChatGPT plan, **OpenAI** and then **Sign in with ChatGPT**; for
 GitHub Copilot, **GitHub Copilot**, which shows a code to enter on GitHub's
 site. Then type ``/models`` to choose a model, and ask your questions.
@@ -160,6 +161,22 @@ OpenCode runs in the same assistant folder as Claude Code, where STAMP writes:
 
 OpenCode reads ``opencode.json`` as the settings of that folder, on top of your
 own OpenCode settings.
+
+Using a model on your own computer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Every model above runs on someone else's servers. OpenCode can also use a
+model run on your own computer by a program such as `Ollama
+<https://ollama.com>`_ or `LM Studio <https://lmstudio.ai>`_, so that nothing
+leaves your computer. STAMP does not set this up: add the program as a
+provider in your own OpenCode settings (see OpenCode's `providers
+<https://opencode.ai/docs/providers/>`_ page), then type ``/models`` in the
+panel and choose its model. Because STAMP's settings are added on top of
+yours, the model is offered in the panel too.
+
+The model must be good at using tools. Small models that run on an ordinary
+computer often use STAMP's tools wrongly or not at all; models that use them
+well need a powerful graphics card or a lot of memory.
 
 What the assistant can do
 -------------------------
@@ -232,9 +249,11 @@ Privacy
 What the assistant reads (descriptions of your data, results and plots, and
 images of plots when it asks for them) is sent to answer your questions:
 with Claude, to Anthropic, under your Claude account and its terms; with
-OpenCode, to the provider you signed in to (OpenAI, GitHub and so on), under
-your account with it. Do not use it with data you are not allowed to share
-with a third party.
+OpenCode, to OpenCode's own servers while you use its free models, or to the
+provider you signed in to (OpenAI, GitHub and so on), under your account with
+it. Do not use it with data you are not allowed to share with a third party.
+Only a model on your own computer, set up in OpenCode as described above,
+keeps everything on your computer.
 
 Sharing is off until you choose Share with Claude Desktop, Open Claude Code
 or Open OpenCode, and stops when you choose **Assistant > Stop sharing** or
