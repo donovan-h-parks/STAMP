@@ -185,7 +185,12 @@ and Gemini users.
   plan.
 - The browser version gets Phase A only.
 
-## Added after the plan: Claude Desktop
+## Added after the plan: Claude Desktop (since removed)
+
+Removed on 2026-11-16 at the user's request: the `stamp-mcp` bridge, the
+`.mcpb` extension, `connection.json` and the Share with / Install in Claude
+Desktop menu items are gone, and Claude Code and OpenCode in the panel are
+the routes left. What was built is kept below for the record.
 
 Claude Code in a terminal proved awkward, so Claude Desktop is now the main
 route. Its custom connectors are reached from Anthropic's servers and cannot

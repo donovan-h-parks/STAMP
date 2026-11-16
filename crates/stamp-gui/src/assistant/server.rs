@@ -41,9 +41,6 @@ pub struct Server {
     stop: Arc<AtomicBool>,
     /// Number of clients that have connected (sent `initialize`).
     clients: Arc<AtomicUsize>,
-    /// The connection file written by [`Server::publish`], removed when
-    /// the server stops.
-    published: Option<std::path::PathBuf>,
 }
 
 impl Server {
@@ -84,23 +81,7 @@ impl Server {
             receiver,
             stop,
             clients,
-            published: None,
         })
-    }
-
-    /// Write how to reach this server to `path`, readable only by the
-    /// user, for the Claude Desktop bridge; removed when the server stops.
-    pub fn publish(&mut self, path: &std::path::Path) -> std::io::Result<()> {
-        if let Some(folder) = path.parent() {
-            std::fs::create_dir_all(folder)?;
-        }
-        let connection = super::bridge::Connection {
-            port: self.port,
-            token: self.token.clone(),
-        };
-        super::launch::write_private(path, &connection.to_json())?;
-        self.published = Some(path.to_path_buf());
-        Ok(())
     }
 
     pub fn port(&self) -> u16 {
@@ -130,9 +111,6 @@ impl Server {
 
 impl Drop for Server {
     fn drop(&mut self) {
-        if let Some(path) = &self.published {
-            let _ = std::fs::remove_file(path);
-        }
         self.stop.store(true, Ordering::SeqCst);
         // Wake the listening thread so that it sees it should stop.
         let _ = TcpStream::connect_timeout(

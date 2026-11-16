@@ -4,18 +4,12 @@
 
 | Package | Contents |
 |---|---|
-| `stamp-<version>-linux-x86_64.tar.gz` | `stamp` (application), `stamp-cli`, `stamp-mcp`, a `.desktop` entry and icon, examples, documentation |
-| `stamp-<version>-windows-x86_64.zip` | `stamp.exe`, `stamp-cli.exe`, `stamp-mcp.exe`, examples, documentation |
-| `stamp-<version>-macos-arm64.zip`, `-macos-x86_64.zip` | `STAMP.app` (with `stamp-mcp` inside), `stamp-cli`, examples, documentation |
+| `stamp-<version>-linux-x86_64.tar.gz` | `stamp` (application), `stamp-cli`, a `.desktop` entry and icon, examples, documentation |
+| `stamp-<version>-windows-x86_64.zip` | `stamp.exe`, `stamp-cli.exe`, examples, documentation |
+| `stamp-<version>-macos-arm64.zip`, `-macos-x86_64.zip` | `STAMP.app`, `stamp-cli`, examples, documentation |
 | `stamp-<version>-web.zip` | The browser version: static files for any web server |
 
 Each desktop program is a single executable with nothing to install.
-
-`stamp-mcp` is the small bridge that Claude Desktop starts to reach a
-running STAMP (`crates/stamp-gui/src/assistant/bridge.rs`). It must sit
-beside `stamp` (inside `STAMP.app/Contents/MacOS` on macOS): Assistant >
-Install in Claude Desktop builds the Claude Desktop extension (`.mcpb`) from
-that copy.
 
 ## Building by hand
 

@@ -3607,3 +3607,24 @@ fn frames_are_hidden_and_shown_and_open_where_they_belong() {
     assert!(harness.app.frame_shown(Frame::Results));
     harness.screenshot("results_table_docked");
 }
+
+/// The Assistant menu: every item has an icon, and the Claude Desktop
+/// items are gone.
+#[test]
+fn the_assistant_menu_has_icons() {
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let closed = harness.screenshot("assistant_menu_closed");
+    // File, View, Settings, then Assistant on the menu bar.
+    let app = &mut harness.app;
+    harness
+        .renderer
+        .click(egui::pos2(165.0, 10.0), |ui| app.draw(ui));
+    let app = &mut harness.app;
+    harness.renderer.run(10, |ui| app.draw(ui));
+    let open = harness.screenshot("assistant_menu");
+    assert!(
+        (0..closed.pixels.len()).any(|i| closed.pixels[i] != open.pixels[i]),
+        "the menu did not open"
+    );
+}

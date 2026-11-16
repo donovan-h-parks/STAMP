@@ -4,54 +4,16 @@ Asking an AI assistant
 STAMP can share what you are looking at with an AI assistant, so that you
 can ask about your data in plain language: *what does this plot show?*,
 *which genera differ most between these groups?*, *is this difference
-large enough to matter?* There are four ways to do it, all in the
+large enough to matter?* There are three ways to do it, all in the
 **Assistant** menu:
 
-- **Claude Desktop** (desktop application): chat with Claude in Anthropic's
-  Claude Desktop app beside STAMP. Claude sees your session and can change
-  the analysis and plots for you.
-- **Claude Code** (desktop application): the same, with Claude Code in a
-  panel of STAMP's window.
+- **Claude Code** (desktop application): ask Claude, in a panel of STAMP's
+  window. Claude sees your session and can change the analysis and plots
+  for you.
 - **OpenCode** (desktop application): the same, with OpenCode in that
   panel, for a **ChatGPT** plan, **GitHub Copilot** or other providers.
 - **Copy and paste** (desktop and browser): copy a description of the
   session into any chat assistant. It cannot change anything in STAMP.
-
-Claude Desktop
---------------
-
-What you need
-~~~~~~~~~~~~~
-
-- The `Claude Desktop <https://claude.com/download>`_ app, signed in with
-  your Claude account. It runs on macOS and Windows; on Linux it is in beta.
-- STAMP's extension in Claude Desktop, added once (below).
-
-Adding STAMP to Claude Desktop (once)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Choose **Assistant > Install in Claude Desktop**. STAMP writes its extension
-(``stamp.mcpb``) to its data folder and hands it to Claude Desktop, which asks
-whether to install it: choose **Install**. If Claude Desktop does not ask (on
-Linux it cannot be handed the file), open Claude Desktop's settings, choose
-**Extensions**, then **Install Extension**, and pick the file STAMP names.
-
-The extension holds ``stamp-mcp``, a small program from STAMP's package that
-Claude Desktop starts to reach STAMP. On its own it shares nothing.
-
-Asking Claude
-~~~~~~~~~~~~~
-
-1. Load your data in STAMP and choose **Assistant > Share with Claude
-   Desktop**. STAMP says what will be shared and asks you to confirm.
-2. In Claude Desktop, ask about your session: *What does the plot in STAMP
-   show?*, *Show me the volcano plot*, *Compare enterotype 1 with enterotype
-   3 using the Mann-Whitney U test*, *Make the points larger and label only
-   the significant genera*. Each change appears in STAMP's window as it is
-   made.
-
-If you ask Claude about STAMP while STAMP is not sharing, Claude is told to
-ask you to share first.
 
 Claude Code
 -----------
@@ -96,9 +58,11 @@ running.
   own conversation with the wheel (and *Ctrl+End* returns to the bottom);
   the scroll bar then has nothing to show.
 - **Hide** hides the panel and leaves Claude Code running; **View > Claude
-  Code** (or **View > OpenCode**) shows it again. **Stop** ends Claude Code, **Restart** starts it
+  Code** (or **View > OpenCode**) shows it again. **Restart** starts it
   again, and **Separate terminal** opens it in your computer's own terminal
-  instead.
+  instead. To end Claude Code, quit it as usual (type ``/exit``); STAMP goes
+  on sharing until you choose **Assistant > Stop sharing** (see
+  :ref:`stop-sharing`).
 - The panel is always dark, whatever STAMP's theme, because Claude Code's
   colours are made for a dark background.
 
@@ -181,7 +145,7 @@ well need a powerful graphics card or a lot of memory.
 What the assistant can do
 -------------------------
 
-With Claude Desktop, Claude Code or OpenCode, the assistant uses these tools
+With Claude Code or OpenCode, the assistant uses these tools
 of STAMP's (OpenCode names them ``stamp_get_session`` and so on):
 
 .. list-table::
@@ -255,23 +219,34 @@ it. Do not use it with data you are not allowed to share with a third party.
 Only a model on your own computer, set up in OpenCode as described above,
 keeps everything on your computer.
 
-Sharing is off until you choose Share with Claude Desktop, Open Claude Code
-or Open OpenCode, and stops when you choose **Assistant > Stop sharing** or
-close STAMP. STAMP listens for Claude only on your own computer (address
-127.0.0.1), and only answers requests that carry a password made afresh each
-time sharing starts; requests from web pages are refused. While it shares,
-STAMP writes that password and its address to ``connection.json`` in the
-folder above, readable only by you, for Claude Desktop's ``stamp-mcp``; the
-file is removed when sharing stops.
+Sharing is off until you choose Open Claude Code or Open OpenCode, and stops
+when you choose **Assistant > Stop sharing** or close STAMP. STAMP listens for
+the assistant only on your own computer (address 127.0.0.1), and only answers
+requests that carry a password made afresh each time sharing starts; requests
+from web pages are refused.
+
+.. _stop-sharing:
+
+Stop sharing
+~~~~~~~~~~~~
+
+**Assistant > Stop sharing** cuts the assistant off from STAMP: STAMP stops
+listening, so Claude Code or OpenCode can no longer read or change anything
+in STAMP, but the program itself keeps running, in the panel or in a separate
+terminal, and you can go on talking to it. Its requests to STAMP fail until
+you open it again from the Assistant menu, which starts sharing afresh with a
+new password.
+
+Quitting Claude Code or OpenCode (typing ``/exit``) ends the program and its
+conversation, but STAMP goes on sharing (the status bar still says so) until
+you choose Stop sharing or close STAMP.
 
 How it works
 ~~~~~~~~~~~~
 
-STAMP answers Claude through the `Model Context Protocol
-<https://modelcontextprotocol.io>`_. Claude Code and OpenCode connect to it
-directly;
-Claude Desktop starts ``stamp-mcp``, which answers Claude Desktop itself and
-passes each request on to the STAMP that is sharing.
+STAMP answers the assistant through the `Model Context Protocol
+<https://modelcontextprotocol.io>`_, and Claude Code and OpenCode connect to
+it directly.
 
 Copy and paste, with any assistant
 ----------------------------------

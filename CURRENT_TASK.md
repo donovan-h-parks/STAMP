@@ -6,7 +6,20 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Idle. Last task (2026-11-16): **Storey FDR reliability**: pi_0 is used only
+Idle. Last task (2026-11-16): **Claude Desktop removed, Assistant menu
+icons**. Deleted `assistant/bridge.rs`, `assistant/bundle.rs`,
+`src/bridge_main.rs` and the `stamp-mcp` binary; the server no longer
+writes `connection.json` (`Server::publish` gone, `start_sharing_with`
+folded into `start_sharing`); package.sh, RELEASING.md, assistant.rst,
+NEW_FEATURES.md updated, ASSISTANT_PLAN.md notes the removal. Assistant
+menu items have icons (clipboard-text, image, terminal-window, plugs,
+pulse, arrow-counter-clockwise; Phosphor subset regenerated). assistant.rst
+explains Stop sharing; the panel's Stop button is removed (quit the
+program with /exit); the HTTP test checks that Stop sharing closes the
+port. Committed and pushed ("Remove Claude Desktop sharing; add icons to
+the Assistant menu").
+
+Previous task (2026-11-16): **Storey FDR reliability**: pi_0 is used only
 when its standard error is at most a quarter of it, some p-value reaches
 0.95 and some lies above lambda; otherwise pi_0 = 1 (BH q-values) with a
 warning (Properties frame under the correction, CLI, assistant). Correction

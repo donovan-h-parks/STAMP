@@ -17,11 +17,6 @@ path = "src/lib.rs"
 name = "stamp"
 path = "src/main.rs"
 
-# The program Claude Desktop starts to reach a running STAMP.
-[[bin]]
-name = "stamp-mcp"
-path = "src/bridge_main.rs"
-
 [dependencies]
 stamp-core = { workspace = true }
 # Without PNG export (resvg) in the browser, which draws PNG images itself;

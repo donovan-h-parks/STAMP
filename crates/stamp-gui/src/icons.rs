@@ -31,9 +31,14 @@ pub const MOON: &str = "\u{E330}";
 pub const GEAR: &str = "\u{E270}";
 pub const INFO: &str = "\u{E2CE}";
 pub const TERMINAL: &str = "\u{EAE8}";
+pub const CLIPBOARD_TEXT: &str = "\u{E198}";
+pub const IMAGE: &str = "\u{E2CA}";
+pub const PLUGS: &str = "\u{EB56}";
+pub const PULSE: &str = "\u{E000}";
+pub const ARROW_COUNTER_CLOCKWISE: &str = "\u{E038}";
 
 /// Every icon, for checking that the font has them all.
-pub const ALL: [&str; 19] = [
+pub const ALL: [&str; 24] = [
     FOLDER_OPEN,
     TAG,
     FLASK,
@@ -53,6 +58,11 @@ pub const ALL: [&str; 19] = [
     GEAR,
     INFO,
     TERMINAL,
+    CLIPBOARD_TEXT,
+    IMAGE,
+    PLUGS,
+    PULSE,
+    ARROW_COUNTER_CLOCKWISE,
 ];
 
 /// The text of a menu item: an icon, then its label.
