@@ -45,6 +45,9 @@ cp "$root/crates/stamp-plot/fonts/LICENSE-Liberation.txt" \
 mkdir -p "$stage/examples"
 cp -r "$root/examples/EnterotypesArumugam" "$root/examples/IronMineEdwards" "$stage/examples/"
 assets="$root/crates/stamp-gui/assets"
+# zip and 7-Zip add to an archive that already exists, which would keep
+# files from an earlier package, so start afresh.
+rm -f "$out/$name.zip" "$out/$name.tar.gz"
 
 case "$platform" in
   linux)
