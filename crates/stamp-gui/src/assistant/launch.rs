@@ -1,5 +1,5 @@
-//! Starting Claude Code or OpenCode connected to STAMP, in the assistant
-//! panel or the computer's own terminal.
+//! Starting Claude Code, OpenCode or Google's Antigravity CLI connected to
+//! STAMP, in the assistant panel or the computer's own terminal.
 //!
 //! STAMP prepares a working folder in its data folder, rewritten at each
 //! launch. For Claude Code:
@@ -18,7 +18,13 @@
 //! web pages), which OpenCode reads as the configuration of the folder it
 //! starts in, and `AGENTS.md`, its counterpart of `CLAUDE.md`.
 //!
-//! Either program is the user's own installation, signed in with their own
+//! For Antigravity (`agy`), `.agents/mcp_config.json` (the server and its
+//! token), which it reads as the MCP servers of the folder (its
+//! workspace), `stamp-antigravity-settings.json`, given with `--settings`
+//! (settings for that run only, never saved), which allows STAMP's own
+//! tools without asking, and `AGENTS.md`.
+//!
+//! Each program is the user's own installation, signed in with their own
 //! account; STAMP never sees the sign-in. If it is not installed, STAMP can
 //! run its maker's installer and then start it.
 
@@ -39,6 +45,13 @@ const OPENCODE_CONFIG: &str = "opencode.json";
 /// as long as STAMP's server waits for the window (a slow plot can take a
 /// while).
 const OPENCODE_TOOL_TIMEOUT: u64 = 15 * 60 * 1000;
+/// Google's installers for the Antigravity CLI.
+const ANTIGRAVITY_INSTALL_SH: &str = "https://antigravity.google/cli/install.sh";
+const ANTIGRAVITY_INSTALL_PS1: &str = "https://antigravity.google/cli/install.ps1";
+/// Antigravity's MCP configuration in the working folder (its workspace).
+const ANTIGRAVITY_CONFIG: [&str; 2] = [".agents", "mcp_config.json"];
+/// Antigravity's settings for the run, in the working folder.
+const ANTIGRAVITY_SETTINGS: &str = "stamp-antigravity-settings.json";
 
 /// The programs that can run in the assistant panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
@@ -49,16 +62,19 @@ pub enum Agent {
     /// OpenCode (opencode.ai), with a ChatGPT or GitHub Copilot
     /// subscription, among others.
     OpenCode,
+    /// Google's Antigravity CLI (`agy`), with a Google account.
+    Antigravity,
 }
 
 impl Agent {
-    pub const ALL: [Agent; 2] = [Agent::ClaudeCode, Agent::OpenCode];
+    pub const ALL: [Agent; 3] = [Agent::ClaudeCode, Agent::OpenCode, Agent::Antigravity];
 
     /// Its name, as shown in menus and on the panel.
     pub fn name(self) -> &'static str {
         match self {
             Agent::ClaudeCode => "Claude Code",
             Agent::OpenCode => "OpenCode",
+            Agent::Antigravity => "Google Antigravity",
         }
     }
 
@@ -70,6 +86,10 @@ impl Agent {
                 "a ChatGPT Plus or Pro plan, GitHub Copilot, OpenCode's own plans, or an API \
                  key from many providers; it also has a few free models"
             }
+            Agent::Antigravity => {
+                "a Google account: free with a weekly limit, or more with a Google AI Pro or \
+                 Ultra plan"
+            }
         }
     }
 
@@ -78,6 +98,7 @@ impl Agent {
         match self {
             Agent::ClaudeCode => find_claude(),
             Agent::OpenCode => find_opencode(),
+            Agent::Antigravity => find_antigravity(),
         }
     }
 
@@ -87,6 +108,7 @@ impl Agent {
         match self {
             Agent::ClaudeCode => claude_command(program),
             Agent::OpenCode => opencode_command(program),
+            Agent::Antigravity => wrapped(program, antigravity_arguments()),
         }
     }
 
@@ -103,6 +125,7 @@ impl Agent {
         match self {
             Agent::ClaudeCode => prepare(folder, url, token, program),
             Agent::OpenCode => prepare_opencode(folder, url, token, program),
+            Agent::Antigravity => prepare_antigravity(folder, url, token, program),
         }
     }
 
@@ -117,6 +140,7 @@ impl Agent {
         match self {
             Agent::ClaudeCode => prepare_install(folder, url, token),
             Agent::OpenCode => prepare_opencode_install(folder, url, token),
+            Agent::Antigravity => prepare_antigravity_install(folder, url, token),
         }
     }
 
@@ -126,6 +150,7 @@ impl Agent {
             Agent::ClaudeCode => "Anthropic's installer (claude.ai/install)",
             Agent::OpenCode if cfg!(windows) => "OpenCode's release on GitHub",
             Agent::OpenCode => "OpenCode's installer (opencode.ai/v2/install)",
+            Agent::Antigravity => "Google's installer (antigravity.google/cli/install)",
         }
     }
 }
@@ -302,6 +327,29 @@ fn opencode_installed_at() -> PathBuf {
         .join(opencode_name())
 }
 
+fn antigravity_name() -> &'static str {
+    if cfg!(windows) {
+        "agy.exe"
+    } else {
+        "agy"
+    }
+}
+
+/// Where Google's installers put the Antigravity CLI: `~/.local/bin`, or
+/// `%LOCALAPPDATA%\agy\bin` on Windows.
+fn antigravity_installed_at() -> PathBuf {
+    let folder = if cfg!(windows) {
+        std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home().unwrap_or_default().join("AppData").join("Local"))
+            .join("agy")
+            .join("bin")
+    } else {
+        home().unwrap_or_default().join(".local").join("bin")
+    };
+    folder.join(antigravity_name())
+}
+
 /// Look for an executable on the `PATH`.
 fn on_path(name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
@@ -329,6 +377,13 @@ pub fn find_opencode() -> Option<PathBuf> {
         "opencode",
         &[&[".opencode", "bin"], &[".local", "bin"], &[".bun", "bin"]],
     )
+}
+
+/// Where the Antigravity CLI is installed, if it is: on the `PATH`, or
+/// where Google's installers put it.
+pub fn find_antigravity() -> Option<PathBuf> {
+    on_path(antigravity_name())
+        .or_else(|| Some(antigravity_installed_at()).filter(|path| path.is_file()))
 }
 
 /// The executable `name` on the `PATH`, in one of the folders `in_home`
@@ -606,6 +661,100 @@ pub fn prepare_opencode_install(folder: &Path, url: &str, token: &str) -> std::i
             shell_quoted(&installed.display().to_string()),
         );
         write_script(folder, "install-opencode", &commands)
+    }
+}
+
+/// The arguments that start Antigravity with its settings for the run.
+fn antigravity_arguments() -> Vec<String> {
+    vec!["--settings".to_string(), ANTIGRAVITY_SETTINGS.to_string()]
+}
+
+/// Antigravity's MCP configuration for the working folder: STAMP's server
+/// and its token, with as long to answer as STAMP's server waits for the
+/// window.
+fn antigravity_config(url: &str, token: &str) -> serde_json::Value {
+    serde_json::json!({
+        "mcpServers": {
+            "stamp": {
+                "url": url,
+                "headers": {"Authorization": format!("Bearer {token}")},
+                "timeoutSeconds": OPENCODE_TOOL_TIMEOUT / 1000
+            }
+        }
+    })
+}
+
+/// The configuration and instructions of Antigravity's working folder.
+fn write_antigravity_folder(folder: &Path, url: &str, token: &str) -> std::io::Result<()> {
+    let [dir, file] = ANTIGRAVITY_CONFIG;
+    std::fs::create_dir_all(folder.join(dir))?;
+    write_private(
+        &folder.join(dir).join(file),
+        &serde_json::to_string_pretty(&antigravity_config(url, token)).unwrap_or_default(),
+    )?;
+    // Ask rules and the user's own rules still apply to everything else.
+    let settings = serde_json::json!({"permissions": {"allow": ["mcp(stamp/*)"]}});
+    std::fs::write(
+        folder.join(ANTIGRAVITY_SETTINGS),
+        serde_json::to_string_pretty(&settings).unwrap_or_default(),
+    )?;
+    std::fs::write(folder.join("AGENTS.md"), GUIDE)
+}
+
+/// Write the working folder for the Antigravity CLI (installed at `agy`)
+/// and a script that starts it there. Returns the script.
+pub fn prepare_antigravity(
+    folder: &Path,
+    url: &str,
+    token: &str,
+    agy: &Path,
+) -> std::io::Result<PathBuf> {
+    write_antigravity_folder(folder, url, token)?;
+    let arguments = antigravity_arguments().join(" ");
+    let commands = if cfg!(windows) {
+        format!("\"{}\" {arguments}\r\n", agy.display())
+    } else {
+        format!(
+            "exec '{}' {arguments}\n",
+            shell_quoted(&agy.display().to_string())
+        )
+    };
+    write_script(folder, "start-antigravity", &commands)
+}
+
+/// Write Antigravity's working folder and a script that installs the
+/// Antigravity CLI with Google's installer and then starts it. Returns the
+/// script.
+pub fn prepare_antigravity_install(
+    folder: &Path,
+    url: &str,
+    token: &str,
+) -> std::io::Result<PathBuf> {
+    write_antigravity_folder(folder, url, token)?;
+    let installed = antigravity_installed_at();
+    let arguments = antigravity_arguments().join(" ");
+    if cfg!(windows) {
+        let script = folder.join("install-antigravity.ps1");
+        let text = format!(
+            "Set-Location -LiteralPath $PSScriptRoot\r\n\
+             Write-Host 'Installing the Antigravity CLI from {ANTIGRAVITY_INSTALL_PS1} ...'\r\n\
+             irm {ANTIGRAVITY_INSTALL_PS1} | iex\r\n\
+             if (Test-Path '{installed}') {{ & '{installed}' {arguments} }}\r\n\
+             else {{ Write-Host 'The Antigravity CLI was not installed where expected.' }}\r\n",
+            installed = installed.display().to_string().replace('\'', "''"),
+        );
+        std::fs::write(&script, text)?;
+        Ok(script)
+    } else {
+        let commands = format!(
+            "echo 'Installing the Antigravity CLI from {ANTIGRAVITY_INSTALL_SH} ...'\n\
+             curl -fsSL {ANTIGRAVITY_INSTALL_SH} | bash\n\
+             if [ -x '{0}' ]; then exec '{0}' {arguments}; fi\n\
+             echo 'The Antigravity CLI was not installed where expected.'\n\
+             exec \"${{SHELL:-/bin/sh}}\"\n",
+            shell_quoted(&installed.display().to_string()),
+        );
+        write_script(folder, "install-antigravity", &commands)
     }
 }
 
@@ -912,6 +1061,75 @@ mod tests {
             );
         }
         assert!(folder.join(OPENCODE_CONFIG).is_file());
+        std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn prepares_the_folder_for_antigravity() {
+        let folder = scratch("antigravity");
+        let script = prepare_antigravity(
+            &folder,
+            "http://127.0.0.1:1234/mcp",
+            "secret",
+            Path::new("/opt/it's/agy"),
+        )
+        .unwrap();
+        let [dir, file] = ANTIGRAVITY_CONFIG;
+        let config = folder.join(dir).join(file);
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&config).unwrap()).unwrap();
+        let stamp = &json["mcpServers"]["stamp"];
+        assert_eq!(stamp["url"], "http://127.0.0.1:1234/mcp");
+        assert_eq!(stamp["headers"]["Authorization"], "Bearer secret");
+        assert_eq!(stamp["timeoutSeconds"], 900);
+        assert_eq!(
+            std::fs::read_to_string(folder.join("AGENTS.md")).unwrap(),
+            GUIDE
+        );
+        let text = std::fs::read_to_string(&script).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert!(
+                text.contains(&format!(
+                    "exec '/opt/it'\\''s/agy' --settings {ANTIGRAVITY_SETTINGS}\n"
+                )),
+                "{text}"
+            );
+            let mode = std::fs::metadata(&config).unwrap().permissions().mode();
+            assert_eq!(mode & 0o077, 0, "the token must be private");
+        }
+        #[cfg(windows)]
+        assert!(text.contains("\"/opt/it's/agy\""), "{text}");
+        assert_eq!(
+            Agent::Antigravity.command(Path::new("/opt/agy")),
+            ("/opt/agy".to_string(), antigravity_arguments())
+        );
+        let settings: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(folder.join(ANTIGRAVITY_SETTINGS)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(settings["permissions"]["allow"][0], "mcp(stamp/*)");
+        std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn antigravity_install_script() {
+        let folder = scratch("antigravity-install");
+        let script = prepare_antigravity_install(&folder, "http://127.0.0.1:1/mcp", "t").unwrap();
+        let text = std::fs::read_to_string(&script).unwrap();
+        if cfg!(windows) {
+            assert!(text.contains(ANTIGRAVITY_INSTALL_PS1), "{text}");
+            assert!(text.contains("agy\\bin\\agy.exe"), "{text}");
+        } else {
+            assert!(text.contains(ANTIGRAVITY_INSTALL_SH), "{text}");
+            assert!(
+                text.contains(".local/bin/agy' --settings stamp-antigravity-settings.json; fi"),
+                "{text}"
+            );
+        }
+        let [dir, file] = ANTIGRAVITY_CONFIG;
+        assert!(folder.join(dir).join(file).is_file());
         std::fs::remove_dir_all(&folder).unwrap();
     }
 

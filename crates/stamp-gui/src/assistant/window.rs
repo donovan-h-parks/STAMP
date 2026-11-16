@@ -64,8 +64,8 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
                 egui::Button::new(icons::label(icons::PLUGS, "Stop sharing")),
             )
             .on_hover_text(
-                "Stop letting Claude Code or OpenCode reach this session. The program keeps \
-                 running, but can no longer read or change anything in STAMP.",
+                "Stop letting the assistant reach this session. The program keeps running, but \
+                 can no longer read or change anything in STAMP.",
             )
             .clicked()
         {
@@ -141,15 +141,17 @@ pub(crate) fn windows(app: &mut StampApp, ctx: &egui::Context) {
     let _ = (app, ctx);
 }
 
-/// What sharing means, said before it starts. `who` is the program being
-/// opened.
+/// What sharing means, said before it starts, with `agent`.
 #[cfg(not(target_arch = "wasm32"))]
-fn sharing(who: &str) -> String {
-    let sent_to = if who == Agent::OpenCode.name() {
-        "the AI provider you sign in to in OpenCode (such as OpenAI or GitHub Copilot) to answer \
-         your questions, under your account with it"
-    } else {
-        "Anthropic to answer your questions, under your Claude account"
+fn sharing(agent: Agent) -> String {
+    let who = agent.name();
+    let sent_to = match agent {
+        Agent::ClaudeCode => "Anthropic to answer your questions, under your Claude account",
+        Agent::OpenCode => {
+            "OpenCode's own service while you use its free models, or the AI provider you sign \
+             in to in OpenCode (such as OpenAI or GitHub Copilot), to answer your questions"
+        }
+        Agent::Antigravity => "Google to answer your questions, under your Google account",
     };
     format!(
         "{who} will be able to read the loaded profile and metadata, the results and the plots, \
@@ -179,7 +181,7 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.set_max_width(460.0);
             let name = agent.name();
-            ui.label(sharing(name));
+            ui.label(sharing(agent));
             ui.add_space(6.0);
             match &found {
                 Some(path) => {
@@ -196,6 +198,12 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
                              example OpenAI, then \"Sign in with ChatGPT\", or GitHub \
                              Copilot), then /models to choose a model."
                         }
+                        Agent::Antigravity => {
+                            "The first time, sign in with your Google account, then choose a \
+                             colour scheme, accept Google's terms and confirm that you trust \
+                             STAMP's folder (\"Yes, I trust this folder\"), with the arrow \
+                             keys and Enter."
+                        }
                     };
                     ui.label(format!(
                         "{name} opens in a panel at the bottom of this window. \
@@ -208,7 +216,7 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
                         "Don't show this again",
                     )
                     .on_hover_text(
-                        "Open Claude Code or OpenCode straight away next time. \
+                        "Open the assistant straight away next time. \
                          Settings > Preferences turns this message back on.",
                     );
                     ui.add_space(6.0);
@@ -258,7 +266,7 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
     }
 }
 
-/// Assistant > Open Claude Code or Open OpenCode: the dialog that says
+/// Assistant > Open Claude Code (or another assistant): the dialog that says
 /// what will be shared, or, if the user chose not to see it again and the
 /// program is installed, the program at once. Installing it always asks
 /// first.
@@ -366,7 +374,7 @@ pub fn open_agent_outside(
     super::launch::open_terminal(&script)
 }
 
-/// The assistant panel, which runs Claude Code or OpenCode (at the bottom
+/// The assistant panel, which runs Claude Code, OpenCode or Antigravity (at the bottom
 /// of the window to start with, like the Metadata table; it can be moved).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
@@ -417,8 +425,8 @@ pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
             Some(terminal) => terminal.show(ui),
             None => {
                 ui.label(format!(
-                    "{name} is not running. Choose Start, or Assistant > Open Claude Code or \
-                     Open OpenCode."
+                    "{name} is not running. Choose Start, or open an assistant from the \
+                     Assistant menu."
                 ));
             }
         }
@@ -477,10 +485,7 @@ fn activity_window(app: &mut StampApp, ctx: &egui::Context) {
                     });
                 }
                 None => {
-                    ui.label(
-                        "Not sharing. Use Assistant > Open Claude Code or Open OpenCode to \
-                         start.",
-                    );
+                    ui.label("Not sharing. Open an assistant from the Assistant menu to start.");
                 }
             }
             if let Some(folder) = super::launch::working_folder() {

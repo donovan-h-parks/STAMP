@@ -4,8 +4,9 @@
 //!   description for AI" and for the tools.
 //! - [`tools`] is what a model may ask of STAMP.
 //! - On the desktop, `server` answers those requests over the Model Context
-//!   Protocol on this computer only, and `launch` starts Claude Code or
-//!   OpenCode connected to it, in the panel `terminal` draws.
+//!   Protocol on this computer only, and `launch` starts Claude Code,
+//!   OpenCode or Google's Antigravity CLI connected to it, in the panel
+//!   `terminal` draws.
 //!
 //! See `docs/ASSISTANT_PLAN.md`.
 
@@ -44,8 +45,8 @@ pub struct State {
     /// The dialog being shown, if any.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) asking: Option<Ask>,
-    /// Claude Code or OpenCode (or its installer) running in the
-    /// assistant panel.
+    /// The assistant program (or its installer) running in the assistant
+    /// panel.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) terminal: Option<terminal::Terminal>,
     /// The program the assistant panel runs, the last one opened
@@ -55,8 +56,7 @@ pub struct State {
     /// The assistant panel is shown.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) show_terminal: bool,
-    /// Open Claude Code or OpenCode without its dialog (remembered between
-    /// runs).
+    /// Open an assistant without its dialog (remembered between runs).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) skip_claude_code_dialog: bool,
 }
@@ -65,7 +65,7 @@ pub struct State {
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Ask {
-    /// Asking before opening Claude Code or OpenCode (and sharing with it).
+    /// Asking before opening an assistant program (and sharing with it).
     Agent(launch::Agent),
 }
 

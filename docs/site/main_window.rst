@@ -140,8 +140,9 @@ Tables
   *Remove all samples where Nationality = american*). Samples left out by
   the *Sample filter* are greyed out here.
 * **View > Claude Code** (desktop application) shows or hides the assistant
-  panel along the bottom of the window, which runs Claude Code or OpenCode
-  (the menu item is named after the one running); see :doc:`assistant`.
+  panel along the bottom of the window, which runs Claude Code, OpenCode or
+  Google Antigravity (the menu item is named after the one running); see
+  :doc:`assistant`.
 
 The tables along the bottom share the room as tabs: click a tab to bring
 its table to the front.

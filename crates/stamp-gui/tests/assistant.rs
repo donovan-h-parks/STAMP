@@ -942,37 +942,80 @@ fn claude_code_in_the_panel() {
 #[test]
 #[ignore]
 fn opencode_in_the_panel() {
-    use eframe::egui;
     use stamp_gui::assistant::launch::Agent;
-
-    let folder = PathBuf::from(std::env::var("STAMP_ASSISTANT_FOLDER").expect("a folder"));
     let opencode = std::env::var("STAMP_OPENCODE")
         .map(PathBuf::from)
         .ok()
         .or_else(|| Agent::OpenCode.find())
         .expect("OpenCode is installed");
+    println!(
+        "OpenCode {:?}",
+        stamp_gui::assistant::launch::opencode_major(&opencode)
+    );
+    agent_in_the_panel(
+        Agent::OpenCode,
+        &opencode,
+        std::env::var("STAMP_OPENCODE_PROMPT").ok(),
+    );
+}
+
+/// Not a test: runs the real Antigravity CLI in the assistant panel, as
+/// Assistant > Open Google Antigravity does, like [`opencode_in_the_panel`].
+/// `agy` is the one installed, or `STAMP_ANTIGRAVITY`; the prompt is
+/// `STAMP_ANTIGRAVITY_PROMPT`. Antigravity keeps its settings in
+/// `~/.gemini`, so set `HOME` to keep it away from the user's own (it then
+/// needs signing in there, or `GEMINI_API_KEY` and `"modelProvider":
+/// "gemini"` in its `settings.json`). It connects to its MCP servers only
+/// when it first needs them, so without a prompt set `STAMP_ASSISTANT_KEYS`
+/// to `/mcp,Enter`, after its first-run screens (`Enter,Down,Right,Enter,Enter`
+/// takes the default colours, accepts the terms with the usage statistics
+/// left off, and trusts the folder). Run with `--ignored --nocapture`.
+#[cfg(unix)]
+#[test]
+#[ignore]
+fn antigravity_in_the_panel() {
+    use stamp_gui::assistant::launch::Agent;
+    let agy = std::env::var("STAMP_ANTIGRAVITY")
+        .map(PathBuf::from)
+        .ok()
+        .or_else(|| Agent::Antigravity.find())
+        .expect("the Antigravity CLI is installed");
+    agent_in_the_panel(
+        Agent::Antigravity,
+        &agy,
+        std::env::var("STAMP_ANTIGRAVITY_PROMPT").ok(),
+    );
+}
+
+/// Run `agent`, installed at `program`, in the assistant panel against the
+/// Enterotypes example, in `STAMP_ASSISTANT_FOLDER`; check that it
+/// connects to STAMP, and ask it `prompt` if given. Keys listed in
+/// `STAMP_ASSISTANT_KEYS` (Enter, Down, Up, Esc, or text, separated by
+/// commas) are typed once the program has started, for its first-run
+/// questions.
+#[cfg(unix)]
+fn agent_in_the_panel(
+    agent: stamp_gui::assistant::launch::Agent,
+    program: &std::path::Path,
+    prompt: Option<String>,
+) {
+    use eframe::egui;
+
+    let name = agent.name();
+    let tag = name.to_lowercase().replace(' ', "-");
+    let folder = PathBuf::from(std::env::var("STAMP_ASSISTANT_FOLDER").expect("a folder"));
     let shots = std::env::var("STAMP_SCREENSHOTS").ok().map(PathBuf::from);
     let mut h = Harness::enterotypes();
     let ctx = h.renderer.ctx.clone();
     let server = stamp_gui::assistant::window::start_sharing(&mut h.app, &ctx).unwrap();
-    println!(
-        "OpenCode {:?} at {}",
-        stamp_gui::assistant::launch::opencode_major(&opencode),
-        opencode.display()
-    );
-    Agent::OpenCode
-        .prepare(&folder, &server.url(), server.token(), &opencode)
+    println!("{name} at {}", program.display());
+    agent
+        .prepare(&folder, &server.url(), server.token(), program)
         .unwrap();
-    let (program, args) = Agent::OpenCode.command(&opencode);
-    println!("{program} {}", args.join(" "));
+    let (command, args) = agent.command(program);
+    println!("{command} {}", args.join(" "));
     stamp_gui::assistant::window::run_in_panel(
-        &mut h.app,
-        &ctx,
-        Agent::OpenCode,
-        "OpenCode",
-        &program,
-        &args,
-        &folder,
+        &mut h.app, &ctx, agent, name, &command, &args, &folder,
     )
     .unwrap();
     let shoot = |h: &mut Harness, name: &str| {
@@ -994,38 +1037,65 @@ fn opencode_in_the_panel() {
         }
         false
     };
-    h.frames(3);
-    let app = &mut h.app;
-    h.renderer
-        .click(egui::pos2(640.0, 700.0), |ui| app.draw(ui));
-    let connected = run_for(&mut h, 60, &|h| h.app.assistant_connections() > 0);
-    run_for(&mut h, 5, &|_| false);
-    shoot(&mut h, "opencode-start");
-    println!("{}", h.app.assistant_terminal_text().unwrap_or_default());
-    assert!(connected, "OpenCode did not connect to STAMP");
-    assert_eq!(h.app.assistant_program(), "OpenCode");
-    let Ok(prompt) = std::env::var("STAMP_OPENCODE_PROMPT") else {
-        return;
-    };
-    let enter = egui::Event::Key {
-        key: egui::Key::Enter,
+    let key = |key: egui::Key| egui::Event::Key {
+        key,
         physical_key: None,
         pressed: true,
         repeat: false,
         modifiers: egui::Modifiers::NONE,
+    };
+    h.frames(3);
+    let app = &mut h.app;
+    h.renderer
+        .click(egui::pos2(640.0, 700.0), |ui| app.draw(ui));
+    if let Ok(keys) = std::env::var("STAMP_ASSISTANT_KEYS") {
+        run_for(&mut h, 10, &|_| false);
+        shoot(&mut h, &format!("{tag}-first-run"));
+        println!("{}", h.app.assistant_terminal_text().unwrap_or_default());
+        for typed in keys.split(',') {
+            let event = match typed {
+                "Enter" => key(egui::Key::Enter),
+                "Down" => key(egui::Key::ArrowDown),
+                "Up" => key(egui::Key::ArrowUp),
+                "Esc" => key(egui::Key::Escape),
+                "Tab" => key(egui::Key::Tab),
+                "Right" => key(egui::Key::ArrowRight),
+                "Space" => key(egui::Key::Space),
+                text => egui::Event::Text(text.to_string()),
+            };
+            let app = &mut h.app;
+            h.renderer.send_events(vec![event], |ui| app.draw(ui));
+            run_for(&mut h, 3, &|_| false);
+            let screen = h.app.assistant_terminal_text().unwrap_or_default();
+            let lines: Vec<&str> = screen.lines().filter(|l| !l.trim().is_empty()).collect();
+            println!(
+                "--- after {typed}:\n{}",
+                lines[lines.len().saturating_sub(12)..].join("\n")
+            );
+        }
+    }
+    let connected = run_for(&mut h, 60, &|h| h.app.assistant_connections() > 0);
+    run_for(&mut h, 5, &|_| false);
+    shoot(&mut h, &format!("{tag}-start"));
+    println!("{}", h.app.assistant_terminal_text().unwrap_or_default());
+    assert!(connected, "{name} did not connect to STAMP");
+    assert_eq!(h.app.assistant_program(), name);
+    let Some(prompt) = prompt else {
+        return;
     };
     let app = &mut h.app;
     h.renderer
         .send_events(vec![egui::Event::Text(prompt)], |ui| app.draw(ui));
     run_for(&mut h, 1, &|_| false);
     let app = &mut h.app;
-    h.renderer.send_events(vec![enter], |ui| app.draw(ui));
+    h.renderer
+        .send_events(vec![key(egui::Key::Enter)], |ui| app.draw(ui));
     let wait: u64 = std::env::var("STAMP_CLAUDE_WAIT")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(120);
     run_for(&mut h, wait, &|_| false);
-    shoot(&mut h, "opencode-answer");
+    shoot(&mut h, &format!("{tag}-answer"));
     println!("{}", h.app.assistant_terminal_text().unwrap_or_default());
     for entry in h.app.assistant_log() {
         println!("tool: {} {}", entry.tool, entry.args);

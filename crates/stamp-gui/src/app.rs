@@ -752,11 +752,12 @@ pub struct Saved {
     /// The [`DEFAULTS_VERSION`] the plot settings were saved under; zero
     /// for settings saved before there was one.
     pub defaults_version: u32,
-    /// Open Claude Code or OpenCode without first showing what it will
-    /// share ("Don't show this again").
+    /// Open an assistant (Claude Code, OpenCode, Antigravity) without first
+    /// showing what it will share ("Don't show this again").
     pub skip_claude_code_dialog: bool,
-    /// The program the assistant panel runs ("Claude Code" or "OpenCode"),
-    /// the last one opened; empty for Claude Code.
+    /// The program the assistant panel runs (the name of a
+    /// [`assistant::launch::Agent`]), the last one opened; empty for Claude
+    /// Code.
     pub assistant_program: String,
     /// Where the frames of the window are, and the [`layout::LAYOUT_VERSION`]
     /// it was saved under (zero before there was one).
@@ -1536,7 +1537,7 @@ impl StampApp {
     }
 
     /// The name of the program the assistant panel runs: Claude Code, or
-    /// OpenCode once that has been opened.
+    /// the last assistant opened.
     pub fn assistant_program(&self) -> &'static str {
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -4687,7 +4688,7 @@ impl StampApp {
                     if ui
                         .checkbox(
                             &mut ask,
-                            "Explain what is shared before opening Claude Code or OpenCode",
+                            "Explain what is shared before opening an assistant",
                         )
                         .changed()
                     {

@@ -27,8 +27,8 @@ pub enum Frame {
     Metadata,
     Results,
     ConfigurePlot,
-    /// The assistant panel, running Claude Code or OpenCode (named for
-    /// the first, as saved layouts name it).
+    /// The assistant panel, running Claude Code, OpenCode or Antigravity
+    /// (named for the first, as saved layouts name it).
     ClaudeCode,
 }
 

@@ -4,7 +4,7 @@ Asking an AI assistant
 STAMP can share what you are looking at with an AI assistant, so that you
 can ask about your data in plain language: *what does this plot show?*,
 *which genera differ most between these groups?*, *is this difference
-large enough to matter?* There are three ways to do it, all in the
+large enough to matter?* There are four ways to do it, all in the
 **Assistant** menu:
 
 - **Claude Code** (desktop application): ask Claude, in a panel of STAMP's
@@ -12,6 +12,9 @@ large enough to matter?* There are three ways to do it, all in the
   for you.
 - **OpenCode** (desktop application): the same, with OpenCode in that
   panel, for a **ChatGPT** plan, **GitHub Copilot** or other providers.
+- **Google Antigravity** (desktop application): the same, with Google's
+  Antigravity CLI in that panel, for a **Google account**, free or with a
+  **Google AI Pro or Ultra** plan.
 - **Copy and paste** (desktop and browser): copy a description of the
   session into any chat assistant. It cannot change anything in STAMP.
 
@@ -35,7 +38,7 @@ the arrow keys and Enter.
 
 Before opening Claude Code, STAMP says what will be shared. Tick **Don't show
 this again** to open it straight away in future; **Settings > Preferences >
-Explain what is shared before opening Claude Code** brings the message back.
+Explain what is shared before opening an assistant** brings the message back.
 STAMP always asks before installing Claude Code.
 
 .. _assistant-panel:
@@ -43,9 +46,9 @@ STAMP always asks before installing Claude Code.
 The assistant panel
 ~~~~~~~~~~~~~~~~~~~
 
-The panel runs Claude Code or OpenCode, whichever was opened last; its tab
-and the View menu are named after it. Opening the other one ends the one
-running.
+The panel runs Claude Code, OpenCode or Google Antigravity, whichever was
+opened last; its tab and the View menu are named after it. Opening another
+one ends the one running.
 
 - Click in the panel to type into Claude Code. While it has the keyboard,
   every key goes to Claude Code, including STAMP's own shortcuts; click
@@ -58,7 +61,8 @@ running.
   own conversation with the wheel (and *Ctrl+End* returns to the bottom);
   the scroll bar then has nothing to show.
 - **Hide** hides the panel and leaves Claude Code running; **View > Claude
-  Code** (or **View > OpenCode**) shows it again. **Restart** starts it
+  Code** (or **View > OpenCode**, **View > Google Antigravity**) shows it
+  again. **Restart** starts it
   again, and **Separate terminal** opens it in your computer's own terminal
   instead. To end Claude Code, quit it as usual (type ``/exit``); STAMP goes
   on sharing until you choose **Assistant > Stop sharing** (see
@@ -66,7 +70,7 @@ running.
 - The panel is always dark, whatever STAMP's theme, because Claude Code's
   colours are made for a dark background.
 
-The same goes for OpenCode in the panel.
+The same goes for OpenCode and Google Antigravity in the panel.
 
 Claude Code is started in a folder STAMP prepares in its data folder (on Linux
 ``~/.local/share/stamp/assistant``, on macOS ``~/Library/Application
@@ -142,10 +146,50 @@ The model must be good at using tools. Small models that run on an ordinary
 computer often use STAMP's tools wrongly or not at all; models that use them
 well need a powerful graphics card or a lot of memory.
 
+Google Antigravity
+------------------
+
+**Assistant > Open Google Antigravity** connects Google's `Antigravity CLI
+<https://antigravity.google/docs/getting-started?tab=cli>`_ (``agy``), in the
+same way, in the same panel (see :ref:`assistant-panel`). It answers with
+Google's Gemini models. Any Google account can use it, with a weekly limit;
+a **Google AI Pro** plan gives more, and **Google AI Ultra** the most. (It
+replaces the Gemini CLI, which Google stopped offering to these accounts in
+June 2026.)
+
+The first time, sign in with your Google account (Antigravity opens your
+browser for it). Then, with the arrow keys and Enter, choose a colour
+scheme, accept Google's terms (sharing usage statistics is yours to tick or
+not), and confirm that you trust the folder it runs in (STAMP's assistant
+folder): choose **Yes, I trust this folder**. Antigravity keeps the sign-in
+in your computer's password store; STAMP never sees it. On Linux that needs
+a password store (such as GNOME Keyring) to be running.
+
+Antigravity uses STAMP's tools without asking, and asks before it runs
+commands or changes files.
+
+If Antigravity is not installed, STAMP offers to install it with Google's
+installer (``antigravity.google/cli/install.sh``, or ``install.ps1`` on
+Windows), in the panel, and then starts it. The installer puts ``agy`` in
+``.local/bin`` in your home folder (in ``%LOCALAPPDATA%\agy\bin`` on
+Windows).
+
+Antigravity runs in the same assistant folder, where STAMP writes:
+
+- ``.agents/mcp_config.json``: STAMP's address and the password for this
+  session, readable only by you, which Antigravity reads as the MCP servers
+  of that folder;
+- ``stamp-antigravity-settings.json``: lets Antigravity use STAMP's tools
+  without asking, given to it for that run only (it is not saved in your
+  own Antigravity settings);
+- ``AGENTS.md``: the same guidance as ``CLAUDE.md``;
+- a script that starts Antigravity with those settings, for **Separate
+  terminal**.
+
 What the assistant can do
 -------------------------
 
-With Claude Code or OpenCode, the assistant uses these tools
+With Claude Code, OpenCode or Google Antigravity, the assistant uses these tools
 of STAMP's (OpenCode names them ``stamp_get_session`` and so on):
 
 .. list-table::
@@ -203,7 +247,7 @@ Seeing what was shared
 ~~~~~~~~~~~~~~~~~~~~~~
 
 The status bar says *Sharing with assistant* while STAMP is sharing, and
-*Assistant connected* once Claude or OpenCode has connected. **Assistant >
+*Assistant connected* once the assistant has connected. **Assistant >
 Assistant activity** lists every request the assistant has made and the
 first line of each answer, latest first.
 
@@ -215,11 +259,12 @@ images of plots when it asks for them) is sent to answer your questions:
 with Claude, to Anthropic, under your Claude account and its terms; with
 OpenCode, to OpenCode's own servers while you use its free models, or to the
 provider you signed in to (OpenAI, GitHub and so on), under your account with
-it. Do not use it with data you are not allowed to share with a third party.
+it; with Google Antigravity, to Google, under your Google account and its
+terms. Do not use it with data you are not allowed to share with a third party.
 Only a model on your own computer, set up in OpenCode as described above,
 keeps everything on your computer.
 
-Sharing is off until you choose Open Claude Code or Open OpenCode, and stops
+Sharing is off until you open an assistant from the Assistant menu, and stops
 when you choose **Assistant > Stop sharing** or close STAMP. STAMP listens for
 the assistant only on your own computer (address 127.0.0.1), and only answers
 requests that carry a password made afresh each time sharing starts; requests
@@ -231,13 +276,13 @@ Stop sharing
 ~~~~~~~~~~~~
 
 **Assistant > Stop sharing** cuts the assistant off from STAMP: STAMP stops
-listening, so Claude Code or OpenCode can no longer read or change anything
+listening, so the assistant can no longer read or change anything
 in STAMP, but the program itself keeps running, in the panel or in a separate
 terminal, and you can go on talking to it. Its requests to STAMP fail until
 you open it again from the Assistant menu, which starts sharing afresh with a
 new password.
 
-Quitting Claude Code or OpenCode (typing ``/exit``) ends the program and its
+Quitting the assistant (typing ``/exit``) ends the program and its
 conversation, but STAMP goes on sharing (the status bar still says so) until
 you choose Stop sharing or close STAMP.
 
@@ -245,8 +290,8 @@ How it works
 ~~~~~~~~~~~~
 
 STAMP answers the assistant through the `Model Context Protocol
-<https://modelcontextprotocol.io>`_, and Claude Code and OpenCode connect to
-it directly.
+<https://modelcontextprotocol.io>`_, and Claude Code, OpenCode and
+Antigravity connect to it directly.
 
 Copy and paste, with any assistant
 ----------------------------------

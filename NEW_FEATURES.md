@@ -47,7 +47,13 @@ Add an entry here whenever a feature is added that v2 did not have.
   Claude plan: STAMP writes `opencode.json` (the server and token, and
   ask-first rules for commands, edits and web fetches) and `AGENTS.md` in
   its assistant folder, in OpenCode 2's form or OpenCode 1's after asking
-  `opencode --version`, and installs OpenCode 2 if asked. Plan:
+  `opencode --version`, and installs OpenCode 2 if asked. **Google
+  Antigravity** (Google's Antigravity CLI, `agy`) runs there too
+  (Assistant > Open Google Antigravity), for a Google account, free or with
+  a Google AI Pro or Ultra plan: STAMP writes `.agents/mcp_config.json`
+  (the server and token, read as the folder's MCP servers), settings for
+  the run given with `--settings` that allow STAMP's tools, and
+  `AGENTS.md`, and installs it with Google's installer if asked. Plan:
   `docs/ASSISTANT_PLAN.md`.
 - **Paired samples joined in the box plot.** After a paired test (paired
   t-test or Wilcoxon signed-rank, two groups) the box plot can draw a line

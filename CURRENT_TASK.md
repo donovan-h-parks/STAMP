@@ -6,6 +6,25 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-17, assistant session): **Assistant > Open
+Google Antigravity**, Google's Antigravity CLI (`agy`) in the assistant
+panel. `launch::Agent::Antigravity`: finds `agy` on the PATH, in
+`~/.local/bin` or `%LOCALAPPDATA%\agy\bin`; writes
+`.agents/mcp_config.json` (url, Bearer header, timeoutSeconds 900),
+`stamp-antigravity-settings.json` (allow `mcp(stamp/*)`, passed with
+`--settings`, never saved) and `AGENTS.md`; installs with
+antigravity.google/cli/install.sh or .ps1. Tested with agy 1.5.9 in the
+panel (isolated HOME, fake GEMINI_API_KEY): it reads the folder's MCP
+config, connects to STAMP over http://127.0.0.1 and lists all 13 tools
+(it connects lazily, on first need); the log shows the allow rule
+applied. Not tested: a real Google sign-in and a model answering, Windows,
+macOS. Test `antigravity_in_the_panel` (ignored) shares a helper with
+`opencode_in_the_panel`. Docs: assistant.rst, main_window.rst,
+NEW_FEATURES.md. My files: crates/stamp-gui/src/{app.rs,layout.rs,
+assistant/{launch,window,mod}.rs}, tests/assistant.rs, the two .rst files,
+and the Antigravity sentence in NEW_FEATURES.md. Committed and pushed
+("Open Google's Antigravity CLI in the assistant panel").
+
 Finished and committed (2026-11-17, the glacier-fed stream session):
 **paired samples joined in the box plot**. `BoxOptions::show_pairs` and
 `FeatureData::paired` (`stamp-plot/src/feature_plots.rs`), drawn by
