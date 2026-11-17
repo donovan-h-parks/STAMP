@@ -147,7 +147,14 @@ const COMBO_WIDTH: f32 = 132.0;
 /// The plot selector: the plots of a mode under a heading for each group,
 /// with the checks on the tests after a divider. Returns true if the user
 /// chose another plot.
-fn choose_plot(ui: &mut egui::Ui, mode: Mode, current: &mut PlotKind) -> bool {
+/// The choice of plot. `custom` is the title of the custom plot the
+/// assistant drew, if there is one ("" if it has none), listed last.
+fn choose_plot(
+    ui: &mut egui::Ui,
+    mode: Mode,
+    current: &mut PlotKind,
+    custom: Option<&str>,
+) -> bool {
     let mut changed = false;
     let combo = egui::ComboBox::from_id_salt("plot-kind")
         .selected_text(current.name())
@@ -186,6 +193,28 @@ fn choose_plot(ui: &mut egui::Ui, mode: Mode, current: &mut PlotKind) -> bool {
                         }
                     });
                 }
+            }
+            if let Some(title) = custom {
+                ui.add_space(2.0);
+                let heading = egui::TextStyle::Button.resolve(ui.style()).size;
+                ui.label(
+                    egui::RichText::new(plots::PlotGroup::Custom.name())
+                        .strong()
+                        .size(heading),
+                );
+                let kind = PlotKind::Custom;
+                let name = if title.is_empty() {
+                    kind.name().to_string()
+                } else {
+                    format!("{}: {title}", kind.name())
+                };
+                ui.horizontal(|ui| {
+                    ui.add_space(10.0);
+                    if ui.selectable_label(*current == kind, name).clicked() && *current != kind {
+                        *current = kind;
+                        changed = true;
+                    }
+                });
             }
         });
     combo.response.on_hover_text(current.name());
@@ -993,6 +1022,7 @@ struct AssistantSnapshot {
     group_colors: std::collections::HashMap<String, stamp_plot::Color>,
     other_samples_color: stamp_plot::Color,
     switched_off: Vec<String>,
+    custom_plot: Option<std::sync::Arc<crate::plots::CustomPlot>>,
 }
 
 /// The settings of the analyses that the assistant can change.
@@ -1197,7 +1227,19 @@ impl StampApp {
 
     /// The plot shown for the current mode.
     pub fn plot_kind(&self) -> PlotKind {
-        self.plot_kinds[mode_slot(self.mode)]
+        match self.plot_kinds[mode_slot(self.mode)] {
+            // The custom plot is gone (undone): the first plot instead.
+            PlotKind::Custom if self.session.custom_plot.is_none() => {
+                PlotKind::available(self.mode)[0]
+            }
+            kind => kind,
+        }
+    }
+
+    /// Show a plot the assistant described, in place of the plot shown.
+    pub fn show_custom_plot(&mut self, plot: crate::plots::CustomPlot) {
+        self.session.custom_plot = Some(std::sync::Arc::new(plot));
+        self.set_plot_kind(PlotKind::Custom);
     }
 
     pub fn set_plot_kind(&mut self, kind: PlotKind) {
@@ -1836,6 +1878,7 @@ impl StampApp {
             group_colors: self.session.chosen_group_colors(),
             other_samples_color: self.session.other_samples_color,
             switched_off: self.session.switched_off_samples(),
+            custom_plot: self.session.custom_plot.clone(),
         };
         self.assistant_undo.push(snapshot);
         if self.assistant_undo.len() > MAX_ASSISTANT_UNDO {
@@ -1872,6 +1915,7 @@ impl StampApp {
         self.session
             .set_switched_off_samples(&snapshot.switched_off);
         self.session.other_samples_color = snapshot.other_samples_color;
+        self.session.custom_plot = snapshot.custom_plot;
         self.apply_filters();
         self.view_dirty = true;
         true
@@ -4051,7 +4095,12 @@ impl StampApp {
             };
 
             let mut kind = self.plot_kind();
-            if choose_plot(ui, self.mode, &mut kind) {
+            let custom = self
+                .session
+                .custom_plot
+                .as_ref()
+                .map(|c| c.title().unwrap_or("").to_string());
+            if choose_plot(ui, self.mode, &mut kind, custom.as_deref()) {
                 self.set_plot_kind(kind);
             }
             let configure = ui

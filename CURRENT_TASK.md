@@ -6,6 +6,20 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-18, assistant session): **custom plots
+drawn by the assistant** (tool `show_custom_plot`). The plot is described in
+a subset of Vega-Lite and drawn as a STAMP `Figure` by the new module
+`crates/stamp-plot/src/custom/` (mod.rs: marks, scales, axes, legends;
+data.rs: tables and transforms; expr.rs: expressions; tests.rs, with an
+ignored `gallery` test that writes PNGs to `STAMP_CUSTOM_PLOTS`). In the
+GUI: `PlotKind::Custom`, `plots::CustomPlot` (spec + STAMP's tables
+"profile", "samples", "results" taken when drawn), `Session::custom_plot`,
+undo, the plot menu ("Drawn by the assistant"), `describe` repeats the
+spec, GUIDE and INSTRUCTIONS mention the tool. Docs: assistant.rst
+(Custom plots, image gui_custom_plot.png), plots.rst, NEW_FEATURES.md.
+fmt, clippy (both targets), the whole test suite and the Sphinx build
+pass. Committed and pushed ("Let the assistant draw custom plots").
+
 Done and committed (2026-11-18): **Antigravity not using STAMP's tools**.
 Report from Windows (agy 1.5.10, Google AI Pro, Gemini): asked about the
 data, the model read the folder's files, found `~/.gemini/config/

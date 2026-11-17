@@ -160,6 +160,8 @@ pub struct Session {
     pub correlation: CorrelationState,
     /// Feature shown by the single-feature plots.
     pub selected_feature: Option<String>,
+    /// The plot the assistant drew last, if any.
+    pub custom_plot: Option<std::sync::Arc<crate::plots::CustomPlot>>,
     /// Colours the user has chosen for groups, by group name.
     group_colors: std::collections::HashMap<String, stamp_plot::Color>,
     /// Colour of the "All other samples" group.
@@ -285,6 +287,7 @@ impl Default for Session {
                 output: None,
             },
             selected_feature: None,
+            custom_plot: None,
             group_colors: std::collections::HashMap::new(),
             other_samples_color: stamp_plot::Color::rgb(127, 127, 127),
             dirty: [false; 4],
@@ -358,7 +361,7 @@ impl Session {
         let mut colors: Vec<(&String, &stamp_plot::Color)> = self.group_colors.iter().collect();
         colors.sort_by(|a, b| a.0.cmp(b.0));
         format!(
-            "{}|{}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{}",
+            "{}|{}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{}|{:?}",
             self.generation,
             self.seed,
             self.profile_level,
@@ -374,6 +377,7 @@ impl Session {
             self.correlation.filter,
             self.multi.post_hoc_test,
             self.multi.post_hoc_coverage,
+            self.custom_plot.as_ref().map(|c| c.id),
         )
     }
 

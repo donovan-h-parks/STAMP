@@ -55,6 +55,22 @@ Add an entry here whenever a feature is added that v2 did not have.
   the run given with `--settings` that allow STAMP's tools, and
   `AGENTS.md`, and installs it with Google's installer if asked. Plan:
   `docs/ASSISTANT_PLAN.md`.
+- **Custom plots drawn by the assistant** (tool `show_custom_plot`,
+  `crates/stamp-plot/src/custom/`, `docs/site/assistant.rst`). When none of
+  STAMP's plots shows what the user asks for, the assistant describes one
+  in a subset of Vega-Lite and STAMP draws it in the middle of the window
+  as a figure like its own plots: STAMP's axes, fonts and group colours,
+  tooltips, saving as PNG, SVG or PDF, and a description for
+  `get_current_plot`. The description can use STAMP's data by name
+  ("profile", "samples", "results"), taken when the plot is drawn. Marks
+  bar, point, circle, square, tick, line, area, rect, rule, text, boxplot
+  and errorbar; stacked, grouped (xOffset) and normalised bars and areas;
+  linear, log and sqrt scales; colour schemes; layers; transforms filter,
+  calculate (with Vega-Lite's expressions), aggregate, joinaggregate,
+  window, fold, lookup and bin. What cannot be drawn is refused with the
+  reason and changes nothing; what is ignored is reported. The plot is
+  listed under "Drawn by the assistant" in the plot selector and undone
+  like any change of the assistant's.
 - **Paired samples joined in the box plot.** After a paired test (paired
   t-test or Wilcoxon signed-rank, two groups) the box plot can draw a line
   between the two boxes for every pair of samples, with a point at each

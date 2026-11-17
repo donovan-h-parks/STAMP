@@ -231,11 +231,53 @@ of STAMP's (OpenCode names them ``stamp_get_session`` and so on):
    * - ``set_group_colors``
      - Change the colour of any group (and of *All other samples*) in every
        plot, by name (*red*, *blue*, ...) or as ``#rrggbb``.
+   * - ``show_custom_plot``
+     - Draw a plot of its own when none of STAMP's shows what you ask for
+       (see `Custom plots`_).
    * - ``undo``
      - Undo its last change.
 
 Claude waits for an analysis to finish and the plot to be drawn before it is
 told the outcome of a change, so it describes what you see.
+
+.. _custom-plots:
+
+Custom plots
+~~~~~~~~~~~~
+
+When none of STAMP's plots shows what you want, ask the assistant to draw
+one: *Plot the proportion of Bacteroidetes in each enterotype as a box
+plot*, *Show the ten most abundant genera in every sample as stacked bars*,
+*Plot the effect size of every feature against its p-value, coloured by
+phylum*. The plot appears in the middle of the window like any other, with
+**Custom plot** chosen beneath it, and it is listed under **Drawn by the
+assistant** in the plot selector, so you can go back to it after looking at
+other plots. Point at it to see the values behind each mark, and save it
+with **File > Save plot as**. Your groups keep their colours, and the font
+sizes and font chosen for every plot apply to it too.
+
+.. figure:: images/gui_custom_plot.png
+   :alt: A box plot drawn by the assistant in the middle of STAMP's window
+
+   A box plot drawn by the assistant: the proportion of Bacteroidetes in
+   each enterotype.
+
+The assistant describes the plot in `Vega-Lite <https://vega.github.io/
+vega-lite/>`_, a common way of describing charts, and STAMP draws it. It can
+use STAMP's own data: the profile (every sample's count and proportion of
+every feature at the current profile level, with the sample's group), the
+samples with their metadata, and the Results table of the current analysis.
+Bars (side by side or stacked), points, lines, areas, heatmaps, box plots,
+error bars, reference lines and text are available, on linear or
+logarithmic axes, and they can be combined in one plot. A plot is drawn in
+one panel: STAMP does not draw pie charts or several small plots side by
+side.
+
+A custom plot shows the data as it was when the assistant drew it. After
+changing the analysis or the profile level, ask the assistant to draw it
+again. **Configure plot** has nothing to change for a custom plot: ask the
+assistant instead (*make the bars red*, *use a logarithmic axis*). Undoing
+the change brings back the plot shown before.
 
 Undoing a change
 ~~~~~~~~~~~~~~~~

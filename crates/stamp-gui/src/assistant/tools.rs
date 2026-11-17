@@ -83,8 +83,9 @@ let you change the analysis and the plot. The user is usually a biologist, not a
 statistician or programmer: explain in plain language what a plot shows and what the \
 statistics do and do not mean (effect sizes, confidence intervals, p-values and their \
 correction for multiple tests). Start with get_session and get_current_plot. Prefer \
-STAMP's own plots (list_plots, show_plot) to drawing your own. Every change you make \
-appears in STAMP's window at once and the user can undo it.";
+STAMP's own plots (list_plots, show_plot); when none shows what the user asks for, draw \
+one with show_custom_plot. Every change you make appears in STAMP's window at once and \
+the user can undo it.";
 
 /// The tools, in the order they are listed.
 pub fn list() -> Vec<ToolInfo> {
@@ -306,8 +307,48 @@ pub fn list() -> Vec<ToolInfo> {
             changes: true,
         },
         ToolInfo {
+            name: "show_custom_plot",
+            description: "Draw a plot of your own in STAMP's window, in place of the plot \
+                          shown, when none of STAMP's plots (list_plots) shows what is wanted. \
+                          'spec' describes it in Vega-Lite (v5) JSON; STAMP draws it in the \
+                          style of its own plots, with tooltips, and the user can save it like \
+                          any plot. Data: {\"values\": [...]}, or {\"name\": ...} for STAMP's \
+                          data: \"profile\" (one row per switched-on sample and feature at the \
+                          current profile level: sample, feature, count, proportion (percent), \
+                          group (the sample's group), and a column per higher level of the \
+                          hierarchy, named by its heading), \"samples\" (sample, switched_on, \
+                          total, and a column per metadata field) or \"results\" (the Results \
+                          table: feature and the other columns get_results shows). Supported: \
+                          marks bar, point, circle, square, tick, line, area, rect, rule, text, \
+                          boxplot, errorbar; channels x, y, x2, y2, xOffset, yOffset, color, \
+                          size, shape, opacity, strokeDash, text, tooltip, detail, xError, \
+                          yError, with field, type, aggregate, bin, title, datum, value, scale \
+                          (type linear, log or sqrt; domain, range, scheme, zero, reverse), \
+                          axis (title, labelAngle, grid, null), legend, sort, stack; transforms \
+                          filter, calculate, aggregate, joinaggregate, window, fold, lookup, \
+                          bin; layer; title; width and height in points. Not supported: facets \
+                          (row, column), concat, repeat, arc (pie), selections, dates. Field \
+                          names are used as written. Groups keep their colours from STAMP's \
+                          plots unless a colour scale is given. Answers with notes on anything \
+                          ignored; if the plot cannot be drawn, nothing changes and the answer \
+                          says why. get_current_plot describes the result.",
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "spec": {
+                        "type": "object",
+                        "description": "The plot, as a Vega-Lite specification."
+                    }
+                },
+                "required": ["spec"],
+                "additionalProperties": false
+            }),
+            changes: true,
+        },
+        ToolInfo {
             name: "undo",
-            description: "Undo the last change made with show_plot or set_analysis.",
+            description: "Undo the last change made with show_plot, show_custom_plot, \
+                          set_analysis or the other tools that change the session.",
             input_schema: empty,
             changes: true,
         },
@@ -336,6 +377,7 @@ pub fn call(app: &mut StampApp, name: &str, args: &Value) -> Outcome {
         "list_plots" => Ok(Outcome::text(list_plots(app))),
         "get_plot_options" => get_plot_options(app, args),
         "show_plot" => show_plot(app, args),
+        "show_custom_plot" => show_custom_plot(app, args),
         "set_analysis" => set_analysis(app, args),
         "set_group_colors" => set_group_colors(app, args),
         "switch_samples" => switch_samples(app, args),
@@ -536,6 +578,50 @@ fn show_plot(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, S
         app.select_feature(feature);
     }
     Ok(Outcome::text("Done."))
+}
+
+fn show_custom_plot(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, String> {
+    let spec =
+        match args.get("spec") {
+            Some(Value::Object(spec)) => Value::Object(spec.clone()),
+            // Some clients send objects as text.
+            Some(Value::String(text)) => {
+                serde_json::from_str(text).map_err(|e| format!("'spec' is not valid JSON: {e}"))?
+            }
+            _ => return Err(
+                "show_custom_plot needs 'spec', the plot described in Vega-Lite (a JSON object)."
+                    .to_string(),
+            ),
+        };
+    let mut tables = std::collections::HashMap::new();
+    for name in stamp_plot::custom::data_names(&spec) {
+        if !crate::plots::CUSTOM_DATA.contains(&name.as_str()) {
+            // The plot reports it, with the names there are.
+            continue;
+        }
+        let table = if name == "results" {
+            let table = app.results_table().clone();
+            crate::plots::custom_table(&app.session, &name, (&table.headings, &table.rows))
+        } else {
+            crate::plots::custom_table(&app.session, &name, (&[], &[]))
+        }
+        .map_err(|e| format!("The data '{name}' is not available: {e}"))?;
+        tables.insert(name, std::sync::Arc::new(table));
+    }
+    let plot = crate::plots::CustomPlot::new(spec, tables);
+    // Drawn here first, so that a plot that cannot be drawn changes nothing.
+    let built =
+        stamp_plot::axes::with_fonts(app.plot_settings().fonts, || plot.build(&app.session))
+            .map_err(|e| format!("The plot could not be drawn: {e}. Nothing was changed."))?;
+    app.remember_for_undo("show_custom_plot");
+    app.show_custom_plot(plot);
+    let mut text = String::from("Done.");
+    if !built.notes.is_empty() {
+        text.push_str("\nNotes on the description: ");
+        text.push_str(&built.notes.join("; "));
+        text.push('.');
+    }
+    Ok(Outcome::text(text))
 }
 
 fn switch_samples(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, String> {

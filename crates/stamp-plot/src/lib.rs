@@ -23,6 +23,7 @@ pub mod co_occurrence_plot;
 pub mod community_plots;
 pub mod composition;
 pub mod correlation_plot;
+pub mod custom;
 pub mod export;
 pub mod extended_error_bar;
 pub mod feature_plots;

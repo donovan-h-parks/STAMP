@@ -19,6 +19,8 @@ stamp-core = { workspace = true }
 ttf-parser = { workspace = true }
 earcut = { workspace = true }
 serde = { workspace = true }
+# Custom plots are described in JSON (a subset of Vega-Lite).
+serde_json = { workspace = true }
 # Compresses the streams of PDF files.
 flate2 = { workspace = true }
 resvg = { workspace = true, optional = true }

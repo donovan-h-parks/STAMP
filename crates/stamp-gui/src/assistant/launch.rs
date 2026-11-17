@@ -449,7 +449,10 @@ there (or ask you to, with the `undo` tool).
   show as well as what they do: effect sizes and their confidence intervals
   matter more than p-values; corrected p-values account for the many features
   tested; a small number of samples limits what can be concluded.
-- Prefer STAMP's own plots (`list_plots`, `show_plot`) to drawing your own.
+- Prefer STAMP's own plots (`list_plots`, `show_plot`). When none shows what
+  the user asks for, draw one with `show_custom_plot`: describe it in
+  Vega-Lite, using STAMP's data by name (`profile`, `samples`, `results`), and
+  check it with `get_current_plot`.
 - Do not change files on the user's computer unless they ask you to.
 ";
 

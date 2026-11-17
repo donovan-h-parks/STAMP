@@ -252,6 +252,24 @@ pub fn plot(app: &StampApp, max_items: usize) -> String {
         let _ = writeln!(out, "- Features drawn in red: {}", highlighted.join(", "));
     }
     out.push_str(&figure(app.figure(), max_items));
+    if kind == PlotKind::Custom {
+        if let Some(custom) = &app.session.custom_plot {
+            let mut spec = serde_json::to_string_pretty(&custom.spec).unwrap_or_default();
+            if spec.len() > MAX_CUSTOM_SPEC {
+                let mut end = MAX_CUSTOM_SPEC;
+                while !spec.is_char_boundary(end) {
+                    end -= 1;
+                }
+                spec.truncate(end);
+                spec.push_str("\n... (cut short)");
+            }
+            let _ = writeln!(
+                out,
+                "\n## Its description, as given to show_custom_plot\n\n```json\n{spec}\n```"
+            );
+        }
+        return out;
+    }
     let _ = writeln!(
         out,
         "\n## Options of this plot (JSON)\n\n```json\n{}\n```",
@@ -259,6 +277,9 @@ pub fn plot(app: &StampApp, max_items: usize) -> String {
     );
     out
 }
+
+/// The longest description of a custom plot that get_current_plot repeats.
+const MAX_CUSTOM_SPEC: usize = 20_000;
 
 /// The text and items of a figure.
 pub fn figure(figure: &Figure, max_items: usize) -> String {
@@ -504,6 +525,8 @@ pub fn option_fields(mode: Mode, kind: PlotKind) -> &'static [&'static str] {
             "co_occurrence_features",
             "co_occurrence_group",
         ],
+        // Described by its own JSON, which get_current_plot gives.
+        PlotKind::Custom => &[],
     }
 }
 

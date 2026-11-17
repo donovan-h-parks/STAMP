@@ -1370,6 +1370,12 @@ pub fn show(
             });
         }
         PlotKind::Map => dialog.map(settings, context),
+        PlotKind::Custom => {
+            dialog.ui.label(
+                "The assistant drew this plot. Ask it to change the plot; the font sizes \
+                 below apply to it as to every plot.",
+            );
+        }
         PlotKind::Pcoa => {
             let (distance, normalisation, permutations, show_tests) = (
                 &mut settings.community_distance,

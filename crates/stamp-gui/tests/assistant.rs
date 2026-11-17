@@ -329,6 +329,106 @@ fn plot_fonts_are_changed_and_undone() {
 }
 
 #[test]
+fn custom_plots_use_stamps_data_and_can_be_undone() {
+    let mut h = Harness::enterotypes();
+    let before = h.app.plot_kind();
+    let feature = "Bacteroidetes";
+    let outcome = h.call(
+        "show_custom_plot",
+        json!({"spec": {
+            "title": format!("{feature} by enterotype"),
+            "data": {"name": "profile"},
+            "transform": [{"filter": {"field": "feature", "equal": feature}}],
+            "mark": "boxplot",
+            "encoding": {
+                "x": {"field": "group", "type": "nominal", "title": "Enterotype"},
+                "y": {"field": "proportion", "type": "quantitative", "title": "Proportion (%)"},
+                "color": {"field": "group"}
+            }
+        }}),
+    );
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert!(text(&outcome).contains("Custom plot"), "{}", text(&outcome));
+    assert_eq!(h.app.plot_kind(), PlotKind::Custom);
+    let figure = h.app.figure().clone();
+    assert!(stamp_gui::assistant::describe::figure_message(&figure).is_none());
+    // The groups have the colours of STAMP's other plots.
+    let colour = h.app.session.group_color("Enterotype 1");
+    assert!(figure.shapes.iter().any(|s| matches!(
+        s,
+        stamp_plot::Shape::Rect { fill: Some(fill), .. } if *fill == colour
+    )));
+    if let Ok(directory) = std::env::var("STAMP_SCREENSHOTS") {
+        let app = &mut h.app;
+        let image = h.renderer.render(|ui| app.draw(ui));
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            PathBuf::from(directory).join("custom_plot.png"),
+            image.to_png(),
+        )
+        .unwrap();
+    }
+    let description = text(&h.call("get_current_plot", json!({})));
+    assert!(description.contains("Proportion (%)"), "{description}");
+    assert!(
+        description.contains("as given to show_custom_plot"),
+        "{description}"
+    );
+
+    // The results table, by its headings.
+    let headings = h.app.results_table().headings.clone();
+    let rows = h.app.results_table().rows.len();
+    let p_value = headings
+        .iter()
+        .find(|h| h.starts_with("p-value"))
+        .unwrap()
+        .clone();
+    let outcome = h.call(
+        "show_custom_plot",
+        json!({"spec": {
+            "data": {"name": "results"},
+            "mark": "point",
+            "encoding": {
+                "x": {"field": p_value, "type": "quantitative"},
+                "y": {"field": "feature", "type": "nominal", "sort": "x"}
+            }
+        }}),
+    );
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert_eq!(h.app.figure().regions.len(), rows);
+
+    // A plot that cannot be drawn changes nothing.
+    let shown = h.app.figure().clone();
+    for (spec, expected) in [
+        (
+            json!({"data": {"name": "otus"}, "mark": "bar"}),
+            "no data named 'otus'",
+        ),
+        (
+            json!({"data": {"name": "profile"}, "mark": "arc"}),
+            "stacked bar",
+        ),
+        (json!("{not json"), "not valid JSON"),
+    ] {
+        let outcome = h.call("show_custom_plot", json!({"spec": spec}));
+        assert!(
+            outcome.is_error && text(&outcome).contains(expected),
+            "{}",
+            text(&outcome)
+        );
+    }
+    h.settle();
+    assert_eq!(*h.app.figure(), shown);
+
+    // Undone twice: back to the plot before.
+    h.app.undo_assistant_change();
+    h.app.undo_assistant_change();
+    h.settle();
+    assert_eq!(h.app.plot_kind(), before);
+    assert!(h.app.session.custom_plot.is_none());
+}
+
+#[test]
 fn group_colours_can_be_changed_and_undone() {
     let mut h = Harness::enterotypes();
     let before = h.app.session.group_color("Enterotype 3");

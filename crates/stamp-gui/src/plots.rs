@@ -302,6 +302,9 @@ pub enum PlotKind {
     CoOccurrence,
     PrevalenceAbundance,
     Map,
+    /// A plot the assistant described ([`CustomPlot`]), in any mode once
+    /// there is one.
+    Custom,
 }
 
 impl PlotKind {
@@ -333,6 +336,7 @@ impl PlotKind {
             PlotKind::CoOccurrence => "Co-occurrence heatmap",
             PlotKind::PrevalenceAbundance => "Prevalence-abundance plot",
             PlotKind::Map => "Map of sample locations",
+            PlotKind::Custom => "Custom plot",
         }
     }
 
@@ -351,6 +355,7 @@ impl PlotKind {
             Rarefaction | RankAbundance | AlphaDiversity => PlotGroup::Diversity,
             Pcoa | Nmds | DistanceBox | Mantel => PlotGroup::Similarity,
             Map => PlotGroup::Samples,
+            Custom => PlotGroup::Custom,
         }
     }
 
@@ -491,6 +496,8 @@ pub enum PlotGroup {
     Similarity,
     /// Where were the samples taken?
     Samples,
+    /// A plot the assistant drew: listed only when there is one.
+    Custom,
 }
 
 impl PlotGroup {
@@ -511,6 +518,7 @@ impl PlotGroup {
             PlotGroup::Diversity => "Diversity",
             PlotGroup::Similarity => "Similarity between samples",
             PlotGroup::Samples => "Where the samples are from",
+            PlotGroup::Custom => "Drawn by the assistant",
         }
     }
 }
@@ -881,6 +889,8 @@ impl PlotSettings {
                 self.co_occurrence_features = defaults.co_occurrence_features;
                 self.co_occurrence_group = defaults.co_occurrence_group;
             }
+            // Its look is in its description.
+            PlotKind::Custom => {}
         }
     }
 }
@@ -1084,6 +1094,203 @@ fn prevalence_figure(
 const NO_RESULTS: &str = "Load a profile to begin";
 const NO_METADATA: &str = "Load a metadata file to compare groups of samples";
 const NO_FEATURE: &str = "Select a feature in the feature table";
+
+/// A plot the assistant described in a subset of Vega-Lite
+/// ([`stamp_plot::custom`]), with the data of STAMP's that it uses, taken
+/// when it was drawn.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomPlot {
+    pub spec: serde_json::Value,
+    pub tables: std::collections::HashMap<String, std::sync::Arc<stamp_plot::custom::Table>>,
+    /// Tells custom plots apart, for the figure cache.
+    pub id: u64,
+}
+
+impl CustomPlot {
+    /// A plot of `spec` with the tables it uses.
+    pub fn new(
+        spec: serde_json::Value,
+        tables: std::collections::HashMap<String, std::sync::Arc<stamp_plot::custom::Table>>,
+    ) -> CustomPlot {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        CustomPlot { spec, tables, id }
+    }
+
+    /// Its title, if it has one.
+    pub fn title(&self) -> Option<&str> {
+        match self.spec.get("title")? {
+            serde_json::Value::String(title) => Some(title),
+            other => other.get("text")?.as_str(),
+        }
+    }
+
+    /// Draw it. Groups take the colours they have in STAMP's other plots.
+    pub fn build(&self, session: &Session) -> Result<stamp_plot::custom::Built, String> {
+        let mut colors = std::collections::HashMap::new();
+        if let Some(groups) = session.grouping() {
+            for (position, name) in groups.names().enumerate() {
+                colors.insert(name.to_string(), session.group_color_at(name, position));
+            }
+        }
+        stamp_plot::custom::plot(&self.spec, &self.tables, &colors)
+    }
+}
+
+/// The names of STAMP's data that custom plots can use.
+pub const CUSTOM_DATA: [&str; 3] = ["profile", "samples", "results"];
+
+/// The table `name` of [`CUSTOM_DATA`], from the session; `results` is the
+/// Results table (headings and rows of text) for the "results" data.
+///
+/// * "profile": one row per sample (switched on) and feature at the
+///   current profile level: sample, feature, count, proportion (percent of
+///   the parent level, as STAMP's plots show it), group (the sample's value
+///   of the field the samples are grouped by), and a column for each higher
+///   level of the hierarchy, named by its heading.
+/// * "samples": one row per sample: sample, switched_on, total (its count)
+///   and a column for each metadata field.
+/// * "results": the Results table, its first column called "feature".
+pub fn custom_table(
+    session: &Session,
+    name: &str,
+    results: (&[String], &[Vec<String>]),
+) -> Result<stamp_plot::custom::Table, String> {
+    use stamp_plot::custom::{Cell, Table};
+    let tree = session.tree.as_ref().ok_or("No profile is loaded.")?;
+    let metadata = session.metadata.as_ref();
+    let active = |sample: &str| metadata.is_none_or(|m| m.is_active(sample));
+    match name {
+        "profile" => {
+            let samples: Vec<&str> = tree
+                .sample_names()
+                .iter()
+                .map(String::as_str)
+                .filter(|s| active(s))
+                .collect();
+            let profile = tree
+                .profile(
+                    &samples,
+                    session.parent_level.as_deref(),
+                    &session.profile_level,
+                    session.unclassified,
+                )
+                .map_err(|e| e.to_string())?;
+            let higher: Vec<String> = profile
+                .hierarchy_headings
+                .iter()
+                .take(profile.hierarchy_headings.len().saturating_sub(1))
+                .cloned()
+                .collect();
+            let mut columns: Vec<String> = ["sample", "feature", "count", "proportion", "group"]
+                .map(String::from)
+                .to_vec();
+            columns.extend(higher.iter().cloned());
+            let mut table = Table::new(columns);
+            let names: Vec<Cell> = profile.sample_names.iter().map(|s| Cell::text(s)).collect();
+            let groups: Vec<Cell> = profile
+                .sample_names
+                .iter()
+                .map(|s| match (metadata, session.group_field.as_deref()) {
+                    (Some(m), Some(field)) => m.value(s, field).map_or(Cell::Null, Cell::text),
+                    _ => Cell::Null,
+                })
+                .collect();
+            for feature in profile.features() {
+                let name = Cell::text(&feature.name);
+                let levels: Vec<Cell> = feature
+                    .hierarchy
+                    .iter()
+                    .take(higher.len())
+                    .map(|h| Cell::text(h))
+                    .collect();
+                let percentages = profile.percentages(feature);
+                for (i, count) in feature.counts.iter().enumerate() {
+                    let mut row = vec![
+                        names[i].clone(),
+                        name.clone(),
+                        Cell::Num(*count),
+                        Cell::Num(percentages[i]),
+                        groups[i].clone(),
+                    ];
+                    row.extend(levels.iter().cloned());
+                    row.resize(table.columns.len(), Cell::Null);
+                    table.rows.push(row);
+                }
+            }
+            Ok(table)
+        }
+        "samples" => {
+            let fields: &[String] = metadata.map_or(&[], |m| m.fields());
+            let mut columns: Vec<String> = ["sample", "switched_on", "total"]
+                .map(String::from)
+                .to_vec();
+            columns.extend(
+                fields
+                    .iter()
+                    .filter(|f| !columns.contains(f))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            );
+            let mut table = Table::new(columns.clone());
+            for sample in tree.sample_names() {
+                let mut row = vec![
+                    Cell::text(sample),
+                    Cell::Bool(active(sample)),
+                    tree.sample_total(sample).map_or(Cell::Null, Cell::Num),
+                ];
+                for field in &columns[3..] {
+                    row.push(
+                        metadata
+                            .and_then(|m| m.value(sample, field))
+                            .map_or(Cell::Null, typed_cell),
+                    );
+                }
+                table.rows.push(row);
+            }
+            Ok(table)
+        }
+        "results" => {
+            let (headings, rows) = results;
+            if headings.is_empty() {
+                return Err("There are no results yet: the analysis has not been run.".to_string());
+            }
+            let mut columns: Vec<String> = headings.to_vec();
+            // The first column names the feature, whatever its heading.
+            if !columns.iter().any(|c| c == "feature") {
+                columns[0] = "feature".to_string();
+            }
+            let mut table = Table::new(columns);
+            for row in rows {
+                let mut cells: Vec<Cell> = row.iter().map(|v| typed_cell(v)).collect();
+                if let Some(first) = cells.first_mut() {
+                    *first = Cell::text(&row[0]);
+                }
+                cells.resize(table.columns.len(), Cell::Null);
+                table.rows.push(cells);
+            }
+            Ok(table)
+        }
+        other => Err(format!(
+            "STAMP has no data named '{other}'; it has {}",
+            CUSTOM_DATA.join(", ")
+        )),
+    }
+}
+
+/// A number if the text reads as one, otherwise the text.
+fn typed_cell(text: &str) -> stamp_plot::custom::Cell {
+    use stamp_plot::custom::Cell;
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Cell::Null;
+    }
+    // STAMP writes minus signs as U+2212 in places.
+    match trimmed.replace('\u{2212}', "-").parse::<f64>() {
+        Ok(n) => Cell::Num(n),
+        Err(_) => Cell::text(text),
+    }
+}
 
 /// Build the figure for the current results of `mode`.
 pub fn build(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSettings) -> Figure {
@@ -1590,6 +1797,15 @@ fn rarefaction_curves(
 }
 
 fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSettings) -> Figure {
+    if kind == PlotKind::Custom {
+        return match &session.custom_plot {
+            Some(custom) => custom.build(session).map_or_else(
+                |e| Figure::message(&format!("The custom plot could not be drawn:\n{e}")),
+                |b| b.figure,
+            ),
+            None => Figure::message("There is no custom plot: ask the assistant to draw one"),
+        };
+    }
     if session.tree.is_none() {
         return Figure::message(NO_RESULTS);
     }

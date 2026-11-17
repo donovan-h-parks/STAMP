@@ -3614,6 +3614,7 @@ dependencies = [
  "flate2",
  "resvg",
  "serde",
+ "serde_json",
  "stamp-core",
  "ttf-parser",
 ]
