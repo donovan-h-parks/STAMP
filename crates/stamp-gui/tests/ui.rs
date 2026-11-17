@@ -537,11 +537,13 @@ fn side_panels_can_be_hidden() {
     harness.settle();
     let (_, with_panels) = harness.app.plot_placement.unwrap();
 
+    // Profile and groups and Statistics are tabs of one frame: hiding one
+    // leaves the other in its place.
     harness.app.show_side_panels(false, true);
     harness.settle();
-    let (_, without_left) = harness.app.plot_placement.unwrap();
-    assert!(without_left.left() < with_panels.left() - 100.0);
-    assert!((without_left.right() - with_panels.right()).abs() < 2.0);
+    let (_, without_profile) = harness.app.plot_placement.unwrap();
+    assert!((without_profile.left() - with_panels.left()).abs() < 2.0);
+    assert!((without_profile.right() - with_panels.right()).abs() < 2.0);
 
     harness.app.show_side_panels(false, false);
     harness.settle();
@@ -555,16 +557,22 @@ fn side_panels_can_be_hidden() {
 fn light_mode_text_is_black() {
     let mut harness = Harness::enterotypes();
     stamp_gui::app::set_dark_mode(&harness.renderer.ctx, false);
+    // Statistics is a tab behind Profile and groups to start with.
+    harness
+        .app
+        .toggle_frame(stamp_gui::layout::Frame::Statistics);
     harness.settle();
     let image = harness.screenshot("light_text");
-    // Labels and combo-box text in the properties panel are drawn in black.
-    let black = (900..1270)
+    // Labels and combo-box text in the Statistics panel are drawn in black.
+    let frame = frame_rect(&harness, stamp_gui::layout::Frame::Statistics);
+    let (x0, x1) = (frame.min.x as usize, frame.max.x as usize);
+    let black = (x0..x1)
         .flat_map(|x| (30..420).map(move |y| (x, y)))
         .filter(|&(x, y)| image.pixel(x, y) == egui::Color32::BLACK)
         .count();
     assert!(
         black > 300,
-        "only {black} black pixels in the properties panel"
+        "only {black} black pixels in the Statistics panel"
     );
 }
 
@@ -1318,6 +1326,9 @@ fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
     use stamp_core::stats::correction::Correction;
     // The label is drawn text; its pixels show which one is in use.
     let mut harness = Harness::enterotypes();
+    harness
+        .app
+        .toggle_frame(stamp_gui::layout::Frame::Statistics);
     harness.settle();
     let label = |harness: &mut Harness, correction, name| {
         harness
@@ -1326,14 +1337,14 @@ fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
             .set_correction(Mode::TwoGroups, correction);
         harness.settle();
         let shot = harness.screenshot(name);
-        // The label's place in the Properties frame, wherever that is.
+        // The label's place in the Statistics frame, wherever that is.
         let layout = harness.app.layout();
-        let tile = stamp_gui::layout::tile_of(layout, stamp_gui::layout::Frame::Properties)
-            .expect("the Properties frame");
+        let tile = stamp_gui::layout::tile_of(layout, stamp_gui::layout::Frame::Statistics)
+            .expect("the Statistics frame");
         let frame = layout.tiles.rect(tile).expect("the frame was laid out");
         let (left, top) = (frame.min.x as usize, frame.min.y as usize);
         (left + 42..left + 140)
-            .flat_map(|x| (top + 358..top + 380).map(move |y| (x, y)))
+            .flat_map(|x| (top + 335..top + 357).map(move |y| (x, y)))
             .map(|(x, y)| shot.pixel(x, y))
             .collect::<Vec<_>>()
     };
@@ -1667,7 +1678,7 @@ fn an_uncertain_storey_estimate_is_not_used_and_says_so() {
         .iter()
         .map(|r| r.p_value_corrected)
         .collect();
-    // Written under the correction in the Properties frame.
+    // Written under the correction in the Statistics frame.
     harness.screenshot("storey_caution");
     let warning = harness.app.correction_warning().expect("a caution");
     assert!(warning.contains("Benjamini-Hochberg"), "{warning}");
@@ -2563,10 +2574,10 @@ fn the_plot_selector_lists_plots_by_group() {
     harness.settle();
     let closed = harness.screenshot("plot_selector_closed");
     // The selector beneath the plot, at the left of the plot bar.
+    let plot = frame_rect(&harness, stamp_gui::layout::Frame::Plot);
+    let selector = egui::pos2(plot.min.x + 50.0, plot.max.y - 40.0);
     let app = &mut harness.app;
-    harness
-        .renderer
-        .click(egui::pos2(320.0, 712.0), |ui| app.draw(ui));
+    harness.renderer.click(selector, |ui| app.draw(ui));
     let app = &mut harness.app;
     harness.renderer.run(30, |ui| app.draw(ui));
     let open = harness.screenshot("plot_selector_open");
@@ -3613,13 +3624,14 @@ fn frames_are_hidden_and_shown_and_open_where_they_belong() {
     assert!(visible(&harness, Frame::Features));
     assert!((frame_rect(&harness, Frame::Plot).width() - plot.width()).abs() < 1.0);
 
-    // Configure plot opens beside the plot, in front of Properties.
+    // Configure plot opens left of the plot, in front of Profile and
+    // groups and Statistics.
     assert!(!visible(&harness, Frame::ConfigurePlot));
     harness.app.show_plot_config(true);
     harness.settle();
     assert!(visible(&harness, Frame::ConfigurePlot));
     let configure = frame_rect(&harness, Frame::ConfigurePlot);
-    assert!(configure.min.x > plot.max.x, "{configure:?}");
+    assert!(configure.max.x < plot.min.x, "{configure:?}");
     harness.screenshot("configure_plot_docked");
 
     // The results table opens along the bottom.
@@ -3653,4 +3665,161 @@ fn the_assistant_menu_has_icons() {
         (0..closed.pixels.len()).any(|i| closed.pixels[i] != open.pixels[i]),
         "the menu did not open"
     );
+}
+
+/// STAMP starts with Profile and groups and Statistics as tabs on the left,
+/// the Feature table right of the plot, the Metadata table beneath it, and
+/// the assistant hidden (on the right when it is opened). The View menu
+/// brings a frame that is behind a tab to the front, and Preferences >
+/// Restore window position defaults puts moved frames back.
+#[test]
+fn the_default_layout_and_restoring_it() {
+    use stamp_gui::layout::{is_in_front, Frame};
+    let mut harness = Harness::enterotypes();
+    harness.app.show_metadata_table(true);
+    harness.settle();
+    harness.screenshot("default_layout");
+    let plot = frame_rect(&harness, Frame::Plot);
+    let profile = frame_rect(&harness, Frame::Profile);
+    let features = frame_rect(&harness, Frame::Features);
+    let metadata = frame_rect(&harness, Frame::Metadata);
+    assert!(
+        profile.max.x < plot.min.x && profile.min.x < 5.0,
+        "{profile:?}"
+    );
+    assert!(features.min.x > plot.max.x, "{features:?}");
+    assert!(metadata.min.y > plot.max.y - 1.0, "{metadata:?}");
+    // Statistics shares the left frame, behind Profile and groups.
+    let layout = harness.app.layout();
+    let parent = |frame| {
+        let tile = stamp_gui::layout::tile_of(layout, frame).unwrap();
+        layout.tiles.parent_of(tile)
+    };
+    assert_eq!(parent(Frame::Statistics), parent(Frame::Profile));
+    assert!(is_in_front(layout, Frame::Profile));
+    assert!(!is_in_front(layout, Frame::Statistics));
+    assert!(!harness.app.frame_shown(Frame::ClaudeCode));
+    // The assistant's room went to the plot: the plot is the widest frame.
+    assert!(plot.width() > 600.0, "{plot:?}");
+
+    // The left frame is as wide as the four analysis buttons need, in one
+    // row, whatever the window's width.
+    let needed = stamp_gui::app::analysis_buttons_width(&harness.renderer.ctx);
+    assert!(
+        (profile.width() - needed).abs() < 1.0,
+        "{profile:?} {needed}"
+    );
+    let renderer = Renderer::new(1920.0, 1080.0, 1.0);
+    let app = StampApp::new(&renderer.ctx);
+    let mut wide = Harness { renderer, app };
+    wide.app.load_profile(
+        "Enterotypes.profile.spf",
+        &example("EnterotypesArumugam/Enterotypes.profile.spf"),
+    );
+    wide.app.toggle_frame(Frame::Statistics);
+    wide.settle();
+    let statistics = frame_rect(&wide, Frame::Statistics);
+    assert!((statistics.width() - needed).abs() < 1.0, "{statistics:?}");
+    wide.screenshot("default_layout_wide");
+
+    // View > Statistics (shown, but behind a tab) brings it to the front;
+    // chosen again it hides it.
+    harness.app.toggle_frame(Frame::Statistics);
+    harness.settle();
+    assert!(is_in_front(harness.app.layout(), Frame::Statistics));
+    assert!(harness.app.frame_shown(Frame::Statistics));
+    harness.app.toggle_frame(Frame::Statistics);
+    assert!(!harness.app.frame_shown(Frame::Statistics));
+    harness.app.toggle_frame(Frame::Statistics);
+    assert!(harness.app.frame_shown(Frame::Statistics));
+
+    // A frame moved elsewhere goes back where it started.
+    let tree = harness.app.layout_mut();
+    let tile = stamp_gui::layout::tile_of(tree, Frame::Metadata).unwrap();
+    let root = tree.root().unwrap();
+    tree.move_tile_to_container(tile, root, 0, false);
+    harness.settle();
+    assert!(frame_rect(&harness, Frame::Metadata).min.y < plot.max.y - 1.0);
+    let ctx = harness.renderer.ctx.clone();
+    harness.app.restore_window_positions(&ctx);
+    harness.settle();
+    assert!(frame_rect(&harness, Frame::Metadata).min.y > plot.max.y - 1.0);
+}
+
+/// Once a row of the Feature table has been clicked, Up and Down move the
+/// selected feature, until something else is clicked.
+#[test]
+fn arrow_keys_move_through_the_feature_table() {
+    use stamp_gui::layout::Frame;
+    let mut harness = Harness::enterotypes();
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.app.set_plot_kind(PlotKind::Box);
+    harness.settle();
+    let rows: Vec<String> = harness
+        .app
+        .feature_table()
+        .iter()
+        .map(|r| r.feature.clone())
+        .collect();
+    assert!(rows.len() > 3);
+    let table = frame_rect(&harness, Frame::Features);
+    let key = |harness: &mut Harness, key: egui::Key| {
+        let app = &mut harness.app;
+        harness.renderer.send_events(
+            vec![egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            |ui| app.draw(ui),
+        );
+        harness.settle();
+    };
+    let selected = |harness: &Harness| harness.app.session.selected_feature.clone();
+    // Without a click the keys leave the table alone.
+    let before = selected(&harness);
+    key(&mut harness, egui::Key::ArrowDown);
+    assert_eq!(selected(&harness), before);
+    // The second row of the body: below the checkbox, the separator and
+    // the heading.
+    let second = egui::pos2(table.min.x + 40.0, table.min.y + 74.0);
+    let app = &mut harness.app;
+    harness.renderer.click(second, |ui| app.draw(ui));
+    harness.settle();
+    let clicked = selected(&harness).expect("a row was clicked");
+    let at = rows.iter().position(|r| *r == clicked).unwrap();
+    key(&mut harness, egui::Key::ArrowDown);
+    assert_eq!(selected(&harness).as_ref(), Some(&rows[at + 1]));
+    key(&mut harness, egui::Key::ArrowDown);
+    assert_eq!(selected(&harness).as_ref(), Some(&rows[at + 2]));
+    key(&mut harness, egui::Key::ArrowUp);
+    assert_eq!(selected(&harness).as_ref(), Some(&rows[at + 1]));
+    harness.screenshot("feature_table_keys");
+    // A click on the plot takes the keyboard away from the table.
+    let plot = frame_rect(&harness, Frame::Plot).center();
+    let app = &mut harness.app;
+    harness.renderer.click(plot, |ui| app.draw(ui));
+    harness.settle();
+    let now = selected(&harness);
+    key(&mut harness, egui::Key::ArrowDown);
+    assert_eq!(selected(&harness), now);
+}
+
+/// The screenshots of the window in the documentation
+/// (`docs/site/images/gui_main_window.png` and `gui_frames.png`), in light
+/// mode: the window as STAMP starts, comparing two enterotypes, and with
+/// Configure plot and the results table open.
+#[test]
+fn documentation_screenshots_of_the_window() {
+    let mut harness = Harness::enterotypes();
+    stamp_gui::app::set_dark_mode(&harness.renderer.ctx, false);
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.settle();
+    harness.screenshot("gui_main_window");
+    harness.app.show_plot_config(true);
+    harness.app.show_results_table(true);
+    harness.settle();
+    harness.screenshot("gui_frames");
 }

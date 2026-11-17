@@ -27,6 +27,19 @@ struct Harness {
 }
 
 impl Harness {
+    /// A point in the middle of the assistant panel, wherever it is.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn in_panel(&self) -> eframe::egui::Pos2 {
+        let layout = self.app.layout();
+        let tile = stamp_gui::layout::tile_of(layout, stamp_gui::layout::Frame::ClaudeCode)
+            .expect("the assistant panel");
+        layout
+            .tiles
+            .rect(tile)
+            .expect("the panel was laid out")
+            .center()
+    }
+
     fn enterotypes() -> Harness {
         let renderer = Renderer::new(1280.0, 800.0, 1.0);
         let mut app = StampApp::new(&renderer.ctx);
@@ -60,6 +73,20 @@ impl Harness {
     fn frames(&mut self, n: usize) {
         let app = &mut self.app;
         self.renderer.run(n, |ui| app.draw(ui));
+    }
+
+    /// Write what the window shows to `STAMP_SCREENSHOTS`, if set.
+    fn screenshot_to(&mut self, name: &str) {
+        if let Ok(directory) = std::env::var("STAMP_SCREENSHOTS") {
+            let app = &mut self.app;
+            let image = self.renderer.render(|ui| app.draw(ui));
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(
+                PathBuf::from(directory).join(format!("{name}.png")),
+                image.to_png(),
+            )
+            .unwrap();
+        }
     }
 
     fn settle(&mut self) {
@@ -654,6 +681,68 @@ fn serve_for_claude_code() {
     }
 }
 
+/// Several assistants run at once, a tab each in the one panel: opening
+/// another adds a tab, opening one already running shows its tab, and the
+/// keyboard goes to the tab shown.
+#[cfg(unix)]
+#[test]
+fn assistants_open_in_tabs_of_one_panel() {
+    use stamp_gui::assistant::launch::Agent;
+
+    let renderer = Renderer::new(1280.0, 800.0, 1.0);
+    let app = StampApp::new(&renderer.ctx);
+    let mut h = Harness { renderer, app };
+    let folder = std::env::temp_dir();
+    let ctx = h.renderer.ctx.clone();
+    let shell = std::env::var("STAMP_TEST_SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    let run = |h: &mut Harness, agent: Agent, label: &str| {
+        stamp_gui::assistant::window::run_in_panel(
+            &mut h.app,
+            &ctx,
+            agent,
+            label,
+            &shell,
+            &[],
+            &folder,
+        )
+        .unwrap();
+        h.frames(3);
+    };
+    run(&mut h, Agent::OpenCode, "First");
+    run(&mut h, Agent::ClaudeCode, "Second");
+    assert_eq!(
+        h.app.assistant_tabs(),
+        (vec!["First".to_string(), "Second".to_string()], 1)
+    );
+    assert!(h.app.frame_shown(stamp_gui::layout::Frame::ClaudeCode));
+    // The panel opens on the right of the plot.
+    let plot = {
+        let layout = h.app.layout();
+        let tile = stamp_gui::layout::tile_of(layout, stamp_gui::layout::Frame::Plot).unwrap();
+        layout.tiles.rect(tile).unwrap()
+    };
+    assert!(h.in_panel().x > plot.max.x);
+    // Opening one that is running shows its tab rather than starting it
+    // again.
+    stamp_gui::assistant::window::show_agent(&mut h.app, &ctx, Agent::OpenCode);
+    assert_eq!(
+        h.app.assistant_tabs(),
+        (vec!["First".to_string(), "Second".to_string()], 0)
+    );
+    // Starting one again replaces its tab, in place.
+    run(&mut h, Agent::OpenCode, "First again");
+    assert_eq!(
+        h.app.assistant_tabs(),
+        (vec!["First again".to_string(), "Second".to_string()], 0)
+    );
+    // The tab shown takes the keyboard when clicked.
+    let point = h.in_panel();
+    let app = &mut h.app;
+    h.renderer.click(point, |ui| app.draw(ui));
+    assert!(h.app.assistant_terminal_has_focus());
+    h.screenshot_to("assistant_tabs");
+}
+
 /// The Claude Code panel is a real terminal: a shell started in it shows
 /// its output, takes typed commands, and is interrupted by Ctrl+C.
 #[cfg(unix)]
@@ -709,11 +798,10 @@ fn the_claude_code_panel_runs_a_terminal() {
         modifiers,
     };
     h.frames(3);
-    // The panel is at the bottom of the window; clicking it gives it the
-    // keyboard.
+    // Clicking the panel gives it the keyboard.
+    let point = h.in_panel();
     let app = &mut h.app;
-    h.renderer
-        .click(egui::pos2(640.0, 700.0), |ui| app.draw(ui));
+    h.renderer.click(point, |ui| app.draw(ui));
     assert!(h.app.assistant_terminal_has_focus());
 
     typed(
@@ -824,7 +912,8 @@ fn the_claude_code_panel_runs_a_terminal() {
         source: egui::MouseWheelSource::Unknown,
         modifiers: egui::Modifiers::NONE,
     };
-    h.renderer.move_pointer(egui::pos2(640.0, 650.0));
+    let point = h.in_panel();
+    h.renderer.move_pointer(point);
     // Ten notches, three lines each.
     typed(&mut h, vec![wheel(10.0)]);
     h.frames(5);
@@ -855,7 +944,8 @@ fn the_claude_code_panel_runs_a_terminal() {
     );
     // Mouse reports are on once the marker after them is shown.
     wait_for(&mut h, "mouse-6");
-    h.renderer.move_pointer(egui::pos2(640.0, 650.0));
+    let point = h.in_panel();
+    h.renderer.move_pointer(point);
     typed(&mut h, vec![wheel(1.0)]);
     typed(&mut h, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
     wait_for(&mut h, "^[[<64;");
@@ -873,7 +963,8 @@ fn the_claude_code_panel_runs_a_terminal() {
         ],
     );
     wait_for(&mut h, "\n200\n");
-    h.renderer.move_pointer(egui::pos2(640.0, 650.0));
+    let point = h.in_panel();
+    h.renderer.move_pointer(point);
     typed(&mut h, vec![wheel(10.0)]);
     h.frames(3);
 
@@ -960,9 +1051,9 @@ fn claude_code_in_the_panel() {
     };
     // The panel is drawn before it can be clicked.
     h.frames(3);
+    let point = h.in_panel();
     let app = &mut h.app;
-    h.renderer
-        .click(egui::pos2(640.0, 700.0), |ui| app.draw(ui));
+    h.renderer.click(point, |ui| app.draw(ui));
     assert!(h.app.assistant_terminal_has_focus());
     // Claude Code's first question in a new folder is whether to trust it;
     // the user answers it (Down, then Enter, for "Yes").
@@ -1010,7 +1101,8 @@ fn claude_code_in_the_panel() {
     let before = h.app.assistant_terminal_text().unwrap_or_default();
     println!("{before}");
     // The mouse wheel over the panel scrolls what Claude Code shows.
-    h.renderer.move_pointer(egui::pos2(640.0, 600.0));
+    let point = h.in_panel();
+    h.renderer.move_pointer(point);
     let wheel = egui::Event::MouseWheel {
         unit: egui::MouseWheelUnit::Line,
         delta: egui::vec2(0.0, 5.0),
@@ -1145,9 +1237,9 @@ fn agent_in_the_panel(
         modifiers: egui::Modifiers::NONE,
     };
     h.frames(3);
+    let point = h.in_panel();
     let app = &mut h.app;
-    h.renderer
-        .click(egui::pos2(640.0, 700.0), |ui| app.draw(ui));
+    h.renderer.click(point, |ui| app.draw(ui));
     if let Ok(keys) = std::env::var("STAMP_ASSISTANT_KEYS") {
         run_for(&mut h, 10, &|_| false);
         shoot(&mut h, &format!("{tag}-first-run"));

@@ -10,13 +10,16 @@ Add an entry here whenever a feature is added that v2 did not have.
 ## Running STAMP
 
 - **Movable frames** (`crates/stamp-gui/src/layout.rs`, `egui_tiles`).
-  Profile and groups, Properties, the Feature table, the Metadata table,
-  the Results table, Configure plot and Claude Code are frames that can
-  be dragged by their tabs to any side of the plot or of each other, or
-  tabbed together; the plot stays in the middle. Configure plot and the
-  Results table, windows in v2, are frames. A closed frame's room goes to
-  the plot; the View menu brings it back where it was. The arrangement is
-  remembered between runs; View > Reset layout restores the default.
+  Profile and groups, Statistics (v2's Properties), the Feature table, the
+  Metadata table, the Results table, Configure plot and the Assistant are
+  frames that can be dragged by their tabs to any side of the plot or of
+  each other, or tabbed together; the plot stays in the middle. Configure
+  plot and the Results table, windows in v2, are frames. A closed frame's
+  room goes to the plot; the View menu brings it back where it was, or to
+  the front when it is behind another tab. The arrangement is remembered
+  between runs; View > Reset layout restores the default, and Settings >
+  Preferences > Restore window position defaults also puts floating windows
+  back.
 - **Asking an AI assistant** (Assistant menu, `crates/stamp-gui/src/assistant/`,
   `docs/site/assistant.rst`). "Copy description for AI" copies the data,
   the analysis settings, a description of the plot on screen (its text and
@@ -30,8 +33,8 @@ Add an entry here whenever a feature is added that v2 did not have.
   caught up. Every change can be undone from the status bar; Assistant
   activity lists every request. STAMP installs Claude Code with
   Anthropic's installer if asked. **Claude
-  Code runs inside STAMP**, in a panel along the bottom of the window like
-  the Metadata table (View > Claude Code): a terminal built on
+  Code runs inside STAMP**, in the assistant panel on the right of the
+  window (View > Assistant): a terminal built on
   `alacritty_terminal` (ConPTY on Windows) drawn with egui
   (`assistant/terminal.rs`), with keys, paste, Ctrl+C, mouse selection,
   a scroll bar, and the mouse wheel scrolling the scrollback or, for
@@ -53,8 +56,10 @@ Add an entry here whenever a feature is added that v2 did not have.
   a Google AI Pro or Ultra plan: STAMP writes `.agents/mcp_config.json`
   (the server and token, read as the folder's MCP servers), settings for
   the run given with `--settings` that allow STAMP's tools, and
-  `AGENTS.md`, and installs it with Google's installer if asked. Plan:
-  `docs/ASSISTANT_PLAN.md`.
+  `AGENTS.md`, and installs it with Google's installer if asked. **Several
+  assistants at once**: each one opened gets a tab of its own in the
+  assistant panel, all connected to the same session; opening one that is
+  running shows its tab. Plan: `docs/ASSISTANT_PLAN.md`.
 - **Custom plots drawn by the assistant** (tool `show_custom_plot`,
   `crates/stamp-plot/src/custom/`, `docs/site/assistant.rst`). When none of
   STAMP's plots shows what the user asks for, the assistant describes one

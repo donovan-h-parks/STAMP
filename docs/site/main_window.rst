@@ -4,8 +4,8 @@ The main window
 .. figure:: images/gui_main_window.png
    :width: 100%
 
-   The STAMP window: profile and groups (left), plot and feature table
-   (centre), properties (right).
+   The STAMP window: profile and groups, with statistics as the tab beside
+   it (left), the plot (centre) and the feature table (right).
 
 The plot is always in the middle. The other parts of the window are frames
 that can be moved around it (see `Arranging the window`_); the sections
@@ -13,6 +13,9 @@ below describe them where STAMP first puts them.
 
 Profile and groups (left)
 -------------------------
+
+*Profile and groups* and *Statistics* share the left of the window as tabs:
+click a tab to bring it to the front.
 
 * **Parent level**, **Profile level** and **Unclassified** choose what is
   analysed; see :doc:`input_files`.
@@ -41,7 +44,7 @@ Beneath the plot are:
   analysis under six headings, by the question they answer (see
   :doc:`plots`);
 * **Configure plot**, which opens the options of the current plot in a frame
-  of their own (beside the properties to start with): its size, what it
+  of their own (a third tab on the left to start with): its size, what it
   shows, its legend and the font sizes of its own text. Changes apply at
   once; **Restore defaults** returns this plot's options to STAMP's, and
   **Close** (or the × of its tab) closes the frame;
@@ -59,8 +62,8 @@ a group. Clicking a feature selects it.
 
    The plot selector, with the plots of a multiple-group analysis by group.
 
-Feature table (centre right)
-----------------------------
+Feature table (right)
+---------------------
 
 The feature table lists every feature with its effect size and p-value.
 Tick *Show only active features* to hide those removed by the filters.
@@ -70,9 +73,12 @@ the box plot is shown, Ctrl+click (Cmd+click on a Mac) adds a feature to the
 box plot's list of features, or removes it, and the plot then shows the list
 (see :ref:`box plots of several features <plot-box-features>`).
 Click a heading to sort by that column; click again to reverse the order.
+Once a row has been clicked, the **Up** and **Down** arrow keys move to the
+row above or below, until you click elsewhere; the results table works the
+same way.
 
-Properties (right)
-------------------
+Statistics (left, a tab)
+------------------------
 
 The tabs at the top choose the kind of analysis: **Multiple groups**, **Two
 groups**, **Two samples** or **Correlation** (see :doc:`analyses`). Below
@@ -139,10 +145,9 @@ Tables
   filter to tick or untick all samples matching a condition (for example,
   *Remove all samples where Nationality = american*). Samples left out by
   the *Sample filter* are greyed out here.
-* **View > Claude Code** (desktop application) shows or hides the assistant
-  panel along the bottom of the window, which runs Claude Code, OpenCode or
-  Google Antigravity (the menu item is named after the one running); see
-  :doc:`assistant`.
+* **View > Assistant** (desktop application) shows or hides the assistant
+  panel on the right of the window, with a tab for each assistant open
+  (OpenCode, Claude Code, Google Antigravity); see :doc:`assistant`.
 
 The tables along the bottom share the room as tabs: click a tab to bring
 its table to the front.
@@ -158,9 +163,13 @@ Arranging the window
 --------------------
 
 Seven parts of the window are frames you can move: *Profile and groups*,
-*Properties*, the *Feature table*, the *Metadata table*, the *Results
-table*, *Configure plot* and, in the desktop application, *Claude Code*.
-Each has a tab with its name.
+*Statistics*, the *Feature table*, the *Metadata table*, the *Results
+table*, *Configure plot* and, in the desktop application, the *Assistant*.
+Each has a tab with its name. STAMP starts with *Profile and groups* and
+*Statistics* as tabs on the left, the *Feature table* on the right, and the
+*Metadata table* and *Results table* as tabs along the bottom (shown when
+you choose them in the View menu); the *Assistant* appears on the right
+when you open an assistant.
 
 * **Move a frame** by dragging its tab. While you drag, STAMP shows where
   the frame would go: drop it at the left, right, top or bottom edge of the
@@ -169,16 +178,20 @@ Each has a tab with its name.
 * **Resize** frames by dragging the gap between them.
 * **Close a frame** with the × on its tab; the View menu (or the button that
   opens it) brings it back in the same place. The room of a closed frame
-  goes to the plot.
+  goes to the plot. Choosing a frame in the View menu while it is behind
+  another tab brings it to the front.
 * **View > Reset layout** puts every frame back where STAMP first put it.
+  **Settings > Preferences > Restore window position defaults** does the
+  same, and also puts floating windows (such as Preferences and Assistant
+  activity) back where they first open.
 
 STAMP remembers the arrangement from one run to the next.
 
 .. figure:: images/gui_frames.png
    :width: 100%
 
-   Configure plot open beside the properties, and the results table along
-   the bottom with the metadata table and Claude Code.
+   Configure plot open as a tab on the left, and the results table along
+   the bottom.
 
 Saving plots
 ------------
@@ -215,6 +228,10 @@ Preferences
 * the **plot font** (Arial, Times New Roman, Courier New or DejaVu Sans) and
   the font sizes of axis labels, tick labels and legends.
 
+**Restore defaults** returns these settings to STAMP's. **Restore window
+position defaults** puts the frames and floating windows back where STAMP
+first opens them (see `Arranging the window`_).
+
 Settings are remembered between sessions.
 
 Keyboard shortcuts
@@ -226,7 +243,7 @@ Ctrl+S                    Save the plot as a PNG image
 Ctrl+T                    Show or hide the results table
 Ctrl+M                    Show or hide the metadata table
 Ctrl+L                    Show or hide the profile and groups frame
-Ctrl+P                    Show or hide the properties frame
+Ctrl+P                    Show or hide the statistics frame
 Ctrl+W                    Send the plot to a window of its own
 Ctrl+Q                    Exit
 ========================  =========================================

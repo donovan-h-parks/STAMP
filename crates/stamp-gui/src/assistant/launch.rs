@@ -67,7 +67,7 @@ pub enum Agent {
 }
 
 impl Agent {
-    pub const ALL: [Agent; 3] = [Agent::ClaudeCode, Agent::OpenCode, Agent::Antigravity];
+    pub const ALL: [Agent; 3] = [Agent::OpenCode, Agent::ClaudeCode, Agent::Antigravity];
 
     /// Its name, as shown in menus and on the panel.
     pub fn name(self) -> &'static str {

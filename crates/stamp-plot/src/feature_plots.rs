@@ -4,8 +4,8 @@
 use stamp_core::{GroupProfile, MultiGroupProfile};
 
 use crate::axes::{
-    self, corner_note, fonts, group_color, legend, x_axis, y_axis, Frame, LabelRotation,
-    LegendPosition, AXES_COLOR, INCH, TITLE_SIZE,
+    self, fonts, group_color, legend, x_axis, y_axis, Frame, LabelRotation, LegendPosition,
+    AXES_COLOR, INCH, TITLE_SIZE,
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, Stroke};
@@ -246,9 +246,20 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
     let column = options.column_width * INCH;
     let left =
         padding + axes::TICK_PAD + axis.label_width() + 4.0 + axes::line_height(fonts().axis_label);
+    // The p-value goes on a line of its own under the title: the plot is
+    // often too narrow for both side by side.
+    let p_value = match (options.show_p_value, &data.p_value) {
+        (true, Some(p)) => Some(crate::multi_box::p_text(p, data.p_value_kind)),
+        _ => None,
+    };
+    let p_line = if p_value.is_some() {
+        1.2 * options.title_font_size
+    } else {
+        0.0
+    };
     let frame = Frame {
         left,
-        top: padding + options.title_font_size,
+        top: padding + options.title_font_size + p_line,
         right: left + column * num_samples,
         bottom: options.height * INCH - padding - longest_label - axes::TICK_PAD,
     };
@@ -324,19 +335,18 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         AXES_COLOR,
     );
     axis.draw_break(&mut figure, &frame, &y, false);
+    let title_frame = Frame {
+        top: frame.top - p_line,
+        ..frame
+    };
     axes::title(
         &mut figure,
-        &frame,
+        &title_frame,
         &shorten(&data.feature, options.truncate_labels),
         options.title_font_size,
     );
-    if let (true, Some(p)) = (options.show_p_value, &data.p_value) {
-        corner_note(
-            &mut figure,
-            &frame,
-            &crate::multi_box::p_text(p, data.p_value_kind),
-            options.title_font_size,
-        );
+    if let Some(p) = &p_value {
+        axes::title(&mut figure, &frame, p, options.title_font_size);
     }
     let entries: Vec<(String, Color)> = data
         .groups
@@ -590,6 +600,37 @@ mod tests {
         more.groups[0].samples.push("L4".into());
         more.groups[0].values.push(11.0);
         assert!(bar_plot(&more, &BarOptions::default()).width > figure.width);
+    }
+
+    #[test]
+    fn the_bar_plot_p_value_is_under_its_title() {
+        let place = |figure: &Figure, wanted: &str| {
+            figure
+                .shapes
+                .iter()
+                .find_map(|s| match s {
+                    Shape::Text { x, y, text, .. } if text == wanted => Some((*x, *y)),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let figure = bar_plot(&data(), &BarOptions::default());
+        let (title_x, title_y) = place(&figure, "Bacteroides");
+        let (p_x, p_y) = place(&figure, "p = 0.012");
+        assert_eq!(p_x, title_x);
+        assert!(
+            p_y - title_y > axes::line_height(TITLE_SIZE),
+            "{title_y} {p_y}"
+        );
+        // Without the p-value the plot takes its line.
+        let plain = bar_plot(
+            &data(),
+            &BarOptions {
+                show_p_value: false,
+                ..BarOptions::default()
+            },
+        );
+        assert_eq!(place(&plain, "Bacteroides"), (title_x, title_y));
     }
 
     #[test]

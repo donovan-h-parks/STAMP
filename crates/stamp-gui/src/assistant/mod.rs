@@ -45,12 +45,16 @@ pub struct State {
     /// The dialog being shown, if any.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) asking: Option<Ask>,
-    /// The assistant program (or its installer) running in the assistant
-    /// panel.
+    /// The assistant programs (or their installers) in the assistant
+    /// panel, a tab each, in the order they were opened: at most one per
+    /// program.
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) terminal: Option<terminal::Terminal>,
-    /// The program the assistant panel runs, the last one opened
-    /// (remembered between runs).
+    pub(crate) tabs: Vec<Tab>,
+    /// The tab shown.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) active: usize,
+    /// The program last opened (remembered between runs), which the panel
+    /// offers to start when no assistant is in it.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) agent: launch::Agent,
     /// The assistant panel is shown.
@@ -59,6 +63,36 @@ pub struct State {
     /// Open an assistant without its dialog (remembered between runs).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) skip_claude_code_dialog: bool,
+}
+
+/// An assistant program in a tab of the assistant panel.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) struct Tab {
+    pub agent: launch::Agent,
+    pub terminal: terminal::Terminal,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl State {
+    /// The tab shown, if any.
+    pub(crate) fn active_tab(&self) -> Option<&Tab> {
+        self.tabs.get(self.active)
+    }
+
+    /// The tab of `agent`, if it has one.
+    pub(crate) fn tab_of(&self, agent: launch::Agent) -> Option<usize> {
+        self.tabs.iter().position(|tab| tab.agent == agent)
+    }
+
+    /// Close the tab at `index`, ending its program.
+    pub(crate) fn close_tab(&mut self, index: usize) {
+        if index < self.tabs.len() {
+            self.tabs.remove(index);
+            if self.active > index || self.active >= self.tabs.len() {
+                self.active = self.active.saturating_sub(1);
+            }
+        }
+    }
 }
 
 /// The assistant's dialogs.

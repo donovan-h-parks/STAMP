@@ -7,25 +7,29 @@ can ask about your data in plain language: *what does this plot show?*,
 large enough to matter?* There are four ways to do it, all in the
 **Assistant** menu:
 
-- **Claude Code** (desktop application): ask Claude, in a panel of STAMP's
-  window. Claude sees your session and can change the analysis and plots
-  for you.
-- **OpenCode** (desktop application): the same, with OpenCode in that
-  panel, for a **ChatGPT** plan, **GitHub Copilot** or other providers.
+- **OpenCode** (desktop application): ask an assistant, in a panel of
+  STAMP's window, with a **ChatGPT** plan, **GitHub Copilot** or other
+  providers. It sees your session and can change the analysis and plots for
+  you.
+- **Claude Code** (desktop application): the same, with Claude in that
+  panel.
 - **Google Antigravity** (desktop application): the same, with Google's
   Antigravity CLI in that panel, for a **Google account**, free or with a
   **Google AI Pro or Ultra** plan.
 - **Copy and paste** (desktop and browser): copy a description of the
   session into any chat assistant. It cannot change anything in STAMP.
 
+OpenCode, Claude Code and Google Antigravity can be open at once, each in a
+tab of the panel.
+
 Claude Code
 -----------
 
 **Assistant > Open Claude Code** connects `Claude Code
 <https://claude.com/claude-code>`_, Anthropic's assistant for the terminal, in
-the same way. It runs in the **assistant panel** along the bottom of STAMP's
-window, like the Metadata table (a frame you can move elsewhere; see
-:ref:`arranging-the-window`), and you type your questions there. Claude
+the same way. It runs in the **assistant panel** on the right of STAMP's
+window (a frame you can move elsewhere; see :ref:`arranging-the-window`),
+and you type your questions there. Claude
 Code needs a Claude **Pro, Max, Team or Enterprise** plan; you sign in with
 your own Claude account the first time it starts, and STAMP never sees your
 sign-in. If Claude Code is not installed, STAMP offers to install it with
@@ -46,9 +50,11 @@ STAMP always asks before installing Claude Code.
 The assistant panel
 ~~~~~~~~~~~~~~~~~~~
 
-The panel runs Claude Code, OpenCode or Google Antigravity, whichever was
-opened last; its tab and the View menu are named after it. Opening another
-one ends the one running.
+The panel, named *Assistant*, is hidden until you open an assistant. Each
+assistant you open gets a tab of its own in it (**OpenCode**, **Claude
+Code**, **Google Antigravity**), so several can run at once; click a tab to
+show that one. Opening an assistant that is already running shows its tab.
+All of them reach the same STAMP session.
 
 - Click in the panel to type into Claude Code. While it has the keyboard,
   every key goes to Claude Code, including STAMP's own shortcuts; click
@@ -60,13 +66,13 @@ one ends the one running.
   on the right. When Claude Code uses its full-screen view it scrolls its
   own conversation with the wheel (and *Ctrl+End* returns to the bottom);
   the scroll bar then has nothing to show.
-- **Hide** hides the panel and leaves Claude Code running; **View > Claude
-  Code** (or **View > OpenCode**, **View > Google Antigravity**) shows it
-  again. **Restart** starts it
-  again, and **Separate terminal** opens it in your computer's own terminal
-  instead. To end Claude Code, quit it as usual (type ``/exit``); STAMP goes
-  on sharing until you choose **Assistant > Stop sharing** (see
-  :ref:`stop-sharing`).
+- **Hide** hides the panel and leaves the assistants running; **View >
+  Assistant** shows it again. **Restart** ends the assistant of the tab
+  shown and starts it again, and **Separate terminal** opens it in your
+  computer's own terminal instead, closing its tab. To end Claude Code, quit
+  it as usual (type ``/exit``); its tab then says *(ended)*, and its **x**
+  closes the tab. STAMP goes on sharing until you choose **Assistant > Stop
+  sharing** (see :ref:`stop-sharing`).
 - The panel is always dark, whatever STAMP's theme, because Claude Code's
   colours are made for a dark background.
 

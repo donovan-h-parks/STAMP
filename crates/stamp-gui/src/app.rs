@@ -1,9 +1,10 @@
 //! The main window.
 //!
-//! The layout follows STAMP v2: profile and group settings in one side
-//! panel; the kind of analysis with its statistical properties and filters in
-//! the other; the plot in the middle, with the table of features beside it
-//! for plots of a single feature and the choice of plot beneath it.
+//! The frames are those of STAMP v2: profile and group settings in one; the
+//! kind of analysis with its statistical properties and filters in another
+//! (Statistics, v2's Properties); the plot in the middle, with the table of
+//! features beside it for plots of a single feature and the choice of plot
+//! beneath it.
 
 use eframe::egui::{self, Color32, RichText};
 use stamp_core::stats::ci::SampleCi;
@@ -269,11 +270,91 @@ fn strings(items: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<(String, Str
         .collect()
 }
 
+/// The margins inside a frame around its contents, across and down.
+const FRAME_MARGIN: (i8, i8) = (6, 4);
+
 /// Text in a table cell. Unlike an ordinary label its text cannot be
 /// selected, so the pointer keeps its arrow and a click anywhere in the cell
 /// reaches the row.
 fn plain_label(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) {
     ui.add(egui::Label::new(text).selectable(false));
+}
+
+/// The width, in points, the Statistics frame needs for the buttons of the
+/// four kinds of analysis at its top to sit in one row: their text, the
+/// padding of each, the spaces between them and the frame's margins.
+pub fn analysis_buttons_width(ctx: &egui::Context) -> f32 {
+    let style = ctx.global_style();
+    let font = egui::TextStyle::Button.resolve(&style);
+    let text: f32 = Mode::ALL
+        .iter()
+        .map(|mode| {
+            ctx.fonts_mut(|fonts| {
+                fonts
+                    .layout_no_wrap(mode.name().to_string(), font.clone(), Color32::WHITE)
+                    .size()
+                    .x
+            })
+        })
+        .sum();
+    let buttons = Mode::ALL.len() as f32;
+    text + buttons * 2.0 * style.spacing.button_padding.x
+        + (buttons - 1.0) * style.spacing.item_spacing.x
+        + 2.0 * f32::from(FRAME_MARGIN.0)
+        // Rounding of the text widths and of the frame's place.
+        + 4.0
+}
+
+/// The step of the arrow keys for a table of rows that has the keyboard: 1
+/// for Down, -1 for Up. A table takes the keyboard when one of its rows is
+/// clicked ([`table_focus`]), and keeps it until something else is clicked;
+/// meanwhile Up and Down move its selection instead of egui's focus.
+fn table_keys(ui: &egui::Ui, id: egui::Id) -> isize {
+    if !ui.memory(|m| m.has_focus(id)) {
+        return 0;
+    }
+    ui.memory_mut(|m| {
+        m.set_focus_lock_filter(
+            id,
+            egui::EventFilter {
+                vertical_arrows: true,
+                ..Default::default()
+            },
+        )
+    });
+    ui.input_mut(|i| {
+        let down = i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown);
+        let up = i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp);
+        isize::from(down) - isize::from(up)
+    })
+}
+
+/// Give the table at `rect` the keyboard when one of its rows was clicked,
+/// and take it away when something else is clicked.
+fn table_focus(ui: &egui::Ui, id: egui::Id, rect: egui::Rect, row_clicked: bool) {
+    let response = ui.interact(rect, id, egui::Sense::focusable_noninteractive());
+    if row_clicked {
+        response.request_focus();
+    } else if response.has_focus()
+        && ui.input(|i| {
+            i.pointer.any_pressed() && !i.pointer.interact_pos().is_some_and(|p| rect.contains(p))
+        })
+    {
+        response.surrender_focus();
+    }
+}
+
+/// The row `step` rows from `current` (or the first or last row when there
+/// is no current one), kept within `rows`.
+fn step_row(current: Option<usize>, step: isize, rows: usize) -> Option<usize> {
+    if step == 0 || rows == 0 {
+        return None;
+    }
+    Some(match current {
+        Some(row) => row.saturating_add_signed(step).min(rows - 1),
+        None if step > 0 => 0,
+        None => rows - 1,
+    })
 }
 
 /// Order of two table cells: numbers by value (a p-value shown as a bound,
@@ -731,7 +812,7 @@ mod shortcut {
     pub const SAVE_PLOT: KeyboardShortcut = command(Key::S);
     pub const EXIT: KeyboardShortcut = command(Key::Q);
     pub const PLOT_WINDOW: KeyboardShortcut = command(Key::W);
-    pub const PROPERTIES: KeyboardShortcut = command(Key::P);
+    pub const STATISTICS: KeyboardShortcut = command(Key::P);
     pub const GROUPS: KeyboardShortcut = command(Key::L);
     pub const METADATA: KeyboardShortcut = command(Key::M);
     pub const RESULTS: KeyboardShortcut = command(Key::T);
@@ -1007,6 +1088,9 @@ pub struct StampApp {
     assistant_undo: Vec<AssistantSnapshot>,
     /// Where the frames of the window are.
     layout: egui_tiles::Tree<Frame>,
+    /// The layout is the default, not yet drawn: its left frame is then
+    /// made as wide as the analysis buttons need.
+    fit_layout: bool,
 }
 
 /// What the assistant's tools can change, as it was before a change, so
@@ -1222,6 +1306,7 @@ impl StampApp {
             assistant: assistant::State::default(),
             assistant_undo: Vec::new(),
             layout: layout::default_tree(),
+            fit_layout: true,
         }
     }
 
@@ -1257,7 +1342,7 @@ impl StampApp {
     }
 
     /// Show or hide the side panels, as the View menu does: the profile and
-    /// groups panel, and the properties (statistics and filtering) panel.
+    /// groups panel, and the Statistics panel (the analysis and filters).
     pub fn show_side_panels(&mut self, profile: bool, properties: bool) {
         self.show_profile_panel = profile;
         self.show_properties_panel = properties;
@@ -1633,12 +1718,15 @@ impl StampApp {
         }
         // A layout from another version of STAMP, or missing a frame, is
         // replaced by the default.
-        self.layout = saved
-            .layout
-            .filter(|tree| {
-                saved.layout_version == layout::LAYOUT_VERSION && layout::is_complete(tree)
-            })
-            .unwrap_or_else(layout::default_tree);
+        match saved.layout.filter(|tree| {
+            saved.layout_version == layout::LAYOUT_VERSION && layout::is_complete(tree)
+        }) {
+            Some(tree) => {
+                self.layout = tree;
+                self.fit_layout = false;
+            }
+            None => self.reset_layout(),
+        }
         self.session.invalidate_all();
         self.view_dirty = true;
     }
@@ -1687,17 +1775,17 @@ impl StampApp {
         if pressed(&shortcut::PLOT_WINDOW) {
             self.send_plot_to_window();
         }
-        if pressed(&shortcut::PROPERTIES) {
-            self.show_properties_panel = !self.show_properties_panel;
+        if pressed(&shortcut::STATISTICS) {
+            self.toggle_frame(Frame::Statistics);
         }
         if pressed(&shortcut::GROUPS) {
-            self.show_profile_panel = !self.show_profile_panel;
+            self.toggle_frame(Frame::Profile);
         }
         if pressed(&shortcut::METADATA) {
-            self.show_metadata_table = !self.show_metadata_table;
+            self.toggle_frame(Frame::Metadata);
         }
         if pressed(&shortcut::RESULTS) {
-            self.show_table = !self.show_table;
+            self.toggle_frame(Frame::Results);
         }
         if cfg!(not(target_arch = "wasm32")) && pressed(&shortcut::EXIT) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1926,29 +2014,49 @@ impl StampApp {
         self.assistant.queue.push_back((request, None));
     }
 
-    /// Whether the Claude Code panel has the keyboard.
+    /// Whether the assistant panel (the terminal of its tab shown) has the
+    /// keyboard.
     pub fn assistant_terminal_has_focus(&self) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.assistant.show_terminal
                 && self
                     .assistant
-                    .terminal
-                    .as_ref()
-                    .is_some_and(|t| t.has_focus())
+                    .active_tab()
+                    .is_some_and(|tab| tab.terminal.has_focus())
         }
         #[cfg(target_arch = "wasm32")]
         false
     }
 
-    /// The text on the screen of the Claude Code panel, if it is running.
+    /// The text on the screen of the assistant panel's tab shown, if there
+    /// is one.
     pub fn assistant_terminal_text(&self) -> Option<String> {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self.assistant.terminal.as_ref().map(|t| t.screen_text())
+            self.assistant
+                .active_tab()
+                .map(|tab| tab.terminal.screen_text())
         }
         #[cfg(target_arch = "wasm32")]
         None
+    }
+
+    /// The names on the assistant panel's tabs, in order, and which is
+    /// shown.
+    pub fn assistant_tabs(&self) -> (Vec<String>, usize) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let names = self
+                .assistant
+                .tabs
+                .iter()
+                .map(|tab| tab.terminal.label.clone())
+                .collect();
+            (names, self.assistant.active)
+        }
+        #[cfg(target_arch = "wasm32")]
+        (Vec::new(), 0)
     }
 
     /// How many times a program has connected to the session being shared
@@ -2852,6 +2960,9 @@ impl StampApp {
         self.handle_file_events(&ui.ctx().clone());
         self.handle_shortcuts(ui.ctx());
         self.serve_assistant(&ui.ctx().clone());
+        if self.keep_choices_valid() {
+            self.session.invalidate(self.mode);
+        }
         if self.session.update(self.mode) {
             // On the desktop the work is on another thread and is looked in
             // on now and then. In the browser each frame does a slice of
@@ -2890,7 +3001,7 @@ impl StampApp {
         match frame {
             Frame::Plot => true,
             Frame::Profile => self.show_profile_panel,
-            Frame::Properties => self.show_properties_panel,
+            Frame::Statistics => self.show_properties_panel,
             Frame::Features => self.show_feature_table && self.session.tree.is_some(),
             Frame::Metadata => self.show_metadata_table,
             Frame::Results => self.show_table,
@@ -2907,7 +3018,7 @@ impl StampApp {
         match frame {
             Frame::Plot => {}
             Frame::Profile => self.show_profile_panel = shown,
-            Frame::Properties => self.show_properties_panel = shown,
+            Frame::Statistics => self.show_properties_panel = shown,
             Frame::Features => self.show_feature_table = shown,
             Frame::Metadata => self.show_metadata_table = shown,
             Frame::Results => self.show_table = shown,
@@ -2916,6 +3027,19 @@ impl StampApp {
             Frame::ClaudeCode => self.assistant.show_terminal = shown,
             #[cfg(target_arch = "wasm32")]
             Frame::ClaudeCode => {}
+        }
+    }
+
+    /// The View menu (and its shortcuts) for a frame: show it if it is
+    /// hidden, bring it to the front if it is shown but behind another tab,
+    /// and hide it if it is in view.
+    pub fn toggle_frame(&mut self, frame: Frame) {
+        if !self.frame_shown(frame) {
+            self.show_frame(frame, true);
+        } else if layout::is_in_front(&self.layout, frame) {
+            self.show_frame(frame, false);
+        } else {
+            layout::bring_to_front(&mut self.layout, frame);
         }
     }
 
@@ -2933,6 +3057,17 @@ impl StampApp {
     /// layout does. Which frames are shown does not change.
     pub fn reset_layout(&mut self) {
         self.layout = layout::default_tree();
+        self.fit_layout = true;
+    }
+
+    /// Put every window back where STAMP first opens it, as Preferences >
+    /// Restore window position defaults does: the frames around the plot
+    /// (as Reset layout does) and the floating windows (Preferences,
+    /// Assistant activity and the like). Which frames are shown does not
+    /// change.
+    pub fn restore_window_positions(&mut self, ctx: &egui::Context) {
+        self.reset_layout();
+        ctx.memory_mut(|m| m.reset_areas());
     }
 
     /// The frames around the plot, where the user has put them.
@@ -2945,16 +3080,19 @@ impl StampApp {
         );
         if !layout::is_complete(&tree) {
             tree = layout::default_tree();
+            self.fit_layout = true;
         }
         layout::sync_visibility(&mut tree, |frame| self.frame_shown(frame));
+        if std::mem::take(&mut self.fit_layout) {
+            let width = analysis_buttons_width(ui.ctx());
+            layout::set_frame_width(&mut tree, Frame::Statistics, width, ui.available_width());
+        }
         let plot_tabs = layout::plot_tabs(&tree);
-        let terminal_title = self.assistant_program();
         let mut draw = |frame: Frame, ui: &mut egui::Ui| self.frame_ui(frame, ui);
         let mut behavior = layout::Behavior {
             draw: &mut draw,
             closed: Vec::new(),
             plot_tabs,
-            terminal_title,
         };
         tree.ui(&mut behavior, ui);
         let closed = std::mem::take(&mut behavior.closed);
@@ -2966,7 +3104,8 @@ impl StampApp {
 
     /// Draw one frame's contents.
     fn frame_ui(&mut self, frame: Frame, ui: &mut egui::Ui) {
-        let padded = egui::Frame::new().inner_margin(egui::Margin::symmetric(6, 4));
+        let padded = egui::Frame::new()
+            .inner_margin(egui::Margin::symmetric(FRAME_MARGIN.0, FRAME_MARGIN.1));
         match frame {
             Frame::Plot => self.plot_panel(ui),
             Frame::Profile => {
@@ -2976,11 +3115,11 @@ impl StampApp {
                         .show(ui, |ui| self.profile_panel(ui));
                 });
             }
-            Frame::Properties => {
+            Frame::Statistics => {
                 padded.show(ui, |ui| {
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])
-                        .show(ui, |ui| self.properties_panel(ui));
+                        .show(ui, |ui| self.statistics_panel(ui));
                 });
             }
             Frame::Features => {
@@ -3085,67 +3224,33 @@ impl StampApp {
                 }
             });
             ui.menu_button("View", |ui| {
-                // A panel that is shown has its item drawn as selected.
-                let toggle =
+                // A frame that is shown has its item drawn as selected.
+                let mut toggle =
                     |ui: &mut egui::Ui,
-                     shown: &mut bool,
+                     frame: Frame,
                      icon: &str,
-                     text: &str,
                      shortcut: Option<&egui::KeyboardShortcut>| {
+                        let shown = self.frame_shown(frame);
                         if ui
-                            .add(item(icon, text, shortcut).selected(*shown))
+                            .add(item(icon, frame.title(), shortcut).selected(shown))
                             .clicked()
                         {
-                            *shown = !*shown;
+                            self.toggle_frame(frame);
                         }
                     };
+                toggle(ui, Frame::Profile, icons::SIDEBAR, Some(&shortcut::GROUPS));
                 toggle(
                     ui,
-                    &mut self.show_profile_panel,
-                    icons::SIDEBAR,
-                    "Profile and groups",
-                    Some(&shortcut::GROUPS),
-                );
-                toggle(
-                    ui,
-                    &mut self.show_properties_panel,
+                    Frame::Statistics,
                     icons::SLIDERS,
-                    "Properties",
-                    Some(&shortcut::PROPERTIES),
+                    Some(&shortcut::STATISTICS),
                 );
-                toggle(
-                    ui,
-                    &mut self.show_feature_table,
-                    icons::LIST,
-                    "Feature table",
-                    None,
-                );
-                toggle(
-                    ui,
-                    &mut self.show_metadata_table,
-                    icons::ROWS,
-                    "Metadata table",
-                    Some(&shortcut::METADATA),
-                );
+                toggle(ui, Frame::Features, icons::LIST, None);
+                toggle(ui, Frame::Metadata, icons::ROWS, Some(&shortcut::METADATA));
                 #[cfg(not(target_arch = "wasm32"))]
-                {
-                    let name = self.assistant_program();
-                    toggle(
-                        ui,
-                        &mut self.assistant.show_terminal,
-                        icons::TERMINAL,
-                        name,
-                        None,
-                    );
-                }
+                toggle(ui, Frame::ClaudeCode, icons::TERMINAL, None);
                 ui.separator();
-                toggle(
-                    ui,
-                    &mut self.show_table,
-                    icons::TABLE,
-                    "Results table",
-                    Some(&shortcut::RESULTS),
-                );
+                toggle(ui, Frame::Results, icons::TABLE, Some(&shortcut::RESULTS));
                 if ui
                     .add(item(icons::SIDEBAR, "Reset layout", None))
                     .on_hover_text("Put the frames back where STAMP starts with them")
@@ -3484,7 +3589,7 @@ impl StampApp {
         self.view_dirty = true;
     }
 
-    fn properties_panel(&mut self, ui: &mut egui::Ui) {
+    fn statistics_panel(&mut self, ui: &mut egui::Ui) {
         // The kind of analysis decides what the sections below contain.
         ui.horizontal_wrapped(|ui| {
             for mode in Mode::ALL {
@@ -3497,6 +3602,115 @@ impl StampApp {
         ui.separator();
         section(ui, "Statistics", |ui| self.statistics_section(ui));
         section(ui, "Filtering", |ui| self.filtering_section(ui));
+    }
+
+    /// Keep what the current analysis compares among what can be chosen:
+    /// samples switched off and groups unticked are replaced, a test
+    /// without a one-sided p-value is two-sided, and a correlation uses a
+    /// numeric field. Done every frame, whether or not the Statistics frame
+    /// is shown (it can be a tab behind another). Returns whether anything
+    /// changed, which needs the analysis run again.
+    fn keep_choices_valid(&mut self) -> bool {
+        let mut changed = false;
+        match self.mode {
+            Mode::TwoSamples => {
+                let Some(tree) = self.session.tree.as_ref() else {
+                    return false;
+                };
+                // Samples switched off in the metadata table are not
+                // offered.
+                let metadata = self.session.metadata.as_ref();
+                let offered = |name: &String| {
+                    tree.sample_names().contains(name)
+                        && metadata.is_none_or(|m| !m.contains(name) || m.is_active(name))
+                };
+                let state = &mut self.session.samples;
+                if !(offered(&state.sample1) && offered(&state.sample2)) {
+                    // In alphabetical order, as in STAMP v2.
+                    let mut names: Vec<String> = tree
+                        .sample_names()
+                        .iter()
+                        .filter(|name| offered(name))
+                        .cloned()
+                        .collect();
+                    names.sort();
+                    if names.len() >= 2 {
+                        if !names.contains(&state.sample1) {
+                            let other = state.sample2.clone();
+                            state.sample1 = names
+                                .iter()
+                                .find(|n| **n != other)
+                                .cloned()
+                                .unwrap_or_default();
+                            changed = true;
+                        }
+                        if !names.contains(&state.sample2) {
+                            let other = state.sample1.clone();
+                            state.sample2 = names
+                                .iter()
+                                .find(|n| **n != other)
+                                .cloned()
+                                .unwrap_or_default();
+                            changed = true;
+                        }
+                    }
+                }
+                // Tests without a one-sided p-value are always two-sided.
+                if !state.analysis.test.has_one_sided()
+                    && state.analysis.test_type == TestType::OneSided
+                {
+                    state.analysis.test_type = TestType::TwoSided;
+                    changed = true;
+                }
+            }
+            Mode::TwoGroups => {
+                let Some(groups) = self.session.grouping() else {
+                    return false;
+                };
+                // Groups unticked in the group list are not offered.
+                let active = &self.session.multi.active_groups;
+                let names: Vec<String> = groups
+                    .names()
+                    .filter(|name| active.iter().any(|a| a == name))
+                    .map(str::to_string)
+                    .collect();
+                if names.is_empty() {
+                    return false;
+                }
+                let state = &mut self.session.groups;
+                if !names.contains(&state.group1) {
+                    let other = state.group2.clone();
+                    state.group1 = names
+                        .iter()
+                        .find(|n| Some(*n) != other.as_ref())
+                        .unwrap_or(&names[0])
+                        .clone();
+                    changed = true;
+                }
+                if state
+                    .group2
+                    .as_ref()
+                    .is_some_and(|second| !names.contains(second) || *second == state.group1)
+                {
+                    // "All other samples" if no other group is left.
+                    state.group2 = names.iter().find(|n| **n != state.group1).cloned();
+                    changed = true;
+                }
+            }
+            Mode::Correlation => {
+                if self.session.metadata.is_none() {
+                    return false;
+                }
+                let fields = self.session.numeric_fields();
+                let state = &mut self.session.correlation;
+                if !fields.is_empty() && !fields.iter().any(|f| Some(f) == state.field.as_ref()) {
+                    state.field = fields.first().cloned();
+                    changed = true;
+                }
+            }
+            Mode::MultipleGroups => {}
+        }
+        changed
     }
 
     fn statistics_section(&mut self, ui: &mut egui::Ui) {
@@ -3529,27 +3743,6 @@ impl StampApp {
                     .into_iter()
                     .filter(|name| metadata.is_none_or(|m| !m.contains(name) || m.is_active(name)))
                     .collect();
-                if names.len() >= 2 {
-                    let state = &mut self.session.samples;
-                    if !names.contains(&state.sample1) {
-                        let other = state.sample2.clone();
-                        state.sample1 = names
-                            .iter()
-                            .find(|n| **n != other)
-                            .cloned()
-                            .unwrap_or_default();
-                        rerun = true;
-                    }
-                    if !names.contains(&state.sample2) {
-                        let other = state.sample1.clone();
-                        state.sample2 = names
-                            .iter()
-                            .find(|n| **n != other)
-                            .cloned()
-                            .unwrap_or_default();
-                        rerun = true;
-                    }
-                }
                 let samples = strings(&names);
                 let state = &mut self.session.samples;
                 egui::Grid::new("sample-stats")
@@ -3565,13 +3758,6 @@ impl StampApp {
                             let tests = named(&SampleTest::ALL, SampleTest::name);
                             choose(ui, "sample-test", &mut state.analysis.test, &tests)
                         });
-                        // Tests without a one-sided p-value are always two-sided.
-                        if !state.analysis.test.has_one_sided()
-                            && state.analysis.test_type == TestType::OneSided
-                        {
-                            state.analysis.test_type = TestType::TwoSided;
-                            rerun = true;
-                        }
                         ui.label("Type:");
                         ui.add_enabled_ui(state.analysis.test.has_one_sided(), |ui| {
                             rerun |= choose(
@@ -3623,27 +3809,6 @@ impl StampApp {
                 if names.is_empty() {
                     ui.label("Tick at least one group in the group list.");
                     return;
-                }
-                {
-                    let state = &mut self.session.groups;
-                    if !names.contains(&state.group1) {
-                        let other = state.group2.clone();
-                        state.group1 = names
-                            .iter()
-                            .find(|n| Some(*n) != other.as_ref())
-                            .unwrap_or(&names[0])
-                            .clone();
-                        rerun = true;
-                    }
-                    if state
-                        .group2
-                        .as_ref()
-                        .is_some_and(|second| !names.contains(second) || *second == state.group1)
-                    {
-                        // "All other samples" if no other group is left.
-                        state.group2 = names.iter().find(|n| **n != state.group1).cloned();
-                        rerun = true;
-                    }
                 }
                 let mut seconds: Vec<(Option<String>, String)> =
                     names.iter().map(|n| (Some(n.clone()), n.clone())).collect();
@@ -3792,10 +3957,6 @@ impl StampApp {
                 let fields: Vec<(Option<String>, String)> =
                     fields.into_iter().map(|f| (Some(f.clone()), f)).collect();
                 let state = &mut self.session.correlation;
-                if !fields.iter().any(|(field, _)| *field == state.field) {
-                    state.field = fields[0].0.clone();
-                    rerun = true;
-                }
                 egui::Grid::new("correlation-stats")
                     .num_columns(2)
                     .show(ui, |ui| {
@@ -4331,10 +4492,22 @@ impl StampApp {
             "Note",
         ];
         let mut select = None;
-        egui::ScrollArea::horizontal().show(ui, |ui| {
-            TableBuilder::new(ui)
-                .id_salt("feature-table")
-                .striped(true)
+        // Up and Down move the selection once a row has been clicked.
+        let keys = egui::Id::unique("feature-table-keys");
+        let current = selected
+            .as_deref()
+            .and_then(|f| rows.iter().position(|row| row.feature == f));
+        let moved = step_row(current, table_keys(ui, keys), rows.len());
+        if let Some(row) = moved {
+            select = Some(rows[row].feature.clone());
+        }
+        let mut clicked = false;
+        let table = egui::ScrollArea::horizontal().show(ui, |ui| {
+            let mut builder = TableBuilder::new(ui).id_salt("feature-table").striped(true);
+            if let Some(row) = moved {
+                builder = builder.scroll_to_row(row, None);
+            }
+            builder
                 .sense(egui::Sense::click())
                 .column(Column::auto().at_least(110.0).clip(true).resizable(true))
                 .columns(Column::auto().at_least(60.0).resizable(true), 3)
@@ -4360,6 +4533,7 @@ impl StampApp {
                             .response()
                             .on_hover_cursor(egui::CursorIcon::PointingHand);
                         if response.clicked() {
+                            clicked = true;
                             if is_box && response.ctx.input(|i| i.modifiers.command) {
                                 toggle = Some(feature.feature.clone());
                             } else {
@@ -4369,6 +4543,7 @@ impl StampApp {
                     });
                 });
         });
+        table_focus(ui, keys, table.inner_rect, clicked);
         self.feature_sort = sort;
         if let Some(feature) = select {
             self.select_feature(&feature);
@@ -4501,10 +4676,22 @@ impl StampApp {
             ui.separator();
             use egui_extras::{Column, TableBuilder};
             let selected = self.session.selected_feature.as_deref();
-            egui::ScrollArea::horizontal().show(ui, |ui| {
-                TableBuilder::new(ui)
-                    .id_salt("results-table")
-                    .striped(true)
+            // Up and Down move the selection once a row has been clicked.
+            let keys = egui::Id::unique("results-table-keys");
+            let current = order.iter().position(|&index| {
+                selected.is_some() && selected == self.table_features.get(index).map(String::as_str)
+            });
+            let moved = step_row(current, table_keys(ui, keys), order.len());
+            if let Some(row) = moved {
+                select = self.table_features.get(order[row]).cloned();
+            }
+            let mut clicked = false;
+            let table = egui::ScrollArea::horizontal().show(ui, |ui| {
+                let mut builder = TableBuilder::new(ui).id_salt("results-table").striped(true);
+                if let Some(row) = moved {
+                    builder = builder.scroll_to_row(row, None);
+                }
+                builder
                     .sense(egui::Sense::click())
                     .columns(
                         Column::auto().at_least(70.0).clip(true).resizable(true),
@@ -4540,11 +4727,13 @@ impl StampApp {
                                 .response()
                                 .on_hover_cursor(egui::CursorIcon::PointingHand);
                             if response.clicked() {
+                                clicked = true;
                                 select = self.table_features.get(index).cloned();
                             }
                         });
                     });
             });
+            table_focus(ui, keys, table.inner_rect, clicked);
         });
         if let Some(feature) = select {
             self.select_feature(&feature);
@@ -4653,7 +4842,7 @@ impl StampApp {
         }
 
         let mut changed = false;
-        let (mut redraw, mut restore_defaults) = (false, false);
+        let (mut redraw, mut restore_defaults, mut restore_positions) = (false, false, false);
         egui::Window::new("Preferences")
             .open(&mut self.show_preferences)
             .resizable(false)
@@ -4744,10 +4933,22 @@ impl StampApp {
                         self.assistant.skip_claude_code_dialog = !ask;
                     }
                 }
-                if ui.button("Restore defaults").clicked() {
-                    restore_defaults = true;
-                }
+                ui.horizontal(|ui| {
+                    if ui.button("Restore defaults").clicked() {
+                        restore_defaults = true;
+                    }
+                    restore_positions = ui
+                        .button("Restore window position defaults")
+                        .on_hover_text(
+                            "Put the frames around the plot and the floating windows back \
+                             where STAMP first opens them",
+                        )
+                        .clicked();
+                });
             });
+        if restore_positions {
+            self.restore_window_positions(ctx);
+        }
         if restore_defaults {
             let defaults = Saved::default();
             self.session.seed = defaults.seed;

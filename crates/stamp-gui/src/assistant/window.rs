@@ -55,7 +55,7 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
                 ))
                 .clicked()
             {
-                open_agent_or_ask(app, ui.ctx(), agent);
+                show_agent(app, ui.ctx(), agent);
             }
         }
         if ui
@@ -266,10 +266,25 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
     }
 }
 
-/// Assistant > Open Claude Code (or another assistant): the dialog that says
-/// what will be shared, or, if the user chose not to see it again and the
-/// program is installed, the program at once. Installing it always asks
-/// first.
+/// Assistant > Open Claude Code (or another assistant): its tab if it is
+/// already running in the panel, otherwise [`open_agent_or_ask`].
+#[cfg(not(target_arch = "wasm32"))]
+pub fn show_agent(app: &mut StampApp, ctx: &egui::Context, agent: Agent) {
+    if let Some(index) = app.assistant.tab_of(agent) {
+        if !app.assistant.tabs[index].terminal.has_exited() {
+            app.assistant.active = index;
+            app.assistant.agent = agent;
+            app.assistant.show_terminal = true;
+            return;
+        }
+    }
+    open_agent_or_ask(app, ctx, agent);
+}
+
+/// The dialog that says what will be shared with `agent`, or, if the user
+/// chose not to see it again and the program is installed, the program at
+/// once, in its tab (a new one, or replacing what ran in its tab before).
+/// Installing it always asks first.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn open_agent_or_ask(app: &mut StampApp, ctx: &egui::Context, agent: Agent) {
     if app.assistant.skip_claude_code_dialog && agent.find().is_some() {
@@ -328,8 +343,8 @@ pub fn open_agent(
         .map_err(|e| format!("Could not start {name}: {e}"))
 }
 
-/// Run `program` in the assistant panel, in `folder`, ending whatever ran
-/// there before, and show the panel, named after `agent`.
+/// Run `program` in the assistant panel, in `folder`, in the tab of `agent`
+/// (ending what ran there before) or a new one, and show that tab.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run_in_panel(
     app: &mut StampApp,
@@ -340,12 +355,22 @@ pub fn run_in_panel(
     args: &[String],
     folder: &std::path::Path,
 ) -> std::io::Result<()> {
-    app.assistant.terminal = None;
     let terminal =
         super::terminal::Terminal::spawn(ctx, label, program, args, folder, Default::default())?;
-    app.assistant.terminal = Some(terminal);
-    app.assistant.agent = agent;
-    app.assistant.show_terminal = true;
+    let tab = super::Tab { agent, terminal };
+    let assistant = &mut app.assistant;
+    match assistant.tab_of(agent) {
+        Some(index) => {
+            assistant.tabs[index] = tab;
+            assistant.active = index;
+        }
+        None => {
+            assistant.tabs.push(tab);
+            assistant.active = assistant.tabs.len() - 1;
+        }
+    }
+    assistant.agent = agent;
+    assistant.show_terminal = true;
     Ok(())
 }
 
@@ -374,68 +399,116 @@ pub fn open_agent_outside(
     super::launch::open_terminal(&script)
 }
 
-/// The assistant panel, which runs Claude Code, OpenCode or Antigravity (at the bottom
-/// of the window to start with, like the Metadata table; it can be moved).
+/// The assistant panel: a tab for each assistant program opened (Claude
+/// Code, OpenCode, Antigravity), on the right of the window to start with;
+/// it can be moved. A program ends when it is quit in its tab (`/exit`); its
+/// tab then says so, and can be closed or the program restarted.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
     let ctx = ui.ctx().clone();
-    let agent = app.assistant.agent;
-    let name = agent.name();
-    let mut restart = false;
-    let mut outside = false;
+    let mut restart = None;
+    let mut outside = None;
+    let mut close = None;
+    let mut start = false;
     egui::Frame::NONE.show(ui, |ui| {
         ui.horizontal(|ui| {
-            match &app.assistant.terminal {
-                Some(terminal) => {
-                    ui.label(egui::RichText::new(&terminal.label).strong());
-                    let title = terminal.title();
-                    if terminal.has_exited() {
-                        ui.label("has ended.");
-                    } else if !title.is_empty() && title != terminal.label {
-                        ui.weak(title);
-                    }
+            let assistant = &mut app.assistant;
+            for (index, tab) in assistant.tabs.iter().enumerate() {
+                let ended = tab.terminal.has_exited();
+                let text = if ended {
+                    format!("{} (ended)", tab.terminal.label)
+                } else {
+                    tab.terminal.label.clone()
+                };
+                let mut text = egui::RichText::new(text);
+                if index == assistant.active {
+                    text = text.strong();
                 }
-                None => {
-                    ui.label(egui::RichText::new(name).strong());
+                if ui
+                    .selectable_label(index == assistant.active, text)
+                    .clicked()
+                {
+                    assistant.active = index;
+                    assistant.agent = tab.agent;
+                }
+                if ended
+                    && ui
+                        .small_button("x")
+                        .on_hover_text("Close this tab")
+                        .clicked()
+                {
+                    close = Some(index);
+                }
+            }
+            if let Some(tab) = assistant.active_tab() {
+                let title = tab.terminal.title();
+                if !tab.terminal.has_exited() && !title.is_empty() && title != tab.terminal.label {
+                    ui.weak(title);
                 }
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .small_button("Hide")
-                    .on_hover_text(format!("Hide this panel; {name} keeps running"))
+                    .on_hover_text("Hide this panel; the assistants keep running")
                     .clicked()
                 {
-                    app.assistant.show_terminal = false;
+                    assistant.show_terminal = false;
                 }
-                let again = if app.assistant.terminal.is_some() {
-                    "Restart"
-                } else {
-                    "Start"
-                };
-                restart = ui.small_button(again).clicked();
-                outside = ui
-                    .small_button("Separate terminal")
-                    .on_hover_text(format!(
-                        "Open {name} in the computer's own terminal instead"
-                    ))
-                    .clicked();
+                match assistant.active_tab() {
+                    Some(tab) => {
+                        let name = tab.agent.name();
+                        if ui
+                            .small_button("Restart")
+                            .on_hover_text(format!("End {name} and start it again"))
+                            .clicked()
+                        {
+                            restart = Some(tab.agent);
+                        }
+                        if ui
+                            .small_button("Separate terminal")
+                            .on_hover_text(format!(
+                                "Open {name} in the computer's own terminal instead"
+                            ))
+                            .clicked()
+                        {
+                            outside = Some(tab.agent);
+                        }
+                    }
+                    None => {
+                        start = ui
+                            .small_button(format!("Start {}", assistant.agent.name()))
+                            .clicked();
+                    }
+                }
             });
         });
-        match &mut app.assistant.terminal {
-            Some(terminal) => terminal.show(ui),
+        let active = app.assistant.active;
+        match app.assistant.tabs.get_mut(active) {
+            Some(tab) => tab.terminal.show(ui),
             None => {
-                ui.label(format!(
-                    "{name} is not running. Choose Start, or open an assistant from the \
-                     Assistant menu."
-                ));
+                ui.label(
+                    "No assistant is running. Open one from the Assistant menu; each opens in a \
+                     tab of its own here.",
+                );
             }
         }
     });
-    if restart {
+    if let Some(index) = close {
+        app.assistant.close_tab(index);
+    }
+    if start {
+        let agent = app.assistant.agent;
         open_agent_or_ask(app, &ctx, agent);
     }
-    if outside {
-        app.assistant.terminal = None;
+    // Its tab is replaced once it starts again (after the dialog, if that
+    // is shown).
+    if let Some(agent) = restart {
+        open_agent_or_ask(app, &ctx, agent);
+    }
+    if let Some(agent) = outside {
+        if let Some(index) = app.assistant.tab_of(agent) {
+            app.assistant.close_tab(index);
+        }
         if let Err(message) = open_agent_outside(app, &ctx, agent) {
             app.show_notice(message);
         }
@@ -462,7 +535,7 @@ fn activity_window(app: &mut StampApp, ctx: &egui::Context) {
     let mut open = app.assistant.show_window;
     let mut stop = false;
     let mut reopen = false;
-    egui::Window::new("Assistant")
+    egui::Window::new("Assistant activity")
         .open(&mut open)
         .default_size([520.0, 360.0])
         .show(ctx, |ui| {
@@ -522,6 +595,6 @@ fn activity_window(app: &mut StampApp, ctx: &egui::Context) {
     }
     if reopen {
         let agent = app.assistant.agent;
-        open_agent_or_ask(app, ctx, agent);
+        show_agent(app, ctx, agent);
     }
 }

@@ -18,26 +18,27 @@ contains) and its metadata (what is known about each sample).
 
    The STAMP window with the enterotype example loaded.
 
-The window has four parts:
+The window has these parts:
 
 * **Left: profile and groups.** The level to analyse (phyla or genera), and
   the groups of samples defined by a metadata field. Here the field is
   *Enterotype*, giving groups such as *Enterotype 1 (8)*, with the number of
   samples in brackets. Untick a group to leave it out.
-* **Centre: the plot**, with the choice of plot beneath it, and beside it a
-  table of features with their effect sizes and p-values. Click a feature
-  in the table to show it in the plots of a single feature.
-* **Right: properties.** The kind of analysis (tabs at the top), the
+* **Left, the Statistics tab.** The kind of analysis (tabs at the top), the
   statistical test, and the filters that decide which features count as
-  "active".
+  "active". Click the tab beside *Profile and groups* to see it.
+* **Centre: the plot**, with the choice of plot beneath it.
+* **Right: the feature table**, every feature with its effect size and
+  p-value. Click a feature to show it in the plots of a single feature.
 * **Bottom: the status bar**, summarising the profile being analysed.
 
 Compare several groups
 ----------------------
 
-Click the **Multiple groups** tab. STAMP tests every genus (choose
-*Genera* as the profile level on the left) for a difference between the
-ticked groups with an ANOVA, and shows a **PCoA plot**: each point is a
+Open the **Statistics** tab on the left and click its **Multiple groups**
+tab. STAMP tests every genus (choose *Genera* as the profile level in
+*Profile and groups*) for a difference between the ticked groups with an
+ANOVA, and shows a **PCoA plot**: each point is a
 sample, placed so that samples with similar profiles are close together.
 The three enterotypes form fairly separate clouds, which is how they were
 defined, and the PERMANOVA above the plot confirms that they differ.
@@ -62,8 +63,8 @@ does not cross zero marks a pair of groups that differ.
 Compare two groups
 ------------------
 
-Click the **Two groups** tab and choose *Enterotype 1* as group 1 and
-*Enterotype 3* as group 2. The test is now Welch's t-test, and the plot is
+In the **Statistics** tab, click the **Two groups** tab and choose
+*Enterotype 1* as group 1 and *Enterotype 3* as group 2. The test is now Welch's t-test, and the plot is
 an **extended error bar plot**:
 
 .. figure:: images/tg_extended_error_bar.png

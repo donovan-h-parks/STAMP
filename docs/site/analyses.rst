@@ -2,7 +2,7 @@ Analyses
 ========
 
 STAMP offers four kinds of analysis, chosen by the tabs at the top of the
-properties panel. Each tests every feature of the profile on its own, then
+Statistics frame. Each tests every feature of the profile on its own, then
 lets you filter the results and explore them in plots.
 
 .. list-table::

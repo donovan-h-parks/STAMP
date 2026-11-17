@@ -162,11 +162,17 @@ pub struct Terminal {
     cell: Vec2,
     /// What runs in it, for the panel's heading.
     pub label: String,
+    /// Its own id, so that each terminal keeps the keyboard focus apart
+    /// from the others, whatever is drawn before it.
+    id: egui::Id,
     /// The terminal had the keyboard last frame.
     focused: bool,
     /// Scrolling not yet a whole line, in lines.
     scrolled: f32,
 }
+
+/// Numbers the terminals, for their ids.
+static NEXT_TERMINAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 impl Drop for Terminal {
     fn drop(&mut self) {
@@ -232,6 +238,10 @@ impl Terminal {
             size,
             cell,
             label: label.to_string(),
+            id: egui::Id::unique((
+                "stamp-assistant-terminal",
+                NEXT_TERMINAL.fetch_add(1, Ordering::SeqCst),
+            )),
             focused: false,
             scrolled: 0.0,
         })
@@ -305,16 +315,12 @@ impl Terminal {
     /// keyboard and mouse when it has the focus.
     pub fn show(&mut self, ui: &mut egui::Ui) {
         self.cell = cell_size(ui.ctx());
-        // A fixed id, so that the keyboard focus stays with the terminal
-        // whatever is drawn before it (the heading shows the program's
-        // title once it sets one).
+        // An id of its own, so that the keyboard focus stays with the
+        // terminal whatever is drawn before it (the heading shows the
+        // program's title once it sets one).
         let (whole, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
         let (rect, bar) = whole.split_left_right_at_x(whole.max.x - SCROLL_BAR_WIDTH);
-        let response = ui.interact(
-            rect,
-            egui::Id::unique("stamp-claude-code-terminal"),
-            Sense::click_and_drag(),
-        );
+        let response = ui.interact(rect, self.id, Sense::click_and_drag());
         let columns = (rect.width() / self.cell.x).floor() as usize;
         let lines = (rect.height() / self.cell.y).floor() as usize;
         self.resize(columns, lines);

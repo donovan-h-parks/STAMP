@@ -2,9 +2,9 @@
 //! plot by dragging their tabs, using `egui_tiles`.
 //!
 //! The plot stays in the middle. Seven frames can be put to any side of it
-//! or of each other, or tabbed together: Profile and groups, Properties,
+//! or of each other, or tabbed together: Profile and groups, Statistics,
 //! the Feature table, the Metadata table, the Results table, Configure plot
-//! and (on the desktop) Claude Code. Which frames are shown is decided by
+//! and (on the desktop) the assistant panel. Which frames are shown is decided by
 //! the window's own flags (the View menu); the layout only follows them.
 //! See `docs/LAYOUT_PLAN.md`.
 
@@ -13,8 +13,18 @@ use egui_tiles::{Container, Tile, TileId, Tiles, Tree};
 
 /// Identifies the layout of a version of STAMP. A remembered layout made
 /// under another number is replaced by the default. **Increase it whenever
-/// a frame is added or removed.**
-pub const LAYOUT_VERSION: u32 = 1;
+/// a frame is added or removed, or the default layout changes.**
+///
+/// 2: Profile and groups and Statistics as tabs on the left, the Feature
+///    table and the assistant on the right (was Profile and groups on the
+///    left, the Feature table and Properties on the right, the assistant
+///    along the bottom).
+/// 3: the left frame as wide as the analysis buttons need (was a share of
+///    the window's width).
+pub const LAYOUT_VERSION: u32 = 3;
+
+/// The gap between frames, in points.
+const GAP: f32 = 2.0;
 
 /// A part of the window that has a place in the layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -22,13 +32,17 @@ pub enum Frame {
     /// The plot and the bar of controls beneath it: fixed.
     Plot,
     Profile,
-    Properties,
+    /// The analysis, its test and filters (v2's Properties; layouts saved
+    /// before it was renamed call it that).
+    #[serde(alias = "Properties")]
+    Statistics,
     Features,
     Metadata,
     Results,
     ConfigurePlot,
-    /// The assistant panel, running Claude Code, OpenCode or Antigravity
-    /// (named for the first, as saved layouts name it).
+    /// The assistant panel, with a tab for each assistant program running
+    /// (Claude Code, OpenCode, Antigravity); named for the first, as saved
+    /// layouts name it.
     ClaudeCode,
 }
 
@@ -36,7 +50,7 @@ impl Frame {
     pub const ALL: [Frame; 8] = [
         Frame::Plot,
         Frame::Profile,
-        Frame::Properties,
+        Frame::Statistics,
         Frame::Features,
         Frame::Metadata,
         Frame::Results,
@@ -49,12 +63,12 @@ impl Frame {
         match self {
             Frame::Plot => "Plot",
             Frame::Profile => "Profile and groups",
-            Frame::Properties => "Properties",
+            Frame::Statistics => "Statistics",
             Frame::Features => "Feature table",
             Frame::Metadata => "Metadata table",
             Frame::Results => "Results table",
             Frame::ConfigurePlot => "Configure plot",
-            Frame::ClaudeCode => "Claude Code",
+            Frame::ClaudeCode => "Assistant",
         }
     }
 
@@ -64,41 +78,89 @@ impl Frame {
     }
 }
 
-/// The layout STAMP starts with, as the window was before frames could be
-/// moved: Profile and groups on the left; the plot, the Feature table and
-/// Properties (with Configure plot as a tab beside it) to its right; the
-/// Metadata table, Claude Code and the Results table as tabs along the
-/// bottom.
+/// The layout STAMP starts with: Profile and groups and Statistics as tabs
+/// on the left (with Configure plot as a third tab when it is opened); the
+/// plot, then the Feature table, then the assistant (hidden until an
+/// assistant is opened) to its right; the Metadata table and the Results
+/// table as tabs along the bottom.
 pub fn default_tree() -> Tree<Frame> {
     let mut tiles = Tiles::default();
     let tabs = |tiles: &mut Tiles<Frame>, frames: &[Frame]| {
         let children = frames.iter().map(|f| tiles.insert_pane(*f)).collect();
         tiles.insert_tab_tile(children)
     };
-    let profile = tabs(&mut tiles, &[Frame::Profile]);
+    let left = tabs(
+        &mut tiles,
+        &[Frame::Profile, Frame::Statistics, Frame::ConfigurePlot],
+    );
     let plot = tabs(&mut tiles, &[Frame::Plot]);
     let features = tabs(&mut tiles, &[Frame::Features]);
-    let properties = tabs(&mut tiles, &[Frame::Properties, Frame::ConfigurePlot]);
-    let bottom = tabs(
-        &mut tiles,
-        &[Frame::Metadata, Frame::ClaudeCode, Frame::Results],
-    );
-    let top = tiles.insert_horizontal_tile(vec![profile, plot, features, properties]);
-    // Widths and heights in points of a 1280 by 800 window (only their
-    // proportions matter): the side frames as wide as their controls.
+    let assistant = tabs(&mut tiles, &[Frame::ClaudeCode]);
+    let bottom = tabs(&mut tiles, &[Frame::Metadata, Frame::Results]);
+    let top = tiles.insert_horizontal_tile(vec![left, plot, features, assistant]);
+    // Widths and heights in points of a 1280 by 800 window with every frame
+    // shown (only their proportions matter): the side frames as wide as
+    // their controls, and the assistant wide enough for its terminal. A
+    // hidden frame's width goes to the plot, so with the assistant hidden
+    // the plot is 685 wide.
     set_shares(
         &mut tiles,
         top,
         &[
-            (profile, 250.0),
-            (plot, 435.0),
+            (left, 325.0),
+            (plot, 245.0),
             (features, 270.0),
-            (properties, 325.0),
+            (assistant, 440.0),
         ],
     );
     let root = tiles.insert_vertical_tile(vec![top, bottom]);
     set_shares(&mut tiles, root, &[(top, 560.0), (bottom, 220.0)]);
     Tree::new(egui::Id::unique("stamp-layout"), root, tiles)
+}
+
+/// Make the frame holding `frame` `width` points wide, in a row of frames
+/// `row_width` points wide, by changing its share of the row; the other
+/// frames of the row keep their proportions. Used when the default layout
+/// is first drawn, since shares are proportions of the window's width.
+pub fn set_frame_width(tree: &mut Tree<Frame>, frame: Frame, width: f32, row_width: f32) {
+    let Some(tabs) = tile_of(tree, frame).and_then(|tile| tree.tiles.parent_of(tile)) else {
+        return;
+    };
+    let Some(row) = tree.tiles.parent_of(tabs) else {
+        return;
+    };
+    let visible: Vec<TileId> = match tree.tiles.get(row) {
+        Some(Tile::Container(Container::Linear(linear)))
+            if linear.dir == egui_tiles::LinearDir::Horizontal =>
+        {
+            linear
+                .children
+                .iter()
+                .copied()
+                .filter(|c| tree.tiles.is_visible_in_layout(*c))
+                .collect()
+        }
+        _ => return,
+    };
+    if !visible.contains(&tabs) {
+        return;
+    }
+    // egui_tiles divides the row, less the gaps between frames, among the
+    // frames shown in proportion to their shares.
+    let gaps = GAP * visible.len().saturating_sub(1) as f32;
+    let room = row_width - gaps;
+    if let Some(Tile::Container(Container::Linear(linear))) = tree.tiles.get_mut(row) {
+        let others: f32 = visible
+            .iter()
+            .filter(|c| **c != tabs)
+            .map(|c| linear.shares[*c])
+            .sum();
+        if room > width && others > 0.0 {
+            linear
+                .shares
+                .set_share(tabs, width * others / (room - width));
+        }
+    }
 }
 
 /// Set the sizes of a row's or column's children, given in points, as
@@ -230,8 +292,6 @@ pub struct Behavior<'a> {
     /// The tabs container that holds only the plot, whose tab bar is not
     /// shown.
     pub plot_tabs: Option<TileId>,
-    /// The name on the assistant panel's tab: the program it runs.
-    pub terminal_title: &'static str,
 }
 
 impl egui_tiles::Behavior<Frame> for Behavior<'_> {
@@ -249,10 +309,7 @@ impl egui_tiles::Behavior<Frame> for Behavior<'_> {
     }
 
     fn tab_title_for_pane(&mut self, frame: &Frame) -> egui::WidgetText {
-        match frame {
-            Frame::ClaudeCode => self.terminal_title.into(),
-            _ => frame.title().into(),
-        }
+        frame.title().into()
     }
 
     fn is_tab_closable(&self, tiles: &Tiles<Frame>, tile_id: TileId) -> bool {
@@ -294,11 +351,34 @@ impl egui_tiles::Behavior<Frame> for Behavior<'_> {
     }
 
     fn gap_width(&self, _style: &egui::Style) -> f32 {
-        2.0
+        GAP
     }
 
     fn tab_bar_height(&self, _style: &egui::Style) -> f32 {
         22.0
+    }
+}
+
+/// Whether `frame` is the open tab of its tabs (or not in tabs at all), so
+/// that it is in view when it is shown.
+pub fn is_in_front(tree: &Tree<Frame>, frame: Frame) -> bool {
+    let Some(tile) = tile_of(tree, frame) else {
+        return false;
+    };
+    match tree
+        .tiles
+        .parent_of(tile)
+        .and_then(|parent| tree.tiles.get(parent))
+    {
+        Some(Tile::Container(Container::Tabs(tabs))) => tabs.active == Some(tile),
+        _ => true,
+    }
+}
+
+/// Open the tab of `frame`.
+pub fn bring_to_front(tree: &mut Tree<Frame>, frame: Frame) {
+    if let Some(tile) = tile_of(tree, frame) {
+        tree.make_active(|id, _| id == tile);
     }
 }
 

@@ -38,6 +38,29 @@ where the cause could instead be the workspace `.agents/mcp_config.json`
 not being loaded or the connection failing; if it still fails, `/mcp` in
 Antigravity on Windows shows which. assistant.rst has a note on `/mcp`.
 
+Finished, committed and pushed (2026-11-18, the layout session; "Rework
+the window layout, add assistant tabs and table arrow keys"): **layout,
+Statistics, assistant tabs**. In the working tree: arrow keys in the
+Feature and Results tables (`table_keys`/`table_focus` in app.rs); bar plot
+p-value under the title (feature_plots.rs); Properties renamed Statistics
+(`Frame::Statistics`, serde alias "Properties"); new default layout
+(layout.rs, LAYOUT_VERSION 2); Preferences > Restore window position
+defaults (`restore_window_positions`); View menu brings a frame behind a tab
+to the front (`toggle_frame`); the comparison corrections moved out of the
+Statistics panel into `keep_choices_valid`, run each frame; Assistant menu
+order OpenCode, Claude Code, Antigravity; several assistants as tabs in the
+panel (`assistant::Tab`, `show_agent`). The left frame is made exactly as wide
+as the four analysis buttons need in one row when the default layout is
+first drawn (`analysis_buttons_width`, `layout::set_frame_width`,
+LAYOUT_VERSION 3). Docs (main_window, assistant,
+quick_start, analyses), images gui_main_window, gui_frames (test
+`documentation_screenshots_of_the_window`) and tg_bar (stamp-cli, 110 dpi),
+CHANGES_FROM_PYTHON 63 and 67, NEW_FEATURES. fmt, clippy (both targets), all
+tests and the Sphinx build pass. Another session has uncommitted edits in
+assistant/server.rs (alwaysLoad), the guide in assistant/launch.rs, the
+Antigravity /mcp paragraph of assistant.rst and NEW_FEATURES.md (a moved
+entry): not mine, leave them out of my commit.
+
 Finished and committed (2026-11-17, assistant session): **Assistant > Open
 Google Antigravity**, Google's Antigravity CLI (`agy`) in the assistant
 panel. `launch::Agent::Antigravity`: finds `agy` on the PATH, in
