@@ -6,6 +6,24 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Done and committed (2026-11-18): **Antigravity not using STAMP's tools**.
+Report from Windows (agy 1.5.10, Google AI Pro, Gemini): asked about the
+data, the model read the folder's files, found `~/.gemini/config/
+mcp_config.json` empty and began writing its own `mcp_client.py`. Here
+(Linux, agy 1.5.9, isolated HOME, fake key) `/mcp` shows `stamp` connected
+with its tools, so the likely cause is that Antigravity leaves MCP tools to
+be discovered on demand (through `call_mcp_tool`) and the model did not.
+Changes: every tool in `tools/list` carries `_meta:
+{"antigravity/alwaysLoad": true}` (`assistant/server.rs`, asserted in its
+test), and the guide (`launch::GUIDE`, CLAUDE.md/AGENTS.md of the working
+folder) tells the assistant to reach STAMP only through the tools and to
+say so if it cannot see them. `/mcp` still lists the tools with 1.5.9;
+fmt, clippy (Linux, wasm) and stamp-gui tests pass. **Not verified**: a
+real Gemini model using the tools (needs a Google sign-in), and Windows,
+where the cause could instead be the workspace `.agents/mcp_config.json`
+not being loaded or the connection failing; if it still fails, `/mcp` in
+Antigravity on Windows shows which. assistant.rst has a note on `/mcp`.
+
 Finished and committed (2026-11-17, assistant session): **Assistant > Open
 Google Antigravity**, Google's Antigravity CLI (`agy`) in the assistant
 panel. `launch::Agent::Antigravity`: finds `agy` on the PATH, in

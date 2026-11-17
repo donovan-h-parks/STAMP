@@ -166,7 +166,10 @@ in your computer's password store; STAMP never sees it. On Linux that needs
 a password store (such as GNOME Keyring) to be running.
 
 Antigravity uses STAMP's tools without asking, and asks before it runs
-commands or changes files.
+commands or changes files. If it answers without them (it starts reading
+files or writing a program instead), type ``/mcp`` in the panel: ``stamp``
+should be listed with a tick and its tools. If it is not, choose **Restart**
+above the panel.
 
 If Antigravity is not installed, STAMP offers to install it with Google's
 installer (``antigravity.google/cli/install.sh``, or ``install.ps1`` on

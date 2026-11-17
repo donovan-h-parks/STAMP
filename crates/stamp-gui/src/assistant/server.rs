@@ -375,7 +375,11 @@ pub fn handle(message: &Value, call_tool: &dyn Fn(&str, Value) -> Outcome) -> Op
                             "readOnlyHint": !t.changes,
                             "destructiveHint": false,
                             "openWorldHint": false
-                        }
+                        },
+                        // Antigravity otherwise leaves a server's tools
+                        // for the model to discover, and Gemini went
+                        // looking through files instead of finding them.
+                        "_meta": {"antigravity/alwaysLoad": true}
                     })
                 })
                 .collect::<Vec<_>>()
@@ -479,6 +483,9 @@ mod tests {
         let body: Value = serde_json::from_str(&body).unwrap();
         let tools = body["result"]["tools"].as_array().unwrap();
         assert!(tools.iter().any(|t| t["name"] == "get_current_plot"));
+        assert!(tools
+            .iter()
+            .all(|t| t["_meta"]["antigravity/alwaysLoad"] == true));
 
         let (_, body) = post(
             port,

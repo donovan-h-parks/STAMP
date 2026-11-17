@@ -441,6 +441,9 @@ the plot. Changes appear in STAMP's window at once and the user can undo them
 there (or ask you to, with the `undo` tool).
 
 - Start with `get_session` and `get_current_plot` to see what the user sees.
+- Reach STAMP only through these tools. If you do not see them, say so and
+  stop: do not read the files of this folder or write a program to connect
+  to STAMP yourself.
 - The user is most likely a biologist rather than a statistician or a
   programmer. Explain in plain language, and say what the statistics do not
   show as well as what they do: effect sizes and their confidence intervals
