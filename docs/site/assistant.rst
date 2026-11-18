@@ -240,6 +240,14 @@ of STAMP's (OpenCode names them ``stamp_get_session`` and so on):
    * - ``show_custom_plot``
      - Draw a plot of its own when none of STAMP's shows what you ask for
        (see `Custom plots`_).
+   * - ``load_data``
+     - Open a profile, a metadata file or both from your computer, in place
+       of the data loaded: *Load the profile in ~/data/gut.spf with the
+       metadata gut_metadata.tsv beside it*. It takes the same formats as
+       **File > Load profile**: for a BIOM table it can name the observation
+       metadata that gives the hierarchy, and for a mothur taxonomy file its
+       groups and names files. If a file cannot be read, nothing changes.
+       After a new profile is loaded, earlier changes can no longer be undone.
    * - ``undo``
      - Undo its last change.
 

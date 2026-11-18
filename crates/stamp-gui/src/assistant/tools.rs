@@ -85,7 +85,8 @@ statistics do and do not mean (effect sizes, confidence intervals, p-values and 
 correction for multiple tests). Start with get_session and get_current_plot. Prefer \
 STAMP's own plots (list_plots, show_plot); when none shows what the user asks for, draw \
 one with show_custom_plot. Every change you make appears in STAMP's window at once and \
-the user can undo it.";
+the user can undo it. When the user asks for other data, load_data opens a profile or \
+metadata file from their computer.";
 
 /// The tools, in the order they are listed.
 pub fn list() -> Vec<ToolInfo> {
@@ -346,6 +347,44 @@ pub fn list() -> Vec<ToolInfo> {
             changes: true,
         },
         ToolInfo {
+            name: "load_data",
+            description: "Open a profile and/or a metadata file from the user's computer, in \
+                          place of the data loaded now, as File > Load profile and Load \
+                          metadata do. Use it only when the user asks for other data. Give \
+                          full paths (\"~/\" stands for the home folder). 'profile': a \
+                          STAMP profile, a BIOM table, a SingleM or Sandpiper profile or a \
+                          mothur taxonomy file; or several SingleM or Sandpiper files (one per \
+                          sample), which are combined into one profile. 'metadata': a \
+                          tab-separated file with a row per sample, for the profile given \
+                          with it or, without 'profile', for the profile loaded now. A BIOM \
+                          table takes its hierarchy from the observation metadata field \
+                          'biom_metadata_field' (STAMP's usual choice if left out; null for \
+                          the observation ids alone). A mothur taxonomy file needs its groups \
+                          file, 'mothur_groups', and may have a names file, 'mothur_names'. A \
+                          new profile starts a new analysis, and earlier changes can then no \
+                          longer be undone. If a file cannot be read, nothing changes and the \
+                          answer says why. Answers once the analysis has run, with what was \
+                          loaded.",
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "profile": {"type": "array", "items": {"type": "string"},
+                                "description": "Full path of the profile file, or of several \
+                                                SingleM or Sandpiper files to combine. A \
+                                                single path may also be given as a string."},
+                    "metadata": {"type": "string",
+                                 "description": "Full path of the metadata file."},
+                    "biom_metadata_field": {"type": ["string", "null"]},
+                    "mothur_groups": {"type": "string",
+                                      "description": "Full path of the mothur groups file."},
+                    "mothur_names": {"type": "string",
+                                     "description": "Full path of the mothur names file."}
+                },
+                "additionalProperties": false
+            }),
+            changes: true,
+        },
+        ToolInfo {
             name: "undo",
             description: "Undo the last change made with show_plot, show_custom_plot, \
                           set_analysis or the other tools that change the session.",
@@ -378,6 +417,7 @@ pub fn call(app: &mut StampApp, name: &str, args: &Value) -> Outcome {
         "get_plot_options" => get_plot_options(app, args),
         "show_plot" => show_plot(app, args),
         "show_custom_plot" => show_custom_plot(app, args),
+        "load_data" => load_data(app, args),
         "set_analysis" => set_analysis(app, args),
         "set_group_colors" => set_group_colors(app, args),
         "switch_samples" => switch_samples(app, args),
@@ -961,6 +1001,220 @@ fn choose_string(what: &str, wanted: &str, choices: &[String]) -> Result<String,
                 shown.join(", ")
             )
         })
+}
+
+/// Open the files named by the assistant: a profile, its metadata, or
+/// both. Every file is read before anything changes.
+fn load_data(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, String> {
+    const KNOWN: [&str; 5] = [
+        "profile",
+        "metadata",
+        "biom_metadata_field",
+        "mothur_groups",
+        "mothur_names",
+    ];
+    if let Some(key) = args.keys().find(|k| !KNOWN.contains(&k.as_str())) {
+        return Err(format!(
+            "load_data has no setting {key}; it takes {}.",
+            KNOWN.join(", ")
+        ));
+    }
+    let profile: Vec<&str> = match args.get("profile") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(Value::String(path)) => vec![path.as_str()],
+        Some(Value::Array(paths)) => paths
+            .iter()
+            .map(Value::as_str)
+            .collect::<Option<_>>()
+            .ok_or("'profile' must be a path or a list of paths.")?,
+        Some(_) => return Err("'profile' must be a path or a list of paths.".to_string()),
+    };
+    let metadata = optional_str(args, "metadata")?;
+    let groups = optional_str(args, "mothur_groups")?;
+    let names = optional_str(args, "mothur_names")?;
+    // Outer `None`: not given (STAMP chooses); inner `None`: the ids alone.
+    let biom_field = match args.get("biom_metadata_field") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(Value::String(field)) => Some(Some(field.as_str())),
+        Some(_) => return Err("'biom_metadata_field' must be a string or null.".to_string()),
+    };
+    if profile.is_empty() {
+        if metadata.is_none() {
+            return Err("Give 'profile', 'metadata' or both.".to_string());
+        }
+        if groups.is_some() || names.is_some() || biom_field.is_some() {
+            return Err(
+                "'biom_metadata_field', 'mothur_groups' and 'mothur_names' go with 'profile'."
+                    .to_string(),
+            );
+        }
+        if app.session.tree.is_none() {
+            return Err(
+                "No profile is loaded: give 'profile' as well as 'metadata'. Nothing was \
+                 changed."
+                    .to_string(),
+            );
+        }
+    }
+    let unchanged = |error: String| format!("{error} Nothing was changed.");
+    let profile = profile
+        .into_iter()
+        .map(read_file)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(unchanged)?;
+    let metadata = metadata.map(read_file).transpose().map_err(unchanged)?;
+    let groups = groups.map(read_file).transpose().map_err(unchanged)?;
+    let names = names.map(read_file).transpose().map_err(unchanged)?;
+
+    let mut out = Vec::new();
+    let loaded_profile = !profile.is_empty();
+    if loaded_profile {
+        load_profile(app, profile, biom_field, groups, names).map_err(unchanged)?;
+        let s = &app.session;
+        if let Some(tree) = &s.tree {
+            out.push(format!(
+                "Loaded the profile {}: {} samples; hierarchy: {}.",
+                s.profile_name,
+                tree.num_samples(),
+                tree.hierarchy_headings().join(" > ")
+            ));
+        }
+    }
+    match metadata {
+        Some(file) => match app.use_metadata(&file.name, &file.text()) {
+            Ok(()) => {
+                let s = &app.session;
+                if let Some(m) = &s.metadata {
+                    out.push(format!(
+                        "Loaded the metadata {}: {} samples of the profile; fields: {}.",
+                        s.metadata_name,
+                        m.samples().len(),
+                        m.fields().join(", ")
+                    ));
+                }
+                if !s.warnings.is_empty() {
+                    out.push(format!("Warnings: {}", s.warnings.join(" ")));
+                }
+            }
+            // The profile has changed: say what did not.
+            Err(message) if loaded_profile => out.push(format!(
+                "The metadata {} could not be used, so no metadata is loaded: {message}",
+                file.name
+            )),
+            Err(message) => {
+                return Err(unchanged(format!(
+                    "Could not load {}: {message}",
+                    file.name
+                )))
+            }
+        },
+        None if loaded_profile => out.push(
+            "No metadata is loaded; give 'metadata' to load a file for this profile.".to_string(),
+        ),
+        None => {}
+    }
+    if loaded_profile {
+        out.push("Earlier changes can no longer be undone.".to_string());
+    }
+    Ok(Outcome::text(out.join("\n")))
+}
+
+/// Open a profile as File > Load profile does, making for a BIOM table or
+/// mothur file the choices its dialog would ask for. An error if it could
+/// not be loaded, when the profile loaded before stays.
+fn load_profile(
+    app: &mut StampApp,
+    files: Vec<crate::platform::OpenedFile>,
+    biom_field: Option<Option<&str>>,
+    groups: Option<crate::platform::OpenedFile>,
+    names: Option<crate::platform::OpenedFile>,
+) -> Result<(), String> {
+    let before = app.session.tree.clone();
+    let mothur = groups.is_some() || names.is_some();
+    app.open_profile_files(files);
+    match app.pending_profile() {
+        Some("BIOM") => {
+            if mothur {
+                app.cancel_pending_profile();
+                return Err("This is a BIOM table, not a mothur taxonomy file.".to_string());
+            }
+            if let Some(field) = biom_field {
+                app.choose_biom_field(field);
+            }
+            app.accept_pending_profile();
+        }
+        Some(_) => match groups {
+            Some(groups) => {
+                app.choose_mothur_files(groups, names);
+                app.accept_pending_profile();
+            }
+            None => {
+                app.cancel_pending_profile();
+                return Err("A mothur taxonomy file needs its groups file: give \
+                            'mothur_groups'."
+                    .to_string());
+            }
+        },
+        // Loaded already, or failed.
+        None => {}
+    }
+    let loaded = match (&before, &app.session.tree) {
+        (Some(before), Some(now)) => !std::sync::Arc::ptr_eq(before, now),
+        (None, Some(_)) => true,
+        (_, None) => false,
+    };
+    if loaded {
+        Ok(())
+    } else {
+        app.cancel_pending_profile();
+        Err(app
+            .notice()
+            .unwrap_or("STAMP could not read the profile.")
+            .to_string())
+    }
+}
+
+/// Read a file named by the assistant, by its full path.
+#[cfg(not(target_arch = "wasm32"))]
+fn read_file(path: &str) -> Result<crate::platform::OpenedFile, String> {
+    use std::path::{Path, PathBuf};
+    let home = || {
+        std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map(PathBuf::from)
+    };
+    let full = match path.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with(['/', '\\']) => home()
+            .map(|home| home.join(rest.trim_start_matches(['/', '\\'])))
+            .unwrap_or_else(|| PathBuf::from(path)),
+        _ => PathBuf::from(path),
+    };
+    if !full.is_absolute() {
+        return Err(format!(
+            "{path} is not a full path: give the whole path of the file (\"~/\" stands for \
+             the home folder)."
+        ));
+    }
+    if full.is_dir() {
+        return Err(format!(
+            "{path} is a folder: give the files in it (several SingleM or Sandpiper files \
+             are combined)."
+        ));
+    }
+    let bytes = std::fs::read(&full).map_err(|e| format!("Could not read {path}: {e}."))?;
+    let name = Path::new(&full)
+        .file_name()
+        .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
+    Ok(crate::platform::OpenedFile { name, bytes })
+}
+
+/// In the browser, files are only opened by the user.
+#[cfg(target_arch = "wasm32")]
+fn read_file(path: &str) -> Result<crate::platform::OpenedFile, String> {
+    Err(format!(
+        "{path} cannot be opened: in the browser, only the user can open files."
+    ))
 }
 
 fn optional_str<'a>(args: &'a Map<String, Value>, key: &str) -> Result<Option<&'a str>, String> {

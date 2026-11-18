@@ -6,7 +6,21 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Finished and committed (2026-11-18, assistant session): **custom plots
+Finished and committed (2026-11-19, assistant session): **assistant tool
+`load_data`**, which opens a profile and/or metadata file by full path ("~/"
+for the home folder): one file in any format File > Load profile reads,
+several SingleM or Sandpiper files combined, a BIOM table with
+`biom_metadata_field`, a mothur taxonomy file with `mothur_groups` and
+`mothur_names`. Every file is read before anything changes; errors end
+"Nothing was changed". app.rs gained `choose_mothur_files`,
+`cancel_pending_profile` and `use_metadata` (loading metadata now clears
+the assistant's undo, as loading a profile did). GUIDE, INSTRUCTIONS,
+assistant.rst, NEW_FEATURES.md; tests in tests/assistant.rs. fmt, clippy
+(both targets), stamp-gui tests and Sphinx pass. Committed ("Let the
+assistant load a profile and metadata"). Follow-up once directory loading
+is committed: let `load_data` take a directory.
+
+Earlier: Finished and committed (2026-11-18, assistant session): **custom plots
 drawn by the assistant** (tool `show_custom_plot`). The plot is described in
 a subset of Vega-Lite and drawn as a STAMP `Figure` by the new module
 `crates/stamp-plot/src/custom/` (mod.rs: marks, scales, axes, legends;

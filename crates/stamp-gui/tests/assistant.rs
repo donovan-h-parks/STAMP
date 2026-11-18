@@ -1293,3 +1293,186 @@ fn agent_in_the_panel(
         println!("tool: {} {}", entry.tool, entry.args);
     }
 }
+
+/// The full path of an example file, as the assistant would give it.
+fn example_path(relative: &str) -> String {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples")
+        .join(relative)
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned()
+}
+
+#[test]
+fn load_data_opens_files_by_path() {
+    let mut h = Harness::enterotypes();
+    h.call("set_plot_fonts", json!({"axis_labels": 12}));
+    assert!(h.app.can_undo_assistant_change());
+    let coal = example_path("CoalSeamGas/coal.spf");
+    let coal_metadata = example_path("CoalSeamGas/coal.metadata.tsv");
+
+    // Mistakes change nothing.
+    let folder = example_path("CoalSeamGas");
+    for (args, expected) in [
+        (json!({}), "Give 'profile', 'metadata' or both"),
+        (
+            json!({"profile": coal, "colour": "red"}),
+            "no setting colour",
+        ),
+        (json!({"profile": "coal.spf"}), "not a full path"),
+        (
+            json!({"profile": format!("{folder}/missing.spf")}),
+            "Could not read",
+        ),
+        (json!({"profile": folder}), "is a folder"),
+        (json!({"profile": coal_metadata.clone()}), "Could not load"),
+        (json!({"metadata": coal_metadata.clone()}), "Could not load"),
+        (json!({"profile": [coal, coal_metadata]}), "Several files"),
+        (
+            json!({"metadata": coal_metadata, "mothur_groups": coal}),
+            "go with 'profile'",
+        ),
+    ] {
+        let outcome = h.call("load_data", args.clone());
+        assert!(outcome.is_error, "{args}: {}", text(&outcome));
+        assert!(
+            text(&outcome).contains(expected),
+            "{args}: {}",
+            text(&outcome)
+        );
+        if expected.starts_with("Could")
+            || expected.contains("full path")
+            || expected.contains("folder")
+        {
+            assert!(
+                text(&outcome).contains("Nothing was changed"),
+                "{args}: {}",
+                text(&outcome)
+            );
+        }
+        assert_eq!(h.app.session.profile_name, "Enterotypes.profile.spf");
+        assert_eq!(h.app.session.metadata_name, "Enterotypes.metadata.tsv");
+        assert!(h.app.pending_profile().is_none());
+    }
+    assert!(h.app.can_undo_assistant_change());
+
+    // A profile and its metadata together.
+    let outcome = h.call(
+        "load_data",
+        json!({"profile": coal, "metadata": coal_metadata}),
+    );
+    let answer = text(&outcome);
+    assert!(!outcome.is_error, "{answer}");
+    assert!(answer.contains("Loaded the profile coal.spf"), "{answer}");
+    assert!(
+        answer.contains("Loaded the metadata coal.metadata.tsv"),
+        "{answer}"
+    );
+    assert!(answer.contains("no longer be undone"), "{answer}");
+    assert!(
+        answer.contains("Now showing: Two groups analysis"),
+        "{answer}"
+    );
+    assert_eq!(h.app.session.profile_name, "coal.spf");
+    assert_eq!(h.app.session.metadata_name, "coal.metadata.tsv");
+    assert!(!h.app.can_undo_assistant_change());
+    assert!(h.app.is_settled());
+
+    // A profile alone, then its metadata, "~/" being the home folder.
+    let outcome = h.call(
+        "load_data",
+        json!({"profile": example_path("EnterotypesArumugam/Enterotypes.profile.spf")}),
+    );
+    let answer = text(&outcome);
+    assert!(!outcome.is_error, "{answer}");
+    assert!(answer.contains("No metadata is loaded"), "{answer}");
+    assert!(h.app.session.metadata.is_none());
+    assert_eq!(h.app.mode, Mode::TwoSamples);
+    let outcome = h.call(
+        "load_data",
+        json!({"metadata": example_path("EnterotypesArumugam/Enterotypes.metadata.tsv")}),
+    );
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert_eq!(h.app.session.metadata_name, "Enterotypes.metadata.tsv");
+    assert_eq!(h.app.mode, Mode::TwoGroups);
+    let outcome = h.call("load_data", json!({"metadata": "~/no-such-stamp-file.tsv"}));
+    assert!(text(&outcome).contains("Could not read ~/no-such-stamp-file.tsv"));
+
+    // A profile that loads with metadata that does not fit it.
+    let outcome = h.call(
+        "load_data",
+        json!({"profile": [coal], "metadata": example_path("EnterotypesArumugam/Enterotypes.metadata.tsv")}),
+    );
+    let answer = text(&outcome);
+    assert!(!outcome.is_error, "{answer}");
+    assert!(answer.contains("could not be used"), "{answer}");
+    assert_eq!(h.app.session.profile_name, "coal.spf");
+    assert!(h.app.session.metadata.is_none());
+
+    // A BIOM table, with and without the field that gives its hierarchy.
+    let biom = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../stamp-core/tests/data/otu_table_v2.biom")
+        .canonicalize()
+        .unwrap();
+    let outcome = h.call("load_data", json!({"profile": biom}));
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert_eq!(h.app.session.profile_name, "otu_table_v2.biom");
+    assert_eq!(
+        h.app
+            .session
+            .tree
+            .as_ref()
+            .unwrap()
+            .hierarchy_headings()
+            .len(),
+        4
+    );
+    assert!(h.app.pending_profile().is_none());
+    let outcome = h.call(
+        "load_data",
+        json!({"profile": biom, "biom_metadata_field": null}),
+    );
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert!(
+        text(&outcome).contains("hierarchy: Observation Ids."),
+        "{}",
+        text(&outcome)
+    );
+
+    // A mothur taxonomy file needs its groups file.
+    let directory = std::env::temp_dir().join(format!("stamp-load-data-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let taxonomy = directory.join("otus.taxonomy");
+    std::fs::write(&taxonomy, "Otu1\tBacteria;Firmicutes;\n").unwrap();
+    let outcome = h.call("load_data", json!({"profile": taxonomy.to_string_lossy()}));
+    assert!(outcome.is_error);
+    assert!(
+        text(&outcome).contains("mothur_groups"),
+        "{}",
+        text(&outcome)
+    );
+    assert!(h.app.pending_profile().is_none());
+    assert_eq!(h.app.session.profile_name, "otu_table_v2.biom");
+    std::fs::remove_dir_all(&directory).ok();
+}
+
+#[test]
+fn load_data_needs_a_profile_for_metadata() {
+    let renderer = Renderer::new(1280.0, 800.0, 1.0);
+    let app = StampApp::new(&renderer.ctx);
+    let mut h = Harness { renderer, app };
+    let outcome = h.call(
+        "load_data",
+        json!({"metadata": example_path("CoalSeamGas/coal.metadata.tsv")}),
+    );
+    assert!(outcome.is_error);
+    assert!(text(&outcome).contains("No profile is loaded"));
+    let outcome = h.call(
+        "load_data",
+        json!({"profile": example_path("CoalSeamGas/coal.spf")}),
+    );
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert_eq!(h.app.session.profile_name, "coal.spf");
+}

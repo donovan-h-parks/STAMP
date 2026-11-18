@@ -60,6 +60,14 @@ Add an entry here whenever a feature is added that v2 did not have.
   assistants at once**: each one opened gets a tab of its own in the
   assistant panel, all connected to the same session; opening one that is
   running shows its tab. Plan: `docs/ASSISTANT_PLAN.md`.
+- **The assistant can open data** (tool `load_data`,
+  `crates/stamp-gui/src/assistant/tools.rs`): asked for other data, it
+  opens a profile, a metadata file or both by their paths, in any format
+  File > Load profile reads, including several SingleM or Sandpiper files
+  combined, a BIOM table with the observation metadata field that gives
+  its hierarchy, and a mothur taxonomy file with its groups and names
+  files. Every file is read before anything changes, and what cannot be
+  loaded is explained without changing the session.
 - **Custom plots drawn by the assistant** (tool `show_custom_plot`,
   `crates/stamp-plot/src/custom/`, `docs/site/assistant.rst`). When none of
   STAMP's plots shows what the user asks for, the assistant describes one

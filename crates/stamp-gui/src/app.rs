@@ -1641,6 +1641,26 @@ impl StampApp {
         }
     }
 
+    /// Give the mothur taxonomy file being opened its groups file and,
+    /// optionally, its names file, as the buttons of its dialog do.
+    pub fn choose_mothur_files(&mut self, groups: OpenedFile, names: Option<OpenedFile>) {
+        if let Some(PendingProfile::Mothur {
+            groups: chosen_groups,
+            names: chosen_names,
+            ..
+        }) = &mut self.pending_profile
+        {
+            *chosen_groups = Some(groups);
+            *chosen_names = names;
+        }
+    }
+
+    /// Stop opening a file that waits for choices (BIOM, mothur), as its
+    /// dialog's Cancel button does.
+    pub fn cancel_pending_profile(&mut self) {
+        self.pending_profile = None;
+    }
+
     /// What would be remembered for the next run.
     pub fn saved(&self, ctx: &egui::Context) -> Saved {
         Saved {
@@ -2421,16 +2441,23 @@ impl StampApp {
             self.pending_metadata = Some((name.to_string(), text.to_string()));
             return;
         }
-        match self.session.load_metadata(name, text) {
-            Ok(()) => {
-                self.mode = Mode::TwoGroups;
-                if !self.session.warnings.is_empty() {
-                    self.notice = Some(self.session.warnings.join("\n\n"));
-                }
-            }
-            Err(message) => self.notice = Some(format!("Could not load {name}:\n{message}")),
+        if let Err(message) = self.use_metadata(name, text) {
+            self.notice = Some(format!("Could not load {name}:\n{message}"));
         }
+    }
+
+    /// Use metadata read from a file, or say why it cannot be used (the
+    /// metadata loaded before then stays).
+    pub fn use_metadata(&mut self, name: &str, text: &str) -> Result<(), String> {
         self.view_dirty = true;
+        self.session.load_metadata(name, text)?;
+        // Changes made with other metadata cannot be undone with this.
+        self.assistant_undo.clear();
+        self.mode = Mode::TwoGroups;
+        if !self.session.warnings.is_empty() {
+            self.notice = Some(self.session.warnings.join("\n\n"));
+        }
+        Ok(())
     }
 
     /// Load the example that ships inside the application.
