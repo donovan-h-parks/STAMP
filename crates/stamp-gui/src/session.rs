@@ -160,8 +160,11 @@ pub struct Session {
     pub correlation: CorrelationState,
     /// Feature shown by the single-feature plots.
     pub selected_feature: Option<String>,
-    /// The plot the assistant drew last, if any.
-    pub custom_plot: Option<std::sync::Arc<crate::plots::CustomPlot>>,
+    /// The plots the assistant drew, in the order they were first drawn,
+    /// each with a name of its own.
+    pub custom_plots: Vec<std::sync::Arc<crate::plots::CustomPlot>>,
+    /// Which of them is shown when the custom plot is chosen.
+    pub shown_custom: usize,
     /// Colours the user has chosen for groups, by group name.
     group_colors: std::collections::HashMap<String, stamp_plot::Color>,
     /// Colour of the "All other samples" group.
@@ -287,7 +290,8 @@ impl Default for Session {
                 output: None,
             },
             selected_feature: None,
-            custom_plot: None,
+            custom_plots: Vec::new(),
+            shown_custom: 0,
             group_colors: std::collections::HashMap::new(),
             other_samples_color: stamp_plot::Color::rgb(127, 127, 127),
             dirty: [false; 4],
@@ -326,6 +330,20 @@ impl Session {
         self.samples.sample2 = samples[1].clone();
         self.tree = Some(Arc::new(tree));
         self.invalidate_all();
+    }
+
+    /// The plot the assistant drew that is shown when the custom plot is
+    /// chosen, if it has drawn any.
+    pub fn custom_plot(&self) -> Option<&std::sync::Arc<crate::plots::CustomPlot>> {
+        self.custom_plots.get(self.shown_custom)
+    }
+
+    /// The custom plot named `name`, ignoring case, as its index.
+    pub fn custom_plot_named(&self, name: &str) -> Option<usize> {
+        let wanted = name.trim().to_lowercase();
+        self.custom_plots
+            .iter()
+            .position(|plot| plot.name.to_lowercase() == wanted)
     }
 
     /// Load metadata for the current profile.
@@ -377,7 +395,7 @@ impl Session {
             self.correlation.filter,
             self.multi.post_hoc_test,
             self.multi.post_hoc_coverage,
-            self.custom_plot.as_ref().map(|c| c.id),
+            self.custom_plot().map(|c| c.id),
         )
     }
 

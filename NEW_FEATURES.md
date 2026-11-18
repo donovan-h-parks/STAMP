@@ -81,8 +81,13 @@ Add an entry here whenever a feature is added that v2 did not have.
   linear, log and sqrt scales; colour schemes; layers; transforms filter,
   calculate (with Vega-Lite's expressions), aggregate, joinaggregate,
   window, fold, lookup and bin. What cannot be drawn is refused with the
-  reason and changes nothing; what is ignored is reported. The plot is
-  listed under "Drawn by the assistant" in the plot selector and undone
+  reason and changes nothing; what is ignored is reported. Every plot the
+  assistant draws is kept and listed by its name under "Drawn by the
+  assistant" in the plot selector. The name is required (`name`) and must
+  be the assistant's own: one in use by another of its plots, or by one of
+  STAMP's plots, is refused. A refinement names the plot it changes
+  (`plot`) and replaces it in place; `show_plot` shows a plot drawn earlier
+  by its name. Undone
   like any change of the assistant's.
 - **In the browser.** STAMP runs as a web page (WebAssembly), entirely on the
   user's computer: files are read with the browser's file picker and saved as

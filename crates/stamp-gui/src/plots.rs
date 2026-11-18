@@ -1100,6 +1100,9 @@ const NO_FEATURE: &str = "Select a feature in the feature table";
 /// when it was drawn.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CustomPlot {
+    /// What it is listed as, under "Drawn by the assistant": unique among
+    /// the custom plots.
+    pub name: String,
     pub spec: serde_json::Value,
     pub tables: std::collections::HashMap<String, std::sync::Arc<stamp_plot::custom::Table>>,
     /// Tells custom plots apart, for the figure cache.
@@ -1107,19 +1110,25 @@ pub struct CustomPlot {
 }
 
 impl CustomPlot {
-    /// A plot of `spec` with the tables it uses.
+    /// A plot named `name` of `spec`, with the tables it uses.
     pub fn new(
+        name: String,
         spec: serde_json::Value,
         tables: std::collections::HashMap<String, std::sync::Arc<stamp_plot::custom::Table>>,
     ) -> CustomPlot {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        CustomPlot { spec, tables, id }
+        CustomPlot {
+            name,
+            spec,
+            tables,
+            id,
+        }
     }
 
-    /// Its title, if it has one.
-    pub fn title(&self) -> Option<&str> {
-        match self.spec.get("title")? {
+    /// The title of the plot `spec` describes, if it has one.
+    pub fn title_of(spec: &serde_json::Value) -> Option<&str> {
+        match spec.get("title")? {
             serde_json::Value::String(title) => Some(title),
             other => other.get("text")?.as_str(),
         }
@@ -1798,7 +1807,7 @@ fn rarefaction_curves(
 
 fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSettings) -> Figure {
     if kind == PlotKind::Custom {
-        return match &session.custom_plot {
+        return match session.custom_plot() {
             Some(custom) => custom.build(session).map_or_else(
                 |e| Figure::message(&format!("The custom plot could not be drawn:\n{e}")),
                 |b| b.figure,

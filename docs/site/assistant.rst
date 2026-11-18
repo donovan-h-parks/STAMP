@@ -263,10 +263,15 @@ When none of STAMP's plots shows what you want, ask the assistant to draw
 one: *Plot the proportion of Bacteroidetes in each enterotype as a box
 plot*, *Show the ten most abundant genera in every sample as stacked bars*,
 *Plot the effect size of every feature against its p-value, coloured by
-phylum*. The plot appears in the middle of the window like any other, with
-**Custom plot** chosen beneath it, and it is listed under **Drawn by the
-assistant** in the plot selector, so you can go back to it after looking at
-other plots. Point at it to see the values behind each mark, and save it
+phylum*. The plot appears in the middle of the window like any other, and
+it is listed by name under **Drawn by the assistant** in the plot selector,
+so you can go back to it after looking at other plots. Each new plot the
+assistant draws is added to that list, so earlier plots are kept. STAMP
+makes the assistant give every plot a short name of its own, saying what it
+shows, and refuses a name another of its plots already has. When you ask it
+to change a plot (*make the boxes narrower*), it changes that plot in place
+instead of adding another; you can also ask it to rename a plot, or to show
+one it drew earlier. Point at it to see the values behind each mark, and save it
 with **File > Save plot as**. Your groups keep their colours, and the font
 sizes and font chosen for every plot apply to it too.
 

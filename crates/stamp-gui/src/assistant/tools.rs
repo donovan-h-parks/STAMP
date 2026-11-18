@@ -169,7 +169,9 @@ pub fn list() -> Vec<ToolInfo> {
         },
         ToolInfo {
             name: "show_plot",
-            description: "Show a plot in STAMP's window and change its options. 'options' is \
+            description: "Show a plot in STAMP's window and change its options. 'plot' is the \
+                          id of one of STAMP's plots, or the name of a plot you drew with \
+                          show_custom_plot. 'options' is \
                           merged into the plot settings: give only the fields to change, in \
                           the shape get_plot_options returns (nested objects are merged, \
                           other values replaced). 'feature' selects the feature that the \
@@ -178,7 +180,9 @@ pub fn list() -> Vec<ToolInfo> {
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "plot": {"type": "string", "description": "Plot id from list_plots."},
+                    "plot": {"type": "string",
+                             "description": "Plot id from list_plots, or the name of a plot \
+                                             you drew."},
                     "options": {"type": "object"},
                     "feature": {"type": "string"}
                 },
@@ -332,16 +336,35 @@ pub fn list() -> Vec<ToolInfo> {
                           names are used as written. Groups keep their colours from STAMP's \
                           plots unless a colour scale is given. Answers with notes on anything \
                           ignored; if the plot cannot be drawn, nothing changes and the answer \
-                          says why. get_current_plot describes the result.",
+                          says why. get_current_plot describes the result. Each plot you \
+                          draw is kept, under a name of its own, in the list of plots \
+                          beneath STAMP's own (\"Drawn by the assistant\"), where the user \
+                          can go back to it. 'name' (required) is what the plot is listed as: \
+                          short, saying what it shows, and not the name of another plot you \
+                          drew. A plot is added to the list unless 'plot' names one already \
+                          there: to change a plot you drew (a refinement, not a new plot), give \
+                          its name as 'plot', and as 'name' the same name or a new one. \
+                          show_plot with its name shows a plot you drew before.",
             input_schema: json!({
                 "type": "object",
                 "properties": {
                     "spec": {
                         "type": "object",
                         "description": "The plot, as a Vega-Lite specification."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "What the plot is listed as under \"Drawn by the \
+                                        assistant\": short, saying what it shows, and not \
+                                        the name of another plot you drew."
+                    },
+                    "plot": {
+                        "type": "string",
+                        "description": "Name of a plot you drew before, to change it instead \
+                                        of adding a new plot."
                     }
                 },
-                "required": ["spec"],
+                "required": ["name", "spec"],
                 "additionalProperties": false
             }),
             changes: true,
@@ -438,7 +461,7 @@ pub fn settled_summary(app: &StampApp) -> String {
     let mut out = format!(
         "Now showing: {} analysis, {} (id `{}`).",
         app.mode.name(),
-        app.plot_kind().name(),
+        app.plot_name(),
         describe::plot_id(app.plot_kind())
     );
     if app.plot_kind().uses_selected_feature(app.mode) {
@@ -549,6 +572,23 @@ fn list_plots(app: &StampApp) -> String {
             kind.group().name()
         ));
     }
+    let custom = &app.session.custom_plots;
+    if !custom.is_empty() {
+        out.push_str(
+            "\nPlots you drew (show one with show_plot and its name; change one with \
+             show_custom_plot and its name as 'plot'):\n",
+        );
+        for (index, plot) in custom.iter().enumerate() {
+            let shown = if app.plot_kind() == crate::plots::PlotKind::Custom
+                && app.session.shown_custom == index
+            {
+                " (shown now)"
+            } else {
+                ""
+            };
+            out.push_str(&format!("- {}{shown}\n", plot.name));
+        }
+    }
     out
 }
 
@@ -579,7 +619,17 @@ fn plot_kind(name: &str) -> Result<crate::plots::PlotKind, String> {
 }
 
 fn show_plot(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, String> {
+    // A plot the assistant drew, by its name.
+    let mut custom = None;
     let kind = match optional_str(args, "plot")? {
+        Some(name) if describe::plot_kind_named(name).is_none() => {
+            custom = Some(
+                app.session
+                    .custom_plot_named(name)
+                    .ok_or_else(|| format!("STAMP has no plot {name}; list_plots gives the plots of the current analysis and the plots you drew."))?,
+            );
+            None
+        }
         Some(name) => {
             let kind = plot_kind(name)?;
             if !crate::plots::PlotKind::available(app.mode).contains(&kind) {
@@ -611,6 +661,9 @@ fn show_plot(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, S
     if let Some(kind) = kind {
         app.set_plot_kind(kind);
     }
+    if let Some(index) = custom {
+        app.choose_custom_plot(index);
+    }
     if let Some(settings) = settings {
         app.set_plot_settings(settings);
     }
@@ -620,19 +673,96 @@ fn show_plot(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, S
     Ok(Outcome::text("Done."))
 }
 
+/// The longest name a custom plot may have.
+const MAX_CUSTOM_NAME: usize = 80;
+
+/// Why `name` names none of the plots the assistant drew.
+fn no_custom_plot(app: &StampApp, name: &str) -> String {
+    let names: Vec<&str> = app
+        .session
+        .custom_plots
+        .iter()
+        .map(|p| p.name.as_str())
+        .collect();
+    if names.is_empty() {
+        format!("There is no plot named {name}: you have not drawn any yet.")
+    } else {
+        format!(
+            "There is no plot named {name}; the plots you drew are: {}.",
+            names.join(", ")
+        )
+    }
+}
+
 fn show_custom_plot(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome, String> {
-    let spec =
-        match args.get("spec") {
-            Some(Value::Object(spec)) => Value::Object(spec.clone()),
-            // Some clients send objects as text.
-            Some(Value::String(text)) => {
-                serde_json::from_str(text).map_err(|e| format!("'spec' is not valid JSON: {e}"))?
-            }
-            _ => return Err(
-                "show_custom_plot needs 'spec', the plot described in Vega-Lite (a JSON object)."
+    const KNOWN: [&str; 3] = ["spec", "plot", "name"];
+    if let Some(key) = args.keys().find(|k| !KNOWN.contains(&k.as_str())) {
+        return Err(format!(
+            "show_custom_plot has no setting {key}; it takes {}.",
+            KNOWN.join(", ")
+        ));
+    }
+    // The plot changed, if it is not a new one.
+    let replace = match optional_str(args, "plot")? {
+        Some(name) => Some(
+            app.session
+                .custom_plot_named(name)
+                .ok_or_else(|| no_custom_plot(app, name))?,
+        ),
+        None => None,
+    };
+    let listed = match optional_str(args, "name")?.map(str::trim) {
+        Some(name) if !name.is_empty() => name.to_string(),
+        _ => {
+            return Err(format!(
+                "show_custom_plot needs 'name': a short name of the plot's own, saying what it \
+                 shows (for example \"Bacteroidetes by enterotype\"), which it is listed as \
+                 under \"Drawn by the assistant\".{}",
+                match replace {
+                    Some(index) => format!(
+                        " To keep the name of the plot you are changing, give \"name\": \"{}\".",
+                        app.session.custom_plots[index].name
+                    ),
+                    None => String::new(),
+                }
+            ))
+        }
+    };
+    if listed.chars().count() > MAX_CUSTOM_NAME {
+        return Err(format!(
+            "The name {listed} is too long: give one of at most {MAX_CUSTOM_NAME} characters."
+        ));
+    }
+    if describe::plot_kind_named(&listed).is_some() {
+        return Err(format!(
+            "{listed} is the name of one of STAMP's own plots: give the plot a name of its own."
+        ));
+    }
+    if let Some(index) = app.session.custom_plot_named(&listed) {
+        if Some(index) != replace {
+            let existing = &app.session.custom_plots[index].name;
+            return Err(format!(
+                "You already drew a plot named {existing}. To change that plot, give \
+                 \"plot\": \"{existing}\" (and its name, or a new one); for a new plot, give a \
+                 name that no other plot has."
+            ));
+        }
+    }
+    let spec = match args.get("spec") {
+        Some(Value::Object(spec)) => Value::Object(spec.clone()),
+        // Some clients send objects as text.
+        Some(Value::String(text)) => {
+            serde_json::from_str(text).map_err(|e| format!("'spec' is not valid JSON: {e}"))?
+        }
+        None | Some(Value::Null) => {
+            return Err(
+                "show_custom_plot needs 'spec', the plot described in Vega-Lite (a JSON \
+                 object). To show a plot you drew before, use show_plot with its name."
                     .to_string(),
-            ),
-        };
+            )
+        }
+        Some(_) => return Err("'spec' must be a JSON object.".to_string()),
+    };
     let mut tables = std::collections::HashMap::new();
     for name in stamp_plot::custom::data_names(&spec) {
         if !crate::plots::CUSTOM_DATA.contains(&name.as_str()) {
@@ -648,14 +778,21 @@ fn show_custom_plot(app: &mut StampApp, args: &Map<String, Value>) -> Result<Out
         .map_err(|e| format!("The data '{name}' is not available: {e}"))?;
         tables.insert(name, std::sync::Arc::new(table));
     }
-    let plot = crate::plots::CustomPlot::new(spec, tables);
+    let plot = crate::plots::CustomPlot::new(listed.clone(), spec, tables);
     // Drawn here first, so that a plot that cannot be drawn changes nothing.
     let built =
         stamp_plot::axes::with_fonts(app.plot_settings().fonts, || plot.build(&app.session))
             .map_err(|e| format!("The plot could not be drawn: {e}. Nothing was changed."))?;
     app.remember_for_undo("show_custom_plot");
-    app.show_custom_plot(plot);
-    let mut text = String::from("Done.");
+    app.show_custom_plot(plot, replace);
+    let mut text = if replace.is_some() {
+        format!("Done: changed the plot {listed}.")
+    } else {
+        format!(
+            "Done: added the plot {listed} under \"Drawn by the assistant\". To change it, give \
+             \"plot\": \"{listed}\"."
+        )
+    };
     if !built.notes.is_empty() {
         text.push_str("\nNotes on the description: ");
         text.push_str(&built.notes.join("; "));

@@ -6,7 +6,19 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Finished and committed (2026-11-19, assistant session): **assistant tool
+Finished and committed (2026-11-19, assistant session): **several named
+custom plots**. Each new plot from `show_custom_plot` is kept and listed by
+name, without a prefix, under "Drawn by the assistant" (`Session::
+custom_plots` + `shown_custom` replace `custom_plot`; `CustomPlot::name`;
+`StampApp::plot_name`, `choose_custom_plot`). `name` and `spec` are required
+(schema and code); a name used by another custom plot or by one of STAMP's
+plots is refused; `plot` names one to change in place; `show_plot` shows an
+earlier one by name; undo restores the list. Tests in tests/assistant.rs;
+docs assistant.rst, plots.rst, NEW_FEATURES.md, GUIDE. fmt, clippy (both
+targets), stamp-gui tests and Sphinx pass. Committed ("Keep every plot the
+assistant draws, by name").
+
+Earlier: Finished and committed (2026-11-19, assistant session): **assistant tool
 `load_data`**, which opens a profile and/or metadata file by full path ("~/"
 for the home folder): one file in any format File > Load profile reads,
 several SingleM or Sandpiper files combined, a BIOM table with

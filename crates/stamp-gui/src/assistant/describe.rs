@@ -240,6 +240,14 @@ pub fn plot(app: &StampApp, max_items: usize) -> String {
     let kind = app.plot_kind();
     let mut out = String::from("# Current plot\n\n");
     let _ = writeln!(out, "- Plot: {} (id `{}`)", kind.name(), plot_id(kind));
+    if let (PlotKind::Custom, Some(custom)) = (kind, app.session.custom_plot()) {
+        let _ = writeln!(
+            out,
+            "- Name: {} (listed under \"Drawn by the assistant\"; give it as 'plot', with a \
+             'name', to show_custom_plot to change this plot)",
+            custom.name
+        );
+    }
     if kind.uses_selected_feature(app.mode) {
         let _ = writeln!(
             out,
@@ -253,7 +261,7 @@ pub fn plot(app: &StampApp, max_items: usize) -> String {
     }
     out.push_str(&figure(app.figure(), max_items));
     if kind == PlotKind::Custom {
-        if let Some(custom) = &app.session.custom_plot {
+        if let Some(custom) = app.session.custom_plot() {
             let mut spec = serde_json::to_string_pretty(&custom.spec).unwrap_or_default();
             if spec.len() > MAX_CUSTOM_SPEC {
                 let mut end = MAX_CUSTOM_SPEC;

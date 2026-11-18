@@ -12,8 +12,8 @@ current analysis under six headings, by the question they answer:
   follow the groups or a measured number?
 * `Where the samples are from`_: a map of the samples' locations.
 
-A plot that an AI assistant drew for you is listed last, under **Drawn by
-the assistant** (see :ref:`custom-plots`).
+Plots that an AI assistant drew for you are listed last, by name, under
+**Drawn by the assistant** (see :ref:`custom-plots`).
 
 Every plot can be changed with **Configure plot** and saved with **File >
 Save plot as**. Point at any part of a plot to see what it stands for.

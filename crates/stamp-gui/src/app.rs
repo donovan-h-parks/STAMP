@@ -148,17 +148,20 @@ const COMBO_WIDTH: f32 = 132.0;
 /// The plot selector: the plots of a mode under a heading for each group,
 /// with the checks on the tests after a divider. Returns true if the user
 /// chose another plot.
-/// The choice of plot. `custom` is the title of the custom plot the
-/// assistant drew, if there is one ("" if it has none), listed last.
+/// The choice of plot. `custom` names the plots the assistant drew, listed
+/// last, and `shown` is the one of them shown when the custom plot is
+/// chosen; `title` is what the box shows for the plot chosen now.
 fn choose_plot(
     ui: &mut egui::Ui,
     mode: Mode,
     current: &mut PlotKind,
-    custom: Option<&str>,
+    custom: &[String],
+    shown: &mut usize,
+    title: &str,
 ) -> bool {
     let mut changed = false;
     let combo = egui::ComboBox::from_id_salt("plot-kind")
-        .selected_text(current.name())
+        .selected_text(title)
         .width(COMBO_WIDTH)
         .truncate()
         // Tall enough for every plot of a mode without scrolling, where the
@@ -195,7 +198,7 @@ fn choose_plot(
                     });
                 }
             }
-            if let Some(title) = custom {
+            if !custom.is_empty() {
                 ui.add_space(2.0);
                 let heading = egui::TextStyle::Button.resolve(ui.style()).size;
                 ui.label(
@@ -203,22 +206,20 @@ fn choose_plot(
                         .strong()
                         .size(heading),
                 );
-                let kind = PlotKind::Custom;
-                let name = if title.is_empty() {
-                    kind.name().to_string()
-                } else {
-                    format!("{}: {title}", kind.name())
-                };
+            }
+            for (index, name) in custom.iter().enumerate() {
+                let selected = *current == PlotKind::Custom && *shown == index;
                 ui.horizontal(|ui| {
                     ui.add_space(10.0);
-                    if ui.selectable_label(*current == kind, name).clicked() && *current != kind {
-                        *current = kind;
+                    if ui.selectable_label(selected, name).clicked() && !selected {
+                        *current = PlotKind::Custom;
+                        *shown = index;
                         changed = true;
                     }
                 });
             }
         });
-    combo.response.on_hover_text(current.name());
+    combo.response.on_hover_text(title);
     changed
 }
 
@@ -1106,7 +1107,8 @@ struct AssistantSnapshot {
     group_colors: std::collections::HashMap<String, stamp_plot::Color>,
     other_samples_color: stamp_plot::Color,
     switched_off: Vec<String>,
-    custom_plot: Option<std::sync::Arc<crate::plots::CustomPlot>>,
+    custom_plots: Vec<std::sync::Arc<crate::plots::CustomPlot>>,
+    shown_custom: usize,
 }
 
 /// The settings of the analyses that the assistant can change.
@@ -1314,17 +1316,48 @@ impl StampApp {
     pub fn plot_kind(&self) -> PlotKind {
         match self.plot_kinds[mode_slot(self.mode)] {
             // The custom plot is gone (undone): the first plot instead.
-            PlotKind::Custom if self.session.custom_plot.is_none() => {
+            PlotKind::Custom if self.session.custom_plot().is_none() => {
                 PlotKind::available(self.mode)[0]
             }
             kind => kind,
         }
     }
 
-    /// Show a plot the assistant described, in place of the plot shown.
-    pub fn show_custom_plot(&mut self, plot: crate::plots::CustomPlot) {
-        self.session.custom_plot = Some(std::sync::Arc::new(plot));
+    /// What the plot shown is called: the name of a custom plot, or the
+    /// name of the kind of plot.
+    pub fn plot_name(&self) -> String {
+        match (self.plot_kind(), self.session.custom_plot()) {
+            (PlotKind::Custom, Some(custom)) => custom.name.clone(),
+            (kind, _) => kind.name().to_string(),
+        }
+    }
+
+    /// Show a plot the assistant described, in place of the plot shown:
+    /// added to the custom plots, or in place of the custom plot at
+    /// `replace`.
+    pub fn show_custom_plot(&mut self, plot: crate::plots::CustomPlot, replace: Option<usize>) {
+        let plot = std::sync::Arc::new(plot);
+        let plots = &mut self.session.custom_plots;
+        match replace.filter(|&index| index < plots.len()) {
+            Some(index) => {
+                plots[index] = plot;
+                self.session.shown_custom = index;
+            }
+            None => {
+                plots.push(plot);
+                self.session.shown_custom = plots.len() - 1;
+            }
+        }
         self.set_plot_kind(PlotKind::Custom);
+    }
+
+    /// Show the custom plot at `index`, as choosing it under "Drawn by the
+    /// assistant" does.
+    pub fn choose_custom_plot(&mut self, index: usize) {
+        if index < self.session.custom_plots.len() {
+            self.session.shown_custom = index;
+            self.set_plot_kind(PlotKind::Custom);
+        }
     }
 
     pub fn set_plot_kind(&mut self, kind: PlotKind) {
@@ -1767,7 +1800,7 @@ impl StampApp {
         self.next_plot_window += 1;
         self.plot_windows.push(PlotWindow {
             id,
-            title: format!("{} ({id})", self.plot_kind().name()),
+            title: format!("{} ({id})", self.plot_name()),
             figure: self.figure.clone(),
         });
     }
@@ -1986,7 +2019,8 @@ impl StampApp {
             group_colors: self.session.chosen_group_colors(),
             other_samples_color: self.session.other_samples_color,
             switched_off: self.session.switched_off_samples(),
-            custom_plot: self.session.custom_plot.clone(),
+            custom_plots: self.session.custom_plots.clone(),
+            shown_custom: self.session.shown_custom,
         };
         self.assistant_undo.push(snapshot);
         if self.assistant_undo.len() > MAX_ASSISTANT_UNDO {
@@ -2023,7 +2057,8 @@ impl StampApp {
         self.session
             .set_switched_off_samples(&snapshot.switched_off);
         self.session.other_samples_color = snapshot.other_samples_color;
-        self.session.custom_plot = snapshot.custom_plot;
+        self.session.custom_plots = snapshot.custom_plots;
+        self.session.shown_custom = snapshot.shown_custom;
         self.apply_filters();
         self.view_dirty = true;
         true
@@ -4283,12 +4318,16 @@ impl StampApp {
             };
 
             let mut kind = self.plot_kind();
-            let custom = self
+            let custom: Vec<String> = self
                 .session
-                .custom_plot
-                .as_ref()
-                .map(|c| c.title().unwrap_or("").to_string());
-            if choose_plot(ui, self.mode, &mut kind, custom.as_deref()) {
+                .custom_plots
+                .iter()
+                .map(|c| c.name.clone())
+                .collect();
+            let mut shown = self.session.shown_custom;
+            let title = self.plot_name();
+            if choose_plot(ui, self.mode, &mut kind, &custom, &mut shown, &title) {
+                self.session.shown_custom = shown;
                 self.set_plot_kind(kind);
             }
             let configure = ui

@@ -362,7 +362,7 @@ fn custom_plots_use_stamps_data_and_can_be_undone() {
     let feature = "Bacteroidetes";
     let outcome = h.call(
         "show_custom_plot",
-        json!({"spec": {
+        json!({"name": format!("{feature} by enterotype"), "spec": {
             "title": format!("{feature} by enterotype"),
             "data": {"name": "profile"},
             "transform": [{"filter": {"field": "feature", "equal": feature}}],
@@ -375,7 +375,11 @@ fn custom_plots_use_stamps_data_and_can_be_undone() {
         }}),
     );
     assert!(!outcome.is_error, "{}", text(&outcome));
-    assert!(text(&outcome).contains("Custom plot"), "{}", text(&outcome));
+    assert!(
+        text(&outcome).contains("added the plot Bacteroidetes by enterotype"),
+        "{}",
+        text(&outcome)
+    );
     assert_eq!(h.app.plot_kind(), PlotKind::Custom);
     let figure = h.app.figure().clone();
     assert!(stamp_gui::assistant::describe::figure_message(&figure).is_none());
@@ -412,7 +416,7 @@ fn custom_plots_use_stamps_data_and_can_be_undone() {
         .clone();
     let outcome = h.call(
         "show_custom_plot",
-        json!({"spec": {
+        json!({"name": "P-values", "spec": {
             "data": {"name": "results"},
             "mark": "point",
             "encoding": {
@@ -437,7 +441,7 @@ fn custom_plots_use_stamps_data_and_can_be_undone() {
         ),
         (json!("{not json"), "not valid JSON"),
     ] {
-        let outcome = h.call("show_custom_plot", json!({"spec": spec}));
+        let outcome = h.call("show_custom_plot", json!({"name": "Broken", "spec": spec}));
         assert!(
             outcome.is_error && text(&outcome).contains(expected),
             "{}",
@@ -452,7 +456,181 @@ fn custom_plots_use_stamps_data_and_can_be_undone() {
     h.app.undo_assistant_change();
     h.settle();
     assert_eq!(h.app.plot_kind(), before);
-    assert!(h.app.session.custom_plot.is_none());
+    assert!(h.app.session.custom_plots.is_empty());
+}
+
+#[test]
+fn custom_plots_are_kept_under_names_of_their_own() {
+    let mut h = Harness::enterotypes();
+    let box_plot = |feature: &str| {
+        json!({
+            "title": "Abundance by enterotype",
+            "data": {"name": "profile"},
+            "transform": [{"filter": {"field": "feature", "equal": feature}}],
+            "mark": "boxplot",
+            "encoding": {
+                "x": {"field": "group", "type": "nominal"},
+                "y": {"field": "proportion", "type": "quantitative"}
+            }
+        })
+    };
+    let names = |h: &Harness| -> Vec<String> {
+        h.app
+            .session
+            .custom_plots
+            .iter()
+            .map(|p| p.name.clone())
+            .collect()
+    };
+
+    // A plot needs a name of its own.
+    for (args, expected) in [
+        (json!({"spec": box_plot("Bacteroidetes")}), "needs 'name'"),
+        (
+            json!({"name": "  ", "spec": box_plot("Bacteroidetes")}),
+            "needs 'name'",
+        ),
+        (
+            json!({"name": "Box plot", "spec": box_plot("Bacteroidetes")}),
+            "one of STAMP's own plots",
+        ),
+        (
+            json!({"name": "x".repeat(81), "spec": box_plot("Bacteroidetes")}),
+            "too long",
+        ),
+        (json!({"name": "Bacteroidetes"}), "needs 'spec'"),
+    ] {
+        let outcome = h.call("show_custom_plot", args.clone());
+        assert!(outcome.is_error, "{args}");
+        assert!(
+            text(&outcome).contains(expected),
+            "{args}: {}",
+            text(&outcome)
+        );
+    }
+    assert!(h.app.session.custom_plots.is_empty());
+
+    // New plots are added under their names.
+    for (name, feature) in [
+        ("Bacteroidetes", "Bacteroidetes"),
+        ("Firmicutes", "Firmicutes"),
+    ] {
+        let outcome = h.call(
+            "show_custom_plot",
+            json!({"name": name, "spec": box_plot(feature)}),
+        );
+        assert!(
+            text(&outcome).contains(&format!("added the plot {name}")),
+            "{}",
+            text(&outcome)
+        );
+    }
+    let outcome = h.call(
+        "show_custom_plot",
+        json!({"name": "Samples", "spec": {
+            "data": {"name": "samples"},
+            "mark": "bar",
+            "encoding": {"x": {"field": "sample", "type": "nominal"},
+                         "y": {"field": "total", "type": "quantitative"}}
+        }}),
+    );
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert_eq!(names(&h), ["Bacteroidetes", "Firmicutes", "Samples"]);
+    assert_eq!(h.app.session.shown_custom, 2);
+    assert_eq!(h.app.plot_name(), "Samples");
+
+    // A name in use is refused, pointing to how that plot is changed.
+    let outcome = h.call(
+        "show_custom_plot",
+        json!({"name": "firmicutes", "spec": box_plot("Proteobacteria")}),
+    );
+    assert!(outcome.is_error);
+    assert!(
+        text(&outcome).contains("\"plot\": \"Firmicutes\""),
+        "{}",
+        text(&outcome)
+    );
+    assert_eq!(names(&h).len(), 3);
+
+    // A plot is changed in place when named, under its name or a new one.
+    let before = h.app.session.custom_plots[1].id;
+    let outcome = h.call(
+        "show_custom_plot",
+        json!({"plot": "firmicutes", "name": "Firmicutes", "spec": box_plot("Proteobacteria")}),
+    );
+    assert!(
+        text(&outcome).contains("changed the plot Firmicutes"),
+        "{}",
+        text(&outcome)
+    );
+    assert_eq!(names(&h).len(), 3);
+    assert_eq!(h.app.session.shown_custom, 1);
+    assert_ne!(h.app.session.custom_plots[1].id, before);
+    let outcome = h.call(
+        "show_custom_plot",
+        json!({"plot": "Firmicutes", "spec": box_plot("Proteobacteria")}),
+    );
+    assert!(
+        text(&outcome).contains("\"name\": \"Firmicutes\""),
+        "{}",
+        text(&outcome)
+    );
+    let outcome = h.call(
+        "show_custom_plot",
+        json!({"plot": "Firmicutes", "name": "Samples", "spec": box_plot("Proteobacteria")}),
+    );
+    assert!(text(&outcome).contains("already drew a plot named Samples"));
+    let outcome = h.call(
+        "show_custom_plot",
+        json!({"plot": "Firmicutes", "name": "Proteobacteria", "spec": box_plot("Proteobacteria")}),
+    );
+    assert!(!outcome.is_error, "{}", text(&outcome));
+    assert_eq!(names(&h), ["Bacteroidetes", "Proteobacteria", "Samples"]);
+    let outcome = h.call(
+        "show_custom_plot",
+        json!({"plot": "Pie", "name": "Pie", "spec": box_plot("Proteobacteria")}),
+    );
+    assert!(text(&outcome).contains("Bacteroidetes, Proteobacteria, Samples"));
+
+    // A plot drawn before is shown again by name, with show_plot.
+    let outcome = h.call("show_plot", json!({"plot": "bacteroidetes"}));
+    assert!(
+        text(&outcome).contains("Now showing: Two groups analysis, Bacteroidetes"),
+        "{}",
+        text(&outcome)
+    );
+    assert_eq!(h.app.session.shown_custom, 0);
+    assert_eq!(h.app.plot_kind(), PlotKind::Custom);
+    let description = text(&h.call("get_current_plot", json!({})));
+    assert!(
+        description.contains("- Name: Bacteroidetes"),
+        "{description}"
+    );
+    let plots = text(&h.call("list_plots", json!({})));
+    assert!(
+        plots.contains("- Bacteroidetes (shown now)\n- Proteobacteria\n- Samples"),
+        "{plots}"
+    );
+    let outcome = h.call("show_plot", json!({"plot": "Pie"}));
+    assert!(outcome.is_error);
+    assert!(
+        text(&outcome).contains("plots you drew"),
+        "{}",
+        text(&outcome)
+    );
+
+    // The user's choice in the plot list.
+    h.app.set_plot_kind(PlotKind::Bar);
+    h.app.choose_custom_plot(2);
+    h.settle();
+    assert_eq!(h.app.plot_name(), "Samples");
+
+    // Undone: the plot shown before, and the name before.
+    h.app.undo_assistant_change();
+    h.settle();
+    assert_eq!(h.app.session.shown_custom, 1);
+    h.app.undo_assistant_change();
+    assert_eq!(names(&h), ["Bacteroidetes", "Firmicutes", "Samples"]);
 }
 
 #[test]
