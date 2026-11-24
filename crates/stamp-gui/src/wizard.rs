@@ -711,6 +711,9 @@ pub struct Wizard {
     pub subject_field: Option<String>,
     /// The choice whose explanation is shown.
     pub info: Option<Choice>,
+    /// True while the window shows the table of tests ("At a glance")
+    /// and not the questions.
+    pub glance: bool,
 }
 
 impl Wizard {
@@ -856,7 +859,36 @@ impl Wizard {
     }
 
     pub fn restart(&mut self) {
-        *self = Wizard::default();
+        *self = Wizard {
+            glance: self.glance,
+            ..Wizard::default()
+        };
+    }
+
+    /// Give the answers that lead to a row of the "At a glance" table and
+    /// show where they lead. Nothing changes if the data do not allow the
+    /// row.
+    pub fn follow(&mut self, row: &Row, facts: &Facts) -> bool {
+        let Ok(comparison) = row.comparison(facts) else {
+            return false;
+        };
+        let mut wizard = Wizard::default();
+        let answers = [
+            Some(Choice::Comparison(comparison)),
+            Some(Choice::Question(row.question)),
+            row.design.map(Choice::Design),
+            row.data.map(Choice::Data),
+        ];
+        for answer in answers.into_iter().flatten() {
+            if !wizard.choose(answer, facts) {
+                return false;
+            }
+        }
+        if wizard.step() != Step::Result {
+            return false;
+        }
+        *self = wizard;
+        true
     }
 
     /// Where the answers lead, once every question of the path is
@@ -1265,6 +1297,382 @@ impl Wizard {
         })
     }
 }
+
+/// What a test of the "At a glance" table is for: the headings its rows
+/// are listed under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Goal {
+    TwoSamples,
+    TwoGroups,
+    MultipleGroups,
+    Presence,
+    Relationships,
+    Communities,
+}
+
+impl Goal {
+    pub const ALL: [Goal; 6] = [
+        Goal::TwoSamples,
+        Goal::TwoGroups,
+        Goal::MultipleGroups,
+        Goal::Presence,
+        Goal::Relationships,
+        Goal::Communities,
+    ];
+
+    pub fn heading(self) -> &'static str {
+        match self {
+            Goal::TwoSamples => "Compare two samples",
+            Goal::TwoGroups => "Compare two groups",
+            Goal::MultipleGroups => "Compare three or more groups",
+            Goal::Presence => "Compare presence or absence",
+            Goal::Relationships => "Find relationships",
+            Goal::Communities => "Compare whole communities",
+        }
+    }
+}
+
+/// A row of the "At a glance" table: a test, what it is for, and the
+/// answers to the wizard's questions that lead to it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Row {
+    pub goal: Goal,
+    pub test: &'static str,
+    /// The comparisons the test is made for; the first the loaded data
+    /// allow is used.
+    pub comparisons: &'static [Comparison],
+    pub question: Question,
+    pub design: Option<Design>,
+    pub data: Option<Data>,
+    pub when: &'static str,
+    pub does: &'static str,
+    pub assumes: &'static str,
+}
+
+impl Row {
+    /// The comparison with which the loaded data allow the test, or why
+    /// they do not.
+    pub fn comparison(&self, facts: &Facts) -> Result<Comparison, String> {
+        let mut first = None;
+        for comparison in self.comparisons {
+            let mut checks = vec![
+                facts.comparison(*comparison),
+                facts.question(*comparison, self.question),
+            ];
+            if let Some(design) = self.design {
+                checks.push(facts.design(*comparison, design));
+                if let Some(data) = self.data {
+                    checks.push(facts.data(*comparison, design, data));
+                }
+            }
+            let reason = checks.into_iter().find_map(|check| match check {
+                Availability::Yes => None,
+                Availability::No(reason) => Some(reason),
+            });
+            match reason {
+                None => return Ok(*comparison),
+                Some(reason) => first = first.or(Some(reason)),
+            }
+        }
+        Err(first.unwrap_or_default())
+    }
+
+    /// The choice whose drawing stands for the test: the most particular
+    /// of the answers that lead to it.
+    pub fn picture(&self) -> Choice {
+        match (self.data, self.design) {
+            (Some(data), _) if data != Data::Typical => Choice::Data(data),
+            (_, Some(Design::Matched)) => Choice::Design(Design::Matched),
+            _ if self.question != Question::Differ => Choice::Question(self.question),
+            _ => Choice::Comparison(self.comparisons[0]),
+        }
+    }
+}
+
+/// The tests of the "At a glance" table, in the order they are listed.
+pub const GLANCE: [Row; 18] = {
+    use Comparison::{MultipleGroups, TwoGroups, TwoSamples, Variable};
+    const fn differ(
+        goal: Goal,
+        test: &'static str,
+        comparison: &'static [Comparison],
+        design: Design,
+        data: Data,
+        [when, does, assumes]: [&'static str; 3],
+    ) -> Row {
+        Row {
+            goal,
+            test,
+            comparisons: comparison,
+            question: Question::Differ,
+            design: Some(design),
+            data: Some(data),
+            when,
+            does,
+            assumes,
+        }
+    }
+    const fn other(
+        goal: Goal,
+        test: &'static str,
+        comparisons: &'static [Comparison],
+        question: Question,
+        [when, does, assumes]: [&'static str; 3],
+    ) -> Row {
+        Row {
+            goal,
+            test,
+            comparisons,
+            question,
+            design: None,
+            data: None,
+            when,
+            does,
+            assumes,
+        }
+    }
+    const NAMED: &str = "A metadata field that names the subject of each sample.";
+    [
+        other(
+            Goal::TwoSamples,
+            "G-test (w/ Yates') + Fisher's",
+            &[TwoSamples],
+            Question::Differ,
+            [
+                "One sample of each condition, without replicates.",
+                "Compares each feature's share of the sequences of the two samples.",
+                "Counts of sequences. A difference is between these two samples, not \
+                 between the conditions they came from.",
+            ],
+        ),
+        differ(
+            Goal::TwoGroups,
+            "Welch's t-test",
+            &[TwoGroups],
+            Design::Independent,
+            Data::Typical,
+            [
+                "Different subjects in each group, about ten or more samples in each.",
+                "Compares the mean abundance of each feature in the two groups.",
+                "Roughly bell-shaped data, or ten or more samples in each group. The \
+                 groups may differ in size and spread.",
+            ],
+        ),
+        differ(
+            Goal::TwoGroups,
+            "Mann-Whitney U test",
+            &[TwoGroups],
+            Design::Independent,
+            Data::SmallOrExtreme,
+            [
+                "Small groups, or a few samples with extreme values.",
+                "Asks whether the samples of one group tend to rank higher than those of \
+                 the other.",
+                "Nothing about the shape of the data. Four or more samples in each group \
+                 are needed to reach p < 0.05.",
+            ],
+        ),
+        differ(
+            Goal::TwoGroups,
+            "White's non-parametric t-test",
+            &[TwoGroups],
+            Design::Independent,
+            Data::MostlyAbsent,
+            [
+                "Features that are absent from most samples.",
+                "Compares the means, with p-values found by shuffling the samples between \
+                 the groups.",
+                "Nothing about the shape of the data. Slower than the other tests.",
+            ],
+        ),
+        differ(
+            Goal::TwoGroups,
+            "Welch's t-test on centred log-ratios",
+            &[TwoGroups],
+            Design::Independent,
+            Data::Dominated,
+            [
+                "One or a few features make up most of every sample.",
+                "Compares each feature relative to the others of its sample, so that a \
+                 change in a dominant feature does not appear as a change in all the rest.",
+                "As Welch's t-test, after the transform.",
+            ],
+        ),
+        differ(
+            Goal::TwoGroups,
+            "Paired t-test",
+            &[TwoGroups],
+            Design::Matched,
+            Data::Typical,
+            [
+                "The same subjects in both groups (before and after), about ten or more \
+                 subjects.",
+                "Asks whether the changes within the subjects average to zero.",
+                "A metadata field that names the subject of each sample. Changes that are \
+                 roughly bell-shaped, or ten or more subjects.",
+            ],
+        ),
+        differ(
+            Goal::TwoGroups,
+            "Wilcoxon signed-rank test",
+            &[TwoGroups],
+            Design::Matched,
+            Data::SmallOrExtreme,
+            [
+                "The same subjects in both groups, with few subjects or extreme changes.",
+                "Asks whether the changes within the subjects tend to go one way.",
+                "A metadata field that names the subject of each sample. Six or more \
+                 subjects are needed to reach p < 0.05.",
+            ],
+        ),
+        differ(
+            Goal::MultipleGroups,
+            "ANOVA",
+            &[MultipleGroups],
+            Design::Independent,
+            Data::Typical,
+            [
+                "Different subjects in each group, about ten or more samples in each.",
+                "Asks whether the group means differ by more than the variation within \
+                 the groups explains. A post-hoc test (Tukey-Kramer or Games-Howell) then \
+                 says which pairs of groups differ.",
+                "Roughly bell-shaped data, or ten or more samples in each group.",
+            ],
+        ),
+        differ(
+            Goal::MultipleGroups,
+            "Kruskal-Wallis H-test",
+            &[MultipleGroups],
+            Design::Independent,
+            Data::SmallOrExtreme,
+            [
+                "Small groups, or a few samples with extreme values.",
+                "Asks whether the samples of some groups tend to rank higher. Dunn's test \
+                 then says which pairs of groups differ.",
+                "Nothing about the shape of the data.",
+            ],
+        ),
+        differ(
+            Goal::MultipleGroups,
+            "Friedman test",
+            &[MultipleGroups],
+            Design::Matched,
+            Data::Typical,
+            [
+                "The same subjects sampled once in every group.",
+                "Ranks each subject's samples across the groups and asks whether some \
+                 groups tend to rank higher. The Wilcoxon signed-rank test then says which \
+                 pairs of groups differ.",
+                NAMED,
+            ],
+        ),
+        differ(
+            Goal::Presence,
+            "Fisher's exact test (presence/absence)",
+            &[TwoGroups],
+            Design::Independent,
+            Data::Presence,
+            [
+                "Two groups, when the question is in how many samples a feature is found \
+                 and not how abundant it is.",
+                "Compares the share of each group's samples that have the feature.",
+                "Nothing about the data: it is exact for any number of samples.",
+            ],
+        ),
+        differ(
+            Goal::Presence,
+            "McNemar's test (presence/absence)",
+            &[TwoGroups],
+            Design::Matched,
+            Data::Presence,
+            [
+                "The same subjects in both groups.",
+                "Asks whether a feature appears within subjects more often than it \
+                 disappears.",
+                "A metadata field that names the subject of each sample. Only the \
+                 subjects in which the feature appears or disappears count.",
+            ],
+        ),
+        differ(
+            Goal::Presence,
+            "Chi-square test (presence/absence)",
+            &[MultipleGroups],
+            Design::Independent,
+            Data::Presence,
+            [
+                "Three or more groups.",
+                "Asks whether the feature is found in the same share of the samples of \
+                 every group.",
+                "About five or more samples expected with and without the feature in \
+                 each group; features with fewer are noted.",
+            ],
+        ),
+        other(
+            Goal::Relationships,
+            "Spearman rank correlation",
+            &[Variable],
+            Question::Follow,
+            [
+                "Samples along a measured variable (pH, age, depth).",
+                "Asks whether each feature rises or falls as the variable does.",
+                "A numeric metadata field. A steady rise or fall, which need not be a \
+                 straight line.",
+            ],
+        ),
+        other(
+            Goal::Relationships,
+            "Co-occurrence heatmap",
+            &[MultipleGroups, TwoGroups, Variable],
+            Question::Together,
+            [
+                "Which features are found together, and which avoid each other?",
+                "Correlates every pair of the most abundant features across the samples.",
+                "Many samples. Features can occur together because they prefer the same \
+                 kind of sample, not because they interact.",
+            ],
+        ),
+        other(
+            Goal::Relationships,
+            "Mantel test",
+            &[Variable],
+            Question::Communities,
+            [
+                "Does the whole community change along a measured variable?",
+                "Asks whether samples that differ more in the variable also differ more \
+                 in composition.",
+                "A numeric metadata field. The p-value is found by shuffling the samples.",
+            ],
+        ),
+        other(
+            Goal::Communities,
+            "PERMANOVA",
+            &[MultipleGroups, TwoGroups],
+            Question::Communities,
+            [
+                "Do the groups differ in overall composition, and not only feature by \
+                 feature?",
+                "Asks whether samples are more alike within the groups than between \
+                 them. Shown above the PCoA plot, with PERMDISP and ANOSIM.",
+                "Groups that are similarly spread out, which PERMDISP checks. The p-value \
+                 is found by shuffling the samples.",
+            ],
+        ),
+        other(
+            Goal::Communities,
+            "Kruskal-Wallis H-test of alpha diversity",
+            &[MultipleGroups, TwoGroups],
+            Question::Diversity,
+            [
+                "Do the groups differ in how many features their samples hold, or how \
+                 evenly?",
+                "Compares the diversity of the samples of the groups. Shown with the \
+                 alpha diversity box plot.",
+                "Samples sequenced to a similar depth, or rarefied: more sequences find \
+                 more features.",
+            ],
+        ),
+    ]
+};
 
 /// A recommendation that changes no test: an analysis and its plots.
 fn plots_only(
@@ -1977,6 +2385,69 @@ mod tests {
         assert!(facts
             .suggested(Comparison::TwoSamples, Design::Independent)
             .is_none());
+    }
+
+    #[test]
+    fn every_test_at_a_glance_is_where_its_answers_lead() {
+        let facts = facts();
+        for row in &GLANCE {
+            let mut wizard = Wizard {
+                glance: true,
+                ..Wizard::default()
+            };
+            assert!(wizard.follow(row, &facts), "{}", row.test);
+            assert!(!wizard.glance && wizard.step() == Step::Result);
+            let recommendation = wizard.recommendation(&facts).unwrap();
+            // The tests of features are named as the Statistics panel
+            // names them (the transform apart).
+            if row.question == Question::Differ && row.data != Some(Data::Dominated) {
+                assert!(
+                    recommendation.heading.starts_with(row.test),
+                    "{} leads to {}",
+                    row.test,
+                    recommendation.heading
+                );
+            }
+            assert_eq!(wizard.comparison.unwrap().mode(), recommendation.mode);
+            for text in [row.when, row.does, row.assumes] {
+                assert!(text.ends_with(['.', '?']) && !text.contains("  "), "{text}");
+            }
+        }
+        for goal in Goal::ALL {
+            assert!(GLANCE.iter().any(|row| row.goal == goal), "{goal:?}");
+        }
+        // Rows of one goal are listed together.
+        let mut goals: Vec<Goal> = GLANCE.iter().map(|row| row.goal).collect();
+        goals.dedup();
+        assert_eq!(goals, Goal::ALL);
+
+        // Without data no test can be followed, and each says why.
+        let nothing = Facts::default();
+        for row in &GLANCE {
+            let reason = row.comparison(&nothing).unwrap_err();
+            assert!(reason.contains("Load a profile"), "{reason}");
+            let mut wizard = Wizard::default();
+            assert!(!wizard.follow(row, &nothing));
+            assert_eq!(wizard, Wizard::default());
+        }
+        // A test for several comparisons uses the first the data allow,
+        // and otherwise gives the reason of the first.
+        let two = Facts {
+            groups: vec![("A".into(), 4), ("B".into(), 4)],
+            subject_fields: Vec::new(),
+            ..facts.clone()
+        };
+        let permanova = GLANCE.iter().find(|row| row.test == "PERMANOVA").unwrap();
+        assert_eq!(permanova.comparison(&facts), Ok(Comparison::MultipleGroups));
+        assert_eq!(permanova.comparison(&two), Ok(Comparison::TwoGroups));
+        let friedman = GLANCE
+            .iter()
+            .find(|row| row.test == "Friedman test")
+            .unwrap();
+        assert!(friedman
+            .comparison(&two)
+            .unwrap_err()
+            .contains("three or more are needed"));
     }
 
     #[test]

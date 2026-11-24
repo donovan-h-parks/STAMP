@@ -38,7 +38,11 @@ wizard and a button in the Statistics panel. GUI tests
 and `documentation_screenshots_of_the_wizard` (writes gui_wizard_*.png,
 copied by hand to docs/site/images). Docs: new wizard.rst, plots.rst,
 statistics.rst, analyses.rst, command_line.rst, choosing_a_test.rst,
-NEW_FEATURES.md. **Not done**: the "At a glance" table view of the plan;
+NEW_FEATURES.md. The **"At a glance" table** was added afterwards
+(2026-11-24, committed): `wizard::{GLANCE, Row, Goal}`,
+`Wizard::{glance, follow}`, `wizard_ui::glance`, unit test
+`every_test_at_a_glance_is_where_its_answers_lead`, screenshot
+gui_wizard_glance.png, wizard.rst section. **Not done**:
 an icon of its own (it uses the sliders icon); figures of the six new
 plots in the documentation; trying it by hand with a mouse (clicks on
 cards and "i" buttons are not covered by a test, which drives

@@ -3,8 +3,8 @@
 Status (2026-11-24): flow chart agreed (comparison first), the dead ends
 it found filled, and **the wizard built** (`crates/stamp-gui/src/wizard.rs`
 for the questions and recommendations, `wizard_ui.rs` for the window;
-user documentation in `docs/site/wizard.rst`). Not built: the "At a
-glance" table view described below.
+user documentation in `docs/site/wizard.rst`), with the "At a glance"
+table view described below (`wizard::GLANCE`).
 
 A wizard that leads someone from the question they want answered to the
 analysis, test and plots in STAMP that answer it. This file holds the flow

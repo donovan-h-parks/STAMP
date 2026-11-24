@@ -107,6 +107,29 @@ features the wizard always chooses the Benjamini-Hochberg FDR correction;
 everything it sets can be changed afterwards in the Statistics panel. The
 two samples, or the two groups, compared are those chosen there.
 
+The tests at a glance
+---------------------
+
+**At a glance**, at the top of the wizard, shows the same tests as one
+table instead of as questions: a row for each test, under what it is for
+(compare two samples, two groups, three or more groups, presence or
+absence, find relationships, compare whole communities), with when to use
+it, what it does and what it assumes. It suits those who already have a
+test in mind and want to check that it fits, or to see what else there is.
+
+.. figure:: images/gui_wizard_glance.png
+   :width: 100%
+
+   The start of the table for the enterotype example. The paired tests are
+   greyed: no metadata field says which samples came from the same subject.
+
+As with the questions, a test that the loaded data cannot support is greyed
+and says why. *Show* beside a test opens its recommendation, the same page
+the questions lead to, from which the analysis can be set up. A test that
+suits two groups or more (PERMANOVA, for example) is set up for multiple
+groups if the group field has three or more groups, and otherwise for two.
+**Step by step** returns to the questions.
+
 Where each path leads
 ---------------------
 

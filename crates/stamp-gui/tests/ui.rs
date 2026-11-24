@@ -4124,6 +4124,27 @@ fn documentation_screenshots_of_the_wizard() {
     assert!(wizard.choose(Choice::Data(Data::SmallOrExtreme), &facts));
     harness.settle();
     harness.screenshot("gui_wizard_result");
+
+    // The same tests as a table. The enterotypes have no subjects to
+    // match and no number to follow, so those tests are greyed.
+    use stamp_gui::wizard::GLANCE;
+    harness.app.wizard.glance = true;
+    harness.settle();
+    harness.screenshot("gui_wizard_glance");
+    let row = |test: &str| GLANCE.iter().find(|row| row.test == test).unwrap();
+    assert!(row("Friedman test")
+        .comparison(&facts)
+        .unwrap_err()
+        .contains("No metadata field names subjects"));
+    assert!(row("Kruskal-Wallis H-test").comparison(&facts).is_ok());
+    // A row leads to its recommendation, which sets the analysis up.
+    assert!(harness.app.wizard.follow(row("PERMANOVA"), &facts));
+    harness.settle();
+    assert!(!harness.app.wizard.glance);
+    assert!(harness.app.apply_wizard(None));
+    harness.settle();
+    assert_eq!(harness.app.mode, Mode::MultipleGroups);
+    assert_eq!(harness.app.plot_kind(), PlotKind::Pcoa);
 }
 
 /// The analysis wizard: every choice is drawn, the ones the data cannot

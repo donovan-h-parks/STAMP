@@ -300,7 +300,11 @@ Add an entry here whenever a feature is added that v2 did not have.
   plots with what each is for, alternatives and what to report; "Set up
   this analysis" chooses the settings (with the Benjamini-Hochberg FDR),
   runs the analysis and shows the first plot. The flow chart it follows is
-  in `docs/WIZARD_PLAN.md`.
+  in `docs/WIZARD_PLAN.md`. "At a glance" in the same window shows the
+  tests as one table (`wizard::GLANCE`): a row for each of 18 tests under
+  what it is for, with its drawing, when to use it, what it does and what
+  it assumes; rows the data cannot support are greyed with the reason, and
+  "Show" on a row opens its recommendation.
 - **Sample filter.** Below the group field, a metadata field and the values
   whose samples every analysis and plot uses (tick or untick each value);
   samples left out are excluded from everything, groups left empty

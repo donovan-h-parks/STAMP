@@ -1,7 +1,8 @@
 //! The window of the analysis wizard: the questions of `wizard.rs` as
 //! cards, each with a small drawing of what it means and an "i" button for
 //! a longer explanation. Every choice is always drawn; those the loaded
-//! data cannot support are greyed and say why.
+//! data cannot support are greyed and say why. The same window shows the
+//! tests "at a glance": a table with a row for each test.
 
 use eframe::egui;
 use egui::{pos2, vec2, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
@@ -9,7 +10,9 @@ use egui::{pos2, vec2, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind}
 use crate::app::StampApp;
 use crate::icons;
 use crate::plots::PlotKind;
-use crate::wizard::{Availability, Choice, Comparison, Data, Design, Facts, Question, Step};
+use crate::wizard::{
+    Availability, Choice, Comparison, Data, Design, Facts, Goal, Question, Step, GLANCE,
+};
 
 /// Size of a card.
 const CARD: egui::Vec2 = vec2(236.0, 172.0);
@@ -48,6 +51,19 @@ pub fn show(app: &mut StampApp, ctx: &egui::Context) {
 
 fn contents(app: &mut StampApp, ui: &mut egui::Ui) {
     let facts = app.wizard_facts();
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut app.wizard.glance, false, "Step by step")
+            .on_hover_text("A few questions that lead to a test");
+        ui.selectable_value(&mut app.wizard.glance, true, "At a glance")
+            .on_hover_text(
+                "Every test in one table: when to use it, what it does, what it assumes",
+            );
+    });
+    ui.separator();
+    if app.wizard.glance {
+        glance(app, ui, &facts);
+        return;
+    }
     trail(app, ui);
     ui.separator();
     let step = app.wizard.step();
@@ -96,6 +112,130 @@ fn contents(app: &mut StampApp, ui: &mut egui::Ui) {
             app.wizard.restart();
         }
     });
+}
+
+/// Width and height of the drawing of a test in the table.
+const GLANCE_PICTURE: egui::Vec2 = vec2(60.0, 40.0);
+/// Width of the column that names the test.
+const GLANCE_TEST: f32 = 168.0;
+
+/// The tests at a glance: a row for each, under what it is for, with when
+/// to use it, what it does and what it assumes. Tests the loaded data
+/// cannot support are greyed and say why; the others lead to their
+/// recommendation.
+fn glance(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts) {
+    ui.add_space(4.0);
+    ui.label(
+        RichText::new("Which test for which question?")
+            .heading()
+            .strong(),
+    );
+    ui.label(
+        RichText::new(
+            "Tests that the loaded data cannot support are greyed, with the reason. \"Show\" \
+             explains a test further and can set it up.",
+        )
+        .weak(),
+    );
+    ui.add_space(4.0);
+    data_summary(app, ui, facts);
+
+    let gap = 10.0;
+    let column =
+        ((ui.available_width() - GLANCE_PICTURE.x - GLANCE_TEST - 4.0 * gap) / 3.0).max(110.0);
+    let cell = |ui: &mut egui::Ui, width: f32, add: &mut dyn FnMut(&mut egui::Ui)| {
+        ui.allocate_ui_with_layout(
+            vec2(width, 0.0),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_width(width);
+                ui.spacing_mut().item_spacing.y = 2.0;
+                add(ui);
+            },
+        );
+    };
+    let text = |ui: &mut egui::Ui, text: RichText| {
+        ui.add(egui::Label::new(text.size(SMALL)).wrap());
+    };
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = gap;
+        ui.allocate_exact_size(vec2(GLANCE_PICTURE.x, 0.0), Sense::hover());
+        for (heading, width) in [
+            ("Test", GLANCE_TEST),
+            ("Use it when", column),
+            ("What it does", column),
+            ("What it assumes", column),
+        ] {
+            cell(ui, width, &mut |ui| {
+                text(ui, RichText::new(heading).strong())
+            });
+        }
+    });
+
+    let visuals = ui.visuals().clone();
+    let mut follow = None;
+    for goal in Goal::ALL {
+        ui.add_space(6.0);
+        ui.label(
+            RichText::new(goal.heading())
+                .strong()
+                .color(visuals.selection.stroke.color),
+        );
+        ui.separator();
+        for row in GLANCE.iter().filter(|row| row.goal == goal) {
+            let availability = row.comparison(facts);
+            let available = availability.is_ok();
+            let dim = |text: &str| {
+                let text = RichText::new(text);
+                if available {
+                    text
+                } else {
+                    text.weak()
+                }
+            };
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = gap;
+                let (picture, _) = ui.allocate_exact_size(GLANCE_PICTURE, Sense::hover());
+                draw(
+                    &ui.painter_at(picture),
+                    picture,
+                    row.picture(),
+                    &Pens::new(
+                        visuals.text_color(),
+                        visuals.window_fill,
+                        if available { 1.0 } else { 0.3 },
+                    ),
+                );
+                cell(ui, GLANCE_TEST, &mut |ui| {
+                    ui.add(egui::Label::new(dim(row.test).strong()).wrap());
+                    match &availability {
+                        Ok(_) => {
+                            if ui
+                                .small_button("Show")
+                                .on_hover_text(
+                                    "Why and when this test is recommended, its plots, and the \
+                                     button that sets it up",
+                                )
+                                .clicked()
+                            {
+                                follow = Some(row);
+                            }
+                        }
+                        Err(reason) => {
+                            text(ui, RichText::new(reason).color(visuals.warn_fg_color));
+                        }
+                    }
+                });
+                for words in [row.when, row.does, row.assumes] {
+                    cell(ui, column, &mut |ui| text(ui, dim(words)));
+                }
+            });
+            ui.add_space(8.0);
+        }
+    }
+    if let Some(row) = follow {
+        app.wizard.follow(row, facts);
+    }
 }
 
 /// The answers so far; clicking one returns to its question.
@@ -318,16 +458,7 @@ fn card(
         &ui.painter_at(picture),
         picture,
         choice,
-        &Pens {
-            ink: Pens {
-                ink: Color32::BLACK,
-                fade,
-                background: fill,
-            }
-            .color(visuals.text_color()),
-            fade,
-            background: fill,
-        },
+        &Pens::new(visuals.text_color(), fill, fade),
     );
 
     let text = Rect::from_min_max(pos2(inner.left(), picture.bottom() + 6.0), inner.max);
@@ -501,6 +632,18 @@ struct Pens {
 }
 
 impl Pens {
+    /// Pens for a drawing on `background`, with lines the colour of the
+    /// text, at a strength from 0 to 1.
+    fn new(text: Color32, background: Color32, fade: f32) -> Pens {
+        let mut pens = Pens {
+            ink: Color32::BLACK,
+            fade,
+            background,
+        };
+        pens.ink = pens.color(text);
+        pens
+    }
+
     /// A colour of the drawing, faded towards the card if the choice
     /// cannot be made. Opaque, so that shapes that overlap do not show.
     fn color(&self, color: Color32) -> Color32 {
