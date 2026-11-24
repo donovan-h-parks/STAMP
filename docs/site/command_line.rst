@@ -72,7 +72,9 @@ Options common to the analyses
 ------------------------------
 
 ``-p, --profile FILE``
-   The profile.
+   The profile: a STAMP profile, a SingleM or Sandpiper profile, or a
+   directory of SingleM or Sandpiper profiles (see
+   :ref:`profile-directory`), read without first being converted.
 ``-m, --metadata FILE``
    The metadata (all commands but ``two-samples``).
 ``--profile-level HEADING``
@@ -610,6 +612,7 @@ written to the screen or to ``-o FILE``:
    stamp-cli convert biom table.biom --metadata-field taxonomy -o profile.spf
    stamp-cli convert cog img_profile.tsv -o profile.spf
    stamp-cli convert singlem condensed_profile.tsv -o profile.spf
+   stamp-cli convert singlem singlem_profiles/ -o profile.spf
    stamp-cli convert sandpiper runs/*.json -o profile.spf
 
 * **mgrast**: an MG-RAST abundance table; ``--heading`` names each level of
@@ -626,8 +629,10 @@ written to the screen or to ``-o FILE``:
   of its categories.
 * **singlem**: SingleM condensed profiles (``singlem pipe -p`` or
   ``singlem summarise``); a file may hold many samples, and several files
-  may be given.
-* **sandpiper**: Sandpiper condensed profiles (JSON), one file per sample.
+  or directories of them may be given (other files in a directory are
+  skipped).
+* **sandpiper**: Sandpiper condensed profiles (JSON), one file per sample,
+  given as files or directories.
   Converting 1,307 runs takes about two seconds.
 
 SingleM and Sandpiper profiles become seven levels from *Domain* to

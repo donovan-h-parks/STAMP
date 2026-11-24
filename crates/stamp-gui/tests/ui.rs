@@ -1108,12 +1108,135 @@ fn singlem_and_sandpiper_profiles_open_from_load_profile() {
         opened(&format!("{data}/singlem_condensed.tsv")),
     ]));
     harness.settle();
+    assert!(harness.app.notice().unwrap().contains("mixture"));
+    harness.app.deliver(Event::Profile(vec![
+        opened(&format!("{data}/singlem_condensed.tsv")),
+        opened("../../examples/EnterotypesArumugam/Enterotypes.profile.spf"),
+    ]));
+    harness.settle();
     assert!(harness
         .app
         .notice()
         .unwrap()
-        .contains("only if they are Sandpiper profiles"));
+        .contains("only if they are SingleM or Sandpiper profiles"));
     assert!(harness.app.session.tree.is_none());
+}
+
+/// The SingleM condensed profile of the test data split into one file per
+/// sample, as `singlem pipe -p` writes when run on each sample.
+fn singlem_per_sample() -> Vec<(String, String)> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../stamp-core/tests/data/singlem/singlem_condensed.tsv");
+    let text = std::fs::read_to_string(path).unwrap();
+    let mut lines = text.lines();
+    let header = lines.next().unwrap();
+    let mut files: Vec<(String, String)> = Vec::new();
+    for line in lines {
+        let sample = line.split('\t').next().unwrap();
+        let name = format!("{sample}.profile.tsv");
+        if files.last().is_none_or(|(n, _)| *n != name) {
+            files.push((name, format!("{header}\n")));
+        }
+        let text = &mut files.last_mut().unwrap().1;
+        text.push_str(line);
+        text.push('\n');
+    }
+    files
+}
+
+#[test]
+fn several_singlem_files_open_from_load_profile_file() {
+    let files: Vec<_> = singlem_per_sample()
+        .iter()
+        .map(|(name, text)| text_file(name, text))
+        .collect();
+    assert_eq!(files.len(), 2);
+
+    // One file holds one sample, which is not enough, and says what to do.
+    let mut harness = Harness::new();
+    harness.app.open_profile_file(text_file(
+        &files[0].name,
+        &String::from_utf8_lossy(&files[0].bytes),
+    ));
+    assert!(harness
+        .app
+        .notice()
+        .unwrap()
+        .contains("Load profile directory"));
+
+    harness.app.deliver(Event::Profile(files));
+    harness.settle();
+    assert_eq!(harness.app.notice(), None);
+    let tree = harness
+        .app
+        .session
+        .tree
+        .as_ref()
+        .expect("the profile loaded");
+    // In the order the files were chosen.
+    assert_eq!(tree.sample_names(), ["SRR28772463", "ERR4084076"]);
+    assert_eq!(harness.app.session.profile_name, "2 SingleM profiles");
+}
+
+#[test]
+fn a_directory_of_singlem_profiles_opens_from_load_profile_directory() {
+    let directory =
+        std::env::temp_dir().join(format!("stamp-gui-singlem-dir-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&directory);
+    std::fs::create_dir_all(directory.join("subdirectory")).unwrap();
+    for (name, text) in singlem_per_sample() {
+        std::fs::write(directory.join(name), text).unwrap();
+    }
+    // Other files are skipped, hidden ones and subdirectories silently.
+    std::fs::write(directory.join("reads_1.fastq"), "@read1\nACGT\n+\nIIII\n").unwrap();
+    std::fs::write(directory.join(".DS_Store"), "x").unwrap();
+    std::fs::write(
+        directory.join("subdirectory/other.tsv"),
+        "sample\tcoverage\ttaxonomy\nX\t1\tRoot; d__Bacteria\n",
+    )
+    .unwrap();
+
+    let read = stamp_gui::platform::read_directory(&directory).unwrap();
+    std::fs::remove_dir_all(&directory).unwrap();
+    assert_eq!(read.files.len(), 2);
+    assert_eq!(read.skipped, ["reads_1.fastq"]);
+    let name = read.name.clone();
+
+    let mut harness = Harness::new();
+    harness.app.deliver(Event::ProfileDirectory(read));
+    harness.settle();
+    let tree = harness
+        .app
+        .session
+        .tree
+        .as_ref()
+        .expect("the profile loaded");
+    assert_eq!(tree.sample_names(), ["ERR4084076", "SRR28772463"]);
+    assert_eq!(
+        harness.app.session.profile_name,
+        format!("{name} (2 SingleM profiles)")
+    );
+    assert_eq!(
+        harness.app.notice(),
+        Some("Skipped 1 file that is not a SingleM or Sandpiper profile: reads_1.fastq.")
+    );
+    harness.screenshot("profile_directory");
+
+    // A directory without profiles says so and keeps the profile loaded.
+    harness.app.deliver(Event::ProfileDirectory(
+        stamp_gui::platform::ProfileDirectory {
+            name: "reads".to_string(),
+            files: Vec::new(),
+            skipped: vec!["reads_1.fastq".to_string()],
+        },
+    ));
+    harness.settle();
+    assert!(harness
+        .app
+        .notice()
+        .unwrap()
+        .contains("No SingleM or Sandpiper profiles were found in reads"));
+    assert_eq!(harness.app.session.tree.as_ref().unwrap().num_samples(), 2);
 }
 
 #[test]

@@ -51,7 +51,8 @@ pub enum Command {
 
 #[derive(Args)]
 pub struct InfoArgs {
-    /// STAMP profile file
+    /// Profile: a STAMP profile file, a SingleM or Sandpiper profile, or a
+    /// directory of SingleM or Sandpiper profiles
     #[arg(long, short)]
     pub profile: PathBuf,
     /// Metadata file describing the samples
@@ -78,7 +79,8 @@ pub struct SampleFilterArgs {
 /// Which features to analyse and where to write the results.
 #[derive(Args)]
 pub struct ProfileArgs {
-    /// STAMP profile file
+    /// Profile: a STAMP profile file, a SingleM or Sandpiper profile, or a
+    /// directory of SingleM or Sandpiper profiles
     #[arg(long, short)]
     pub profile: PathBuf,
     /// Hierarchical level to analyse [default: the most specific level]
@@ -657,7 +659,8 @@ pub enum ConvertFormat {
     /// `singlem summarise`); each file may hold several samples. Values are
     /// coverages, in seven ranks from Domain to Species
     Singlem {
-        /// SingleM condensed profile files
+        /// SingleM condensed profile files, or directories of them (other
+        /// files in a directory are skipped)
         #[arg(required = true)]
         inputs: Vec<PathBuf>,
         #[command(flatten)]
@@ -666,7 +669,8 @@ pub enum ConvertFormat {
     /// Sandpiper condensed profiles (JSON from the Sandpiper API), one file
     /// per sample. Values are coverages, in seven ranks from Domain to Species
     Sandpiper {
-        /// Sandpiper JSON files
+        /// Sandpiper JSON files, or directories of them (other files in a
+        /// directory are skipped)
         #[arg(required = true)]
         inputs: Vec<PathBuf>,
         #[command(flatten)]

@@ -8,6 +8,7 @@
 pub mod biom;
 pub mod cog;
 pub mod comet;
+pub mod coverage;
 pub mod lineage;
 pub mod mgrast;
 pub mod mothur;

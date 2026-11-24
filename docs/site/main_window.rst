@@ -238,7 +238,7 @@ Keyboard shortcuts
 ------------------
 
 ========================  =========================================
-Ctrl+O (Cmd+O on macOS)   Load profile
+Ctrl+O (Cmd+O on macOS)   Load profile file
 Ctrl+S                    Save the plot as a PNG image
 Ctrl+T                    Show or hide the results table
 Ctrl+M                    Show or hide the metadata table

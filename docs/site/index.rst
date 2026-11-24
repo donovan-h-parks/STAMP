@@ -25,7 +25,8 @@ Running STAMP
 -------------
 
 1. :doc:`Install STAMP <installing>`, or open the browser version.
-2. Load a **profile** (File > Load profile) and, to compare groups of
+2. Load a **profile** (File > Load profile file, or Load profile directory for a
+   directory of SingleM profiles) and, to compare groups of
    samples, its **metadata** (File > Load metadata). File > Open example data
    loads a ready-made data set.
 3. Choose the kind of analysis (two samples, two groups, multiple groups or

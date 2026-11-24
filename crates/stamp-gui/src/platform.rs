@@ -14,6 +14,7 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use eframe::egui;
+use stamp_core::import::coverage::{self, CoverageFormat};
 use stamp_core::import::{biom, cog, comet, mgrast, mothur, rita, sandpiper, singlem, NamedText};
 use stamp_plot::export::{export, Format};
 use stamp_plot::Figure;
@@ -28,6 +29,27 @@ impl OpenedFile {
     pub fn text(&self) -> String {
         stamp_core::text::decode(&self.bytes).into_owned()
     }
+}
+
+/// The files of a directory that may be SingleM or Sandpiper profiles.
+pub struct ProfileDirectory {
+    /// The directory's name, without its parent directories.
+    pub name: String,
+    /// Files that start like a SingleM or Sandpiper profile, in order of
+    /// name.
+    pub files: Vec<OpenedFile>,
+    /// Names of the other files, which are not read in full.
+    pub skipped: Vec<String>,
+}
+
+/// How much of a file is read to tell whether it is a SingleM or Sandpiper
+/// profile.
+const DETECTION_BYTES: usize = 65536;
+
+/// True if a file starting with these bytes is a SingleM or Sandpiper
+/// profile.
+fn starts_like_profile(start: &[u8]) -> bool {
+    CoverageFormat::detect(&String::from_utf8_lossy(start)).is_some()
 }
 
 /// File formats that can be converted to a STAMP profile.
@@ -104,6 +126,8 @@ pub enum Auxiliary {
 /// Something the interface wants done with files.
 pub enum Request {
     OpenProfile,
+    /// Choose a directory of SingleM or Sandpiper profiles.
+    OpenProfileDirectory,
     OpenMetadata,
     /// Ask for a further file of a profile that is being opened.
     OpenAuxiliary(Auxiliary),
@@ -128,8 +152,11 @@ pub enum Request {
 
 /// The outcome of a request.
 pub enum Event {
-    /// Files chosen with Load profile: one, or several Sandpiper profiles.
+    /// Files chosen with Load profile file: one, or several SingleM or
+    /// Sandpiper profiles.
     Profile(Vec<OpenedFile>),
+    /// The profiles in a directory chosen with Load profile directory.
+    ProfileDirectory(ProfileDirectory),
     Metadata(OpenedFile),
     Auxiliary(Auxiliary, OpenedFile),
     /// A converted profile, ready to be loaded.
@@ -227,10 +254,14 @@ impl Platform {
 async fn perform(request: Request) -> Result<Option<Event>, String> {
     match request {
         Request::OpenProfile => {
-            // Several files can be chosen: Sandpiper gives one per sample.
-            let files = imp::open("Load profile", &PROFILE_EXTENSIONS, true).await;
+            // Several files can be chosen: SingleM and Sandpiper profiles
+            // are often one per sample.
+            let files = imp::open("Load profile file", &PROFILE_EXTENSIONS, true).await;
             Ok((!files.is_empty()).then_some(Event::Profile(files)))
         }
+        Request::OpenProfileDirectory => Ok(imp::open_directory("Load profile directory")
+            .await?
+            .map(Event::ProfileDirectory)),
         Request::OpenMetadata => Ok(imp::open("Load metadata", &METADATA_EXTENSIONS, false)
             .await
             .pop()
@@ -282,6 +313,10 @@ fn deliver(outcome: Result<Option<Event>, String>, sender: &Sender<Event>, ctx: 
     ctx.request_repaint();
 }
 
+/// Read the profiles of a directory as Load profile directory does.
+#[cfg(not(target_arch = "wasm32"))]
+pub use imp::read_directory;
+
 #[cfg(not(target_arch = "wasm32"))]
 mod imp {
     use super::*;
@@ -318,6 +353,55 @@ mod imp {
             dialog.pick_file().into_iter().collect()
         };
         paths.iter().filter_map(|p| read(p)).collect()
+    }
+
+    pub async fn open_directory(title: &str) -> Result<Option<ProfileDirectory>, String> {
+        match rfd::FileDialog::new().set_title(title).pick_folder() {
+            Some(path) => read_directory(&path).map(Some),
+            None => Ok(None),
+        }
+    }
+
+    /// The files directly in a directory (not in its subdirectories) that
+    /// may be SingleM or Sandpiper profiles. Only the start of other files
+    /// is read, so that large files beside the profiles, such as reads,
+    /// cost little. Hidden files are left out.
+    pub fn read_directory(path: &std::path::Path) -> Result<ProfileDirectory, String> {
+        use std::io::Read;
+        let failed = |e: std::io::Error| format!("Could not read {}: {e}", path.display());
+        let mut entries: Vec<(String, std::path::PathBuf)> = std::fs::read_dir(path)
+            .map_err(failed)?
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let path = entry.path();
+                // Follows links, unlike the entry's own file type.
+                let is_file = std::fs::metadata(&path).is_ok_and(|m| m.is_file());
+                (is_file && coverage::is_candidate(&name)).then_some((name, path))
+            })
+            .collect();
+        entries.sort();
+        let mut directory = ProfileDirectory {
+            name: path.file_name().map_or_else(
+                || path.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            ),
+            files: Vec::new(),
+            skipped: Vec::new(),
+        };
+        for (name, path) in entries {
+            let mut start = Vec::new();
+            let opened = std::fs::File::open(&path)
+                .and_then(|file| file.take(DETECTION_BYTES as u64).read_to_end(&mut start));
+            if opened.is_ok() && starts_like_profile(&start) {
+                if let Some(file) = read(&path) {
+                    directory.files.push(file);
+                    continue;
+                }
+            }
+            directory.skipped.push(name);
+        }
+        Ok(directory)
     }
 
     /// Ask where to save, and save. Returns the chosen file name, or `None`
@@ -393,6 +477,90 @@ mod imp {
             });
         }
         files
+    }
+
+    /// The contents of a blob, such as a file or part of one.
+    async fn blob_bytes(blob: &web_sys::Blob) -> Result<Vec<u8>, String> {
+        let buffer = wasm_bindgen_futures::JsFuture::from(blob.array_buffer())
+            .await
+            .map_err(|_| "The browser could not read a file.".to_string())?;
+        Ok(js_sys::Uint8Array::new(&buffer).to_vec())
+    }
+
+    /// Ask for a directory with the browser's folder picker (an input
+    /// element with `webkitdirectory`, which rfd does not offer), and read
+    /// the files directly in it that may be SingleM or Sandpiper profiles.
+    /// The browser asks the user to allow the page to read the folder.
+    pub async fn open_directory(_title: &str) -> Result<Option<ProfileDirectory>, String> {
+        let failed = |_| "The browser could not open a folder picker.".to_string();
+        let document = web_sys::window()
+            .and_then(|w| w.document())
+            .ok_or("No page to open a folder from.")?;
+        let input: web_sys::HtmlInputElement = document
+            .create_element("input")
+            .map_err(failed)?
+            .dyn_into()
+            .map_err(|_| "No input element.".to_string())?;
+        input.set_type("file");
+        input.set_attribute("webkitdirectory", "").map_err(failed)?;
+        input
+            .set_attribute("style", "display: none")
+            .map_err(failed)?;
+        let body = document.body().ok_or("No page to open a folder from.")?;
+        body.append_child(&input).map_err(failed)?;
+        // Settled when files are chosen or the picker is cancelled. A
+        // browser that refuses to show the picker settles nothing, which
+        // leaves this request waiting harmlessly.
+        let chosen = js_sys::Promise::new(&mut |resolve, _| {
+            input.set_onchange(Some(&resolve));
+            let _ = input.add_event_listener_with_callback("cancel", &resolve);
+        });
+        input.click();
+        let _ = wasm_bindgen_futures::JsFuture::from(chosen).await;
+        input.set_onchange(None);
+        let _ = body.remove_child(&input);
+
+        let Some(list) = input.files().filter(|list| list.length() > 0) else {
+            return Ok(None);
+        };
+        let mut name = String::new();
+        let mut entries = Vec::new();
+        for index in 0..list.length() {
+            let Some(file) = list.get(index) else {
+                continue;
+            };
+            // `folder/file`; files in subdirectories have more parts.
+            // web-sys has no binding for this property.
+            let path = js_sys::Reflect::get(&file, &"webkitRelativePath".into())
+                .ok()
+                .and_then(|path| path.as_string())
+                .unwrap_or_default();
+            let parts: Vec<&str> = path.split('/').collect();
+            if let [folder, file_name] = parts.as_slice() {
+                name = folder.to_string();
+                if coverage::is_candidate(file_name) {
+                    entries.push((file_name.to_string(), file));
+                }
+            }
+        }
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut directory = ProfileDirectory {
+            name,
+            files: Vec::new(),
+            skipped: Vec::new(),
+        };
+        for (name, file) in entries {
+            let start = file
+                .slice_with_f64_and_f64(0.0, DETECTION_BYTES as f64)
+                .map_err(|_| "The browser could not read a file.".to_string())?;
+            if starts_like_profile(&blob_bytes(&start).await?) {
+                let bytes = blob_bytes(&file).await?;
+                directory.files.push(OpenedFile { name, bytes });
+            } else {
+                directory.skipped.push(name);
+            }
+        }
+        Ok(Some(directory))
     }
 
     /// Hand the data to the browser as a download.

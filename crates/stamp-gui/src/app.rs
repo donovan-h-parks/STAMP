@@ -31,7 +31,7 @@ use crate::figure_painter;
 use crate::icons;
 use crate::jobs::Job;
 use crate::layout::{self, Frame};
-use crate::platform::{self, Auxiliary, Event, OpenedFile, Platform, Request};
+use crate::platform::{self, Auxiliary, Event, OpenedFile, Platform, ProfileDirectory, Request};
 use crate::plot_config;
 use crate::plots::{self, PlotKind, PlotSettings};
 use crate::select_features::{FeatureSelection, Outcome};
@@ -1595,12 +1595,18 @@ impl StampApp {
                 ctx.request_repaint_after(std::time::Duration::from_millis(wait));
             }
             outcome => {
-                self.loading = None;
+                let note = self.loading.take().and_then(|loading| loading.note);
                 let metadata = self.pending_metadata.take();
                 match outcome {
                     Ok(Ok((name, tree))) => {
                         self.notice = None;
                         self.use_profile(&name, Ok(tree));
+                        if let Some(note) = note {
+                            self.notice = Some(match self.notice.take() {
+                                Some(notice) => format!("{notice}\n{note}"),
+                                None => note,
+                            });
+                        }
                         if let Some((name, text)) = metadata {
                             self.load_metadata(&name, &text);
                         }
@@ -1653,8 +1659,8 @@ impl StampApp {
         }
     }
 
-    /// Open the files chosen with File > Load profile: one profile in any
-    /// format that is read, or several Sandpiper profiles (one per sample),
+    /// Open the files chosen with File > Load profile file: one profile in
+    /// any format that is read, or several SingleM or Sandpiper profiles,
     /// which are combined.
     pub fn open_profile_files(&mut self, mut files: Vec<OpenedFile>) {
         if files.len() == 1 {
@@ -1675,6 +1681,47 @@ impl StampApp {
             Some(Err(notice)) => self.notice = Some(notice),
             None => {}
         }
+    }
+
+    /// Load the SingleM or Sandpiper profiles of a directory chosen with
+    /// File > Load profile directory, in a job, as one profile. The files
+    /// that are not profiles are named in a notice once it has loaded.
+    pub fn open_profile_directory(&mut self, directory: ProfileDirectory) {
+        use stamp_core::import::{coverage, NamedText};
+        self.pending_profile = None;
+        self.pending_metadata = None;
+        let ProfileDirectory {
+            name,
+            files,
+            mut skipped,
+        } = directory;
+        let label = format!("Reading {} files from {name}", files.len());
+        let note = skipped_note(&skipped);
+        let mut loading = Loading::start(label, move || {
+            let texts: Vec<String> = files.iter().map(OpenedFile::text).collect();
+            let named: Vec<NamedText<'_>> = files
+                .iter()
+                .zip(&texts)
+                .map(|(file, text)| NamedText {
+                    name: &file.name,
+                    text,
+                })
+                .collect();
+            let profile = coverage::directory_to_spf(&name, &named)
+                .map_err(|error| format!("Could not load {name}:\n{error}"))?;
+            // Files the platform kept are profiles, so none are skipped here.
+            skipped.extend(profile.skipped);
+            let title = format!(
+                "{name} ({} {} profiles)",
+                profile.used,
+                profile.format.name()
+            );
+            stamp_core::ProfileTree::read(&profile.spf)
+                .map(|tree| (title, tree))
+                .map_err(|error| format!("Could not load {name}:\n{error}"))
+        });
+        loading.note = note;
+        self.loading = Some(loading);
     }
 
     /// Open a profile in any of the formats that are read: a STAMP profile,
@@ -2729,6 +2776,7 @@ impl StampApp {
         for event in self.platform.poll() {
             match event {
                 Event::Profile(files) => self.start_loading(files),
+                Event::ProfileDirectory(directory) => self.open_profile_directory(directory),
                 Event::Auxiliary(which, file) => {
                     if let Some(PendingProfile::Mothur { groups, names, .. }) =
                         &mut self.pending_profile
@@ -3320,12 +3368,20 @@ impl StampApp {
             ui.menu_button("File", |ui| {
                 let loaded = self.session.tree.is_some();
                 let load = item(
-                    icons::FOLDER_OPEN,
-                    "Load profile...",
+                    icons::FILE,
+                    "Load profile file...",
                     Some(&shortcut::LOAD_PROFILE),
                 );
                 if ui.add(load).clicked() {
                     self.platform.request(Request::OpenProfile, &ctx);
+                }
+                let directory = item(icons::FOLDER_OPEN, "Load profile directory...", None);
+                let directory = ui.add(directory).on_hover_text(
+                    "Load a directory of SingleM or Sandpiper profiles, such as one per \
+                     sample. Other files in it are skipped.",
+                );
+                if directory.clicked() {
+                    self.platform.request(Request::OpenProfileDirectory, &ctx);
                 }
                 let metadata = item(icons::TAG, "Load metadata...", None);
                 if ui.add_enabled(loaded, metadata).clicked() {
@@ -3518,7 +3574,7 @@ impl StampApp {
 
     fn profile_section(&mut self, ui: &mut egui::Ui) {
         let Some(tree) = self.session.tree.clone() else {
-            ui.label("Use File > Load profile to open a STAMP profile.");
+            ui.label("Use File > Load profile file or Load profile directory to open a profile.");
             return;
         };
         ui.label(RichText::new(&self.session.profile_name).strong());
@@ -5331,51 +5387,38 @@ fn progress_text(stage: &str, (done, total): (usize, usize)) -> String {
 /// for the user.
 type ProfileText = Result<(String, String, Option<&'static str>), String>;
 
+/// A notice naming the files of a directory that were skipped, the first
+/// few by name.
+fn skipped_note(skipped: &[String]) -> Option<String> {
+    const SHOWN: usize = 5;
+    let (first, rest) = skipped.split_at(skipped.len().min(SHOWN));
+    let names = first.join(", ");
+    match (first.len(), rest.len()) {
+        (0, _) => None,
+        (1, 0) => Some(format!(
+            "Skipped 1 file that is not a SingleM or Sandpiper profile: {names}."
+        )),
+        (n, 0) => Some(format!(
+            "Skipped {n} files that are not SingleM or Sandpiper profiles: {names}."
+        )),
+        (n, more) => Some(format!(
+            "Skipped {} files that are not SingleM or Sandpiper profiles: {names} and {more} more.",
+            n + more
+        )),
+    }
+}
+
+/// What is said when a SingleM or Sandpiper file opened on its own holds a
+/// single sample, should loading it fail.
+const ONE_SAMPLE_HINT: &str = "This file holds one sample: choose the files of all samples \
+     together, or use File > Load profile directory.";
+
+/// The text of the profile in files chosen together: one file in a format
+/// read without choices, or SingleM or Sandpiper profiles, which are
+/// combined. `None` for a BIOM table or mothur file, which need choices
+/// first.
 fn profile_text(files: &[OpenedFile]) -> Option<ProfileText> {
-    use stamp_core::import::{biom, sandpiper, singlem, NamedText};
-    if let [file] = files {
-        let text = file.text();
-        let failed = |error: String| Err(format!("Could not load {}:\n{error}", file.name));
-        let named = [NamedText {
-            name: &file.name,
-            text: &text,
-        }];
-        // Checked before BIOM, which takes any JSON object for a table.
-        return if sandpiper::looks_like_sandpiper(&file.bytes) {
-            Some(match sandpiper::to_spf(&named) {
-                Ok(spf) => Ok((
-                    file.name.clone(),
-                    spf,
-                    Some(
-                        "A Sandpiper file holds one sample: choose the files of all samples \
-                         together.",
-                    ),
-                )),
-                Err(error) => failed(error.to_string()),
-            })
-        } else if singlem::looks_like_singlem(&text) {
-            Some(match singlem::to_spf(&named) {
-                Ok(spf) => Ok((file.name.clone(), spf, None)),
-                Err(error) => failed(error.to_string()),
-            })
-        } else if biom::looks_like_biom(&file.bytes)
-            || file.name.to_lowercase().ends_with(".taxonomy")
-        {
-            None
-        } else {
-            Some(Ok((file.name.clone(), text, None)))
-        };
-    }
-    if !files
-        .iter()
-        .all(|f| sandpiper::looks_like_sandpiper(&f.bytes))
-    {
-        return Some(Err(
-            "Several files can be loaded together only if they are Sandpiper profiles, \
-             one per sample. Choose a single file for other formats."
-                .to_string(),
-        ));
-    }
+    use stamp_core::import::{biom, coverage, NamedText};
     let texts: Vec<String> = files.iter().map(OpenedFile::text).collect();
     let named: Vec<NamedText<'_>> = files
         .iter()
@@ -5385,14 +5428,45 @@ fn profile_text(files: &[OpenedFile]) -> Option<ProfileText> {
             text,
         })
         .collect();
-    let name = format!("{} Sandpiper profiles", files.len());
-    Some(match sandpiper::to_spf(&named) {
-        Ok(spf) => Ok((name, spf, None)),
-        Err(error) => Err(format!("Could not load {name}:\n{error}")),
-    })
+    let single = match files {
+        [file] => Some(file),
+        _ => None,
+    };
+    match coverage::combine(&named) {
+        Ok(Some((format, spf))) => {
+            let name = match single {
+                Some(file) => file.name.clone(),
+                None => format!("{} {} profiles", files.len(), format.name()),
+            };
+            let samples = spf
+                .lines()
+                .next()
+                .map_or(0, |h| h.split('\t').count().saturating_sub(7));
+            let hint = (single.is_some() && samples == 1).then_some(ONE_SAMPLE_HINT);
+            return Some(Ok((name, spf, hint)));
+        }
+        Err(error) => {
+            let name = single.map_or("the files", |file| file.name.as_str());
+            return Some(Err(format!("Could not load {name}:\n{error}")));
+        }
+        Ok(None) => {}
+    }
+    match single {
+        Some(file)
+            if biom::looks_like_biom(&file.bytes)
+                || file.name.to_lowercase().ends_with(".taxonomy") =>
+        {
+            None
+        }
+        Some(file) => Some(Ok((file.name.clone(), texts[0].clone(), None))),
+        None => Some(Err(
+            "Several files can be loaded together only if they are SingleM or Sandpiper \
+             profiles. Choose a single file for other formats."
+                .to_string(),
+        )),
+    }
 }
 
-/// Add `hint` to the message shown after a profile failed to load.
 fn add_hint(notice: &mut Option<String>, hint: Option<&str>) {
     if let (Some(notice), Some(hint)) = (notice, hint) {
         notice.push('\n');
@@ -5406,6 +5480,9 @@ struct Loading {
     job: Job<Result<(String, stamp_core::ProfileTree), String>>,
     /// When the job started, in the time of the user interface, once known.
     started: Option<f64>,
+    /// Shown once the profile has loaded, such as the files that were
+    /// skipped.
+    note: Option<String>,
 }
 
 impl Loading {
@@ -5427,6 +5504,7 @@ impl Loading {
             label,
             job,
             started: None,
+            note: None,
         }
     }
 }

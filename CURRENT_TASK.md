@@ -44,6 +44,24 @@ plots in the documentation; trying it by hand with a mouse (clicks on
 cards and "i" buttons are not covered by a test, which drives
 `Wizard::choose`); the browser build was only linted, not run.
 
+Finished (2026-11-19), committed 2026-11-24: **SingleM profiles loaded
+natively, and directories of them**. New `stamp-core` module
+`import/coverage.rs` (`CoverageFormat::detect` by content, `combine`,
+`directory_to_spf`, mixture of SingleM and Sandpiper refused). GUI: File >
+"Load profile file..." (renamed, file icon added to the Phosphor subset)
+combines several SingleM or Sandpiper files; new "Load profile
+directory..." (`Request::OpenProfileDirectory`, `Event::ProfileDirectory`,
+`App::open_profile_directory`; desktop `platform::read_directory` reads
+only the first 64 KiB of non-profiles; browser uses its own hidden
+`<input webkitdirectory>` as rfd has no folder picker on wasm; skipped
+files named in a notice). CLI: `--profile` reads SingleM/Sandpiper files
+and directories; `convert singlem|sandpiper` take directories. Tests in
+coverage.rs, ui.rs, cli.rs. Docs: input_files.rst (new "Loading a
+directory of profiles", stale "File > Convert" removed: that menu no
+longer exists), command_line.rst, index.rst, main_window.rst,
+NEW_FEATURES, CHANGES_FROM_PYTHON #59 and new #68. **Not verified**: the
+browser folder picker in a real browser (it compiles, clippy-clean).
+
 Finished and committed (2026-11-19, assistant session): **several named
 custom plots**. Each new plot from `show_custom_plot` is kept and listed by
 name, without a prefix, under "Drawn by the assistant" (`Session::

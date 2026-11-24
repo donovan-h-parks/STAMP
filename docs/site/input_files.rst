@@ -87,8 +87,9 @@ way round, are reported when the file is loaded.
 Other formats
 -------------
 
-**File > Load profile** also opens these formats directly, converting them
-as they are read:
+**File > Load profile file** also opens these formats directly, converting
+them as they are read. STAMP tells the formats apart by their contents, not
+by the file extension:
 
 .. list-table::
    :header-rows: 1
@@ -102,18 +103,45 @@ as they are read:
    * - mothur
      - A taxonomy file with a groups file, and optionally a names file.
        STAMP asks for the other files after the first.
-   * - SingleM condensed profile
-     - The output of ``singlem pipe -p`` or ``singlem summarise``: columns
-       ``sample``, ``coverage`` and ``taxonomy``, any number of samples in
-       one file. The variant written with
+   * - SingleM condensed profile (usually ``.tsv``)
+     - The output of ``singlem pipe -p`` or ``singlem summarise``: a
+       tab-separated table whose first line names the columns ``sample``,
+       ``coverage`` and ``taxonomy``, with any number of samples in one
+       file. The variant written with
        ``--output-taxonomic-profile-with-extras`` is read too (its
-       ``coverage`` column is used).
+       ``coverage`` column is used). Files of one sample each are chosen
+       together in the file dialog, or loaded as a directory (below).
    * - Sandpiper profile (``.json``)
      - The condensed profile of one run from the Sandpiper web service
        (``https://sandpiper.qut.edu.au/api/condensed/<run>``, GTDB or GlobDB
-       taxonomy). Choose the files of all runs together in the file dialog;
-       each is one sample, named by its ``sample_name`` (or else the file
-       name).
+       taxonomy). Each file is one sample, named by its ``sample_name`` (or
+       else the file name); choose the files of all runs together, or load
+       their directory.
+
+Other SingleM outputs are not read: the species-by-site tables of
+``singlem summarise`` hold relative abundances of one rank only, OTU tables
+are per marker gene, and a "filled" profile
+(``--output-filled-taxonomic-profile``) has the same columns as an ordinary
+one but coverages that include the descendants', which STAMP cannot tell
+apart.
+
+.. _profile-directory:
+
+Loading a directory of profiles
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+SingleM is usually run once per sample, giving one profile file per
+sample. **File > Load profile directory** loads every SingleM or Sandpiper
+profile directly in a directory (not in its subdirectories) as one
+profile, its samples in the order of the file names. Other files in the
+directory, such as reads or logs, are skipped and named in a message; only
+their first 64 KB are read to tell what they are. A directory must hold
+profiles of one kind (SingleM or Sandpiper), and a sample may be in only
+one file. In the browser, the browser asks before letting STAMP read the
+folder.
+
+On the command line, ``--profile`` takes a SingleM or Sandpiper profile, or
+a directory of them, in the same way.
 
 The command line also converts the output of other tools to STAMP
 profiles (see :ref:`cli-convert`):
@@ -123,9 +151,6 @@ profiles (see :ref:`cli-convert`):
 * **RITA** classifications, one file per sample,
 * **SingleM** condensed profiles and **Sandpiper** profiles,
 * **IMG/M COG** profiles, to which COG categories are added.
-
-The window's **File > Convert** menu converts the same formats, saves the
-profile and opens it.
 
 .. _singlem-profiles:
 

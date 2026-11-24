@@ -13,6 +13,7 @@ use eframe::egui;
 const FONT_NAME: &str = "phosphor";
 
 pub const FOLDER_OPEN: &str = "\u{E256}";
+pub const FILE: &str = "\u{E230}";
 pub const TAG: &str = "\u{E478}";
 pub const FLASK: &str = "\u{E79E}";
 pub const FLOPPY_DISK: &str = "\u{E248}";
@@ -38,8 +39,9 @@ pub const PULSE: &str = "\u{E000}";
 pub const ARROW_COUNTER_CLOCKWISE: &str = "\u{E038}";
 
 /// Every icon, for checking that the font has them all.
-pub const ALL: [&str; 24] = [
+pub const ALL: [&str; 25] = [
     FOLDER_OPEN,
+    FILE,
     TAG,
     FLASK,
     FLOPPY_DISK,
@@ -105,7 +107,7 @@ mod tests {
                 for icon in ALL {
                     assert!(fonts.has_glyphs(&font, icon), "missing {icon:?}");
                 }
-                assert!(fonts.has_glyphs(&font, "Load profile..."));
+                assert!(fonts.has_glyphs(&font, "Load profile file..."));
             });
         });
         assert_eq!(

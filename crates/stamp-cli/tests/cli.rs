@@ -794,6 +794,74 @@ fn convert_singlem_and_sandpiper_profiles() {
 }
 
 #[test]
+fn singlem_and_sandpiper_profiles_are_read_without_converting() {
+    let data = "crates/stamp-core/tests/data/singlem";
+    // The condensed profile split into one file per sample, in a directory
+    // with Sandpiper files and a file of another kind.
+    let directory =
+        std::env::temp_dir().join(format!("stamp-cli-singlem-dir-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&directory);
+    fs::create_dir_all(&directory).unwrap();
+    let text = fs::read_to_string(repo().join(data).join("singlem_condensed.tsv")).unwrap();
+    let header = text.lines().next().unwrap();
+    for sample in ["SRR28772463", "ERR4084076"] {
+        let mut file = format!("{header}\n");
+        for line in text
+            .lines()
+            .filter(|l| l.starts_with(&format!("{sample}\t")))
+        {
+            file.push_str(line);
+            file.push('\n');
+        }
+        fs::write(directory.join(format!("{sample}.profile.tsv")), file).unwrap();
+    }
+    fs::write(directory.join("notes.txt"), "trimmed reads\n").unwrap();
+    let dir = directory.to_str().unwrap();
+
+    // `convert` takes the directory and keeps the files of its format.
+    let converted = stdout(&["convert", "singlem", dir]);
+    let whole = stdout(&[
+        "convert",
+        "singlem",
+        &format!("{data}/singlem_condensed.tsv"),
+    ]);
+    assert_eq!(converted.lines().count(), whole.lines().count());
+    assert!(failure(&["convert", "sandpiper", dir]).contains("holds no Sandpiper profiles"));
+
+    // Analyses read the directory, or a SingleM file, as a profile.
+    let samples = ["--sample1", "SRR28772463", "--sample2", "ERR4084076"];
+    let level = ["--profile-level", "Phylum"];
+    let mut args = vec!["two-samples", "--profile", dir];
+    args.extend(samples);
+    args.extend(level);
+    let from_directory = stdout(&args);
+    let file = format!("{data}/singlem_condensed.tsv");
+    let mut args = vec!["two-samples", "--profile", &file];
+    args.extend(samples);
+    args.extend(level);
+    // The same results, but for the last digit: the rows come in another
+    // order, so coverages are added up in another order.
+    let (a, b) = (Table::parse(&from_directory), Table::parse(&stdout(&args)));
+    assert_eq!(a.headings, b.headings);
+    assert_eq!(a.rows.len(), b.rows.len());
+    for (x, y) in a.rows.iter().flatten().zip(b.rows.iter().flatten()) {
+        match (x.parse::<f64>(), y.parse::<f64>()) {
+            (Ok(x), Ok(y)) => assert!((x - y).abs() <= 1e-9 * x.abs().max(1.0), "{x} {y}"),
+            _ => assert_eq!(x, y),
+        }
+    }
+
+    // A Sandpiper file beside the SingleM ones is a mixture.
+    fs::copy(
+        repo().join(data).join("SRR28771658.json"),
+        directory.join("SRR28771658.json"),
+    )
+    .unwrap();
+    assert!(failure(&["info", "--profile", dir]).contains("mixture"));
+    fs::remove_dir_all(&directory).unwrap();
+}
+
+#[test]
 fn problems_are_reported_clearly() {
     assert!(failure(&[
         "two-samples",

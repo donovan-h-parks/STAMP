@@ -4,6 +4,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+use stamp_core::import::coverage::{self, CoverageFormat};
 use stamp_core::import::{biom, cog, comet, mgrast, mothur, rita, sandpiper, singlem, NamedText};
 use stamp_core::stats::correction::Correction;
 use stamp_core::stats::multi_group::MultiGroupEffectSize;
@@ -98,9 +99,85 @@ fn core<T>(result: stamp_core::Result<T>) -> CliResult<T> {
     result.map_err(|e| e.to_string())
 }
 
+/// Read a profile: a STAMP profile, a SingleM or Sandpiper profile, or a
+/// directory of SingleM or Sandpiper profiles.
 fn load_profile(path: &Path) -> CliResult<ProfileTree> {
+    let in_file = |e: String| format!("{}: {e}", path.display());
+    let spf = if path.is_dir() {
+        let (names, texts) = read_directory(path, "SingleM or Sandpiper", |_| true)?;
+        let _task = Task::start(&format!("Combining {} profiles", names.len()));
+        core(coverage::directory_to_spf(
+            &path.display().to_string(),
+            &named(&names, &texts),
+        ))?
+        .spf
+    } else {
+        let _task = Task::start(&format!("Reading {}", path.display()));
+        let text = read_text(path)?;
+        match CoverageFormat::detect(&text) {
+            Some(format) => {
+                core(format.to_spf(&named(&[file_name(path)], &[text]))).map_err(in_file)?
+            }
+            None => text,
+        }
+    };
+    core(ProfileTree::read(&spf)).map_err(in_file)
+}
+
+/// How much of a file is read to tell whether it is a SingleM or Sandpiper
+/// profile.
+const DETECTION_BYTES: u64 = 65536;
+
+/// The files directly in a directory (not in its subdirectories) that are
+/// SingleM or Sandpiper profiles accepted by `keep`, in order of name.
+/// Only the start of other files is read, and they are named in a note
+/// that calls the files kept `kind` profiles. Hidden files are left out.
+fn read_directory(
+    path: &Path,
+    kind: &str,
+    keep: impl Fn(CoverageFormat) -> bool,
+) -> CliResult<(Vec<String>, Vec<String>)> {
+    use std::io::Read;
     let _task = Task::start(&format!("Reading {}", path.display()));
-    core(ProfileTree::read(&read_text(path)?)).map_err(|e| format!("{}: {e}", path.display()))
+    let failed = |e: std::io::Error| format!("cannot read {}: {e}", path.display());
+    let mut entries: Vec<(String, std::path::PathBuf)> = Vec::new();
+    for entry in fs::read_dir(path).map_err(failed)? {
+        let entry = entry.map_err(failed)?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let file = entry.path();
+        // Follows links, unlike the entry's own file type.
+        if coverage::is_candidate(&name) && fs::metadata(&file).is_ok_and(|m| m.is_file()) {
+            entries.push((name, file));
+        }
+    }
+    entries.sort();
+    let (mut names, mut texts, mut skipped) = (Vec::new(), Vec::new(), Vec::new());
+    for (name, file) in entries {
+        let mut start = Vec::new();
+        fs::File::open(&file)
+            .and_then(|f| f.take(DETECTION_BYTES).read_to_end(&mut start))
+            .map_err(|e| format!("cannot read {}: {e}", file.display()))?;
+        match CoverageFormat::detect(&String::from_utf8_lossy(&start)) {
+            Some(format) if keep(format) => {
+                texts.push(read_text(&file)?);
+                names.push(name);
+            }
+            _ => skipped.push(name),
+        }
+    }
+    if !skipped.is_empty() {
+        let what = if skipped.len() == 1 {
+            format!("1 file that is not a {kind} profile")
+        } else {
+            format!("{} files that are not {kind} profiles", skipped.len())
+        };
+        eprintln!(
+            "note: skipped {what} in {}: {}",
+            path.display(),
+            skipped.join(", ")
+        );
+    }
+    Ok((names, texts))
 }
 
 /// A progress callback for the analyses of every feature, shown by `task`.
@@ -2604,11 +2681,11 @@ fn convert(format: ConvertFormat) -> CliResult {
             output,
         ),
         ConvertFormat::Singlem { inputs, output } => {
-            let (names, texts) = read_named(&inputs)?;
+            let (names, texts) = read_profiles(&inputs, CoverageFormat::SingleM)?;
             (core(singlem::to_spf(&named(&names, &texts)))?, output)
         }
         ConvertFormat::Sandpiper { inputs, output } => {
-            let (names, texts) = read_named(&inputs)?;
+            let (names, texts) = read_profiles(&inputs, CoverageFormat::Sandpiper)?;
             (core(sandpiper::to_spf(&named(&names, &texts)))?, output)
         }
         ConvertFormat::Cog {
@@ -2645,6 +2722,33 @@ fn read_named(paths: &[std::path::PathBuf]) -> CliResult<(Vec<String>, Vec<Strin
         .iter()
         .map(|p| read_text(p))
         .collect::<CliResult<Vec<String>>>()?;
+    Ok((names, texts))
+}
+
+/// Read SingleM or Sandpiper profiles given as files or directories; from a
+/// directory, only the files that are profiles of this format.
+fn read_profiles(
+    paths: &[std::path::PathBuf],
+    format: CoverageFormat,
+) -> CliResult<(Vec<String>, Vec<String>)> {
+    let (mut names, mut texts) = (Vec::new(), Vec::new());
+    for path in paths {
+        let (n, t) = if path.is_dir() {
+            let (n, t) = read_directory(path, format.name(), |f| f == format)?;
+            if n.is_empty() {
+                return Err(format!(
+                    "{} holds no {} profiles",
+                    path.display(),
+                    format.name()
+                ));
+            }
+            (n, t)
+        } else {
+            read_named(std::slice::from_ref(path))?
+        };
+        names.extend(n);
+        texts.extend(t);
+    }
     Ok((names, texts))
 }
 

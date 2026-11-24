@@ -148,10 +148,17 @@ Add an entry here whenever a feature is added that v2 did not have.
   include descendants) that stops above species goes into a row padded with
   `unclassified <prefixed taxon>` (`unclassified f__Oscillospiraceae`);
   named taxa lose their rank prefixes; a name with two parents at one rank
-  becomes `name (parent)`. Opened from File > Load profile (choose all
-  Sandpiper files together), File > Convert, and `stamp-cli convert
-  singlem|sandpiper`. 1,307 Sandpiper runs (12,276 features) convert in
+  becomes `name (parent)`. Opened from File > Load profile file (several
+  files of either kind chosen together are combined) and `stamp-cli
+  convert singlem|sandpiper`, and read directly by every `stamp-cli`
+  analysis (`--profile`). 1,307 Sandpiper runs (12,276 features) convert in
   about two seconds.
+- **Load profile directory.** File > Load profile directory loads the
+  SingleM or Sandpiper profiles directly in a directory (typically one
+  `singlem pipe -p` output per sample) as one profile, skipping other files
+  (only their first 64 KB are read) and naming them in a message. Works in
+  the browser too (its folder picker). `stamp-cli --profile` and
+  `stamp-cli convert singlem|sandpiper` take a directory as well.
 
 ## Statistics
 
