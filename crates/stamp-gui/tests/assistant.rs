@@ -1006,7 +1006,14 @@ fn the_claude_code_panel_runs_a_terminal() {
     // Some shells (zsh) drop what was typed while a command is
     // interrupted: wait for the prompt to come back (within 30 s, half the
     // time `sleep 60` would take).
+    //
+    // "sleeping-4" is printed before the shell has started `sleep` and
+    // handed it the terminal, so a Ctrl+C sent at once can reach the shell
+    // alone and leave `sleep` running: it is sent again every second until
+    // the prompt is back. At the prompt a further Ctrl+C only gives a new
+    // prompt.
     let end = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut again = std::time::Instant::now() + std::time::Duration::from_secs(1);
     while !h
         .app
         .assistant_terminal_text()
@@ -1019,6 +1026,10 @@ fn the_claude_code_panel_runs_a_terminal() {
             "no prompt after Ctrl+C:\n{}",
             h.app.assistant_terminal_text().unwrap()
         );
+        if std::time::Instant::now() >= again {
+            typed(&mut h, vec![egui::Event::Copy]);
+            again = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        }
         h.frames(1);
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
