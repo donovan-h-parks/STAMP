@@ -400,7 +400,7 @@ impl Transform {
     /// True if the transform changes the p-values of this two-group test.
     /// White's test works on counts and is left as it is.
     pub fn applies_to(self, test: GroupTest) -> bool {
-        self == Transform::CentredLogRatio && test != GroupTest::White
+        self == Transform::CentredLogRatio && test != GroupTest::White && !test.is_presence()
     }
 }
 
@@ -815,7 +815,11 @@ impl MultiGroupRun {
         }
         let analysis = self.analysis;
         let features = profile.profile.features();
-        if analysis.transform == Transform::CentredLogRatio && self.transformed.is_none() {
+        // Presence is read from the counts, which a transform would hide.
+        if analysis.transform == Transform::CentredLogRatio
+            && !analysis.test.is_presence()
+            && self.transformed.is_none()
+        {
             self.transformed = Some(clr_values(&profile.profile));
         }
         while self.rows.len() < features.len() {

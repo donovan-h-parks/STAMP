@@ -3,7 +3,7 @@
 //! between groups.
 
 use stamp_core::stats::community::{
-    mantel, CommunityTest, MantelRun, PermutationRun, PermutationTest,
+    mantel, CommunityTest, MantelRun, PairwiseRun, PermutationRun, PermutationTest,
 };
 use stamp_core::stats::correlation::CorrelationMethod;
 use stamp_core::stats::diversity::{
@@ -93,6 +93,15 @@ impl Community {
             .collect()
     }
 
+    /// The names of the groups as [`dense_groups`](Self::dense_groups)
+    /// numbers them.
+    fn dense_group_names(&self) -> Vec<String> {
+        let mut used: Vec<usize> = self.sample_groups.clone();
+        used.sort_unstable();
+        used.dedup();
+        used.iter().map(|&g| self.groups[g].clone()).collect()
+    }
+
     /// A note on how the samples were made comparable, if they were rarefied.
     fn depth_note(&self) -> Option<String> {
         self.table
@@ -158,6 +167,86 @@ pub fn alpha_plot(community: &Community, metric: AlphaMetric, options: &BoxOptio
         paired: false,
     };
     feature_plots::box_plot(&data, options)
+}
+
+/// An alpha diversity measure of each sample against a number known for
+/// each (`values[i]` for sample `i`), with their correlation by `method`:
+/// what [`correlation_plot::plot`] draws. The samples are coloured by the
+/// community's groups if it has more than one. `Err` holds a message for
+/// the plot.
+pub fn alpha_correlation(
+    community: &Community,
+    metric: AlphaMetric,
+    field: &str,
+    values: &[f64],
+    method: CorrelationMethod,
+) -> Result<correlation_plot::Data, String> {
+    let diversity = alpha_values(community, metric);
+    if diversity.iter().any(|v| v.is_nan()) {
+        return Err(
+            "The Chao1 estimate needs counts of sequences, and this profile holds fractional values"
+                .to_string(),
+        );
+    }
+    let pairs: (Vec<f64>, Vec<f64>) = values
+        .iter()
+        .zip(&diversity)
+        .filter(|(v, _)| v.is_finite())
+        .map(|(&v, &d)| (v, d))
+        .unzip();
+    let statistics = match method.coefficient(&pairs.0, &pairs.1) {
+        Some(coefficient) => format!(
+            "{} = {:.3}, p = {} (n = {})",
+            match method {
+                CorrelationMethod::Pearson => "Pearson r",
+                CorrelationMethod::Spearman => "Spearman rho",
+            },
+            coefficient,
+            format_p_value(
+                stamp_core::stats::correlation::correlation_p_value(coefficient, pairs.0.len()),
+                -15
+            ),
+            pairs.0.len()
+        ),
+        None => "No correlation: too few samples, or values that do not vary".to_string(),
+    };
+    let grouped = community.groups.len() > 1;
+    Ok(correlation_plot::Data {
+        feature: match community.depth_note() {
+            Some(note) => format!("{} ({})", metric.name(), note.to_lowercase()),
+            None => metric.name().to_string(),
+        },
+        field: field.to_string(),
+        points: community
+            .samples
+            .iter()
+            .zip(values)
+            .zip(&diversity)
+            .enumerate()
+            .map(
+                |(i, ((sample, &value), &diversity))| correlation_plot::Point {
+                    sample: sample.clone(),
+                    value,
+                    percent: diversity,
+                    group: grouped.then(|| community.sample_groups[i]),
+                },
+            )
+            .collect(),
+        groups: if grouped {
+            community.groups.clone()
+        } else {
+            Vec::new()
+        },
+        group_colors: if grouped {
+            (0..community.groups.len())
+                .map(|g| community.group_color(g))
+                .collect()
+        } else {
+            Vec::new()
+        },
+        statistics: Some(statistics),
+        value_label: Some(metric.name().to_string()),
+    })
 }
 
 /// The outcome of the community tests on a set of distances, as lines of
@@ -226,6 +315,64 @@ pub struct Layout {
     pub notes: Vec<String>,
     /// The outcome of each community test, if they were run (PCoA).
     pub tests: Option<Vec<String>>,
+    /// PERMANOVA between every pair of groups, if the tests were run and
+    /// there are three or more groups.
+    pub pairwise: Vec<Pairwise>,
+}
+
+/// PERMANOVA between two of the groups.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pairwise {
+    pub first: String,
+    pub second: String,
+    /// The pseudo-F ratio; `NaN` if the two groups have too few samples.
+    pub statistic: f64,
+    pub p_value: f64,
+    /// Corrected for the number of pairs by Holm's method.
+    pub p_value_corrected: f64,
+}
+
+/// Pairs of groups beyond which a plot counts those that differ instead of
+/// listing each.
+const LISTED_PAIRS: usize = 6;
+
+impl Pairwise {
+    /// "A vs B: pseudo-F = 3.21, p = 0.012".
+    pub fn line(&self) -> String {
+        if self.statistic.is_nan() {
+            format!("{} vs {}: too few samples", self.first, self.second)
+        } else {
+            format!(
+                "{} vs {}: pseudo-F = {:.3}, p = {}",
+                self.first,
+                self.second,
+                self.statistic,
+                format_p_value(self.p_value_corrected, -15)
+            )
+        }
+    }
+}
+
+/// The lines a plot shows for the pairwise tests: each pair if they are
+/// few, and otherwise how many differ.
+pub fn pairwise_notes(pairwise: &[Pairwise]) -> Vec<String> {
+    const HEADING: &str = "Pairwise PERMANOVA (Holm-corrected p-values)";
+    if pairwise.is_empty() {
+        Vec::new()
+    } else if pairwise.len() <= LISTED_PAIRS {
+        std::iter::once(format!("{HEADING}:"))
+            .chain(pairwise.iter().map(Pairwise::line))
+            .collect()
+    } else {
+        let differ = pairwise
+            .iter()
+            .filter(|p| p.p_value_corrected <= 0.05)
+            .count();
+        vec![format!(
+            "{HEADING}: {differ} of {} pairs of groups differ (p \u{2264} 0.05)",
+            pairwise.len()
+        )]
+    }
 }
 
 /// The note on the distance and on rarefying.
@@ -287,6 +434,7 @@ pub fn draw_pcoa(
     let mut notes = layout.notes.clone();
     if let Some(tests) = &layout.tests {
         notes.extend(tests.iter().cloned());
+        notes.extend(pairwise_notes(&layout.pairwise));
         // The tests compare the groups whatever colours the samples.
         if community.styling.color != crate::ordination_style::SampleColors::Group {
             notes.push(format!(
@@ -337,6 +485,7 @@ fn nmds_result(
             format!("Stress = {:.3} ({quality})", layout.stress),
         ],
         tests: None,
+        pairwise: Vec::new(),
     })
 }
 
@@ -641,6 +790,8 @@ enum PcoaStage {
         permutations: usize,
         lines: Vec<String>,
         run: Option<PermutationRun>,
+        /// The tests between pairs of groups, which follow the others.
+        pairwise: Option<Box<PairwiseRun>>,
     },
 }
 
@@ -790,7 +941,11 @@ impl PcoaStage {
             };
             let Some(permutations) = *permutations else {
                 return Step::Done(CommunityOutput::Layout(Ok(pcoa_result(
-                    community, distance, ordination, None,
+                    community,
+                    distance,
+                    ordination,
+                    None,
+                    Vec::new(),
                 ))));
             };
             let matrix = std::mem::replace(matrix, DistanceMatrix::from_fn(0, |_, _| 0.0));
@@ -800,6 +955,7 @@ impl PcoaStage {
                 permutations,
                 lines: Vec::new(),
                 run: None,
+                pairwise: None,
             };
         }
         let PcoaStage::Tests {
@@ -808,6 +964,7 @@ impl PcoaStage {
             permutations,
             lines,
             run,
+            pairwise,
         } = self
         else {
             unreachable!("the PCoA was found above");
@@ -827,6 +984,32 @@ impl PcoaStage {
             lines.push(test_line(test, &result));
             *run = None;
         }
+        // Which groups differ, when there are more than two. These draw
+        // their random numbers after the tests above, which are therefore
+        // the same with and without them.
+        let group_names = community.dense_group_names();
+        let pairs = if group_names.len() >= 3 {
+            let current =
+                pairwise.get_or_insert_with(|| Box::new(PairwiseRun::new(&groups, *permutations)));
+            match current.advance(matrix, rng, &mut |done, total| {
+                pace("Pairwise PERMANOVA", done, total)
+            }) {
+                Step::Done(tests) => tests
+                    .into_iter()
+                    .map(|t| Pairwise {
+                        first: group_names[t.first].clone(),
+                        second: group_names[t.second].clone(),
+                        statistic: t.test.statistic,
+                        p_value: t.test.p_value,
+                        p_value_corrected: t.p_value_corrected,
+                    })
+                    .collect(),
+                Step::Paused => return Step::Paused,
+                Step::Cancelled => return Step::Cancelled,
+            }
+        } else {
+            Vec::new()
+        };
         let ordination = std::mem::replace(
             ordination,
             Ordination {
@@ -839,6 +1022,7 @@ impl PcoaStage {
             distance,
             ordination,
             Some(std::mem::take(lines)),
+            pairs,
         ))))
     }
 }
@@ -850,6 +1034,7 @@ fn pcoa_result(
     distance: Distance,
     ordination: Ordination,
     tests: Option<Vec<String>>,
+    pairwise: Vec<Pairwise>,
 ) -> Layout {
     Layout {
         positions: ordination
@@ -863,6 +1048,7 @@ fn pcoa_result(
         variance_fractions: ordination.variance_fractions,
         notes: vec![distance_note(community, distance)],
         tests,
+        pairwise,
     }
 }
 
@@ -938,6 +1124,51 @@ mod tests {
         assert!(self::texts(&figure)
             .iter()
             .any(|t| t.contains("rarefied to 95 sequences")));
+    }
+
+    #[test]
+    fn pcoa_tests_every_pair_of_three_groups() {
+        let mut community = community(Normalisation::Proportions);
+        community.sample_groups = vec![0, 0, 1, 1, 2, 2];
+        community.groups = vec!["A".into(), "B".into(), "C".into()];
+        community.group_colors.clear();
+        let layout = pcoa_layout(
+            &community,
+            Distance::BrayCurtis,
+            Some((99, &mut rng_from_seed(3))),
+        )
+        .unwrap();
+        let pairs: Vec<(&str, &str)> = layout
+            .pairwise
+            .iter()
+            .map(|p| (p.first.as_str(), p.second.as_str()))
+            .collect();
+        assert_eq!(pairs, [("A", "B"), ("A", "C"), ("B", "C")]);
+        let notes = pairwise_notes(&layout.pairwise);
+        assert_eq!(notes[0], "Pairwise PERMANOVA (Holm-corrected p-values):");
+        assert!(notes[1].starts_with("A vs B: pseudo-F = "), "{}", notes[1]);
+        // The other tests are as they are without the pairs.
+        let two = pcoa_layout(
+            &self::community(Normalisation::Proportions),
+            Distance::BrayCurtis,
+            Some((99, &mut rng_from_seed(3))),
+        )
+        .unwrap();
+        assert!(two.pairwise.is_empty());
+        // Many pairs are counted, not listed.
+        let many: Vec<Pairwise> = (0..10)
+            .map(|i| Pairwise {
+                first: "x".into(),
+                second: "y".into(),
+                statistic: 2.0,
+                p_value: 0.01,
+                p_value_corrected: if i < 3 { 0.02 } else { 0.5 },
+            })
+            .collect();
+        assert_eq!(
+            pairwise_notes(&many),
+            ["Pairwise PERMANOVA (Holm-corrected p-values): 3 of 10 pairs of groups differ (p \u{2264} 0.05)"]
+        );
     }
 
     #[test]

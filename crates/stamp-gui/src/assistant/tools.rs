@@ -218,7 +218,10 @@ pub fn list() -> Vec<ToolInfo> {
                                                with every other sample."},
                     "groups": {"type": "array", "items": {"type": "string"},
                                "description": "Groups compared in a multiple-group analysis."},
-                    "pair_field": {"type": ["string", "null"]},
+                    "pair_field": {"type": ["string", "null"],
+                                   "description": "Metadata field naming the subject of each \
+                                                   sample, for the paired two-group tests and \
+                                                   the Friedman test of matched groups."},
                     "correlation_field": {"type": "string"},
                     "test": {"type": "string"},
                     "test_type": {"type": "string", "enum": ["One-sided", "Two-sided"]},
@@ -1595,7 +1598,11 @@ fn set_analysis(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome
     only_in("ci_method", ci_method.is_some(), &[Mode::TwoSamples])?;
     only_in("group1", group1.is_some(), &[Mode::TwoGroups])?;
     only_in("group2", group2.is_some(), &[Mode::TwoGroups])?;
-    only_in("pair_field", pair_field.is_some(), &[Mode::TwoGroups])?;
+    only_in(
+        "pair_field",
+        pair_field.is_some(),
+        &[Mode::TwoGroups, Mode::MultipleGroups],
+    )?;
     only_in("groups", groups.is_some(), &[Mode::MultipleGroups])?;
     only_in(
         "post_hoc_test",
@@ -1681,7 +1688,11 @@ fn set_analysis(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome
         rerun = true;
     }
     if let Some(field) = pair_field {
-        s.groups.pair_field = field;
+        if mode == Mode::MultipleGroups {
+            s.multi.pair_field = field;
+        } else {
+            s.groups.pair_field = field;
+        }
         rerun = true;
     }
     if let Some(groups) = groups {

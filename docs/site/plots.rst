@@ -137,8 +137,8 @@ it, with an example.
 p-value histogram
 ^^^^^^^^^^^^^^^^^
 
-*Two samples, correlation.* The number of features with p-values in each
-range, with an enlarged view of the p-values below 0.05.
+*Every analysis.* The number of features with p-values in each range, with
+an enlarged view of the p-values below 0.05.
 
 .. figure:: images/ts_p_value_histogram.png
    :width: 70%
@@ -535,6 +535,22 @@ every other feature, as bars:
    The 20 genera most strongly correlated with *Methanobacterium* (CLR,
    genera present in at least 10% of the samples).
 
+With *Show: The selected feature against one other (scatter plot)*, the
+plot shows the two features themselves: one point per sample, the selected
+feature's proportion along the bottom and the other's up the side, coloured
+by group, with the least-squares line, the correlation, its p-value and the
+number of samples. The other feature is the one named under *Against* in
+*Configure plot*, or the feature most strongly correlated with the selected
+one if none is named. The axes always show proportions, also when centred
+log ratios are correlated.
+
+**What to look for.** A coefficient is one number for a whole cloud of
+points; the scatter plot shows what it stands for. A strong correlation
+that rests on two or three samples, or on samples in which one of the
+features is absent, is weaker evidence than the coefficient suggests, and
+groups that form separate clouds can create a correlation that exists
+within none of them.
+
 .. warning::
 
    **Correlations of proportions are biased.** Proportions add up to 100%,
@@ -687,6 +703,21 @@ the Kruskal-Wallis p-value is 0.45: no evidence that the sample types differ
 in diversity. They may still differ in *which* organisms they contain (see
 the PCoA plot of the same samples in :doc:`statistics`).
 
+Alpha diversity scatter plot
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+*Correlation.* The diversity of each sample against the numeric field: one
+point per sample, coloured by the groups of the group field, with the
+least-squares line and the correlation (Spearman's or Pearson's, as chosen
+for the analysis), its p-value and the number of samples. The measure and
+whether the samples are rarefied are chosen in *Configure plot*, as for the
+box plot.
+
+**What to look for.** Whether diversity rises or falls along the variable,
+and whether the trend is carried by all the samples or by a few at one end
+of the range. Observed features and Chao1 rise with the number of sequences
+read, so rarefy the samples unless they were sequenced to similar depths.
+
 Similarity between samples
 --------------------------
 
@@ -735,6 +766,12 @@ placed within the main panel.
    :width: 90%
 
    PCoA (Bray-Curtis) of the genera of the three enterotypes.
+
+With three or more groups, **pairwise PERMANOVA** follows the three tests:
+PERMANOVA between every two groups, on their samples alone, with p-values
+corrected for the number of pairs by Holm's method. Up to six pairs are
+listed above the plot; with more, the plot says how many of the pairs
+differ, and the command line lists them all.
 
 **What to look for.** Whether groups form separate clouds. Here
 Enterotype 1 lies to the left along PCo1, which captures 30% of the

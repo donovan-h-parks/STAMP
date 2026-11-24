@@ -320,6 +320,24 @@ Wilcoxon signed-rank test
    differences within pairs tend to be positive or negative. Robust to
    extreme pairs. Its interval comes from the bootstrap.
 
+Fisher's exact test (presence/absence)
+   Asks a different question from the tests above: not whether a feature
+   is more *abundant* in one group, but whether it is *found* in more of
+   that group's samples. Each sample counts as having the feature (any
+   sequences at all) or not, and the test compares the two groups' shares
+   of samples that have it. It is exact for any number of samples. Use it
+   for features that are absent from many samples, where a difference in
+   mean proportion says little. The effect size and its interval remain
+   the difference in mean proportions (from the bootstrap), since the test
+   itself measures no size; the **prevalence-abundance plot** shows the
+   shares themselves.
+
+McNemar's test (presence/absence)
+   The same question for paired samples (see :ref:`paired-tests`): among
+   the pairs in which only one of the two samples has the feature, is it
+   more often the sample of one group? Pairs in which both or neither have
+   it say nothing. The exact form of the test is used.
+
 .. tip::
 
    * **Do the t-tests need normally distributed data?** Less than often
@@ -374,7 +392,26 @@ Kruskal-Wallis H-test
    The rank-based equivalent of ANOVA, and the multiple-group equivalent of
    the Mann-Whitney test. Robust to skewed data and extreme samples.
 
-Both answer only whether *some* groups differ. To find which, use a
+Friedman test
+   For **matched groups**: the same subjects (patients, sites) sampled once
+   in every group, such as several time points. It is the rank-based test
+   for this design, the multiple-group equivalent of the Wilcoxon
+   signed-rank test: each subject's values are ranked across the groups,
+   and the test asks whether some groups tend to rank higher. Because every
+   subject is compared only with itself, differences between subjects do
+   not hide a consistent change. Choose the **Subject field**, the metadata
+   field that names the subject of each sample; subjects without exactly
+   one sample in every group are left out.
+
+Chi-square test (presence/absence)
+   Asks whether a feature is *found* in the same share of the samples of
+   every group, whatever its abundance where it is found: the
+   multiple-group equivalent of Fisher's exact test of presence. A note
+   marks features for which a group is expected to hold fewer than five
+   samples with (or without) the feature, where the test's approximation is
+   rough.
+
+All of them answer only whether *some* groups differ. To find which, use a
 post-hoc test.
 
 The effect size is **eta-squared** (see `Effect sizes`_).
@@ -415,6 +452,13 @@ Dunn's test (Bonferroni)
    interval for the difference in means is Welch's interval at the
    correspondingly stricter confidence level.
 
+Wilcoxon signed-rank (Holm)
+   The post-hoc test for matched groups, which goes with the Friedman test
+   (and is the only one offered with it): a Wilcoxon signed-rank test for
+   each pair of groups, with p-values corrected for the number of pairs by
+   Holm's method. Its interval is that of the paired t-test at the
+   correspondingly stricter confidence level.
+
 .. figure:: images/mg_post_hoc.png
    :width: 100%
 
@@ -432,7 +476,8 @@ real, but its size is uncertain with this few samples.
 .. tip::
 
    Use the post-hoc test that matches the main test: Tukey-Kramer or
-   Games-Howell after ANOVA, Dunn's test after Kruskal-Wallis. Look at the
+   Games-Howell after ANOVA, Dunn's test after Kruskal-Wallis, the Wilcoxon
+   signed-rank test after Friedman. Look at the
    post-hoc plot only for features the main test found significant.
 
 Correlation
@@ -598,6 +643,15 @@ ANOSIM
 PERMDISP
    Tests whether the groups differ in their **spread** (how variable the
    samples within each group are), not in their position.
+
+Pairwise PERMANOVA
+   With three or more groups, the tests above say only that *some* groups
+   differ. Pairwise PERMANOVA then tests every two groups on their samples
+   alone, and corrects the p-values for the number of pairs by Holm's
+   method: the community-level counterpart of a post-hoc test. A pair of
+   small groups cannot reach a small p-value (two groups of three samples
+   allow only ten distinct groupings), so a pair that "does not differ" may
+   simply have too few samples.
 
 .. figure:: images/mg_pcoa.png
    :width: 90%

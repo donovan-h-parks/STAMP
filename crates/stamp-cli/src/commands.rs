@@ -424,31 +424,14 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
                     ..Default::default()
                 },
             ),
-            PlotTypeArg::PValueHistogram => {
-                let uncorrected = plot.plot_uncorrected_p_values;
-                let p: Vec<f64> = results
+            PlotTypeArg::PValueHistogram => p_value_histogram_figure(
+                results
                     .rows
                     .iter()
-                    .map(|r| {
-                        if uncorrected {
-                            r.p_value
-                        } else {
-                            r.p_value_corrected
-                        }
-                    })
-                    .collect();
-                histogram::p_value_histogram(
-                    &p,
-                    &histogram::PValueOptions {
-                        label: PValueKind::shown(results.correction.method, !uncorrected)
-                            .label()
-                            .to_string(),
-                        width: plot.plot_width,
-                        height: size(7.0),
-                        ..Default::default()
-                    },
-                )
-            }
+                    .map(|r| (r.p_value, r.p_value_corrected)),
+                results.correction.method,
+                plot,
+            ),
             PlotTypeArg::MultipleComparison => sample_plots::multiple_comparison(
                 &results,
                 &sample_plots::MultCompOptions {
@@ -559,16 +542,21 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
         }
         (false, Some(_)) => {
             return Err(
-                "--pair-field is for the paired tests (--test paired-t or wilcoxon)".to_string(),
+                "--pair-field is for the paired tests (--test paired-t, wilcoxon or mcnemar)"
+                    .to_string(),
             )
         }
         (false, None) => {}
     }
     let transform: stamp_core::stats::results::Transform = args.transform.into();
     if transform != stamp_core::stats::results::Transform::None && !transform.applies_to(test) {
-        return Err(
-            "White's test works on counts and cannot be combined with --transform".to_string(),
-        );
+        return Err(if test.is_presence() {
+            "a test of presence or absence works on counts and cannot be combined with \
+             --transform"
+                .to_string()
+        } else {
+            "White's test works on counts and cannot be combined with --transform".to_string()
+        });
     }
     let (parent_level, profile_level) = levels(&tree, &args.profile);
     let group2 = match args.group2.as_deref() {
@@ -746,6 +734,14 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     plot,
                 )?
             }
+            PlotTypeArg::PValueHistogram => p_value_histogram_figure(
+                results
+                    .rows
+                    .iter()
+                    .map(|r| (r.p_value, r.p_value_corrected)),
+                results.correction.method,
+                plot,
+            ),
             PlotTypeArg::Volcano => volcano::plot(
                 &volcano::Data::from_group_results(&profile, &results),
                 &volcano::Options {
@@ -848,16 +844,21 @@ fn multi_group_profile(
     profile_args: &ProfileArgs,
     metadata_args: &MetadataArgs,
     requested: &[String],
+    pair_field: Option<&str>,
 ) -> CliResult<MultiGroupProfile> {
-    multi_group_profile_and_metadata(tree, profile_args, metadata_args, requested).map(|(p, _)| p)
+    multi_group_profile_and_metadata(tree, profile_args, metadata_args, requested, pair_field)
+        .map(|(p, _)| p)
 }
 
-/// As [`multi_group_profile`], with the metadata it was made from.
+/// As [`multi_group_profile`], with the metadata it was made from. With
+/// `pair_field`, only the subjects that field names once in every group are
+/// kept, and each group lists its samples subject by subject.
 fn multi_group_profile_and_metadata(
     tree: &ProfileTree,
     profile_args: &ProfileArgs,
     metadata_args: &MetadataArgs,
     requested: &[String],
+    pair_field: Option<&str>,
 ) -> CliResult<(MultiGroupProfile, Metadata)> {
     let metadata = load_metadata(
         tree,
@@ -865,8 +866,32 @@ fn multi_group_profile_and_metadata(
         &metadata_args.excluded_samples,
         &metadata_args.sample_filter,
     )?;
-    let groups = groups_of(&metadata, &metadata_args.field)?;
+    let mut groups = groups_of(&metadata, &metadata_args.field)?;
     let (parent_level, profile_level) = levels(tree, profile_args);
+    if let Some(field) = pair_field {
+        let names: Vec<String> = if requested.is_empty() {
+            groups
+                .names()
+                .filter(|g| groups.samples(g).is_some_and(|s| !s.is_empty()))
+                .map(str::to_string)
+                .collect()
+        } else {
+            requested.to_vec()
+        };
+        let matching = core(metadata.matched_groups(&groups, &names, field))
+            .map_err(|e| with_group_names(e, &groups))?;
+        if matching.pairs < 2 {
+            return Err(format!(
+                "fewer than two values of '{field}' have one sample in each of the {} groups",
+                names.len()
+            ));
+        }
+        eprintln!(
+            "Matched by {field}: {}.",
+            matching.matched_summary(names.len())
+        );
+        groups = matching.groups;
+    }
     let active: Vec<&str> = if requested.is_empty() {
         groups
             .names()
@@ -891,8 +916,27 @@ fn multi_group_profile_and_metadata(
 
 fn multi_groups(args: MultiGroupsArgs) -> CliResult {
     let tree = load_profile(&args.profile.profile)?;
-    let (profile, metadata) =
-        multi_group_profile_and_metadata(&tree, &args.profile, &args.metadata, &args.groups)?;
+    let test: stamp_core::stats::multi_group::MultiGroupTest = args.test.into();
+    match (test.is_matched(), &args.pair_field) {
+        (true, None) => {
+            return Err(
+                "the Friedman test needs --pair-field, the metadata field that says \
+                which samples came from the same subject"
+                    .to_string(),
+            )
+        }
+        (false, Some(_)) => {
+            return Err("--pair-field is for the Friedman test (--test friedman)".to_string())
+        }
+        _ => {}
+    }
+    let (profile, metadata) = multi_group_profile_and_metadata(
+        &tree,
+        &args.profile,
+        &args.metadata,
+        &args.groups,
+        args.pair_field.as_deref(),
+    )?;
 
     let analysis = MultiGroupAnalysis {
         test: args.test.into(),
@@ -1035,6 +1079,14 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                 profile.group_names.clone(),
                 plot,
             )?,
+            PlotTypeArg::PValueHistogram => p_value_histogram_figure(
+                results
+                    .rows
+                    .iter()
+                    .map(|r| (r.p_value, r.p_value_corrected)),
+                results.correction.method,
+                plot,
+            ),
             PlotTypeArg::Volcano => volcano::plot(
                 &volcano::Data::from_multi_group_results(&results),
                 &volcano::Options {
@@ -1130,7 +1182,29 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
 fn post_hoc(args: PostHocArgs) -> CliResult {
     check_coverage(args.coverage)?;
     let tree = load_profile(&args.profile.profile)?;
-    let profile = multi_group_profile(&tree, &args.profile, &args.metadata, &args.groups)?;
+    let test: stamp_core::stats::post_hoc::PostHocTest = args.test.into();
+    match (test.is_matched(), &args.pair_field) {
+        (true, None) => {
+            return Err(
+                "the Wilcoxon signed-rank post-hoc test needs --pair-field, the metadata \
+                field that says which samples came from the same subject"
+                    .to_string(),
+            )
+        }
+        (false, Some(_)) => {
+            return Err(
+                "--pair-field is for the matched post-hoc test (--test wilcoxon)".to_string(),
+            )
+        }
+        _ => {}
+    }
+    let profile = multi_group_profile(
+        &tree,
+        &args.profile,
+        &args.metadata,
+        &args.groups,
+        args.pair_field.as_deref(),
+    )?;
 
     let mut combined: Option<Table> = None;
     for feature in &args.features {
@@ -1226,7 +1300,7 @@ fn correlation(args: CorrelationArgs) -> CliResult {
     let rows = results.filter(&filter);
 
     if let Some(path) = &args.plot.plot {
-        use stamp_plot::{correlation_plot, histogram, volcano};
+        use stamp_plot::{correlation_plot, volcano};
         let plot = &args.plot;
         let height = plot.plot_height.unwrap_or(6.0);
         let figure = match plot.plot_type.unwrap_or(PlotTypeArg::CorrelationScatter) {
@@ -1279,27 +1353,51 @@ fn correlation(args: CorrelationArgs) -> CliResult {
                     ..Default::default()
                 },
             ),
-            PlotTypeArg::PValueHistogram => {
-                let uncorrected = plot.plot_uncorrected_p_values;
-                let p: Vec<f64> = results
+            PlotTypeArg::PValueHistogram => p_value_histogram_figure(
+                results
                     .rows
                     .iter()
-                    .map(|r| {
-                        if uncorrected {
-                            r.p_value
-                        } else {
-                            r.p_value_corrected
-                        }
-                    })
-                    .collect();
-                histogram::p_value_histogram(
-                    &p,
-                    &histogram::PValueOptions {
-                        label: PValueKind::shown(results.correction.method, !uncorrected)
-                            .label()
-                            .to_string(),
+                    .map(|r| (r.p_value, r.p_value_corrected)),
+                results.correction.method,
+                plot,
+            ),
+            PlotTypeArg::AlphaDiversity => {
+                use stamp_core::stats::diversity::{AlphaMetric, Normalisation};
+                use stamp_plot::community_plots::{self, Community};
+                let samples = &profile.profile.sample_names;
+                let community = Community::from_tree(
+                    &tree,
+                    samples,
+                    profile_level,
+                    vec![0; samples.len()],
+                    vec![String::new()],
+                    if plot.rarefy {
+                        Normalisation::Rarefy
+                    } else {
+                        Normalisation::Proportions
+                    },
+                    &mut rng_from_seed(args.seed),
+                )?;
+                let data = community_plots::alpha_correlation(
+                    &community,
+                    match plot.alpha_metric {
+                        AlphaMetricArg::Observed => AlphaMetric::Observed,
+                        AlphaMetricArg::Shannon => AlphaMetric::Shannon,
+                        AlphaMetricArg::Simpson => AlphaMetric::Simpson,
+                        AlphaMetricArg::Chao1 => AlphaMetric::Chao1,
+                    },
+                    &profile.field,
+                    &profile.values,
+                    analysis.method,
+                )?;
+                if let Some(statistics) = &data.statistics {
+                    eprintln!("{} against {}: {statistics}", data.feature, data.field);
+                }
+                correlation_plot::plot(
+                    &data,
+                    &correlation_plot::Options {
                         width: plot.plot_width,
-                        height: plot.plot_height.unwrap_or(7.0),
+                        height,
                         ..Default::default()
                     },
                 )
@@ -1771,6 +1869,9 @@ fn co_occurrence(args: CoOccurrenceArgs) -> CliResult {
     if let Some(kind) = args.plot.plot_type {
         return Err(unavailable(kind, "co-occurrence"));
     }
+    if args.against.is_some() && args.with.is_none() {
+        return Err("--against needs --with".to_string());
+    }
     if !(args.q_threshold > 0.0 && args.q_threshold <= 1.0) {
         return Err("--q-threshold must lie between 0 and 1".to_string());
     }
@@ -1865,14 +1966,38 @@ fn co_occurrence(args: CoOccurrenceArgs) -> CliResult {
             let task = Task::start("Correlating features");
             let found = co_occurrence_plot::compute_partners(&profile, None, feature, &settings)?;
             drop(task);
-            let figure = co_occurrence_plot::partner_plot(
-                feature,
-                &found,
-                profile.sample_names.len(),
-                settings.clr,
-                &settings,
-                &options,
-            );
+            let figure = match &args.against {
+                // The two features themselves, a point for each sample.
+                Some(other) => {
+                    let data = co_occurrence_plot::pair_data(
+                        &profile,
+                        None,
+                        feature,
+                        Some(other),
+                        None,
+                        &settings,
+                    )?;
+                    if let Some(statistics) = &data.statistics {
+                        eprintln!("{}: {statistics}", data.feature);
+                    }
+                    stamp_plot::correlation_plot::plot(
+                        &data,
+                        &stamp_plot::correlation_plot::Options {
+                            width: args.plot.plot_width,
+                            height: args.plot.plot_height.unwrap_or(6.0),
+                            ..Default::default()
+                        },
+                    )
+                }
+                None => co_occurrence_plot::partner_plot(
+                    feature,
+                    &found,
+                    profile.sample_names.len(),
+                    settings.clr,
+                    &settings,
+                    &options,
+                ),
+            };
             (
                 stamp_core::stats::table::partner_table(feature, settings.method, &found),
                 figure,
@@ -1969,6 +2094,13 @@ fn community_figure(
                 CommunityOutput::Layout(Ok(layout)) => {
                     for line in layout.tests.iter().flatten() {
                         eprintln!("{line}");
+                    }
+                    // Every pair, however many: the plot lists only a few.
+                    if !layout.pairwise.is_empty() {
+                        eprintln!("Pairwise PERMANOVA (Holm-corrected p-values):");
+                        for pair in &layout.pairwise {
+                            eprintln!("  {}", pair.line());
+                        }
                     }
                     if kind == PlotTypeArg::Pcoa {
                         community_plots::draw_pcoa(community, &layout, &ordination_options)
@@ -2263,7 +2395,7 @@ fn ancom_figure(
 /// ANCOM between groups, written as a table.
 fn ancom(args: AncomArgs) -> CliResult {
     let tree = load_profile(&args.profile.profile)?;
-    let profile = multi_group_profile(&tree, &args.profile, &args.metadata, &args.groups)?;
+    let profile = multi_group_profile(&tree, &args.profile, &args.metadata, &args.groups, None)?;
     let sample_groups: Vec<usize> = profile
         .samples_in_groups()
         .iter()
@@ -2522,4 +2654,28 @@ fn named<'a>(names: &'a [String], texts: &'a [String]) -> Vec<NamedText<'a>> {
         .zip(texts)
         .map(|(name, text)| NamedText { name, text })
         .collect()
+}
+
+/// The histogram of an analysis's p-values, `(uncorrected, corrected)` for
+/// each feature: the corrected ones unless `--plot-uncorrected-p-values`.
+fn p_value_histogram_figure(
+    p_values: impl Iterator<Item = (f64, f64)>,
+    correction: stamp_core::stats::correction::Correction,
+    plot: &PlotArgs,
+) -> stamp_plot::Figure {
+    let uncorrected = plot.plot_uncorrected_p_values;
+    let values: Vec<f64> = p_values
+        .map(|(p, q)| if uncorrected { p } else { q })
+        .collect();
+    stamp_plot::histogram::p_value_histogram(
+        &values,
+        &stamp_plot::histogram::PValueOptions {
+            label: PValueKind::shown(correction, !uncorrected)
+                .label()
+                .to_string(),
+            width: plot.plot_width,
+            height: plot.plot_height.unwrap_or(7.0),
+            ..Default::default()
+        },
+    )
 }

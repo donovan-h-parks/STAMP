@@ -6,6 +6,44 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-24): **analysis wizard** and the six
+plots and tests it needed. Asked for: a wizard from research question to
+test and plots, for non-statisticians, with pictures and "i" buttons on
+the choices, every choice always visible and only those the loaded data
+supports selectable. `docs/WIZARD_PLAN.md` has how such guides are
+structured, the flow chart (Mermaid), the selectable-when rules and what
+STAMP still lacks against such guides (assumption checks, linear models
+and smaller additions). Order decided by the owner: comparison first,
+research question second; dead ends of the chart filled first: (1) p-value
+histogram in the two-group and multiple-group analyses; (2) pairwise
+PERMANOVA (`community::PairwiseRun`, `Layout::pairwise`, PCoA notes, CLI
+prints all pairs); (3) `PlotKind::AlphaScatter` (correlation;
+`community_plots::alpha_correlation`; CLI `correlation --plot-type
+alpha-diversity`); (4) co-occurrence `View::Pair` (`pair_plot`, setting
+`co_occurrence_pair`, CLI `--with A --against B`); (5)
+`MultiGroupTest::Friedman` with `PostHocTest::WilcoxonHolm`,
+`Metadata::matched_groups`, `MultiState::pair_field` ("Subject field"),
+CLI `--test friedman --pair-field`; (6) `stats/presence.rs`:
+`GroupTest::FisherPresence`, `GroupTest::McNemar`,
+`MultiGroupTest::ChiSquarePresence`. Reference values from SciPy 1.18.1
+(`pixi exec --spec python=3.12 --spec scipy`), named in each test; they
+are not in tests/reference/reference_values.R. No default changed
+(DEFAULTS_VERSION as it was). The wizard: `wizard.rs` (questions, `Facts`
+about the loaded data, availability with reasons, `Recommendation` and
+`Change`; unit tests), `wizard_ui.rs` (window, cards with painted
+drawings, "i" explanations, trail of answers, result page),
+`StampApp::{show_wizard, wizard_facts, apply_wizard}`, Help > Analysis
+wizard and a button in the Statistics panel. GUI tests
+`plots_and_tests_the_wizard_leads_to`, `the_wizard_leads_to_an_analysis`
+and `documentation_screenshots_of_the_wizard` (writes gui_wizard_*.png,
+copied by hand to docs/site/images). Docs: new wizard.rst, plots.rst,
+statistics.rst, analyses.rst, command_line.rst, choosing_a_test.rst,
+NEW_FEATURES.md. **Not done**: the "At a glance" table view of the plan;
+an icon of its own (it uses the sliders icon); figures of the six new
+plots in the documentation; trying it by hand with a mouse (clicks on
+cards and "i" buttons are not covered by a test, which drives
+`Wizard::choose`); the browser build was only linted, not run.
+
 Finished and committed (2026-11-19, assistant session): **several named
 custom plots**. Each new plot from `show_custom_plot` is kept and listed by
 name, without a prefix, under "Drawn by the assistant" (`Session::

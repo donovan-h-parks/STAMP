@@ -6,11 +6,12 @@ use stamp_core::stats::cluster::Linkage;
 use stamp_core::stats::co_occurrence::{
     co_occurrence, partners, top_features, CoOccurrence, FeatureRanking, Partner,
 };
-use stamp_core::stats::correlation::CorrelationMethod;
+use stamp_core::stats::correlation::{correlation_p_value, CorrelationMethod};
 use stamp_core::stats::results::clr_values;
 use stamp_core::Profile;
 
 use crate::axes::{fonts, INCH, NOTE_SIZE};
+use crate::correlation_plot;
 use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::group_heatmap::{color_bar, color_bar_height, text_color_on};
 use crate::heatmap::{arrange, dendrogram, ColorMap, Order};
@@ -24,6 +25,8 @@ pub enum View {
     Matrix,
     /// One feature against every other.
     OneFeature,
+    /// One feature against one other, a point for each sample.
+    Pair,
 }
 
 /// What is correlated, and which features.
@@ -215,6 +218,103 @@ pub fn compute_partners(
         .map(|(i, f)| (f.name.clone(), values[i].as_slice()))
         .collect();
     Ok(partners(&values[target], &others, settings.method))
+}
+
+/// The groups that colour the samples of a [`pair_plot`].
+#[derive(Debug, Clone, Copy)]
+pub struct PairGroups<'a> {
+    /// The group of each sample of the profile, in the order of its
+    /// columns.
+    pub sample_groups: &'a [usize],
+    pub names: &'a [String],
+    pub colors: &'a [Color],
+}
+
+/// One feature against another, a point for each sample (those of the
+/// profile at `columns`, all if `None`), with their correlation by the
+/// settings' method. `other` is the feature on the vertical axis; without
+/// it, the feature most strongly correlated with `feature`. The axes show
+/// proportions whatever is correlated.
+pub fn pair_plot(
+    profile: &Profile,
+    columns: Option<&[usize]>,
+    feature: &str,
+    other: Option<&str>,
+    groups: Option<PairGroups<'_>>,
+    settings: &Settings,
+    options: &correlation_plot::Options,
+) -> Figure {
+    match pair_data(profile, columns, feature, other, groups, settings) {
+        Ok(data) => correlation_plot::plot(&data, options),
+        Err(message) => Figure::message(&message),
+    }
+}
+
+/// What a [`pair_plot`] draws.
+pub fn pair_data(
+    profile: &Profile,
+    columns: Option<&[usize]>,
+    feature: &str,
+    other: Option<&str>,
+    groups: Option<PairGroups<'_>>,
+    settings: &Settings,
+) -> Result<correlation_plot::Data, String> {
+    let all: Vec<usize>;
+    let columns = match columns {
+        Some(columns) => columns,
+        None => {
+            all = (0..profile.sample_names.len()).collect();
+            &all
+        }
+    };
+    if columns.len() < 3 {
+        return Err("Correlations need at least three samples".to_string());
+    }
+    let x = indices(profile, &[feature.to_string()])?[0];
+    let other = match other {
+        Some(name) => name.to_string(),
+        None => compute_partners(profile, Some(columns), feature, settings)?
+            .into_iter()
+            .find(|p| p.coefficient.is_finite())
+            .map(|p| p.feature)
+            .ok_or("No other feature varies among these samples")?,
+    };
+    let y = indices(profile, std::slice::from_ref(&other))?[0];
+    if x == y {
+        return Err("Choose two different features".to_string());
+    }
+    let (proportions, values) = feature_values(profile, Some(columns), settings.clr);
+    let statistics = match settings.method.coefficient(&values[x], &values[y]) {
+        Some(coefficient) => format!(
+            "{} = {:.3}, p = {} (n = {})",
+            coefficient_label(settings.method, settings.clr),
+            coefficient,
+            stamp_core::stats::results::format_p_value(
+                correlation_p_value(coefficient, columns.len()),
+                -15
+            ),
+            columns.len()
+        ),
+        None => "No correlation: one of the features does not vary".to_string(),
+    };
+    Ok(correlation_plot::Data {
+        feature: format!("{other} against {feature}"),
+        field: format!("{feature} (%)"),
+        points: columns
+            .iter()
+            .enumerate()
+            .map(|(i, &column)| correlation_plot::Point {
+                sample: profile.sample_names[column].clone(),
+                value: proportions[x][i],
+                percent: proportions[y][i],
+                group: groups.and_then(|g| g.sample_groups.get(column).copied()),
+            })
+            .collect(),
+        groups: groups.map(|g| g.names.to_vec()).unwrap_or_default(),
+        group_colors: groups.map(|g| g.colors.to_vec()).unwrap_or_default(),
+        statistics: Some(statistics),
+        value_label: Some(format!("{other} (%)")),
+    })
 }
 
 /// Label of a coefficient: "Spearman rho of CLR values".

@@ -3,6 +3,7 @@
 
 use super::ci::SampleCi;
 use super::dist::{normal_cdf, t_cdf, t_isf};
+use super::presence::{fisher_presence, mcnemar};
 use super::two_sample::{random_index, SampleTest};
 use super::{sample_variance, StampRng, StatsSettings};
 
@@ -22,7 +23,11 @@ pub struct GroupOutcome {
 /// Statistical tests for two groups.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GroupTest {
+    /// Presence or absence of the feature in the samples of each group.
+    FisherPresence,
     MannWhitney,
+    /// Presence or absence, for samples in pairs.
+    McNemar,
     PairedT,
     TTest,
     Welch,
@@ -41,8 +46,10 @@ const WHITE_ZERO_VARIANCE: &str =
 const WHITE_FISHER: &str = "heuristic: statistics calculated with Fisher's test";
 
 impl GroupTest {
-    pub const ALL: [GroupTest; 6] = [
+    pub const ALL: [GroupTest; 8] = [
+        GroupTest::FisherPresence,
         GroupTest::MannWhitney,
+        GroupTest::McNemar,
         GroupTest::PairedT,
         GroupTest::TTest,
         GroupTest::Welch,
@@ -52,6 +59,8 @@ impl GroupTest {
 
     pub fn name(self) -> &'static str {
         match self {
+            GroupTest::FisherPresence => "Fisher's exact test (presence/absence)",
+            GroupTest::McNemar => "McNemar's test (presence/absence)",
             GroupTest::MannWhitney => "Mann-Whitney U test",
             GroupTest::PairedT => "Paired t-test",
             GroupTest::WilcoxonSignedRank => "Wilcoxon signed-rank test",
@@ -68,6 +77,7 @@ impl GroupTest {
     /// Name of the confidence-interval method that goes with the test.
     pub fn ci_method(self) -> &'static str {
         match self {
+            GroupTest::FisherPresence | GroupTest::McNemar => "DP: bootstrap",
             GroupTest::MannWhitney => "DP: bootstrap",
             GroupTest::PairedT => "DP: paired t-test inverted",
             GroupTest::WilcoxonSignedRank => "DP: bootstrap",
@@ -83,15 +93,28 @@ impl GroupTest {
         // confidence intervals are.
         matches!(
             self,
-            GroupTest::White | GroupTest::MannWhitney | GroupTest::WilcoxonSignedRank
+            GroupTest::White
+                | GroupTest::MannWhitney
+                | GroupTest::WilcoxonSignedRank
+                | GroupTest::FisherPresence
+                | GroupTest::McNemar
         )
+    }
+
+    /// True if the test asks only in how many samples of each group the
+    /// feature is present (above zero), not how abundant it is.
+    pub fn is_presence(self) -> bool {
+        matches!(self, GroupTest::FisherPresence | GroupTest::McNemar)
     }
 
     /// True if the test compares each sample of the first group with its
     /// partner in the second: the samples of the two groups must then be
     /// given in the same order, pair by pair.
     pub fn is_paired(self) -> bool {
-        matches!(self, GroupTest::PairedT | GroupTest::WilcoxonSignedRank)
+        matches!(
+            self,
+            GroupTest::PairedT | GroupTest::WilcoxonSignedRank | GroupTest::McNemar
+        )
     }
 
     /// The one-sided and two-sided p-values of the test on values that are
@@ -119,7 +142,8 @@ impl GroupTest {
                 }
                 Some(from_tails(signed_rank_tails(values1, values2)))
             }
-            GroupTest::White => None,
+            // Counts, and presence, are not to be read from other values.
+            GroupTest::White | GroupTest::FisherPresence | GroupTest::McNemar => None,
         }
     }
 
@@ -175,6 +199,50 @@ impl GroupTest {
                     };
                     if (zero1 || zero2) && outcome.note.is_empty() {
                         outcome.note = ZERO_PARENT;
+                    }
+                    out.push(outcome);
+                }
+                Some(out)
+            }
+            GroupTest::FisherPresence | GroupTest::McNemar => {
+                let mut out = Vec::with_capacity(features.len());
+                for (i, f) in features.iter().enumerate() {
+                    if !progress(i, features.len()) {
+                        return None;
+                    }
+                    let (prop1, zero1) = proportions(f.seq1, f.parent1);
+                    let (prop2, zero2) = proportions(f.seq2, f.parent2);
+                    // The test says nothing about the size of a difference:
+                    // the effect size and its interval are those of the
+                    // rank-based test of the same design.
+                    let mut outcome = if self == GroupTest::McNemar {
+                        wilcoxon_signed_rank(&prop1, &prop2, coverage, settings.replicates, rng)
+                    } else {
+                        mann_whitney(&prop1, &prop2, coverage, settings.replicates, rng)
+                    };
+                    if outcome.note.is_empty() {
+                        let present = |seq: &[f64]| seq.iter().filter(|&&v| v > 0.0).count();
+                        let (one_sided, two_sided) = if self == GroupTest::McNemar {
+                            let only = |a: &[f64], b: &[f64]| {
+                                a.iter()
+                                    .zip(b)
+                                    .filter(|(x, y)| **x > 0.0 && **y <= 0.0)
+                                    .count()
+                            };
+                            mcnemar(only(f.seq1, f.seq2), only(f.seq2, f.seq1))
+                        } else {
+                            fisher_presence(
+                                present(f.seq1),
+                                f.seq1.len(),
+                                present(f.seq2),
+                                f.seq2.len(),
+                            )
+                        };
+                        outcome.one_sided = one_sided;
+                        outcome.two_sided = two_sided;
+                        if zero1 || zero2 {
+                            outcome.note = ZERO_PARENT;
+                        }
                     }
                     out.push(outcome);
                 }
@@ -493,7 +561,7 @@ const SIGNED_RANK_EXACT_PAIRS: usize = 50;
 /// least, the one observed. Pairs with no difference are left out. With 50
 /// pairs or fewer the distribution is exact, ties included; otherwise it
 /// is the normal approximation with the correction for ties.
-fn signed_rank_tails(prop1: &[f64], prop2: &[f64]) -> (f64, f64) {
+pub(super) fn signed_rank_tails(prop1: &[f64], prop2: &[f64]) -> (f64, f64) {
     let mut differences: Vec<f64> = prop1
         .iter()
         .zip(prop2)

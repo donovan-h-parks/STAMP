@@ -1344,7 +1344,9 @@ fn filter_is_named_for_q_values_under_a_false_discovery_rate() {
         let frame = layout.tiles.rect(tile).expect("the frame was laid out");
         let (left, top) = (frame.min.x as usize, frame.min.y as usize);
         (left + 42..left + 140)
-            .flat_map(|x| (top + 335..top + 357).map(move |y| (x, y)))
+            // Below the wizard's button, the statistics and the filters'
+            // heading.
+            .flat_map(|x| (top + 362..top + 384).map(move |y| (x, y)))
             .map(|(x, y)| shot.pixel(x, y))
             .collect::<Vec<_>>()
     };
@@ -2848,6 +2850,37 @@ fn co_occurrence_heatmap_and_one_feature() {
     assert!(shown.contains(&"Correlations with g__Methanobacterium".to_string()));
     harness.screenshot("co_occurrence_one_feature");
 
+    // The selected feature against one other: a point for each sample,
+    // coloured by group, with the most strongly correlated feature unless
+    // one is named.
+    let mut settings = harness.app.plot_settings().clone();
+    settings.co_occurrence.view = View::Pair;
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    assert!(
+        shown
+            .iter()
+            .any(|t| t.ends_with(" against g__Methanobacterium")),
+        "{shown:?}"
+    );
+    assert!(shown.contains(&"g__Methanobacterium (%)".to_string()));
+    // Still centred log ratios, within the 15 samples of produced water.
+    assert!(shown
+        .iter()
+        .any(|t| t.starts_with("Spearman rho (centred log ratios) = ")));
+    assert_eq!(harness.app.figure().regions.len(), 15);
+    settings.co_occurrence_pair = "g__Methanosarcina".to_string();
+    harness.app.set_plot_settings(settings.clone());
+    harness.settle();
+    assert!(figure_texts(&harness.app)
+        .contains(&"g__Methanosarcina against g__Methanobacterium".to_string()));
+    harness.screenshot("co_occurrence_pair");
+    settings.co_occurrence_pair = "g__Nothing".to_string();
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert!(figure_texts(&harness.app).contains(&"Unknown feature 'g__Nothing'".to_string()));
+
     // Correlation analyses offer it too.
     let mut harness = coal_with_pairs_and_depths();
     harness.app.set_mode(Mode::Correlation);
@@ -2856,6 +2889,125 @@ fn co_occurrence_heatmap_and_one_feature() {
     assert!(figure_texts(&harness.app)
         .iter()
         .any(|t| t.starts_with("Spearman rho")));
+}
+
+/// The plots and tests added for the test selection wizard: the p-value
+/// histogram of a group analysis, pairwise PERMANOVA on the PCoA plot,
+/// diversity against a number, and the tests of matched groups and of
+/// presence.
+#[test]
+fn plots_and_tests_the_wizard_leads_to() {
+    use stamp_core::stats::multi_group::MultiGroupTest;
+    use stamp_core::stats::post_hoc::PostHocTest;
+    use stamp_core::stats::two_group::GroupTest;
+    let mut harness = Harness::new();
+    harness
+        .app
+        .load_example_data(stamp_gui::app::Example::CoalSeamGas);
+    harness.app.set_p_value_filter(None);
+    harness.app.session.profile_level = "Genus".to_string();
+    harness
+        .app
+        .session
+        .set_group_field("Simplified Environment");
+    harness.app.session.invalidate_all();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::PValueHistogram);
+    harness.settle();
+    let features = harness
+        .app
+        .session
+        .multi
+        .output
+        .as_ref()
+        .unwrap()
+        .1
+        .rows
+        .len();
+    assert!(figure_texts(&harness.app)
+        .iter()
+        .any(|t| t.contains("p-value") || t.contains("q-value")));
+    assert!(features > 100);
+
+    // Three groups: every pair is tested on the PCoA plot.
+    harness.app.set_plot_kind(PlotKind::Pcoa);
+    harness.settle();
+    let shown = figure_texts(&harness.app);
+    assert!(
+        shown.contains(&"Pairwise PERMANOVA (Holm-corrected p-values):".to_string()),
+        "{shown:?}"
+    );
+    assert!(shown
+        .iter()
+        .any(|t| t.starts_with("Deep cutting vs Produced water: pseudo-F = ")));
+    harness.screenshot("pcoa_pairwise");
+
+    // The chi-square test of presence takes no transform, and the Friedman
+    // test brings its own post-hoc test.
+    harness.app.session.multi.analysis.test = MultiGroupTest::ChiSquarePresence;
+    harness.app.session.invalidate(Mode::MultipleGroups);
+    harness.settle();
+    let (_, results) = harness.app.session.multi.output.as_ref().unwrap();
+    assert!(results.rows.iter().any(|r| r.p_value < 0.05));
+    assert!(results
+        .rows
+        .iter()
+        .any(|r| r.note.contains("present in every sample")));
+    harness.app.session.multi.analysis.test = MultiGroupTest::Friedman;
+    harness.app.session.invalidate(Mode::MultipleGroups);
+    harness.settle();
+    assert_eq!(
+        harness.app.session.multi.post_hoc_test,
+        PostHocTest::WilcoxonHolm
+    );
+    assert!(harness
+        .app
+        .session
+        .error(Mode::MultipleGroups)
+        .is_some_and(|e| e.contains("same subject")));
+    harness.app.session.multi.analysis.test = MultiGroupTest::Anova;
+    harness.app.session.invalidate(Mode::MultipleGroups);
+    harness.settle();
+    assert_eq!(
+        harness.app.session.multi.post_hoc_test,
+        PostHocTest::TukeyKramer
+    );
+
+    // Two groups: Fisher's exact test of presence, and its histogram.
+    harness.app.set_mode(Mode::TwoGroups);
+    harness.app.session.groups.analysis.test = GroupTest::FisherPresence;
+    harness.app.session.invalidate(Mode::TwoGroups);
+    harness.app.set_plot_kind(PlotKind::PValueHistogram);
+    harness.settle();
+    let (_, results) = harness.app.session.groups.output.as_ref().unwrap();
+    assert!(results
+        .rows
+        .iter()
+        .all(|r| (0.0..=1.0).contains(&r.p_value)));
+    assert!(figure_texts(&harness.app)
+        .iter()
+        .any(|t| t.contains("p-value") || t.contains("q-value")));
+
+    // Diversity against a number.
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.set_mode(Mode::Correlation);
+    harness.app.set_plot_kind(PlotKind::AlphaScatter);
+    harness.settle();
+    let samples = harness
+        .app
+        .session
+        .correlation
+        .output
+        .as_ref()
+        .unwrap()
+        .0
+        .values
+        .len();
+    assert_eq!(harness.app.figure().regions.len(), samples);
+    let shown = figure_texts(&harness.app);
+    assert!(shown.contains(&"Depth".to_string()), "{shown:?}");
+    assert!(shown.iter().any(|t| t.starts_with("Spearman rho = ")));
+    harness.screenshot("alpha_scatter");
 }
 
 /// The settings of the group and co-occurrence heatmaps, drawn on their
@@ -3822,4 +3974,168 @@ fn documentation_screenshots_of_the_window() {
     harness.app.show_results_table(true);
     harness.settle();
     harness.screenshot("gui_frames");
+}
+
+/// The analysis wizard as the documentation shows it, in light mode: the
+/// research questions for the three enterotypes, and a recommendation.
+#[test]
+fn documentation_screenshots_of_the_wizard() {
+    use stamp_gui::wizard::{Choice, Comparison, Data, Design, Question};
+    let mut harness = Harness::enterotypes();
+    stamp_gui::app::set_dark_mode(&harness.renderer.ctx, false);
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.show_wizard(true);
+    harness.settle();
+    harness.screenshot("gui_wizard_comparison");
+    let facts = harness.app.wizard_facts();
+    let wizard = &mut harness.app.wizard;
+    assert!(wizard.choose(Choice::Comparison(Comparison::MultipleGroups), &facts));
+    harness.settle();
+    harness.screenshot("gui_wizard_question");
+    let wizard = &mut harness.app.wizard;
+    assert!(wizard.choose(Choice::Question(Question::Differ), &facts));
+    assert!(wizard.choose(Choice::Design(Design::Independent), &facts));
+    harness.settle();
+    harness.screenshot("gui_wizard_data");
+    let wizard = &mut harness.app.wizard;
+    assert!(wizard.choose(Choice::Data(Data::SmallOrExtreme), &facts));
+    harness.settle();
+    harness.screenshot("gui_wizard_result");
+}
+
+/// The analysis wizard: every choice is drawn, the ones the data cannot
+/// support are refused, and its recommendation sets the analysis up.
+#[test]
+fn the_wizard_leads_to_an_analysis() {
+    use stamp_core::stats::correction::Correction;
+    use stamp_core::stats::two_group::GroupTest;
+    use stamp_gui::wizard::{Choice, Comparison, Data, Design, Question, Step};
+
+    // Nothing loaded: every comparison is greyed.
+    let mut harness = Harness::new();
+    harness.app.show_wizard(true);
+    harness.settle();
+    let facts = harness.app.wizard_facts();
+    assert!(!harness
+        .app
+        .wizard
+        .choose(Choice::Comparison(Comparison::TwoSamples), &facts));
+    harness.screenshot("wizard_nothing_loaded");
+
+    // A profile without metadata: two samples only.
+    harness
+        .app
+        .load_profile("coal.spf", &example("CoalSeamGas/coal.spf"));
+    harness.settle();
+    let facts = harness.app.wizard_facts();
+    assert!(facts.comparison(Comparison::TwoSamples).is_available());
+    assert!(!facts.comparison(Comparison::TwoGroups).is_available());
+    assert!(facts.whole_counts);
+
+    // With metadata that pairs samples and holds a number.
+    let mut harness = coal_with_pairs_and_depths();
+    harness.app.show_wizard(true);
+    harness.settle();
+    // "Environment" has four groups; the pairs are between the two groups
+    // of "Core vs. Water".
+    assert!(harness
+        .app
+        .wizard_facts()
+        .comparison(Comparison::MultipleGroups)
+        .is_available());
+    harness.app.session.set_group_field("Core vs. Water");
+    harness.settle();
+    let facts = harness.app.wizard_facts();
+    assert!(!facts.comparison(Comparison::MultipleGroups).is_available());
+    for comparison in [
+        Comparison::TwoSamples,
+        Comparison::TwoGroups,
+        Comparison::Variable,
+    ] {
+        assert!(
+            facts.comparison(comparison).is_available(),
+            "{comparison:?}: {:?}",
+            facts.comparison(comparison)
+        );
+    }
+    harness.screenshot("wizard_comparison");
+    assert!(harness
+        .app
+        .wizard
+        .choose(Choice::Comparison(Comparison::TwoGroups), &facts));
+    harness.app.wizard.info = Some(Choice::Question(Question::Communities));
+    harness.settle();
+    harness.screenshot("wizard_question");
+    assert!(harness
+        .app
+        .wizard
+        .choose(Choice::Question(Question::Differ), &facts));
+    harness.settle();
+    harness.screenshot("wizard_design");
+    assert!(
+        facts
+            .design(Comparison::TwoGroups, Design::Matched)
+            .is_available(),
+        "{:?}",
+        facts.pair_fields
+    );
+    assert!(harness
+        .app
+        .wizard
+        .choose(Choice::Design(Design::Matched), &facts));
+    assert!(harness.app.wizard.subject_field.is_some());
+    harness.settle();
+    harness.screenshot("wizard_data");
+    // White's test is for independent groups.
+    assert!(!harness
+        .app
+        .wizard
+        .choose(Choice::Data(Data::MostlyAbsent), &facts));
+    assert!(harness
+        .app
+        .wizard
+        .choose(Choice::Data(Data::SmallOrExtreme), &facts));
+    assert_eq!(harness.app.wizard.step(), Step::Result);
+    harness.settle();
+    harness.screenshot("wizard_result");
+
+    // Setting it up chooses the test, the pair field and the correction,
+    // runs the analysis and shows the first plot.
+    harness.app.set_mode(Mode::MultipleGroups);
+    assert!(harness.app.apply_wizard(None));
+    harness.settle();
+    assert_eq!(harness.app.mode, Mode::TwoGroups);
+    assert_eq!(harness.app.plot_kind(), PlotKind::ExtendedErrorBar);
+    let groups = &harness.app.session.groups;
+    assert_eq!(groups.analysis.test, GroupTest::WilcoxonSignedRank);
+    assert_eq!(groups.analysis.correction, Correction::BenjaminiHochberg);
+    assert_eq!(groups.pair_field, harness.app.wizard.subject_field);
+    assert!(groups.pairing.is_some());
+    assert!(harness.app.session.error(Mode::TwoGroups).is_none());
+    assert!(groups.output.is_some());
+    assert!(harness.app.plot_settings().box_plot.show_pairs);
+
+    // A question without a test changes only what is shown.
+    harness.app.show_wizard(true);
+    harness.app.wizard.restart();
+    let facts = harness.app.wizard_facts();
+    harness
+        .app
+        .wizard
+        .choose(Choice::Comparison(Comparison::Variable), &facts);
+    harness
+        .app
+        .wizard
+        .choose(Choice::Question(Question::Diversity), &facts);
+    assert!(harness.app.apply_wizard(None));
+    harness.settle();
+    assert_eq!(harness.app.mode, Mode::Correlation);
+    assert_eq!(harness.app.plot_kind(), PlotKind::AlphaScatter);
+    assert_eq!(
+        harness.app.session.groups.analysis.test,
+        GroupTest::WilcoxonSignedRank
+    );
+    // No recommendation yet: nothing to set up.
+    harness.app.wizard.restart();
+    assert!(!harness.app.apply_wizard(None));
 }

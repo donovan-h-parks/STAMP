@@ -53,6 +53,7 @@ the same for every plot.
    input_files
    main_window
    analyses
+   wizard
    assistant
    command_line
 

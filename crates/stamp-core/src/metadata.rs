@@ -330,6 +330,67 @@ impl Metadata {
         })
     }
 
+    /// Match the samples of several groups by the value of another field
+    /// (the subject each sample came from, say), for the tests of matched
+    /// groups. A value is kept if exactly one sample of every group has
+    /// it; every other sample of those groups is left out. The groups
+    /// returned list their samples subject by subject, in the order of the
+    /// values. `pairs` of the result counts the subjects.
+    pub fn matched_groups(
+        &self,
+        groups: &Groups,
+        names: &[String],
+        match_field: &str,
+    ) -> Result<Pairing> {
+        let f = self
+            .field_index(match_field)
+            .ok_or_else(|| StampError::new(format!("Unknown metadata field '{match_field}'.")))?;
+        let mut by_value: Vec<BTreeMap<&str, Vec<&String>>> = Vec::new();
+        let mut total = 0;
+        for name in names {
+            let samples = groups
+                .samples(name)
+                .ok_or_else(|| StampError::new(format!("Unknown group '{name}'.")))?;
+            let mut map: BTreeMap<&str, Vec<&String>> = BTreeMap::new();
+            for sample in samples {
+                if let Some(i) = self.samples.iter().position(|s| s == sample) {
+                    map.entry(self.values[i][f].as_str())
+                        .or_default()
+                        .push(sample);
+                    total += 1;
+                }
+            }
+            by_value.push(map);
+        }
+        let mut matched: Vec<Vec<String>> = vec![Vec::new(); names.len()];
+        if let Some(first) = by_value.first() {
+            for value in first.keys().filter(|v| !v.trim().is_empty()) {
+                let members: Vec<&String> = by_value
+                    .iter()
+                    .filter_map(|map| match map.get(value).map(Vec::as_slice) {
+                        Some([sample]) => Some(*sample),
+                        _ => None,
+                    })
+                    .collect();
+                if members.len() == names.len() {
+                    for (group, sample) in matched.iter_mut().zip(members) {
+                        group.push(sample.clone());
+                    }
+                }
+            }
+        }
+        let subjects = matched.first().map_or(0, Vec::len);
+        let mut result = groups.clone();
+        for (name, samples) in names.iter().zip(matched) {
+            result.groups.insert(name.clone(), samples);
+        }
+        Ok(Pairing {
+            groups: result,
+            pairs: subjects,
+            unpaired: total - subjects * names.len(),
+        })
+    }
+
     fn field_index(&self, field: &str) -> Option<usize> {
         self.fields.iter().position(|f| f == field)
     }
@@ -357,6 +418,22 @@ impl Pairing {
             0 => pairs,
             1 => format!("{pairs}; 1 sample without a partner left out"),
             n => format!("{pairs}; {n} samples without a partner left out"),
+        }
+    }
+}
+
+impl Pairing {
+    /// A sentence saying how many subjects were matched across `groups`
+    /// groups ([`Metadata::matched_groups`]).
+    pub fn matched_summary(&self, groups: usize) -> String {
+        let subjects = match self.pairs {
+            1 => format!("1 subject sampled in each of the {groups} groups"),
+            n => format!("{n} subjects sampled in each of the {groups} groups"),
+        };
+        match self.unpaired {
+            0 => subjects,
+            1 => format!("{subjects}; 1 other sample left out"),
+            n => format!("{subjects}; {n} other samples left out"),
         }
     }
 }

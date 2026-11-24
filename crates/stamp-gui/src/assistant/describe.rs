@@ -157,6 +157,9 @@ pub fn session(app: &StampApp) -> String {
             let st = &s.multi;
             let a = &st.analysis;
             let _ = writeln!(out, "- Groups compared: {}", st.active_groups.join(", "));
+            if let (true, Some(field)) = (a.test.is_matched(), &st.pair_field) {
+                let _ = writeln!(out, "- Samples matched by: {field}");
+            }
             let _ = writeln!(
                 out,
                 "- Test: {}\n- Effect size: {}\n- Transform for the test: {}",
@@ -424,7 +427,7 @@ pub fn plot_id(kind: PlotKind) -> String {
 }
 
 /// The plot kinds, for looking one up by id or name.
-pub const ALL_PLOT_KINDS: [PlotKind; 26] = [
+pub const ALL_PLOT_KINDS: [PlotKind; 27] = [
     PlotKind::ExtendedErrorBar,
     PlotKind::Bar,
     PlotKind::Box,
@@ -451,6 +454,7 @@ pub const ALL_PLOT_KINDS: [PlotKind; 26] = [
     PlotKind::CoOccurrence,
     PlotKind::PrevalenceAbundance,
     PlotKind::Map,
+    PlotKind::AlphaScatter,
 ];
 
 /// A plot kind by its id (`ExtendedErrorBar`) or its name ("Extended error
@@ -491,6 +495,7 @@ pub fn option_fields(mode: Mode, kind: PlotKind) -> &'static [&'static str] {
         PlotKind::Rarefaction => &["rarefaction"],
         PlotKind::Volcano => &["volcano"],
         PlotKind::CorrelationScatter => &["correlation"],
+        PlotKind::AlphaScatter => &["correlation", "alpha_metric", "community_normalisation"],
         PlotKind::Composition => &["composition"],
         PlotKind::SharedFeatures => &["shared"],
         PlotKind::RankAbundance => &["rank_abundance"],
@@ -532,6 +537,8 @@ pub fn option_fields(mode: Mode, kind: PlotKind) -> &'static [&'static str] {
             "co_occurrence_options",
             "co_occurrence_features",
             "co_occurrence_group",
+            "co_occurrence_pair",
+            "correlation",
         ],
         // Described by its own JSON, which get_current_plot gives.
         PlotKind::Custom => &[],

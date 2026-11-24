@@ -7,6 +7,11 @@ use super::dist::{chi2_sf, f_sf};
 pub enum MultiGroupTest {
     Anova,
     KruskalWallis,
+    /// For matched groups: the same subjects (or sites) sampled once in
+    /// every group.
+    Friedman,
+    /// Presence or absence of the feature in the samples of each group.
+    ChiSquarePresence,
 }
 
 /// Effect-size measures for multiple groups.
@@ -28,17 +33,37 @@ impl MultiGroupEffectSize {
 }
 
 impl MultiGroupTest {
-    pub const ALL: [MultiGroupTest; 2] = [MultiGroupTest::Anova, MultiGroupTest::KruskalWallis];
+    pub const ALL: [MultiGroupTest; 4] = [
+        MultiGroupTest::Anova,
+        MultiGroupTest::ChiSquarePresence,
+        MultiGroupTest::Friedman,
+        MultiGroupTest::KruskalWallis,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             MultiGroupTest::Anova => "ANOVA",
             MultiGroupTest::KruskalWallis => "Kruskal-Wallis H-test",
+            MultiGroupTest::Friedman => "Friedman test",
+            MultiGroupTest::ChiSquarePresence => "Chi-square test (presence/absence)",
         }
     }
 
     pub fn from_name(name: &str) -> Option<MultiGroupTest> {
         Self::ALL.into_iter().find(|t| t.name() == name)
+    }
+
+    /// True for a test of matched groups, which takes the samples of every
+    /// group in the same order of subjects (sample `i` of each group came
+    /// from subject `i`).
+    pub fn is_matched(self) -> bool {
+        self == MultiGroupTest::Friedman
+    }
+
+    /// True if the test asks only in how many samples of each group the
+    /// feature is present (above zero), not how abundant it is.
+    pub fn is_presence(self) -> bool {
+        self == MultiGroupTest::ChiSquarePresence
     }
 
     /// p-value for the null hypothesis that all groups have the same
@@ -47,6 +72,14 @@ impl MultiGroupTest {
         match self {
             MultiGroupTest::Anova => anova(groups),
             MultiGroupTest::KruskalWallis => kruskal_wallis(groups),
+            MultiGroupTest::Friedman => friedman(groups),
+            MultiGroupTest::ChiSquarePresence => {
+                let counts: Vec<(usize, usize)> = groups
+                    .iter()
+                    .map(|g| (g.iter().filter(|&&v| v > 0.0).count(), g.len()))
+                    .collect();
+                super::presence::chi_square_presence(&counts)
+            }
         }
     }
 }
@@ -152,9 +185,91 @@ fn kruskal_wallis(groups: &[&[f64]]) -> (f64, &'static str) {
     (chi2_sf(h, groups.len() as f64 - 1.0), "")
 }
 
+/// Friedman test, with correction for ties, as R's `friedman.test` and
+/// SciPy's `friedmanchisquare` compute it: the values of each subject are
+/// ranked across the groups, and the rank sums of the groups compared; the
+/// p-value comes from the chi-square approximation. The groups must hold
+/// the subjects in the same order.
+fn friedman(groups: &[&[f64]]) -> (f64, &'static str) {
+    let k = groups.len();
+    let n = groups.first().map_or(0, |g| g.len());
+    if groups.iter().any(|g| g.len() != n) {
+        return (
+            1.0,
+            "degenerate case: the Friedman test needs every subject sampled once in each group",
+        );
+    }
+    if k < 2 || n < 2 {
+        return (
+            1.0,
+            "degenerate case: the Friedman test needs at least 2 groups and 2 subjects",
+        );
+    }
+    let mut rank_sums = vec![0.0; k];
+    let mut tie_sum = 0.0;
+    let mut order: Vec<usize> = (0..k).collect();
+    // `subject` indexes every group, not `groups` itself.
+    #[allow(clippy::needless_range_loop)]
+    for subject in 0..n {
+        order.sort_by(|&a, &b| groups[a][subject].total_cmp(&groups[b][subject]));
+        let mut start = 0;
+        while start < k {
+            let mut end = start + 1;
+            while end < k && groups[order[end]][subject] == groups[order[start]][subject] {
+                end += 1;
+            }
+            let average_rank = (start + 1 + end) as f64 / 2.0;
+            for &group in &order[start..end] {
+                rank_sums[group] += average_rank;
+            }
+            let t = (end - start) as f64;
+            tie_sum += t * t * t - t;
+            start = end;
+        }
+    }
+    let (kf, nf) = (k as f64, n as f64);
+    let ties = 1.0 - tie_sum / (kf * (kf * kf - 1.0) * nf);
+    if ties <= 0.0 {
+        // Every subject has the same value in every group.
+        return (
+            1.0,
+            "degenerate case: no subject differs between the groups",
+        );
+    }
+    let squares: f64 = rank_sums.iter().map(|r| r * r).sum();
+    let statistic = (12.0 / (kf * nf * (kf + 1.0)) * squares - 3.0 * nf * (kf + 1.0)) / ties;
+    (chi2_sf(statistic, kf - 1.0), "")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `scipy.stats.friedmanchisquare` of SciPy 1.18.1 (statistics 6.2308
+    /// and 6.75); the first three groups have a tie within a subject.
+    #[test]
+    fn friedman_values() {
+        use MultiGroupTest::Friedman;
+        let a = [1.2, 3.4, 2.2, 5.1, 0.8, 2.9, 4.4];
+        let b = [2.3, 3.9, 2.2, 6.0, 1.9, 3.3, 4.1];
+        let c = [0.9, 2.8, 3.1, 4.0, 0.2, 2.9, 3.0];
+        let d = [1.5, 3.0, 2.6, 5.5, 1.1, 2.0, 4.9];
+        close(p(Friedman, &[&a, &b, &c]), 0.044361441772906844);
+        close(p(Friedman, &[&a, &b, &c, &d]), 0.08030772655502616);
+        // The order of the subjects does not matter, as long as it is the
+        // same in every group.
+        let reversed = |g: &[f64]| g.iter().rev().copied().collect::<Vec<f64>>();
+        close(
+            p(Friedman, &[&reversed(&a), &reversed(&b), &reversed(&c)]),
+            0.044361441772906844,
+        );
+        // Groups that are not matched, and subjects that never differ.
+        let (value, note) = Friedman.run(&[&a, &b[..6], &c]);
+        assert!(value == 1.0 && note.contains("every subject"));
+        let (value, note) = Friedman.run(&[&a, &a, &a]);
+        assert!(value == 1.0 && note.contains("no subject differs"));
+        assert!(Friedman.is_matched() && !MultiGroupTest::Anova.is_matched());
+    }
 
     fn p(test: MultiGroupTest, groups: &[&[f64]]) -> f64 {
         test.run(groups).0

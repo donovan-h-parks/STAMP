@@ -155,6 +155,34 @@ Add an entry here whenever a feature is added that v2 did not have.
 
 ## Statistics
 
+- **Friedman test** for matched groups in the multiple-group analysis: the
+  same subjects (patients, sites) sampled once in every group. A "Subject
+  field" of the metadata names the subject of each sample
+  (`Metadata::matched_groups`); subjects without exactly one sample in
+  every chosen group are left out and the number matched is shown. The
+  p-value is the tie-corrected chi-square approximation and agrees with
+  SciPy. Its post-hoc test, the only one offered with it, is **Wilcoxon
+  signed-rank (Holm)**: the signed-rank test for each pair of groups with
+  Holm's correction, and paired t intervals at the level a Bonferroni
+  adjustment gives each pair. Command line: `multi-groups --test friedman
+  --pair-field FIELD`, `post-hoc --test wilcoxon --pair-field FIELD`.
+- **Tests of presence or absence** (`stats/presence.rs`): is a feature
+  found in more of the samples of one group, whatever its abundance where
+  it is found? **Fisher's exact test (presence/absence)** for two groups,
+  **McNemar's test (presence/absence)**, exact, for paired samples, and the
+  **Chi-square test (presence/absence)** for multiple groups, which notes
+  features with expected counts below five. They agree with SciPy. The
+  effect size and interval of the two-group tests stay the difference in
+  mean proportions (bootstrap); the centred log-ratio transform does not
+  apply. Command line: `--test fisher-presence`, `--test mcnemar
+  --pair-field FIELD`, `--test chi-square-presence`.
+- **Pairwise PERMANOVA**: with three or more groups, the PCoA plot's
+  community tests are followed by PERMANOVA between every two groups, on
+  their samples alone, with Holm-corrected p-values
+  (`community::PairwiseRun`, resumable like the other tests; its random
+  numbers are drawn after theirs, so their results are unchanged). Up to
+  six pairs are listed above the plot, more are counted; the command line
+  prints every pair.
 - **Mann-Whitney U test** (Wilcoxon rank-sum test) for two groups: a
   rank-based test that does not assume the proportions are normally
   distributed. The p-value is exact when there are no ties and either
@@ -246,6 +274,26 @@ Add an entry here whenever a feature is added that v2 did not have.
 
 ## Window
 
+- **Analysis wizard** (Help > Analysis wizard, and a button at the top of
+  the Statistics panel; `crates/stamp-gui/src/wizard.rs`, `wizard_ui.rs`,
+  `docs/site/wizard.rst`). A few questions lead from what the user wants to
+  know to the analysis, test and plots that answer it: what is compared
+  (two samples, two groups, multiple groups, samples along a measured
+  variable), the research question (features that differ, that follow the
+  variable, that occur together; communities; diversity; composition;
+  sequencing depth), and, for features that differ between groups, whether
+  the same subjects were sampled in every group and what the data look
+  like. Each choice is a card with a small drawing and an "i" button for a
+  longer explanation with an example. Every choice is always shown; those
+  the loaded data cannot support are greyed and say why (no metadata, too
+  few groups, no numeric field, no field that matches subjects, proportions
+  where counts are needed). The size of the smallest group, or the number
+  of matched subjects, marks one answer about the data as suggested. The
+  last page names the test, lists what will be set, explains why, lists the
+  plots with what each is for, alternatives and what to report; "Set up
+  this analysis" chooses the settings (with the Benjamini-Hochberg FDR),
+  runs the analysis and shows the first plot. The flow chart it follows is
+  in `docs/WIZARD_PLAN.md`.
 - **Sample filter.** Below the group field, a metadata field and the values
   whose samples every analysis and plot uses (tick or untick each value);
   samples left out are excluded from everything, groups left empty
@@ -409,6 +457,20 @@ Add an entry here whenever a feature is added that v2 did not have.
   other, as bars. Within all samples of the analysis or one group. Command
   line: `stamp-cli co-occurrence`, which writes the pairs (coefficient,
   p-value, q-value) as a table.
+- **Feature against feature scatter plot**: a third view of the
+  co-occurrence heatmap ("The selected feature against one other"), a point
+  for each sample with the selected feature's proportion against another's
+  (named, or the most strongly correlated), coloured by group, with the
+  fitted line, the correlation and its p-value. Command line:
+  `stamp-cli co-occurrence --with A --against B`.
+- **p-value histogram for the group analyses**: v2's plot for two samples
+  is offered for two groups and multiple groups too (and for correlation),
+  as the check that some features truly differ. Command line:
+  `--plot-type p-value-histogram`.
+- **Alpha diversity scatter plot** (Correlation tab): the chosen diversity
+  measure of each sample against the numeric field, coloured by group, with
+  the fitted line and the Spearman or Pearson correlation and its p-value.
+  Command line: `stamp-cli correlation --plot-type alpha-diversity`.
 - **Volcano plot**, in all three analysis types: the effect size of every
   feature against -log10 of its p-value. Features past the chosen
   significance level (and, optionally, a minimum effect size) are coloured

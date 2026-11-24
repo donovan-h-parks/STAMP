@@ -16,6 +16,7 @@ pub mod group_summary;
 pub mod multi_group;
 pub mod pca;
 pub mod post_hoc;
+pub mod presence;
 pub mod prevalence;
 pub mod rarefaction;
 pub mod results;

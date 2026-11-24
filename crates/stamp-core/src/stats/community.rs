@@ -359,6 +359,145 @@ impl PermutationRun {
     }
 }
 
+/// PERMANOVA between two of the groups, one of the pairs of a
+/// [`PairwiseRun`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PairwiseTest {
+    /// The two groups, as numbered in the grouping given.
+    pub first: usize,
+    pub second: usize,
+    /// PERMANOVA on the samples of the two groups alone. Undefined (`NaN`)
+    /// if they have only two samples between them.
+    pub test: PermutationTest,
+    /// The p-value corrected for the number of pairs by Holm's method.
+    pub p_value_corrected: f64,
+}
+
+/// Pairwise PERMANOVA: which groups differ, once PERMANOVA on all of them
+/// says that some do? Each pair of groups is tested by PERMANOVA on the
+/// distances between their samples alone, as the pairwiseAdonis package for
+/// R does, and the p-values are corrected by Holm's method. Carried out a
+/// permutation at a time, like [`PermutationRun`]; the outcome does not
+/// depend on where it pauses.
+pub struct PairwiseRun {
+    /// The samples of each group.
+    members: Vec<Vec<usize>>,
+    /// The pairs of groups, in order.
+    pairs: Vec<(usize, usize)>,
+    permutations: usize,
+    finished: Vec<PermutationTest>,
+    current: Option<PermutationRun>,
+}
+
+impl PairwiseRun {
+    /// `groups[i]` is the group of sample `i`, as a number from zero.
+    pub fn new(groups: &[usize], permutations: usize) -> PairwiseRun {
+        let count = groups.iter().copied().max().map_or(0, |g| g + 1);
+        let mut members = vec![Vec::new(); count];
+        for (sample, &group) in groups.iter().enumerate() {
+            members[group].push(sample);
+        }
+        let pairs = (0..count)
+            .flat_map(|a| (a + 1..count).map(move |b| (a, b)))
+            .collect();
+        PairwiseRun {
+            members,
+            pairs,
+            permutations,
+            finished: Vec::new(),
+            current: None,
+        }
+    }
+
+    /// The number of pairs of groups.
+    pub fn pairs(&self) -> usize {
+        self.pairs.len()
+    }
+
+    /// Carry the tests further, drawing on `rng`, which must be the same
+    /// on every call, as must `distances`. `pace` is asked before each
+    /// permutation, with the number made and to make over all the pairs.
+    pub fn advance(
+        &mut self,
+        distances: &DistanceMatrix,
+        rng: &mut StampRng,
+        pace: Pace<'_>,
+    ) -> Step<Vec<PairwiseTest>> {
+        let total = self.pairs.len() * self.permutations;
+        while self.finished.len() < self.pairs.len() {
+            let (a, b) = self.pairs[self.finished.len()];
+            let before = self.finished.len() * self.permutations;
+            let members = &self.members;
+            let permutations = self.permutations;
+            let run = self.current.get_or_insert_with(|| {
+                let samples: Vec<usize> = members[a].iter().chain(&members[b]).copied().collect();
+                let subset = DistanceMatrix::from_fn(samples.len(), |i, j| {
+                    distances.get(samples[i], samples[j])
+                });
+                let groups: Vec<usize> = (0..samples.len())
+                    .map(|i| usize::from(i >= members[a].len()))
+                    .collect();
+                CommunityTest::Permanova.start(&subset, &groups, permutations, None)
+            });
+            match run.advance(rng, &mut |done, _| pace(before + done, total)) {
+                Step::Done(result) => {
+                    self.finished.push(result);
+                    self.current = None;
+                }
+                Step::Paused => return Step::Paused,
+                Step::Cancelled => return Step::Cancelled,
+            }
+        }
+        let p_values: Vec<f64> = self.finished.iter().map(|t| t.p_value).collect();
+        let corrected = holm(&p_values);
+        Step::Done(
+            self.pairs
+                .iter()
+                .zip(&self.finished)
+                .zip(corrected)
+                .map(
+                    |((&(first, second), &test), p_value_corrected)| PairwiseTest {
+                        first,
+                        second,
+                        test,
+                        p_value_corrected,
+                    },
+                )
+                .collect(),
+        )
+    }
+}
+
+/// [`PairwiseRun`] carried out in one piece.
+pub fn pairwise_permanova(
+    distances: &DistanceMatrix,
+    groups: &[usize],
+    permutations: usize,
+    rng: &mut StampRng,
+) -> Vec<PairwiseTest> {
+    let mut run = PairwiseRun::new(groups, permutations);
+    match run.advance(distances, rng, &mut |_, _| Control::Continue) {
+        Step::Done(tests) => tests,
+        Step::Paused | Step::Cancelled => unreachable!("never paused or cancelled"),
+    }
+}
+
+/// Holm's correction of the p-values that are numbers; the others stay as
+/// they are and are not counted among the tests.
+fn holm(p_values: &[f64]) -> Vec<f64> {
+    let mut order: Vec<usize> = (0..p_values.len())
+        .filter(|&i| !p_values[i].is_nan())
+        .collect();
+    order.sort_by(|&a, &b| p_values[a].total_cmp(&p_values[b]));
+    let mut corrected = p_values.to_vec();
+    let mut largest: f64 = 0.0;
+    for (rank, &i) in order.iter().enumerate() {
+        largest = largest.max(((order.len() - rank) as f64 * p_values[i]).min(1.0));
+        corrected[i] = largest;
+    }
+    corrected
+}
+
 /// The Mantel test (Mantel 1967): are two sets of distances between the
 /// same samples related? The statistic is the correlation of the distances
 /// between every pair of samples, by `method`; its two-sided p-value comes
@@ -534,6 +673,54 @@ mod tests {
     fn run(test: CommunityTest, groups: &[usize]) -> PermutationTest {
         let matrix = distances(&table(), Distance::BrayCurtis);
         test.run(&matrix, groups, 999, &mut rng_from_seed(1))
+    }
+
+    /// Each pair is PERMANOVA on the samples of the two groups alone (whose
+    /// statistic is checked against scikit-bio above), and the p-values
+    /// are Holm's: R's `p.adjust(c(0.01, 0.04, 0.03), "holm")` gives 0.03,
+    /// 0.06, 0.06.
+    #[test]
+    fn pairwise_permanova_tests_each_pair_alone() {
+        let matrix = distances(&table(), Distance::BrayCurtis);
+        let tests = pairwise_permanova(&matrix, &THREE, 999, &mut rng_from_seed(1));
+        let pairs: Vec<(usize, usize)> = tests.iter().map(|t| (t.first, t.second)).collect();
+        assert_eq!(pairs, [(0, 1), (0, 2), (1, 2)]);
+        // Groups 0 and 2: samples 0, 1 and 4, 5, 6.
+        let samples = [0, 1, 4, 5, 6];
+        let subset = DistanceMatrix::from_fn(5, |i, j| matrix.get(samples[i], samples[j]));
+        let alone =
+            CommunityTest::Permanova.run(&subset, &[0, 0, 1, 1, 1], 999, &mut rng_from_seed(2));
+        assert!((tests[1].test.statistic - alone.statistic).abs() < 1e-12);
+        // Two groups of two samples allow only three groupings: p >= 1/3.
+        assert!(tests[0].test.p_value > 0.3);
+        for t in &tests {
+            assert!(t.p_value_corrected >= t.test.p_value);
+            assert!(t.p_value_corrected <= 1.0);
+        }
+        let corrected = holm(&[0.01, 0.04, 0.03, f64::NAN]);
+        for (value, expected) in corrected.iter().zip([0.03, 0.06, 0.06]) {
+            assert!((value - expected).abs() < 1e-12);
+        }
+        assert!(corrected[3].is_nan());
+
+        // The same wherever it pauses.
+        let mut run = PairwiseRun::new(&THREE, 999);
+        let mut rng = rng_from_seed(1);
+        let mut calls = 0;
+        let paused = loop {
+            let step = run.advance(&matrix, &mut rng, &mut |_, _| {
+                calls += 1;
+                if calls % 7 == 0 {
+                    Control::Pause
+                } else {
+                    Control::Continue
+                }
+            });
+            if let Step::Done(tests) = step {
+                break tests;
+            }
+        };
+        assert_eq!(paused, tests);
     }
 
     /// Statistics from scikit-bio 0.7.4 on the same Bray-Curtis distances;

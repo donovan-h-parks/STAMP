@@ -1173,6 +1173,37 @@ fn every_plot_type_can_be_drawn() {
         "pcoa",
     );
     assert!(has(&pcoa, "Jaccard distance") && pcoa.contains("PERMANOVA: pseudo-F = "));
+    // With three or more groups, every pair of them is tested too.
+    assert!(!pcoa.contains("Pairwise PERMANOVA"));
+    let pairwise = svg_plot(
+        "multi-groups",
+        &[
+            "--profile",
+            "examples/CoalSeamGas/coal.spf",
+            "--metadata",
+            "examples/CoalSeamGas/coal.metadata.tsv",
+            "--field",
+            "Simplified Environment",
+        ],
+        &["--plot-type", "pcoa"],
+        &directory,
+        "pairwise",
+    );
+    assert!(pairwise.contains("Pairwise PERMANOVA (Holm-corrected p-values)"));
+    // The p-values of a group analysis as a histogram.
+    let histogram = svg_plot(
+        "multi-groups",
+        &coal,
+        &[
+            "--plot-type",
+            "p-value-histogram",
+            "--correction",
+            "bonferroni",
+        ],
+        &directory,
+        "m-histogram",
+    );
+    assert!(has(&histogram, "Corrected p-value"));
     let boxes = svg_plot(
         "two-groups",
         &[
@@ -1268,6 +1299,169 @@ fn paired_example(name: &str) -> (PathBuf, String, String) {
         profile.to_str().unwrap().to_string(),
         metadata.to_str().unwrap().to_string(),
     )
+}
+
+#[test]
+fn the_friedman_test_matches_subjects_across_groups() {
+    let directory = std::env::temp_dir().join(format!("stamp-cli-friedman-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let profile = directory.join("profile.spf");
+    // x rises from A to B to C in every subject; y does not change.
+    fs::write(
+        &profile,
+        "Phylum\tGenus\tA1\tA2\tA3\tA4\tB1\tB2\tB3\tB4\tC1\tC2\tC3\tC4\tC5\n\
+         P1\tx\t10\t12\t11\t14\t20\t23\t21\t19\t30\t33\t31\t29\t5\n\
+         P1\ty\t50\t48\t52\t47\t50\t49\t51\t50\t50\t48\t52\t47\t50\n\
+         P2\tz\t40\t40\t37\t39\t30\t28\t28\t31\t20\t19\t17\t24\t45\n",
+    )
+    .unwrap();
+    let metadata = directory.join("metadata.tsv");
+    // C5 is a fifth subject, sampled only once.
+    fs::write(
+        &metadata,
+        "Id\tTime\tSubject\n\
+         A1\tA\ts1\nA2\tA\ts2\nA3\tA\ts3\nA4\tA\ts4\n\
+         B1\tB\ts4\nB2\tB\ts3\nB3\tB\ts2\nB4\tB\ts1\n\
+         C1\tC\ts2\nC2\tC\ts1\nC3\tC\ts4\nC4\tC\ts3\nC5\tC\ts5\n",
+    )
+    .unwrap();
+    let (profile, metadata) = (profile.to_str().unwrap(), metadata.to_str().unwrap());
+    let base = [
+        "--profile",
+        profile,
+        "--metadata",
+        metadata,
+        "--field",
+        "Time",
+    ];
+    let output = stamp(&with(
+        "multi-groups",
+        &base,
+        &["--test", "friedman", "--pair-field", "Subject"],
+    ));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains(
+        "Matched by Subject: 4 subjects sampled in each of the 3 groups; 1 other sample left out."
+    ));
+    let table = Table::parse(&String::from_utf8_lossy(&output.stdout));
+    // The unmatched sample takes no part.
+    assert!(!table.headings.iter().any(|h| h == "C5"));
+    let (genus, p) = (table.column("Genus"), table.column("p-values"));
+    let value = |feature: &str| -> f64 {
+        table.rows.iter().find(|r| r[genus] == feature).unwrap()[p]
+            .parse()
+            .unwrap()
+    };
+    // Four subjects ranked the same way in three groups: chi-square = 8 on
+    // two degrees of freedom, p = exp(-4).
+    assert!(
+        (value("x") - (-4.0f64).exp()).abs() < 1e-9,
+        "{}",
+        value("x")
+    );
+    assert!(value("y") > 0.3);
+
+    // The post-hoc test of matched groups.
+    let post_hoc = stdout(&with(
+        "post-hoc",
+        &base,
+        &[
+            "--feature",
+            "x",
+            "--test",
+            "wilcoxon",
+            "--pair-field",
+            "Subject",
+        ],
+    ));
+    assert!(post_hoc.contains("A : B") && post_hoc.contains("B : C"));
+
+    let fails = |command: &str, extra: &[&str]| failure(&with(command, &base, extra));
+    assert!(fails("multi-groups", &["--test", "friedman"]).contains("--pair-field"));
+    assert!(fails("multi-groups", &["--pair-field", "Subject"]).contains("Friedman"));
+    assert!(fails(
+        "multi-groups",
+        &["--test", "friedman", "--pair-field", "Time"]
+    )
+    .contains("fewer than two values"));
+    assert!(fails("post-hoc", &["--feature", "x", "--test", "wilcoxon"]).contains("--pair-field"));
+    fs::remove_dir_all(&directory).ok();
+}
+
+#[test]
+fn presence_or_absence_is_tested_between_groups() {
+    let directory = std::env::temp_dir().join(format!("stamp-cli-presence-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let profile = directory.join("profile.spf");
+    // w is in every sample of A and in none of B; x is in all of them.
+    fs::write(
+        &profile,
+        "Phylum\tGenus\tA1\tA2\tA3\tA4\tB1\tB2\tB3\tB4\n\
+         P1\tw\t3\t1\t2\t4\t0\t0\t0\t0\n\
+         P1\tx\t10\t12\t11\t14\t30\t33\t31\t29\n\
+         P2\tz\t40\t40\t37\t39\t20\t18\t18\t21\n",
+    )
+    .unwrap();
+    let metadata = directory.join("metadata.tsv");
+    fs::write(
+        &metadata,
+        "Id\tGroup\tSubject\n\
+         A1\tA\ts1\nA2\tA\ts2\nA3\tA\ts3\nA4\tA\ts4\n\
+         B1\tB\ts4\nB2\tB\ts3\nB3\tB\ts2\nB4\tB\ts9\n",
+    )
+    .unwrap();
+    let (profile, metadata) = (profile.to_str().unwrap(), metadata.to_str().unwrap());
+    let base = [
+        "--profile",
+        profile,
+        "--metadata",
+        metadata,
+        "--field",
+        "Group",
+    ];
+    let two = ["--group1", "A", "--group2", "B"];
+    let p_of = |command: &str, extra: &[&str], feature: &str| -> f64 {
+        let table = Table::parse(&stdout(&with(command, &base, extra)));
+        let (genus, p) = (table.column("Genus"), table.column("p-values"));
+        table.rows.iter().find(|r| r[genus] == feature).unwrap()[p]
+            .parse()
+            .unwrap()
+    };
+    let close = |value: f64, expected: f64| {
+        assert!(
+            (value - expected).abs() < 1e-9,
+            "{value} against {expected}"
+        )
+    };
+    // Fisher's exact test: one table of 70 is as extreme, in each direction.
+    let fisher = [&two[..], &["--test", "fisher-presence"]].concat();
+    close(p_of("two-groups", &fisher, "w"), 2.0 / 70.0);
+    close(p_of("two-groups", &fisher, "x"), 1.0);
+    // McNemar's test on the three pairs, all with w in A only.
+    let mcnemar = [&two[..], &["--test", "mcnemar", "--pair-field", "Subject"]].concat();
+    close(p_of("two-groups", &mcnemar, "w"), 0.25);
+    // Chi-square = 8 on one degree of freedom.
+    close(
+        p_of("multi-groups", &["--test", "chi-square-presence"], "w"),
+        0.004677734981047266,
+    );
+    assert!(failure(&with(
+        "two-groups",
+        &base,
+        &[&fisher[..], &["--transform", "clr"]].concat()
+    ))
+    .contains("presence or absence"));
+    assert!(failure(&with(
+        "two-groups",
+        &base,
+        &[&two[..], &["--test", "mcnemar"]].concat()
+    ))
+    .contains("--pair-field"));
+    fs::remove_dir_all(&directory).ok();
 }
 
 #[test]
@@ -1478,6 +1672,20 @@ fn correlation_with_a_numeric_field() {
         &directory,
         "histogram",
     );
+    // The diversity of each sample against the field.
+    let alpha = svg_plot(
+        "correlation",
+        &base,
+        &[
+            "--plot-type",
+            "alpha-diversity",
+            "--alpha-metric",
+            "shannon",
+        ],
+        &directory,
+        "alpha",
+    );
+    assert!(has(&alpha, "Depth") && alpha.contains("Spearman rho = "));
 
     let fails = |base: &[&str], extra: &[&str]| failure(&with("correlation", base, extra));
     assert!(fails(&base, &["--plot", "x.svg", "--plot-type", "heatmap"]).contains("not available"));
@@ -1971,6 +2179,27 @@ fn co_occurrence_correlates_features() {
         .map(|r| r[2].parse::<f64>().unwrap().abs())
         .collect();
     assert!(strength.windows(2).all(|w| w[0] >= w[1]));
+
+    // Two features against each other, a point for each sample.
+    let svg = svg_plot(
+        "co-occurrence",
+        &base,
+        &[
+            "--with",
+            "g__Methanobacterium",
+            "--against",
+            "g__Methanosarcina",
+        ],
+        &directory,
+        "pair",
+    );
+    assert!(svg.contains(">g__Methanosarcina against g__Methanobacterium</text>"));
+    assert!(svg.contains(">g__Methanobacterium (%)</text>"));
+    assert!(svg.contains("Spearman rho (proportions) = "));
+    let mut alone = vec!["co-occurrence"];
+    alone.extend_from_slice(&base);
+    alone.extend(["--against", "g__Methanosarcina"]);
+    assert!(failure(&alone).contains("--against needs --with"));
 
     // Mistakes are explained.
     let mut unknown = vec!["co-occurrence"];

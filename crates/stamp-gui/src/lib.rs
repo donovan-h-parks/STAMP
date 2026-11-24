@@ -15,5 +15,7 @@ pub mod plot_config;
 pub mod plots;
 pub mod select_features;
 pub mod session;
+pub mod wizard;
+pub mod wizard_ui;
 
 pub use app::StampApp;

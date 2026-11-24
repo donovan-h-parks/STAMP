@@ -192,10 +192,11 @@ samples.
 
 ``--test``
    ``welch`` (default), ``t-test``, ``white``, ``mann-whitney``,
-   ``paired-t``, ``wilcoxon``.
+   ``paired-t``, ``wilcoxon``, and the tests of presence or absence
+   ``fisher-presence`` and ``mcnemar`` (paired).
 ``--pair-field FIELD``
-   For ``paired-t`` and ``wilcoxon``: the field that pairs the samples (see
-   :ref:`paired-tests`).
+   For ``paired-t``, ``wilcoxon`` and ``mcnemar``: the field that pairs the
+   samples (see :ref:`paired-tests`).
 ``--transform``
    ``none`` (default) or ``clr`` (see :ref:`clr`).
 
@@ -220,9 +221,19 @@ Multiple groups and post-hoc tests
        --feature Prevotella --test games-howell --plot prevotella.png
 
 ``--group`` chooses the groups (default: every group). ``multi-groups``
-takes ``--test anova`` (default) or ``kruskal-wallis``; ``post-hoc`` takes
-``--test tukey-kramer`` (default), ``games-howell``, ``scheffe``, ``welch``
-or ``dunn``, and ``--feature`` (repeat for several features).
+takes ``--test anova`` (default), ``kruskal-wallis``, ``friedman`` or
+``chi-square-presence``; ``post-hoc`` takes ``--test tukey-kramer``
+(default), ``games-howell``, ``scheffe``, ``welch``, ``dunn`` or
+``wilcoxon``, and ``--feature`` (repeat for several features).
+
+``friedman`` (and the ``wilcoxon`` post-hoc test) are for matched groups
+and need ``--pair-field FIELD``, the metadata field that names the subject
+of each sample; subjects without exactly one sample in every group are left
+out, and the number matched is reported.
+
+With ``--plot-type pcoa`` and three or more groups, PERMANOVA between
+every pair of groups is reported after the community tests, with
+Holm-corrected p-values.
 
 Correlation
 -----------
@@ -236,7 +247,9 @@ Correlation
 ``--method`` is ``spearman`` (default) or ``pearson``.
 ``--min-correlation`` keeps features whose coefficient is at least that far
 from zero. ``--group-field`` colours the points of the correlation scatter
-plot by group.
+plot by group. ``--plot-type alpha-diversity`` plots the diversity of each
+sample (``--alpha-metric``, ``--rarefy``) against the field instead, with
+their correlation.
 
 .. _cli-co-occurrence:
 
@@ -276,6 +289,9 @@ of the profile, or with ``--metadata`` those that ``--where``,
    Correlate one feature with every other feature instead; the table lists
    every correlation, strongest first, and the plot shows the N strongest
    (default 30) as bars.
+``--against FEATURE``
+   With ``--with``: the plot is a scatter plot of the two features, a point
+   for each sample, with their correlation.
 ``--q-threshold Q``, ``--mark-min-coefficient R``, ``--no-marks``
    Asterisks mark correlations with a Benjamini-Hochberg q-value below Q (default 0.05) and,
    optionally, at least R from zero; or none.

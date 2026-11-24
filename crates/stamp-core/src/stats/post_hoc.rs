@@ -1,7 +1,7 @@
 //! Post-hoc tests: pairwise comparisons of groups after a multiple-group test.
 
 use super::dist::{f_ppf, f_sf, normal_cdf, studentized_range_cdf, studentized_range_ppf};
-use super::two_group::welch;
+use super::two_group::{paired_t, signed_rank_tails, welch};
 use super::{mean, sample_variance};
 use crate::error::{Result, StampError};
 
@@ -13,6 +13,8 @@ pub enum PostHocTest {
     Scheffe,
     TukeyKramer,
     WelchUncorrected,
+    /// For matched groups (after the Friedman test).
+    WilcoxonHolm,
 }
 
 /// p-value of a pairwise comparison. It is `NaN` where the comparison could
@@ -60,12 +62,13 @@ const SINGLE_SAMPLE_GROUP: &str =
     "degenerate case: a group with fewer than 2 samples cannot be compared";
 
 impl PostHocTest {
-    pub const ALL: [PostHocTest; 5] = [
+    pub const ALL: [PostHocTest; 6] = [
         PostHocTest::Dunn,
         PostHocTest::GamesHowell,
         PostHocTest::Scheffe,
         PostHocTest::TukeyKramer,
         PostHocTest::WelchUncorrected,
+        PostHocTest::WilcoxonHolm,
     ];
 
     /// True if the p-values allow for the number of pairs compared; false
@@ -81,7 +84,14 @@ impl PostHocTest {
             PostHocTest::Scheffe => "Scheffè",
             PostHocTest::TukeyKramer => "Tukey-Kramer",
             PostHocTest::WelchUncorrected => "Welch's (uncorrected)",
+            PostHocTest::WilcoxonHolm => "Wilcoxon signed-rank (Holm)",
         }
+    }
+
+    /// True for a test of matched groups, which takes the samples of every
+    /// group in the same order of subjects.
+    pub fn is_matched(self) -> bool {
+        self == PostHocTest::WilcoxonHolm
     }
 
     pub fn from_name(name: &str) -> Option<PostHocTest> {
@@ -108,6 +118,7 @@ impl PostHocTest {
             PostHocTest::Scheffe => scheffe(groups, coverage),
             PostHocTest::TukeyKramer => tukey_kramer(groups, coverage)?,
             PostHocTest::WelchUncorrected => welch_uncorrected(groups, coverage),
+            PostHocTest::WilcoxonHolm => wilcoxon_holm(groups, coverage)?,
         };
 
         let mut comparisons = Vec::with_capacity(stats.len());
@@ -359,6 +370,71 @@ fn dunn(groups: &[&[f64]], coverage: f64) -> Result<(PairStats, &'static str)> {
         }
     }
     Ok((stats, note))
+}
+
+/// For matched groups: the Wilcoxon signed-rank test on each pair of groups
+/// (exact for 50 subjects or fewer), with the p-values corrected for the
+/// number of pairs by Holm's method, as R's `pairwise.wilcox.test(paired =
+/// TRUE)` does by default.
+///
+/// The effect size is the mean difference within the subjects, and its
+/// interval that of the paired t-test at the confidence level a Bonferroni
+/// adjustment gives each pair.
+fn wilcoxon_holm(groups: &[&[f64]], coverage: f64) -> Result<(PairStats, &'static str)> {
+    check_coverage(coverage)?;
+    let k = groups.len();
+    let n = groups.first().map_or(0, |g| g.len());
+    if groups.iter().any(|g| g.len() != n) {
+        return Err(StampError::new(
+            "The Wilcoxon signed-rank post-hoc test needs matched groups: every subject sampled \
+             once in each group.",
+        ));
+    }
+    let pairs = (k * k.saturating_sub(1) / 2).max(1) as f64;
+    let pair_coverage = 1.0 - (1.0 - coverage) / pairs;
+    let as_proportions = |g: &[f64]| g.iter().map(|x| x / 100.0).collect::<Vec<f64>>();
+    let mut raw = Vec::new();
+    for i in 0..k {
+        for j in i + 1..k {
+            let p = if n < 2 {
+                f64::NAN
+            } else {
+                let (lower, upper) = signed_rank_tails(groups[i], groups[j]);
+                (2.0 * lower.min(upper)).min(1.0)
+            };
+            let interval = paired_t(
+                &as_proportions(groups[i]),
+                &as_proportions(groups[j]),
+                pair_coverage,
+            );
+            raw.push((p, mean(groups[i]) - mean(groups[j]), interval));
+        }
+    }
+    // Holm: the smallest p-value times the number of pairs, the next by
+    // one fewer, and so on, none below the one before.
+    let mut order: Vec<usize> = (0..raw.len()).filter(|&i| !raw[i].0.is_nan()).collect();
+    order.sort_by(|&a, &b| raw[a].0.total_cmp(&raw[b].0));
+    let mut corrected: Vec<f64> = raw.iter().map(|r| r.0).collect();
+    let mut largest: f64 = 0.0;
+    for (rank, &i) in order.iter().enumerate() {
+        largest = largest.max(((order.len() - rank) as f64 * raw[i].0).min(1.0));
+        corrected[i] = largest;
+    }
+    let note = if n < 2 { SINGLE_SAMPLE_GROUP } else { "" };
+    Ok((
+        raw.into_iter()
+            .zip(corrected)
+            .map(|((_, effect, interval), p)| {
+                let (lower, upper) = if n < 2 {
+                    (f64::NAN, f64::NAN)
+                } else {
+                    (interval.lower_ci, interval.upper_ci)
+                };
+                (PostHocP::Value(p), effect, lower, upper)
+            })
+            .collect(),
+        note,
+    ))
 }
 
 fn welch_uncorrected(groups: &[&[f64]], coverage: f64) -> (PairStats, &'static str) {
@@ -689,6 +765,32 @@ mod tests {
                 assert!(c.lower_ci < c.effect_size && c.effect_size < c.upper_ci);
             }
         }
+    }
+
+    /// `scipy.stats.wilcoxon` of SciPy 1.18.1 gives 0.0625, 0.21875 and
+    /// 0.046875 for the three pairs; Holm's method (R's `p.adjust`) makes
+    /// them 0.140625, 0.21875 and 0.140625.
+    #[test]
+    fn wilcoxon_holm_values() {
+        let a = [1.2, 3.4, 2.2, 5.1, 0.8, 2.9, 4.4];
+        let b = [2.3, 3.9, 2.2, 6.0, 1.9, 3.3, 4.1];
+        let c = [0.9, 2.8, 3.1, 4.0, 0.2, 2.9, 3.0];
+        let r = PostHocTest::WilcoxonHolm
+            .run(&[&a, &b, &c], 0.95, &["a", "b", "c"])
+            .unwrap();
+        for (comparison, expected) in r.comparisons.iter().zip([0.140625, 0.21875, 0.140625]) {
+            let PostHocP::Value(p) = comparison.p_value;
+            assert!((p - expected).abs() < 1e-12, "{}: {p}", comparison.label);
+            assert!(comparison.lower_ci < comparison.effect_size);
+            assert!(comparison.effect_size < comparison.upper_ci);
+        }
+        let mean = |g: &[f64]| g.iter().sum::<f64>() / g.len() as f64;
+        assert!((r.comparisons[0].effect_size - (mean(&a) - mean(&b))).abs() < 1e-12);
+        // Groups of different sizes cannot be matched.
+        assert!(PostHocTest::WilcoxonHolm
+            .run(&[&a, &b[..5]], 0.95, &["a", "b"])
+            .is_err());
+        assert!(PostHocTest::WilcoxonHolm.is_matched() && !PostHocTest::Dunn.is_matched());
     }
 
     /// `dunn.test(y, g, method = "bonferroni", altp = TRUE)` from the R

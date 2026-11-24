@@ -5,6 +5,10 @@ STAMP starts every analysis with a sensible default, so a test need only be
 changed for a reason. This page gives those reasons. The tests themselves
 are explained in :doc:`statistics`.
 
+The :doc:`analysis wizard <wizard>` (**Help > Analysis wizard**) asks the
+questions of this page one at a time, shows which answers your data
+support, and sets the analysis up.
+
 Which analysis?
 ---------------
 
@@ -27,6 +31,9 @@ Which analysis?
    * - Three or more conditions
      - Multiple groups
      - ANOVA, Tukey-Kramer post-hoc
+   * - The same subjects or sites in three or more conditions
+     - Multiple groups, matched
+     - Friedman test, Wilcoxon signed-rank (Holm) post-hoc
    * - A measured number (pH, age, depth)
      - Correlation
      - Spearman rank correlation
@@ -65,6 +72,10 @@ Two groups
        numbers of pairs or extreme values
    * - Concern that a few features dominate the composition
      - Add the **centred log-ratio** transform, or confirm with **ANCOM**
+   * - The question is whether a feature is *found* in more samples of one
+       group, not whether it is more abundant
+     - **Fisher's exact test (presence/absence)**, or **McNemar's test
+       (presence/absence)** for paired samples
 
 Avoid the *t-test (equal variance)* unless you have a reason to assume the
 groups vary equally: Welch's test is as powerful when they do and much
@@ -78,6 +89,11 @@ Multiple groups
 * **Kruskal-Wallis** with **Dunn's test** for small groups or skewed data.
 * **Scheffè** if you want to be especially cautious about calling pairs
   different; **Welch's (uncorrected)** only for exploration.
+* The **Friedman test** when the same subjects were sampled in every group
+  (time points, treatments in turn); its post-hoc test is the Wilcoxon
+  signed-rank test with Holm's correction.
+* The **Chi-square test (presence/absence)** to ask whether a feature is
+  found in the same share of the samples of every group.
 
 Correlation
 -----------
@@ -88,6 +104,8 @@ Correlation
   values.
 * To ask whether the community as a whole changes with the number, use the
   **Mantel test plot**.
+* To ask which features rise and fall with *each other*, use the
+  **Co-occurrence heatmap**, and its scatter view to look at any one pair.
 
 Multiple test correction
 ------------------------
@@ -118,10 +136,14 @@ Community-level questions
      - Where to look
    * - Do the groups differ in composition overall?
      - **PCoA plot** (PERMANOVA, ANOSIM and PERMDISP), **NMDS plot**
+   * - Which of three or more groups differ in composition?
+     - Pairwise PERMANOVA on the **PCoA plot**
    * - Are the samples of one group more variable than another?
      - PERMDISP on the **PCoA plot**; **Distance box plot**
    * - Do the groups differ in diversity?
      - **Alpha diversity box plot**
+   * - Does diversity change with a measured number?
+     - **Alpha diversity scatter plot** (Correlation)
    * - Have the samples been sequenced deeply enough?
      - **Rarefaction curves**
    * - Does composition change with a measured number?

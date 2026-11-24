@@ -71,6 +71,11 @@ beneath the field.
 Pairing removes the differences between subjects from the comparison, so a
 paired test finds smaller consistent changes than an unpaired one.
 
+**McNemar's test (presence/absence)** is paired in the same way; it and
+**Fisher's exact test (presence/absence)** ask whether a feature is found
+in more samples of one group, not whether it is more abundant (see
+:doc:`statistics`). The *Transform* does not apply to them.
+
 Multiple groups
 ---------------
 
@@ -80,6 +85,16 @@ significant result says that *some* groups differ, not which ones; the
 **post-hoc test** chosen in the statistics panel then compares every pair
 of groups for the selected feature, shown in the post-hoc plot. The window
 starts with ANOVA and the Tukey-Kramer post-hoc test.
+
+When the same subjects were sampled in every group (several time points,
+say), choose the **Friedman test** and then the **Subject field**, the
+metadata field that names the subject of each sample. Only subjects with
+exactly one sample in every ticked group take part; their number is shown
+beneath the field. The post-hoc test is then the Wilcoxon signed-rank test
+with Holm's correction.
+
+The **Chi-square test (presence/absence)** asks whether a feature is found
+in the same share of the samples of every group.
 
 .. _correlation:
 

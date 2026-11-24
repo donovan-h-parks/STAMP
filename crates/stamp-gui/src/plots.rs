@@ -302,6 +302,8 @@ pub enum PlotKind {
     CoOccurrence,
     PrevalenceAbundance,
     Map,
+    /// An alpha diversity measure against the numeric field (correlation).
+    AlphaScatter,
     /// A plot the assistant described ([`CustomPlot`]), in any mode once
     /// there is one.
     Custom,
@@ -336,6 +338,7 @@ impl PlotKind {
             PlotKind::CoOccurrence => "Co-occurrence heatmap",
             PlotKind::PrevalenceAbundance => "Prevalence-abundance plot",
             PlotKind::Map => "Map of sample locations",
+            PlotKind::AlphaScatter => "Alpha diversity scatter plot",
             PlotKind::Custom => "Custom plot",
         }
     }
@@ -352,7 +355,7 @@ impl PlotKind {
             | PrevalenceAbundance | Scatter | SharedFeatures | SequenceHistogram => {
                 PlotGroup::Composition
             }
-            Rarefaction | RankAbundance | AlphaDiversity => PlotGroup::Diversity,
+            Rarefaction | RankAbundance | AlphaDiversity | AlphaScatter => PlotGroup::Diversity,
             Pcoa | Nmds | DistanceBox | Mantel => PlotGroup::Similarity,
             Map => PlotGroup::Samples,
             Custom => PlotGroup::Custom,
@@ -415,6 +418,7 @@ impl PlotKind {
                 PlotKind::PrevalenceAbundance,
                 PlotKind::Rarefaction,
                 PlotKind::Volcano,
+                PlotKind::PValueHistogram,
                 PlotKind::Composition,
                 PlotKind::AlphaDiversity,
                 PlotKind::Pcoa,
@@ -429,6 +433,7 @@ impl PlotKind {
                 PlotKind::CorrelationScatter,
                 PlotKind::Volcano,
                 PlotKind::PValueHistogram,
+                PlotKind::AlphaScatter,
                 PlotKind::Mantel,
                 PlotKind::CoOccurrence,
                 PlotKind::Map,
@@ -444,6 +449,7 @@ impl PlotKind {
                 PlotKind::PostHoc,
                 PlotKind::Rarefaction,
                 PlotKind::Volcano,
+                PlotKind::PValueHistogram,
                 PlotKind::Composition,
                 PlotKind::AlphaDiversity,
                 PlotKind::Nmds,
@@ -619,6 +625,9 @@ pub struct PlotSettings {
     pub co_occurrence_options: co_occurrence_plot::Options,
     pub co_occurrence_features: String,
     pub co_occurrence_group: Option<String>,
+    /// The feature plotted against the selected one by the co-occurrence
+    /// plot's scatter view; empty for the most strongly correlated.
+    pub co_occurrence_pair: String,
     /// The prevalence-abundance plot: its appearance and view, the
     /// smallest proportion (%) at which a feature counts as present,
     /// whether only active features are drawn, whether the selected
@@ -769,6 +778,7 @@ impl Default for PlotSettings {
             co_occurrence_options: co_occurrence_plot::Options::default(),
             co_occurrence_features: String::new(),
             co_occurrence_group: None,
+            co_occurrence_pair: String::new(),
             prevalence: prevalence_plot::Options::default(),
             prevalence_min_abundance: 0.0,
             prevalence_only_active: false,
@@ -829,6 +839,11 @@ impl PlotSettings {
             PlotKind::Rarefaction => self.rarefaction = defaults.rarefaction,
             PlotKind::Volcano => self.volcano = defaults.volcano,
             PlotKind::CorrelationScatter => self.correlation = defaults.correlation,
+            PlotKind::AlphaScatter => {
+                self.correlation = defaults.correlation;
+                self.alpha_metric = defaults.alpha_metric;
+                self.community_normalisation = defaults.community_normalisation;
+            }
             PlotKind::Composition => self.composition = defaults.composition,
             PlotKind::SharedFeatures => self.shared = defaults.shared,
             PlotKind::RankAbundance => self.rank_abundance = defaults.rank_abundance,
@@ -888,6 +903,7 @@ impl PlotSettings {
                 self.co_occurrence_options = defaults.co_occurrence_options;
                 self.co_occurrence_features = defaults.co_occurrence_features;
                 self.co_occurrence_group = defaults.co_occurrence_group;
+                self.co_occurrence_pair = defaults.co_occurrence_pair;
             }
             // Its look is in its description.
             PlotKind::Custom => {}
@@ -999,6 +1015,28 @@ fn co_occurrence_figure(
                 }
                 Err(message) => Figure::message(&message),
             }
+        }
+        co_occurrence_plot::View::Pair => {
+            let Some(feature) = &session.selected_feature else {
+                return Figure::message(NO_FEATURE);
+            };
+            // The first name typed.
+            let typed = typed_features(&settings.co_occurrence_pair);
+            let other = typed.first().map_or("", String::as_str);
+            let colors: Vec<Color> = groups.iter().map(|g| session.group_color(g)).collect();
+            co_occurrence_plot::pair_plot(
+                profile,
+                columns.as_deref(),
+                feature,
+                (!other.is_empty()).then_some(other),
+                (!groups.is_empty()).then_some(co_occurrence_plot::PairGroups {
+                    sample_groups,
+                    names: groups,
+                    colors: &colors,
+                }),
+                &co,
+                &settings.correlation,
+            )
         }
     }
 }
@@ -1805,6 +1843,58 @@ fn rarefaction_curves(
     }
 }
 
+/// The group of each of some samples, and the groups' names, by the
+/// session's group field: one group, "Samples", without one, and a last
+/// group "No group" for samples that belong to none.
+fn correlation_groups(session: &Session, samples: &[String]) -> (Vec<usize>, Vec<String>) {
+    let Some(grouping) = session.grouping() else {
+        return (vec![0; samples.len()], vec!["Samples".to_string()]);
+    };
+    let mut names: Vec<String> = grouping.names().map(str::to_string).collect();
+    let mut sample_groups: Vec<usize> = samples
+        .iter()
+        .map(|sample| {
+            names
+                .iter()
+                .position(|g| {
+                    grouping
+                        .samples(g)
+                        .is_some_and(|members| members.contains(sample))
+                })
+                .unwrap_or(usize::MAX)
+        })
+        .collect();
+    if sample_groups.contains(&usize::MAX) {
+        names.push("No group".to_string());
+        for g in &mut sample_groups {
+            if *g == usize::MAX {
+                *g = names.len() - 1;
+            }
+        }
+    }
+    (sample_groups, names)
+}
+
+/// The histogram of the p-values of an analysis: `(uncorrected, corrected)`
+/// for each feature.
+fn p_value_figure(
+    p_values: impl Iterator<Item = (f64, f64)>,
+    correction: stamp_core::stats::correction::Correction,
+    settings: &PlotSettings,
+) -> Figure {
+    let corrected = settings.p_value_histogram_corrected;
+    let values: Vec<f64> = p_values
+        .map(|(p, q)| if corrected { q } else { p })
+        .collect();
+    histogram::p_value_histogram(
+        &values,
+        &histogram::PValueOptions {
+            label: PValueKind::shown(correction, corrected).label().to_string(),
+            ..settings.p_value_histogram.clone()
+        },
+    )
+}
+
 fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSettings) -> Figure {
     if kind == PlotKind::Custom {
         return match session.custom_plot() {
@@ -1899,28 +1989,14 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                 PlotKind::SequenceHistogram => {
                     histogram::sequence_histogram(profile, &settings.sequence_histogram)
                 }
-                PlotKind::PValueHistogram => {
-                    let corrected = settings.p_value_histogram_corrected;
-                    let p: Vec<f64> = results
+                PlotKind::PValueHistogram => p_value_figure(
+                    results
                         .rows
                         .iter()
-                        .map(|r| {
-                            if corrected {
-                                r.p_value_corrected
-                            } else {
-                                r.p_value
-                            }
-                        })
-                        .collect();
-                    let label = PValueKind::shown(results.correction.method, corrected).label();
-                    histogram::p_value_histogram(
-                        &p,
-                        &histogram::PValueOptions {
-                            label: label.to_string(),
-                            ..settings.p_value_histogram.clone()
-                        },
-                    )
-                }
+                        .map(|r| (r.p_value, r.p_value_corrected)),
+                    results.correction.method,
+                    settings,
+                ),
                 PlotKind::MultipleComparison => {
                     sample_plots::multiple_comparison(results, &settings.multiple_comparison)
                 }
@@ -2109,6 +2185,14 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         settings,
                     )
                 }
+                PlotKind::PValueHistogram => p_value_figure(
+                    results
+                        .rows
+                        .iter()
+                        .map(|r| (r.p_value, r.p_value_corrected)),
+                    results.correction.method,
+                    settings,
+                ),
                 PlotKind::Volcano => {
                     let mut data = volcano::Data::from_group_results(profile, results);
                     data.sides = Some([
@@ -2226,55 +2310,54 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     &volcano::Data::from_correlation_results(results, &profile.field),
                     &volcano_options,
                 ),
-                PlotKind::PValueHistogram => {
-                    let corrected = settings.p_value_histogram_corrected;
-                    let values: Vec<f64> = if corrected {
-                        results.rows.iter().map(|r| r.p_value_corrected).collect()
-                    } else {
-                        results.rows.iter().map(|r| r.p_value).collect()
-                    };
-                    let label = PValueKind::shown(results.correction.method, corrected).label();
-                    histogram::p_value_histogram(
-                        &values,
-                        &histogram::PValueOptions {
-                            label: label.to_string(),
-                            ..settings.p_value_histogram.clone()
-                        },
-                    )
-                }
+                PlotKind::PValueHistogram => p_value_figure(
+                    results
+                        .rows
+                        .iter()
+                        .map(|r| (r.p_value, r.p_value_corrected)),
+                    results.correction.method,
+                    settings,
+                ),
                 PlotKind::Mantel => mantel_figure(session, profile, results, settings),
+                PlotKind::AlphaScatter => {
+                    let Some(tree) = &session.tree else {
+                        return Figure::message(NO_RESULTS);
+                    };
+                    // Coloured by the groups of the group field, if any.
+                    let samples = &profile.profile.sample_names;
+                    let (sample_groups, groups) = correlation_groups(session, samples);
+                    let community = Community::from_tree(
+                        tree,
+                        samples,
+                        &session.profile_level,
+                        sample_groups,
+                        groups,
+                        settings.community_normalisation,
+                        &mut rng_from_seed(session.seed),
+                    );
+                    let data = community.and_then(|mut community| {
+                        community.group_colors = community
+                            .groups
+                            .iter()
+                            .map(|g| session.group_color(g))
+                            .collect();
+                        community_plots::alpha_correlation(
+                            &community,
+                            settings.alpha_metric,
+                            &profile.field,
+                            &profile.values,
+                            results.analysis.method,
+                        )
+                    });
+                    match data {
+                        Ok(data) => correlation_plot::plot(&data, &settings.correlation),
+                        Err(message) => Figure::message(&message),
+                    }
+                }
                 PlotKind::Map => {
                     // By the groups of the group field, if any.
                     let samples = &profile.profile.sample_names;
-                    let (sample_groups, groups) = match session.grouping() {
-                        Some(grouping) => {
-                            let mut names: Vec<String> =
-                                grouping.names().map(str::to_string).collect();
-                            let mut sample_groups: Vec<usize> = samples
-                                .iter()
-                                .map(|sample| {
-                                    names
-                                        .iter()
-                                        .position(|g| {
-                                            grouping
-                                                .samples(g)
-                                                .is_some_and(|members| members.contains(sample))
-                                        })
-                                        .unwrap_or(usize::MAX)
-                                })
-                                .collect();
-                            if sample_groups.contains(&usize::MAX) {
-                                names.push("No group".to_string());
-                                for g in &mut sample_groups {
-                                    if *g == usize::MAX {
-                                        *g = names.len() - 1;
-                                    }
-                                }
-                            }
-                            (sample_groups, names)
-                        }
-                        None => (vec![0; samples.len()], vec!["Samples".to_string()]),
-                    };
+                    let (sample_groups, groups) = correlation_groups(session, samples);
                     let colors = groups.iter().map(|g| session.group_color(g)).collect();
                     map_figure(
                         session,
@@ -2442,6 +2525,14 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         .collect(),
                     profile.group_names.clone(),
                     colors.clone(),
+                    settings,
+                ),
+                PlotKind::PValueHistogram => p_value_figure(
+                    results
+                        .rows
+                        .iter()
+                        .map(|r| (r.p_value, r.p_value_corrected)),
+                    results.correction.method,
                     settings,
                 ),
                 PlotKind::Volcano => volcano::plot(

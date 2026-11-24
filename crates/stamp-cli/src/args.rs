@@ -293,7 +293,8 @@ pub enum PlotTypeArg {
     Volcano,
     /// Stacked bars of the most abundant features of each sample
     Composition,
-    /// Diversity within the samples of each group
+    /// Diversity within the samples of each group; in the correlation
+    /// command, the diversity of each sample against the numeric field
     AlphaDiversity,
     /// Samples placed by the distances between them, with community tests
     Pcoa,
@@ -466,6 +467,11 @@ pub struct MultiGroupsArgs {
     /// Statistical test
     #[arg(long, value_enum, default_value_t = MultiGroupTestArg::Anova)]
     pub test: MultiGroupTestArg,
+    /// For the Friedman test: the metadata field that says which samples
+    /// came from the same subject. Subjects without exactly one sample in
+    /// every group are left out
+    #[arg(long, value_name = "FIELD")]
+    pub pair_field: Option<String>,
     /// Transform applied before the test; changes the p-values only
     #[arg(long, value_enum, default_value_t = TransformArg::None)]
     pub transform: TransformArg,
@@ -574,6 +580,10 @@ pub struct PostHocArgs {
     /// Post-hoc test
     #[arg(long, value_enum, default_value_t = PostHocTestArg::TukeyKramer)]
     pub test: PostHocTestArg,
+    /// For the matched post-hoc test: the metadata field that says which
+    /// samples came from the same subject
+    #[arg(long, value_name = "FIELD")]
+    pub pair_field: Option<String>,
     /// Nominal coverage of the confidence intervals
     #[arg(long, default_value_t = 0.95)]
     pub coverage: f64,
@@ -1071,6 +1081,10 @@ pub struct CoOccurrenceArgs {
     /// other feature of the profile; the plot shows the strongest correlations
     #[arg(long, value_name = "FEATURE")]
     pub with: Option<String>,
+    /// With --with: plot that feature against this one, a point for each
+    /// sample, with their correlation, instead of the strongest correlations
+    #[arg(long, value_name = "FEATURE")]
+    pub against: Option<String>,
     /// With --with: number of correlations shown in the plot
     #[arg(long, default_value_t = 30, value_name = "N")]
     pub partners: usize,
@@ -1423,6 +1437,12 @@ impl From<CorrelationMethodArg> for CorrelationMethod {
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum GroupTestArg {
+    /// Fisher's exact test of whether the feature is present in the same
+    /// share of the samples of both groups
+    FisherPresence,
+    /// McNemar's exact test of presence or absence, for paired samples
+    /// (needs --pair-field)
+    Mcnemar,
     /// Mann-Whitney U test (Wilcoxon rank-sum test)
     MannWhitney,
     /// Paired t-test (needs --pair-field)
@@ -1440,6 +1460,8 @@ pub enum GroupTestArg {
 impl From<GroupTestArg> for GroupTest {
     fn from(value: GroupTestArg) -> Self {
         match value {
+            GroupTestArg::FisherPresence => GroupTest::FisherPresence,
+            GroupTestArg::Mcnemar => GroupTest::McNemar,
             GroupTestArg::MannWhitney => GroupTest::MannWhitney,
             GroupTestArg::PairedT => GroupTest::PairedT,
             GroupTestArg::Wilcoxon => GroupTest::WilcoxonSignedRank,
@@ -1453,7 +1475,13 @@ impl From<GroupTestArg> for GroupTest {
 #[derive(Clone, Copy, ValueEnum)]
 pub enum MultiGroupTestArg {
     Anova,
+    /// Chi-square test of whether the feature is present in the same share
+    /// of the samples of every group
+    ChiSquarePresence,
     KruskalWallis,
+    /// For matched groups: the same subjects sampled once in every group
+    /// (needs --pair-field)
+    Friedman,
 }
 
 impl From<MultiGroupTestArg> for MultiGroupTest {
@@ -1461,6 +1489,8 @@ impl From<MultiGroupTestArg> for MultiGroupTest {
         match value {
             MultiGroupTestArg::Anova => MultiGroupTest::Anova,
             MultiGroupTestArg::KruskalWallis => MultiGroupTest::KruskalWallis,
+            MultiGroupTestArg::Friedman => MultiGroupTest::Friedman,
+            MultiGroupTestArg::ChiSquarePresence => MultiGroupTest::ChiSquarePresence,
         }
     }
 }
@@ -1474,6 +1504,9 @@ pub enum PostHocTestArg {
     TukeyKramer,
     /// Welch's t-test for each pair, without correction
     Welch,
+    /// For matched groups: the Wilcoxon signed-rank test for each pair, with
+    /// Holm's correction (needs --pair-field)
+    Wilcoxon,
 }
 
 impl From<PostHocTestArg> for PostHocTest {
@@ -1484,6 +1517,7 @@ impl From<PostHocTestArg> for PostHocTest {
             PostHocTestArg::Scheffe => PostHocTest::Scheffe,
             PostHocTestArg::TukeyKramer => PostHocTest::TukeyKramer,
             PostHocTestArg::Welch => PostHocTest::WelchUncorrected,
+            PostHocTestArg::Wilcoxon => PostHocTest::WilcoxonHolm,
         }
     }
 }

@@ -1073,6 +1073,12 @@ pub struct StampApp {
     highlight_value: String,
     show_table: bool,
     show_about: bool,
+    /// The analysis wizard: whether its window is open, the answers given,
+    /// and what it last found out about the loaded data (with what that
+    /// was found for).
+    pub(crate) show_wizard: bool,
+    pub wizard: crate::wizard::Wizard,
+    wizard_facts: Option<(String, crate::wizard::Facts)>,
     show_preferences: bool,
     /// A message for the user, shown until dismissed.
     notice: Option<String>,
@@ -1126,6 +1132,7 @@ struct AnalysisSettings {
     ),
     multi: (
         Vec<String>,
+        Option<String>,
         stamp_core::stats::results::MultiGroupAnalysis,
         PostHocTest,
         f64,
@@ -1155,6 +1162,7 @@ impl AnalysisSettings {
             ),
             multi: (
                 session.multi.active_groups.clone(),
+                session.multi.pair_field.clone(),
                 session.multi.analysis,
                 session.multi.post_hoc_test,
                 session.multi.post_hoc_coverage,
@@ -1183,6 +1191,7 @@ impl AnalysisSettings {
         ) = self.groups;
         (
             session.multi.active_groups,
+            session.multi.pair_field,
             session.multi.analysis,
             session.multi.post_hoc_test,
             session.multi.post_hoc_coverage,
@@ -1300,6 +1309,9 @@ impl StampApp {
             highlight_value: String::new(),
             show_table: false,
             show_about: false,
+            show_wizard: false,
+            wizard: crate::wizard::Wizard::default(),
+            wizard_facts: None,
             show_preferences: false,
             notice: None,
             platform: Platform::default(),
@@ -1358,6 +1370,97 @@ impl StampApp {
             self.session.shown_custom = index;
             self.set_plot_kind(PlotKind::Custom);
         }
+    }
+
+    /// Open or close the analysis wizard (Help > Analysis wizard).
+    pub fn show_wizard(&mut self, show: bool) {
+        self.show_wizard = show;
+    }
+
+    /// What the wizard knows about the loaded data, found again only when
+    /// the data or the choices it depends on change.
+    pub fn wizard_facts(&mut self) -> crate::wizard::Facts {
+        let key = crate::wizard::Facts::key(&self.session);
+        match &self.wizard_facts {
+            Some((found_for, facts)) if *found_for == key => facts.clone(),
+            _ => {
+                let facts = crate::wizard::Facts::of(&self.session, &self.plot_settings);
+                self.wizard_facts = Some((key, facts.clone()));
+                facts
+            }
+        }
+    }
+
+    /// Set up the analysis the wizard recommends: its settings in the
+    /// Statistics panel, the analysis run again if they changed, and
+    /// `plot` shown (the recommendation's first plot if `None`). The
+    /// wizard closes. Returns false if the wizard has no recommendation
+    /// yet.
+    pub fn apply_wizard(&mut self, plot: Option<PlotKind>) -> bool {
+        let facts = self.wizard_facts();
+        let Some(recommendation) = self.wizard.recommendation(&facts) else {
+            return false;
+        };
+        let change = &recommendation.change;
+        let mode = recommendation.mode;
+        let session = &mut self.session;
+        if let Some(test) = change.sample_test {
+            session.samples.analysis.test = test;
+        }
+        if let Some(test) = change.group_test {
+            session.groups.analysis.test = test;
+            if let Some((first, second)) = &change.two_groups {
+                session.groups.group1 = first.clone();
+                session.groups.group2 = Some(second.clone());
+            }
+            if test.is_paired() {
+                session.groups.pair_field = change.subject_field.clone();
+            }
+            if let Some(transform) = change.transform {
+                session.groups.analysis.transform = transform;
+            }
+        }
+        if let Some((test, post_hoc)) = change.multi_test {
+            session.multi.analysis.test = test;
+            session.multi.post_hoc_test = post_hoc;
+            if test.is_matched() {
+                session.multi.pair_field = change.subject_field.clone();
+            }
+            if let Some(transform) = change.transform {
+                session.multi.analysis.transform = transform;
+            }
+        }
+        if let Some(method) = change.method {
+            session.correlation.analysis.method = method;
+        }
+        if let Some(correction) = change.correction {
+            match mode {
+                Mode::TwoSamples => session.samples.analysis.correction = correction,
+                Mode::TwoGroups => session.groups.analysis.correction = correction,
+                Mode::MultipleGroups => session.multi.analysis.correction = correction,
+                Mode::Correlation => session.correlation.analysis.correction = correction,
+            }
+        }
+        if *change != crate::wizard::Change::default() {
+            session.invalidate(mode);
+        }
+        self.set_mode(mode);
+        let plot = plot.unwrap_or(recommendation.plots[0].0);
+        self.set_plot_kind(plot);
+        // What the recommended plots are described as showing.
+        if change.show_pairs {
+            self.plot_settings.box_plot.show_pairs = true;
+        }
+        match plot {
+            PlotKind::Pcoa => self.plot_settings.pcoa_show_tests = true,
+            PlotKind::CoOccurrence => {
+                self.plot_settings.co_occurrence.view =
+                    stamp_plot::co_occurrence_plot::View::Matrix;
+            }
+            _ => {}
+        }
+        self.show_wizard = false;
+        true
     }
 
     pub fn set_plot_kind(&mut self, kind: PlotKind) {
@@ -3348,6 +3451,13 @@ impl StampApp {
             });
             ui.menu_button("Assistant", |ui| assistant::window::menu(self, ui));
             ui.menu_button("Help", |ui| {
+                if ui
+                    .add(item(icons::SLIDERS, "Analysis wizard...", None))
+                    .on_hover_text("A few questions that lead to the test and plots for your data")
+                    .clicked()
+                {
+                    self.show_wizard = true;
+                }
                 if ui.add(item(icons::INFO, "About STAMP", None)).clicked() {
                     self.show_about = true;
                 }
@@ -3770,7 +3880,19 @@ impl StampApp {
                     changed = true;
                 }
             }
-            Mode::MultipleGroups => {}
+            Mode::MultipleGroups => {
+                // Matched groups have their own post-hoc test, which the
+                // other tests cannot use.
+                let state = &mut self.session.multi;
+                if state.analysis.test.is_matched() != state.post_hoc_test.is_matched() {
+                    state.post_hoc_test = if state.analysis.test.is_matched() {
+                        PostHocTest::WilcoxonHolm
+                    } else {
+                        PostHocTest::TukeyKramer
+                    };
+                    changed = true;
+                }
+            }
         }
         changed
     }
@@ -3780,6 +3902,14 @@ impl StampApp {
             ui.label("Load a profile to choose a statistical test.");
             return;
         }
+        if ui
+            .button(icons::label(icons::SLIDERS, "Analysis wizard..."))
+            .on_hover_text("A few questions that lead to the test and plots for your data")
+            .clicked()
+        {
+            self.show_wizard = true;
+        }
+        ui.add_space(4.0);
         let corrections = named(&Correction::ALL, Correction::name);
         let test_types = named(&TestType::ALL, TestType::name);
         let coverages: Vec<(f64, String)> =
@@ -3917,7 +4047,9 @@ impl StampApp {
                         });
                         // White's test works on counts; it is not transformed.
                         ui.label("Transform:").on_hover_text(TRANSFORM_HELP);
-                        ui.add_enabled_ui(state.analysis.test != GroupTest::White, |ui| {
+                        let transformable = state.analysis.test != GroupTest::White
+                            && !state.analysis.test.is_presence();
+                        ui.add_enabled_ui(transformable, |ui| {
                             rerun |= choose(
                                 ui,
                                 "group-transform",
@@ -3957,6 +4089,18 @@ impl StampApp {
                     ui.label("Load a metadata file to compare groups.");
                     return;
                 }
+                // Any field can say which samples came from one subject.
+                let mut pair_fields: Vec<(Option<String>, String)> =
+                    vec![(None, "(choose a field)".to_string())];
+                if let Some(metadata) = &self.session.metadata {
+                    pair_fields.extend(
+                        metadata
+                            .fields()
+                            .iter()
+                            .filter(|f| Some(*f) != self.session.group_field.as_ref())
+                            .map(|f| (Some(f.clone()), f.clone())),
+                    );
+                }
                 let state = &mut self.session.multi;
                 let mut post_hoc_changed = false;
                 egui::Grid::new("multi-stats")
@@ -3966,17 +4110,37 @@ impl StampApp {
                             let tests = named(&MultiGroupTest::ALL, MultiGroupTest::name);
                             choose(ui, "multi-test", &mut state.analysis.test, &tests)
                         });
+                        if state.analysis.test.is_matched() {
+                            rerun |= row(ui, "Subject field:", |ui| {
+                                choose(ui, "multi-pair-field", &mut state.pair_field, &pair_fields)
+                            });
+                            if let Some(pairing) = &state.pairing {
+                                ui.label("");
+                                ui.weak(pairing);
+                                ui.end_row();
+                            }
+                        }
                         ui.label("Transform:").on_hover_text(TRANSFORM_HELP);
                         let transforms = named(&Transform::ALL, Transform::name);
-                        rerun |= choose(
-                            ui,
-                            "multi-transform",
-                            &mut state.analysis.transform,
-                            &transforms,
-                        );
+                        // Presence is read from the counts, untransformed.
+                        ui.add_enabled_ui(!state.analysis.test.is_presence(), |ui| {
+                            rerun |= choose(
+                                ui,
+                                "multi-transform",
+                                &mut state.analysis.transform,
+                                &transforms,
+                            );
+                        });
                         ui.end_row();
                         post_hoc_changed |= row(ui, "Post-hoc test:", |ui| {
-                            let tests = named(&PostHocTest::ALL, PostHocTest::name);
+                            // Matched groups have one post-hoc test, and
+                            // the other tests cannot use it.
+                            let matched = state.analysis.test.is_matched();
+                            let offered: Vec<PostHocTest> = PostHocTest::ALL
+                                .into_iter()
+                                .filter(|t| t.is_matched() == matched)
+                                .collect();
+                            let tests = named(&offered, PostHocTest::name);
                             choose(ui, "post-hoc-test", &mut state.post_hoc_test, &tests)
                         });
                         post_hoc_changed |= row(ui, "Post-hoc coverage:", |ui| {
@@ -5071,6 +5235,8 @@ impl StampApp {
             .retain(|window| !closed.contains(&window.id));
 
         assistant::window::windows(self, ctx);
+
+        crate::wizard_ui::show(self, ctx);
 
         egui::Window::new("About STAMP")
             .open(&mut self.show_about)

@@ -1317,6 +1317,33 @@ pub fn show(
                 rows.check("Assign unique shapes", &mut o.unique_shapes);
             });
         }
+        PlotKind::AlphaScatter => {
+            let o = &mut settings.correlation;
+            let (metric, normalisation) = (
+                &mut settings.alpha_metric,
+                &mut settings.community_normalisation,
+            );
+            dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
+            dialog.group("Diversity", |rows| {
+                let metrics: Vec<(AlphaMetric, &str)> =
+                    AlphaMetric::ALL.iter().map(|&m| (m, m.name())).collect();
+                rows.choice("Measure:", metric, &metrics);
+                rows.normalisation(normalisation);
+            });
+            dialog.group("Correlation", |rows| {
+                rows.check("Show fitted line (least squares)", &mut o.show_line);
+                rows.check("Show correlation and p-value", &mut o.show_statistics);
+            });
+            dialog.legend(&mut o.legend);
+            dialog.group(FONT_SIZES, |rows| {
+                rows.font("Title:", &mut o.title_font_size);
+                rows.font("Correlation and p-value:", &mut o.note_font_size);
+            });
+            dialog.group(OTHER_OPTIONS, |rows| {
+                rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
+                rows.check("Assign unique shapes", &mut o.unique_shapes);
+            });
+        }
         PlotKind::Composition => {
             let o = &mut settings.composition;
             dialog.group("Figure size", |rows| rows.size(&mut o.width, &mut o.height));
@@ -1700,6 +1727,7 @@ pub fn show(
             let o = &mut settings.co_occurrence_options;
             let features = &mut settings.co_occurrence_features;
             let group = &mut settings.co_occurrence_group;
+            let pair = &mut settings.co_occurrence_pair;
             dialog.group("Correlation", |rows| {
                 rows.choice(
                     "Show:",
@@ -1707,6 +1735,10 @@ pub fn show(
                     &[
                         (View::Matrix, "Every pair of features"),
                         (View::OneFeature, "The selected feature against all others"),
+                        (
+                            View::Pair,
+                            "The selected feature against one other (scatter plot)",
+                        ),
                     ],
                 );
                 rows.choice(
@@ -1744,8 +1776,14 @@ pub fn show(
                 rows.when(matrix, |rows| {
                     rows.lines("Always include (one per line):", features)
                 });
+                rows.when(co.view == View::Pair, |rows| {
+                    rows.lines(
+                        "Against (a feature's name; empty for the most strongly correlated):",
+                        pair,
+                    )
+                });
                 rows.count_if(
-                    !matrix,
+                    co.view == View::OneFeature,
                     "Correlations shown:",
                     &mut co.partner_count,
                     1..=500,

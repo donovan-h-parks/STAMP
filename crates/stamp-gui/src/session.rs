@@ -117,6 +117,11 @@ pub struct CorrelationState {
 pub struct MultiState {
     /// Groups included in the analysis.
     pub active_groups: Vec<String>,
+    /// The metadata field that says which samples of the groups came from
+    /// the same subject, for the tests of matched groups (Friedman).
+    pub pair_field: Option<String>,
+    /// How many subjects the last matched analysis found, as a sentence.
+    pub pairing: Option<String>,
     pub analysis: MultiGroupAnalysis,
     pub filter: MultiGroupFilter,
     pub post_hoc_test: PostHocTest,
@@ -276,6 +281,8 @@ impl Default for Session {
                     transform: stamp_core::stats::results::Transform::None,
                 },
                 filter: MultiGroupFilter::default(),
+                pair_field: None,
+                pairing: None,
                 post_hoc_test: PostHocTest::TukeyKramer,
                 post_hoc_coverage: 0.95,
                 output: None,
@@ -972,6 +979,42 @@ impl Session {
                     );
                     return None;
                 }
+                // A test of matched groups takes the samples of every group
+                // subject by subject, as a metadata field matches them.
+                self.multi.pairing = None;
+                let groups = if analysis.test.is_matched() {
+                    let matched = match (&self.multi.pair_field, &self.metadata) {
+                        (None, _) | (_, None) => Err("Choose the metadata field that says \
+                            which samples came from the same subject."
+                            .to_string()),
+                        (Some(field), Some(metadata)) => metadata
+                            .matched_groups(&groups, &active, field)
+                            .map_err(|e| e.to_string()),
+                    };
+                    match matched {
+                        Ok(matching) if matching.pairs < 2 => {
+                            self.multi.output = None;
+                            self.set_error(
+                                Mode::MultipleGroups,
+                                "Fewer than two subjects have one sample in each of the \
+                                 selected groups."
+                                    .to_string(),
+                            );
+                            return None;
+                        }
+                        Ok(matching) => {
+                            self.multi.pairing = Some(matching.matched_summary(active.len()));
+                            matching.groups
+                        }
+                        Err(message) => {
+                            self.multi.output = None;
+                            self.set_error(Mode::MultipleGroups, message);
+                            return None;
+                        }
+                    }
+                } else {
+                    groups
+                };
                 let mut state = None;
                 Some(Job::spawn_steps(move |progress, out_of_time| {
                     if state.is_none() {
@@ -1492,6 +1535,62 @@ mod tests {
         assert!(session.groups.output.is_none());
         assert!(session.samples.output.is_some());
         assert!(session.post_hoc().is_none());
+    }
+
+    #[test]
+    fn the_friedman_test_matches_subjects_across_groups() {
+        let mut session = loaded();
+        session.profile_level = "Genus".to_string();
+        session.multi.active_groups = vec!["A".to_string(), "B".to_string()];
+        session.multi.analysis.test = MultiGroupTest::Friedman;
+        session.invalidate(Mode::MultipleGroups);
+        // No field chosen yet: nothing is run, and the reason is given.
+        session.run_to_completion(Mode::MultipleGroups);
+        assert!(session.multi.output.is_none());
+        assert!(session
+            .error(Mode::MultipleGroups)
+            .unwrap()
+            .contains("same subject"));
+
+        session.multi.pair_field = Some("Subject".to_string());
+        session.invalidate(Mode::MultipleGroups);
+        session.run_to_completion(Mode::MultipleGroups);
+        assert!(session.error(Mode::MultipleGroups).is_none());
+        assert_eq!(
+            session.multi.pairing.as_deref(),
+            Some("3 subjects sampled in each of the 2 groups")
+        );
+        let (profile, results) = session.multi.output.as_ref().unwrap();
+        // Subject by subject: s1, s2, s3.
+        assert_eq!(profile.samples_in_groups()[0], ["A1", "A2", "A3"]);
+        assert_eq!(profile.samples_in_groups()[1], ["B2", "B3", "B1"]);
+        assert!(results.rows.iter().all(|r| r.note.is_empty()));
+        // x is higher in B for every subject: with two groups the test is
+        // the sign test, chi-square = 3 on one degree of freedom.
+        let x = results.rows.iter().find(|r| r.feature == "x").unwrap();
+        assert!(
+            (x.p_value - 0.08326451666355042).abs() < 1e-9,
+            "{}",
+            x.p_value
+        );
+
+        // The subjects of C are others: nothing can be matched.
+        session.multi.active_groups.push("C".to_string());
+        session.invalidate(Mode::MultipleGroups);
+        session.run_to_completion(Mode::MultipleGroups);
+        assert!(session.multi.output.is_none());
+        assert!(session
+            .error(Mode::MultipleGroups)
+            .unwrap()
+            .contains("Fewer than two subjects"));
+
+        // Another test ignores the field and uses every sample again.
+        session.multi.analysis.test = MultiGroupTest::KruskalWallis;
+        session.invalidate(Mode::MultipleGroups);
+        session.run_to_completion(Mode::MultipleGroups);
+        assert!(session.multi.pairing.is_none());
+        let (profile, _) = session.multi.output.as_ref().unwrap();
+        assert_eq!(profile.samples_in_groups().len(), 3);
     }
 
     #[test]
