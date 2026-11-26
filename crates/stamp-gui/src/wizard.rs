@@ -384,8 +384,9 @@ pub struct Facts {
     pub samples: usize,
     pub has_metadata: bool,
     pub group_field: Option<String>,
-    /// The groups ticked in the group list that have samples, with their
-    /// number of samples.
+    /// The groups ticked in the group list that can be tested, with two or
+    /// more samples switched on, with their number of samples. (A ticked
+    /// group of one sample is left out of the tests.)
     pub groups: Vec<(String, usize)>,
     /// The two groups of the two-group analysis.
     pub two_groups: Option<(String, String)>,
@@ -466,7 +467,7 @@ impl Facts {
             .filter(|name| session.multi.active_groups.iter().any(|a| a == name))
             .filter_map(|name| {
                 let size = grouping.samples(name).map_or(0, <[String]>::len);
-                (size > 0).then(|| (name.to_string(), size))
+                (size >= 2).then(|| (name.to_string(), size))
             })
             .collect();
         // The two groups of the two-group analysis, or the first two if it
@@ -715,6 +716,62 @@ pub struct Recommendation {
     pub change: Change,
 }
 
+/// The settings of the data chosen on the wizard's first page, beside the
+/// comparisons, each with an explanation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Setting {
+    ParentLevel,
+    ProfileLevel,
+    GroupField,
+}
+
+impl Setting {
+    pub const ALL: [Setting; 3] = [
+        Setting::ParentLevel,
+        Setting::ProfileLevel,
+        Setting::GroupField,
+    ];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Setting::ParentLevel => "Parent level",
+            Setting::ProfileLevel => "Profile level",
+            Setting::GroupField => "Group field",
+        }
+    }
+
+    /// What the setting controls, in a paragraph.
+    pub fn info(self) -> &'static str {
+        match self {
+            Setting::ParentLevel => {
+                "What each feature's proportion is a proportion of. With \"Entire sample\", \
+                 a feature's proportion is its share of all the sequences of a sample. With a \
+                 parent level, such as Phylum, it is its share of its own parent instead: each \
+                 genus as a proportion of its phylum. That asks a different question: whether \
+                 a genus makes up more or less of its phylum in one sample or group than in \
+                 another, whatever happens to the phylum itself. The parent level is always \
+                 above the profile level; \"Entire sample\" suits most analyses."
+            }
+            Setting::ProfileLevel => {
+                "The level of the hierarchy whose features are compared: for a taxonomic \
+                 profile, for example Phylum, Family or Genus; for a functional profile, a \
+                 pathway or a gene family. Each feature counts the sequences assigned to it \
+                 and to everything below it. A higher level has fewer, more abundant features \
+                 and fewer tests to correct for; a lower level is more specific, with more and \
+                 rarer features."
+            }
+            Setting::GroupField => {
+                "The metadata column whose values put the samples in groups: Treatment, with \
+                 the values Control and Drug, say. Each value that has samples is a group, \
+                 listed beside the box with its number of samples. It decides what can be \
+                 compared: two groups need a field with at least two groups, multiple groups \
+                 at least three. A group can be left out by unticking it in the group list of \
+                 the Profile and groups panel, or on the wizard's last page."
+            }
+        }
+    }
+}
+
 /// The answers given so far.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Wizard {
@@ -726,6 +783,8 @@ pub struct Wizard {
     pub subject_field: Option<String>,
     /// The choice whose explanation is shown.
     pub info: Option<Choice>,
+    /// The setting of the first page whose explanation is shown.
+    pub setting_info: Option<Setting>,
     /// True while the window shows the table of tests ("At a glance")
     /// and not the questions.
     pub glance: bool,
@@ -844,6 +903,7 @@ impl Wizard {
             Choice::Data(d) => self.data = Some(d),
         }
         self.info = None;
+        self.setting_info = None;
         true
     }
 
@@ -863,6 +923,7 @@ impl Wizard {
             self.comparison = None;
         }
         self.info = None;
+        self.setting_info = None;
     }
 
     /// Return to the step before the current one.
@@ -2618,6 +2679,10 @@ mod tests {
             assert!(!choice.title().is_empty());
             assert!(choice.summary().ends_with('.') || choice.summary().ends_with('?'));
             assert!(choice.info().len() > 150, "{choice:?}");
+        }
+        for setting in Setting::ALL {
+            assert!(!setting.title().is_empty());
+            assert!(setting.info().len() > 150, "{setting:?}");
         }
     }
 }

@@ -10,8 +10,9 @@ use egui::{pos2, vec2, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind}
 use crate::app::StampApp;
 use crate::icons;
 use crate::plots::PlotKind;
+use crate::session::Mode;
 use crate::wizard::{
-    Availability, Choice, Comparison, Data, Design, Facts, Goal, Question, Step, GLANCE,
+    Availability, Choice, Comparison, Data, Design, Facts, Goal, Question, Setting, Step, GLANCE,
 };
 
 /// Size of a card.
@@ -48,7 +49,7 @@ pub fn show(app: &mut StampApp, ctx: &egui::Context) {
                 .show(ui, |ui| contents(app, ui));
         });
     if !open {
-        app.show_wizard = false;
+        app.show_wizard(false);
     }
 }
 
@@ -68,7 +69,7 @@ fn contents(app: &mut StampApp, ui: &mut egui::Ui) {
         ui.add_space(8.0);
         ui.separator();
         if ui.button("Close").clicked() {
-            app.show_wizard = false;
+            app.show_wizard(false);
         }
         return;
     }
@@ -120,7 +121,7 @@ fn contents(app: &mut StampApp, ui: &mut egui::Ui) {
             app.wizard.restart();
         }
         if ui.button("Close").clicked() {
-            app.show_wizard = false;
+            app.show_wizard(false);
         }
     });
 }
@@ -150,6 +151,9 @@ fn glance(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts) {
     );
     ui.add_space(12.0);
     if facts.samples > 0 {
+        if app.wizard.setting_info.is_some() {
+            explanation(app, ui);
+        }
         data_summary(app, ui, facts);
         ui.add_space(12.0);
     }
@@ -308,8 +312,50 @@ fn data_summary(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts) {
         .as_ref()
         .map(|m| m.fields().to_vec())
         .unwrap_or_default();
+    let levels: Vec<String> = app
+        .session
+        .tree
+        .as_ref()
+        .map(|tree| tree.hierarchy_headings().to_vec())
+        .unwrap_or_default();
+    ui.label(format!("Loaded: {} samples.", facts.samples));
+    if levels.len() > 1 {
+        ui.horizontal_wrapped(|ui| {
+            let level = app.session.profile_level.clone();
+            let depth = levels.iter().position(|l| *l == level).unwrap_or(0);
+            // "Entire sample", or a level above the profile level.
+            const ENTIRE: &str = "Entire sample";
+            let mut parents = vec![ENTIRE.to_string()];
+            parents.extend(levels[..depth].iter().cloned());
+            let parent = app
+                .session
+                .parent_level
+                .clone()
+                .unwrap_or_else(|| ENTIRE.to_string());
+            ui.label("Parent level:");
+            if let Some(chosen) = pick(ui, "wizard-parent-level", &parent, &parents) {
+                app.wizard_will_change();
+                let chosen = (chosen != ENTIRE).then_some(chosen);
+                app.set_profile_level(&level, chosen.as_deref());
+            }
+            setting_info(app, ui, Setting::ParentLevel);
+            ui.add_space(8.0);
+            ui.label("Profile level:");
+            if let Some(chosen) = pick(ui, "wizard-profile-level", &level, &levels) {
+                app.wizard_will_change();
+                // The parent level must stay above the profile level.
+                let depth = levels.iter().position(|l| *l == chosen).unwrap_or(0);
+                let parent = app
+                    .session
+                    .parent_level
+                    .clone()
+                    .filter(|p| levels[..depth].contains(p));
+                app.set_profile_level(&chosen, parent.as_deref());
+            }
+            setting_info(app, ui, Setting::ProfileLevel);
+        });
+    }
     ui.horizontal_wrapped(|ui| {
-        ui.label(format!("Loaded: {} samples.", facts.samples));
         if fields.is_empty() {
             ui.weak("No metadata: only two samples can be compared.");
             return;
@@ -325,8 +371,10 @@ fn data_summary(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts) {
                 }
             });
         if field != before {
+            app.wizard_will_change();
             app.session.set_group_field(&field);
         }
+        setting_info(app, ui, Setting::GroupField);
         let groups: Vec<String> = facts
             .groups
             .iter()
@@ -412,6 +460,7 @@ fn cards(app: &mut StampApp, ui: &mut egui::Ui, step: Step, facts: &Facts) {
         } else {
             Some(choice)
         };
+        app.wizard.setting_info = None;
     }
     if let Some(choice) = chosen {
         app.wizard.choose(choice, facts);
@@ -514,7 +563,7 @@ fn card(
                 .frame(false)
                 .selected(explained),
         )
-        .on_hover_text("What does this mean?");
+        .on_hover_ui(|ui| explanation_tip(ui, choice.title(), choice.info()));
     if info.clicked() {
         Clicked::Info
     } else if available && response.clicked() {
@@ -526,8 +575,10 @@ fn card(
 
 /// The longer explanation of the choice whose "i" was clicked.
 fn explanation(app: &mut StampApp, ui: &mut egui::Ui) {
-    let Some(choice) = app.wizard.info else {
-        return;
+    let (title, text) = match (app.wizard.setting_info, app.wizard.info) {
+        (Some(setting), _) => (setting.title(), setting.info()),
+        (None, Some(choice)) => (choice.title(), choice.info()),
+        (None, None) => return,
     };
     let mut close = false;
     egui::Frame::group(ui.style())
@@ -535,15 +586,40 @@ fn explanation(app: &mut StampApp, ui: &mut egui::Ui) {
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                ui.label(RichText::new(icons::label(icons::INFO, choice.title())).strong());
+                ui.label(RichText::new(icons::label(icons::INFO, title)).strong());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     close = ui.small_button("Close").clicked();
                 });
             });
-            ui.label(choice.info());
+            ui.label(text);
         });
     ui.add_space(6.0);
     if close {
+        app.wizard.info = None;
+        app.wizard.setting_info = None;
+    }
+}
+
+/// The tooltip of an "i" button: the explanation it opens, in full.
+fn explanation_tip(ui: &mut egui::Ui, title: &str, text: &str) {
+    ui.set_max_width(380.0);
+    ui.label(RichText::new(title).strong());
+    ui.label(text);
+}
+
+/// The "i" button of a setting of the first page: its explanation when
+/// pointed at, and shown in full above the choices when clicked.
+fn setting_info(app: &mut StampApp, ui: &mut egui::Ui, setting: Setting) {
+    let shown = app.wizard.setting_info == Some(setting);
+    let info = ui
+        .add(
+            egui::Button::new(RichText::new(icons::INFO).size(14.0))
+                .frame(false)
+                .selected(shown),
+        )
+        .on_hover_ui(|ui| explanation_tip(ui, setting.title(), setting.info()));
+    if info.clicked() {
+        app.wizard.setting_info = (!shown).then_some(setting);
         app.wizard.info = None;
     }
 }
@@ -581,13 +657,21 @@ fn result(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts) {
     }
     ui.add_space(6.0);
 
-    if !recommendation.settings.is_empty() {
+    data_used(app, ui, facts, recommendation.mode);
+    // The data compared are chosen above; the rest is shown as it will be
+    // set.
+    let settings: Vec<&(&str, String)> = recommendation
+        .settings
+        .iter()
+        .filter(|(label, _)| !DATA_ROWS.contains(label))
+        .collect();
+    if !settings.is_empty() {
         section(ui, "What will be set");
         egui::Grid::new("wizard-settings")
             .num_columns(2)
             .spacing([12.0, 3.0])
             .show(ui, |ui| {
-                for (label, value) in &recommendation.settings {
+                for (label, value) in settings {
                     ui.weak(format!("{label}:"));
                     ui.label(value);
                     ui.end_row();
@@ -630,6 +714,200 @@ fn result(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts) {
     if let Some(plot) = show_plot {
         app.apply_wizard(plot);
     }
+}
+
+/// Rows of a recommendation's settings that [`data_used`] lets the user
+/// choose instead of showing.
+const DATA_ROWS: [&str; 5] = [
+    "Samples",
+    "Groups",
+    "Numeric field",
+    "Pair field",
+    "Subject field",
+];
+
+/// The data an analysis of `mode` uses, each a choice among those the
+/// loaded data allow: the two samples, the two groups (and the field that
+/// pairs them), the groups compared (and the field that names their
+/// subjects), or the numeric field. Choosing changes the Statistics panel
+/// at once, as the group field and profile level of the first page do, and
+/// the recommendation follows.
+fn data_used(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts, mode: Mode) {
+    let comparison = app.wizard.comparison;
+    let matched = app.wizard.design == Some(Design::Matched);
+    section(ui, "Data used");
+    egui::Grid::new("wizard-data")
+        .num_columns(2)
+        .spacing([12.0, 3.0])
+        .show(ui, |ui| match mode {
+            Mode::TwoSamples => {
+                let names = active_samples(app);
+                let (first, second) = (
+                    app.session.samples.sample1.clone(),
+                    app.session.samples.sample2.clone(),
+                );
+                ui.weak("Sample 1:");
+                let others: Vec<String> = names.iter().filter(|n| **n != second).cloned().collect();
+                if let Some(chosen) = pick(ui, "wizard-sample1", &first, &others) {
+                    app.wizard_will_change();
+                    app.session.samples.sample1 = chosen;
+                    app.session.invalidate(Mode::TwoSamples);
+                }
+                ui.end_row();
+                ui.weak("Sample 2:");
+                let others: Vec<String> = names.iter().filter(|n| **n != first).cloned().collect();
+                if let Some(chosen) = pick(ui, "wizard-sample2", &second, &others) {
+                    app.wizard_will_change();
+                    app.session.samples.sample2 = chosen;
+                    app.session.invalidate(Mode::TwoSamples);
+                }
+                ui.end_row();
+            }
+            Mode::TwoGroups => {
+                let Some((first, second)) = facts.two_groups.clone() else {
+                    return;
+                };
+                let names: Vec<String> = facts.groups.iter().map(|(n, _)| n.clone()).collect();
+                ui.weak("Group 1:");
+                let others: Vec<String> = names.iter().filter(|n| **n != second).cloned().collect();
+                if let Some(chosen) = pick(ui, "wizard-group1", &first, &others) {
+                    app.wizard_will_change();
+                    app.session.groups.group1 = chosen;
+                    app.session.groups.group2 = Some(second.clone());
+                    app.session.invalidate(Mode::TwoGroups);
+                }
+                ui.end_row();
+                ui.weak("Group 2:");
+                let others: Vec<String> = names.iter().filter(|n| **n != first).cloned().collect();
+                if let Some(chosen) = pick(ui, "wizard-group2", &second, &others) {
+                    app.wizard_will_change();
+                    app.session.groups.group2 = Some(chosen);
+                    app.session.invalidate(Mode::TwoGroups);
+                }
+                ui.end_row();
+                if matched {
+                    subject_row(app, ui, facts, Comparison::TwoGroups, "Pair field:");
+                }
+            }
+            Mode::MultipleGroups => {
+                ui.weak("Groups:");
+                group_ticks(app, ui, comparison);
+                ui.end_row();
+                if matched {
+                    subject_row(app, ui, facts, Comparison::MultipleGroups, "Subject field:");
+                }
+            }
+            Mode::Correlation => {
+                ui.weak("Numeric field:");
+                let field = app.session.correlation.field.clone().unwrap_or_default();
+                if let Some(chosen) =
+                    pick(ui, "wizard-numeric-field", &field, &facts.numeric_fields)
+                {
+                    app.wizard_will_change();
+                    app.session.correlation.field = Some(chosen);
+                    app.session.invalidate(Mode::Correlation);
+                }
+                ui.end_row();
+            }
+        });
+}
+
+/// The samples the two-sample analysis can compare: those not switched off
+/// in the metadata table, in alphabetical order, as the Statistics panel
+/// offers them.
+fn active_samples(app: &StampApp) -> Vec<String> {
+    let metadata = app.session.metadata.as_ref();
+    let mut names: Vec<String> = app
+        .session
+        .tree
+        .as_ref()
+        .map(|t| t.sample_names().to_vec())
+        .unwrap_or_default();
+    names.sort();
+    names
+        .into_iter()
+        .filter(|name| metadata.is_none_or(|m| !m.contains(name) || m.is_active(name)))
+        .collect()
+}
+
+/// A tick box for each group, as in the group list: unticking one switches
+/// its samples off everywhere. While three or more groups are compared, the
+/// last three cannot be unticked, so that the comparison stays possible.
+fn group_ticks(app: &mut StampApp, ui: &mut egui::Ui, comparison: Option<Comparison>) {
+    let Some(grouping) = app.session.grouping() else {
+        return;
+    };
+    // Every group, as in the group list: unticking one switches its
+    // samples off, and ticking it switches them on again.
+    let groups: Vec<(String, usize)> = grouping
+        .names()
+        .map(|name| {
+            let size = grouping.samples(name).map_or(0, <[String]>::len);
+            (name.to_string(), size)
+        })
+        .collect();
+    let minimum = if comparison == Some(Comparison::MultipleGroups) {
+        3
+    } else {
+        2
+    };
+    let ticked = groups
+        .iter()
+        .filter(|(name, _)| app.session.multi.active_groups.contains(name))
+        .count();
+    ui.horizontal_wrapped(|ui| {
+        for (name, size) in &groups {
+            let mut active = app.session.multi.active_groups.contains(name);
+            let enabled = !active || ticked > minimum;
+            let response = ui
+                .add_enabled(
+                    enabled,
+                    egui::Checkbox::new(&mut active, format!("{name} ({size})")),
+                )
+                .on_disabled_hover_text(format!("At least {minimum} groups are compared"));
+            if response.changed() {
+                app.wizard_will_change();
+                app.session.set_group_ticked(name, active);
+            }
+        }
+    });
+}
+
+/// The field that pairs or matches the samples, among those that do.
+fn subject_row(
+    app: &mut StampApp,
+    ui: &mut egui::Ui,
+    facts: &Facts,
+    comparison: Comparison,
+    label: &str,
+) {
+    let fields: Vec<String> = facts
+        .matching_fields(comparison)
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+    ui.weak(label);
+    let field = app.wizard.subject_field.clone().unwrap_or_default();
+    if let Some(chosen) = pick(ui, "wizard-subject-row", &field, &fields) {
+        app.wizard.subject_field = Some(chosen);
+    }
+    ui.end_row();
+}
+
+/// A drop-down box of `options` showing `current`: the option chosen, if
+/// it differs.
+fn pick(ui: &mut egui::Ui, id: &str, current: &str, options: &[String]) -> Option<String> {
+    let mut chosen = None;
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(current)
+        .show_ui(ui, |ui| {
+            for option in options {
+                if ui.selectable_label(option == current, option).clicked() && option != current {
+                    chosen = Some(option.clone());
+                }
+            }
+        });
+    chosen
 }
 
 fn section(ui: &mut egui::Ui, title: &str) {

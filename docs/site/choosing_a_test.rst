@@ -5,7 +5,7 @@ STAMP starts every analysis with a sensible default, so a test need only be
 changed for a reason. This page gives those reasons. The tests themselves
 are explained in :doc:`statistics`.
 
-The :doc:`analysis wizard <wizard>` (**Help > Analysis wizard**) asks the
+The :doc:`analysis wizard <wizard>` (**Assistant > Analysis wizard**) asks the
 questions of this page one at a time, shows which answers your data
 support, and sets the analysis up.
 

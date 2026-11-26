@@ -1,10 +1,16 @@
 //! The colour schemes of the window, chosen in Preferences: egui's dark and
-//! light appearance and the four Catppuccin flavours.
+//! light appearance, the four Catppuccin flavours, and Solarized light and
+//! dark.
 //!
 //! The Catppuccin colours and the way they are given to egui follow the
 //! `catppuccin-egui` crate (MIT licence, © 2023 Catppuccin), which does not
 //! support the version of egui STAMP uses; only the colours it needs are
-//! copied. Plots keep their own colours whatever the scheme.
+//! copied. The Solarized colours are Ethan Schoonover's palette (MIT
+//! licence), given to egui in the same way; the `egui_solarized` crate was
+//! not used because it marks its light scheme as dark and draws all text in
+//! one colour, which would lose the greyed text STAMP uses. The two shades
+//! between Solarized's base colours, for hovered and pressed controls, are
+//! STAMP's. Plots keep their own colours whatever the scheme.
 
 use eframe::egui::{self, style, Color32};
 
@@ -18,16 +24,20 @@ pub enum ColorScheme {
     CatppuccinFrappe,
     CatppuccinMacchiato,
     CatppuccinMocha,
+    SolarizedLight,
+    SolarizedDark,
 }
 
 impl ColorScheme {
-    pub const ALL: [ColorScheme; 6] = [
+    pub const ALL: [ColorScheme; 8] = [
         ColorScheme::Dark,
         ColorScheme::Light,
         ColorScheme::CatppuccinLatte,
         ColorScheme::CatppuccinFrappe,
         ColorScheme::CatppuccinMacchiato,
         ColorScheme::CatppuccinMocha,
+        ColorScheme::SolarizedLight,
+        ColorScheme::SolarizedDark,
     ];
 
     /// As listed in Preferences.
@@ -39,12 +49,17 @@ impl ColorScheme {
             ColorScheme::CatppuccinFrappe => "Catppuccin Frappé",
             ColorScheme::CatppuccinMacchiato => "Catppuccin Macchiato",
             ColorScheme::CatppuccinMocha => "Catppuccin Mocha",
+            ColorScheme::SolarizedLight => "Solarized Light",
+            ColorScheme::SolarizedDark => "Solarized Dark",
         }
     }
 
     /// Light text on a dark background.
     pub fn is_dark(self) -> bool {
-        !matches!(self, ColorScheme::Light | ColorScheme::CatppuccinLatte)
+        !matches!(
+            self,
+            ColorScheme::Light | ColorScheme::CatppuccinLatte | ColorScheme::SolarizedLight
+        )
     }
 
     /// Show the whole window in this scheme. egui keeps one appearance for
@@ -69,6 +84,8 @@ impl ColorScheme {
             ColorScheme::CatppuccinFrappe => FRAPPE.visuals(egui::Visuals::dark(), true),
             ColorScheme::CatppuccinMacchiato => MACCHIATO.visuals(egui::Visuals::dark(), true),
             ColorScheme::CatppuccinMocha => MOCHA.visuals(egui::Visuals::dark(), true),
+            ColorScheme::SolarizedLight => SOLARIZED_LIGHT.visuals(egui::Visuals::light(), false),
+            ColorScheme::SolarizedDark => SOLARIZED_DARK.visuals(egui::Visuals::dark(), true),
         }
     }
 }
@@ -168,6 +185,52 @@ const MOCHA: Palette = Palette {
     base: rgb(30, 30, 46),
     mantle: rgb(24, 24, 37),
     crust: rgb(17, 17, 27),
+};
+
+/// The Solarized base colours used, from darkest to lightest, and the accents
+/// used.
+const BASE03: Color32 = rgb(0x00, 0x2b, 0x36);
+const BASE02: Color32 = rgb(0x07, 0x36, 0x42);
+const BASE01: Color32 = rgb(0x58, 0x6e, 0x75);
+const BASE00: Color32 = rgb(0x65, 0x7b, 0x83);
+const BASE1: Color32 = rgb(0x93, 0xa1, 0xa1);
+const BASE2: Color32 = rgb(0xee, 0xe8, 0xd5);
+const BASE3: Color32 = rgb(0xfd, 0xf6, 0xe3);
+const SOLARIZED_ORANGE: Color32 = rgb(0xcb, 0x4b, 0x16);
+const SOLARIZED_RED: Color32 = rgb(0xdc, 0x32, 0x2f);
+const SOLARIZED_BLUE: Color32 = rgb(0x26, 0x8b, 0xd2);
+
+/// Solarized light: dark grey-blue text on cream.
+const SOLARIZED_LIGHT: Palette = Palette {
+    rosewater: SOLARIZED_BLUE,
+    maroon: SOLARIZED_RED,
+    peach: SOLARIZED_ORANGE,
+    blue: SOLARIZED_BLUE,
+    text: BASE01,
+    overlay1: BASE1,
+    surface2: rgb(0xd9, 0xd2, 0xbc),
+    surface1: rgb(0xe3, 0xdc, 0xc6),
+    surface0: BASE2,
+    base: BASE3,
+    mantle: BASE2,
+    crust: rgb(0xe6, 0xdf, 0xca),
+};
+
+/// Solarized dark: grey text (base1, a step brighter than Solarized's usual
+/// base0, for contrast in small type) on deep blue-green.
+const SOLARIZED_DARK: Palette = Palette {
+    rosewater: SOLARIZED_BLUE,
+    maroon: SOLARIZED_RED,
+    peach: SOLARIZED_ORANGE,
+    blue: SOLARIZED_BLUE,
+    text: BASE1,
+    overlay1: BASE00,
+    surface2: rgb(0x17, 0x52, 0x60),
+    surface1: rgb(0x0e, 0x44, 0x51),
+    surface0: BASE02,
+    base: BASE03,
+    mantle: rgb(0x00, 0x24, 0x2e),
+    crust: rgb(0x00, 0x1f, 0x28),
 };
 
 impl Palette {

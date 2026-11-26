@@ -9,32 +9,12 @@ use crate::StampApp;
 
 /// The Assistant menu.
 pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
-    let copy = ui
-        .button(icons::label(
-            icons::CLIPBOARD_TEXT,
-            "Copy description for AI",
-        ))
-        .on_hover_text(
-            "Copy a description of the data, the analysis, the plot and the top results, \
-             to paste into a chat with Claude, ChatGPT or Gemini",
-        );
-    if copy.clicked() {
-        let text = describe::everything(app);
-        ui.ctx().copy_text(text);
-        app.show_notice(
-            "A description of the session, the plot and the top results is on the clipboard.\n\
-             Paste it into a chat with an AI assistant and ask your question. To include the \
-             plot itself, also use Copy plot image and paste that too.",
-        );
-    }
-    let image = ui
-        .add_enabled(
-            app.session.tree.is_some(),
-            egui::Button::new(icons::label(icons::IMAGE, "Copy plot image")),
-        )
-        .on_hover_text("Copy the plot as an image, to paste into a chat");
-    if image.clicked() {
-        app.copy_plot_image(ui.ctx());
+    if ui
+        .button(icons::label(icons::SLIDERS, "Analysis wizard..."))
+        .on_hover_text("A few questions that lead to the test and plots for your data")
+        .clicked()
+    {
+        app.show_wizard(true);
     }
     ui.separator();
     let sharing = app.assistant.server.is_some();
@@ -70,6 +50,34 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
         app.assistant.server = None;
     }
     ui.separator();
+    let copy = ui
+        .button(icons::label(
+            icons::CLIPBOARD_TEXT,
+            "Copy description for AI",
+        ))
+        .on_hover_text(
+            "Copy a description of the data, the analysis, the plot and the top results, \
+             to paste into a chat with Claude, ChatGPT or Gemini",
+        );
+    if copy.clicked() {
+        let text = describe::everything(app);
+        ui.ctx().copy_text(text);
+        app.show_notice(
+            "A description of the session, the plot and the top results is on the clipboard.\n\
+             Paste it into a chat with an AI assistant and ask your question. To include the \
+             plot itself, also use Copy plot image and paste that too.",
+        );
+    }
+    let image = ui
+        .add_enabled(
+            app.session.tree.is_some(),
+            egui::Button::new(icons::label(icons::IMAGE, "Copy plot image")),
+        )
+        .on_hover_text("Copy the plot as an image, to paste into a chat");
+    if image.clicked() {
+        app.copy_plot_image(ui.ctx());
+    }
+    ui.separator();
     if ui
         .add_enabled(
             app.can_undo_assistant_change(),
@@ -77,6 +85,10 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
                 icons::ARROW_COUNTER_CLOCKWISE,
                 "Undo assistant's last change",
             )),
+        )
+        .on_hover_text(
+            "Put back the analysis and plot as they were before the assistant's last change, \
+             or before the analysis wizard last set up an analysis",
         )
         .clicked()
     {

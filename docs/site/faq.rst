@@ -10,9 +10,9 @@ My profile will not load. What is wrong?
 Some samples are missing from my analysis.
    Samples are left out if they are missing from the metadata (or the
    metadata names them differently: names must match exactly, including
-   case), if they are unticked in the metadata table, or if their group is
-   unticked. Groups with a single sample start unticked, since they cannot
-   be tested. In a correlation, samples without a number in the field are
+   case), or if they are unticked in the metadata table (unticking a group
+   unticks all its samples there). The multiple-group tests also leave out
+   any group with a single sample. In a correlation, samples without a number in the field are
    left out; in a paired test, samples without exactly one partner.
 
 Why are no features significant after correcting for multiple tests?

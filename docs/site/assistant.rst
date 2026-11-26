@@ -353,7 +353,8 @@ Every change Claude makes can be undone: click **Undo assistant's change** in
 the status bar, choose **Assistant > Undo assistant's last change**, or ask
 Claude to undo it. Each click undoes one change, most recent first. Undoing
 puts back the analysis and plot settings as they were before that change,
-including anything you changed yourself since.
+including anything you changed yourself since. The same command undoes an
+analysis set up by the :doc:`analysis wizard <wizard>`.
 
 Seeing what was shared
 ~~~~~~~~~~~~~~~~~~~~~~

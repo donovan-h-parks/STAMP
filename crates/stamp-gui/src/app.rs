@@ -135,7 +135,7 @@ const COMBO_WIDTH: f32 = 132.0;
 /// A combo box over a fixed list of choices. Returns true if the choice
 /// changed.
 /// The plot selector: the plots of a mode under a heading for each group,
-/// with the checks on the tests after a divider. Returns true if the user
+/// with the checks on the tests last in theirs. Returns true if the user
 /// chose another plot.
 /// The choice of plot. `custom` names the plots the assistant drew, listed
 /// last, and `shown` is the one of them shown when the custom plot is
@@ -170,12 +170,7 @@ fn choose_plot(
                 // text colour: egui's interface font has no bold.
                 let heading = egui::TextStyle::Button.resolve(ui.style()).size;
                 ui.label(egui::RichText::new(group.name()).strong().size(heading));
-                let mut divided = false;
                 for kind in kinds {
-                    if kind.checks_the_tests() && !divided {
-                        ui.separator();
-                        divided = true;
-                    }
                     ui.horizontal(|ui| {
                         ui.add_space(10.0);
                         if ui.selectable_label(*current == kind, kind.name()).clicked()
@@ -1110,6 +1105,10 @@ pub struct StampApp {
     /// How things were before each change the assistant made, most recent
     /// last.
     assistant_undo: Vec<AssistantSnapshot>,
+    /// How things were before the analysis wizard first changed the data
+    /// it uses (profile level, samples, groups, numeric field), so that
+    /// undoing the analysis it sets up undoes those choices too.
+    wizard_before: Option<AssistantSnapshot>,
     /// Where the frames of the window are.
     layout: egui_tiles::Tree<Frame>,
     /// The layout is the default, not yet drawn: its left frame is then
@@ -1310,6 +1309,7 @@ impl StampApp {
             plot_placement: None,
             assistant: assistant::State::default(),
             assistant_undo: Vec::new(),
+            wizard_before: None,
             layout: layout::default_tree(),
             fit_layout: true,
         }
@@ -1363,9 +1363,22 @@ impl StampApp {
         }
     }
 
-    /// Open or close the analysis wizard (Help > Analysis wizard).
+    /// Open or close the analysis wizard (Assistant > Analysis wizard).
     pub fn show_wizard(&mut self, show: bool) {
         self.show_wizard = show;
+        if !show {
+            // Choices made in the wizard without setting up an analysis
+            // are the user's own.
+            self.wizard_before = None;
+        }
+    }
+
+    /// Note that the analysis wizard is about to change the data an
+    /// analysis uses, so that undoing what it sets up puts this back too.
+    pub fn wizard_will_change(&mut self) {
+        if self.wizard_before.is_none() {
+            self.wizard_before = Some(self.snapshot());
+        }
     }
 
     /// Whether the analysis wizard is open.
@@ -1390,13 +1403,16 @@ impl StampApp {
     /// Set up the analysis the wizard recommends: its settings in the
     /// Statistics panel, the analysis run again if they changed, and
     /// `plot` shown (the recommendation's first plot if `None`). The
-    /// wizard closes. Returns false if the wizard has no recommendation
-    /// yet.
+    /// wizard stays open. Assistant > Undo assistant's last change puts
+    /// back what was there before. Returns false if the wizard has no
+    /// recommendation yet.
     pub fn apply_wizard(&mut self, plot: Option<PlotKind>) -> bool {
         let facts = self.wizard_facts();
         let Some(recommendation) = self.wizard.recommendation(&facts) else {
             return false;
         };
+        let before = self.wizard_before.take().unwrap_or_else(|| self.snapshot());
+        self.push_undo(before);
         let change = &recommendation.change;
         let mode = recommendation.mode;
         let session = &mut self.session;
@@ -2223,9 +2239,22 @@ impl StampApp {
     }
 
     /// Remember how things are, so that the change about to be made by
-    /// the assistant can be undone.
+    /// the assistant, or set up by the analysis wizard, can be undone.
     pub fn remember_for_undo(&mut self, _what: &str) {
-        let snapshot = AssistantSnapshot {
+        let snapshot = self.snapshot();
+        self.push_undo(snapshot);
+    }
+
+    fn push_undo(&mut self, snapshot: AssistantSnapshot) {
+        self.assistant_undo.push(snapshot);
+        if self.assistant_undo.len() > MAX_ASSISTANT_UNDO {
+            self.assistant_undo.remove(0);
+        }
+    }
+
+    /// How the analysis and plots are now.
+    fn snapshot(&self) -> AssistantSnapshot {
+        AssistantSnapshot {
             mode: self.mode,
             plot_kinds: self.plot_kinds,
             plot_settings: self.plot_settings.clone(),
@@ -2237,19 +2266,17 @@ impl StampApp {
             switched_off: self.session.switched_off_samples(),
             custom_plots: self.session.custom_plots.clone(),
             shown_custom: self.session.shown_custom,
-        };
-        self.assistant_undo.push(snapshot);
-        if self.assistant_undo.len() > MAX_ASSISTANT_UNDO {
-            self.assistant_undo.remove(0);
         }
     }
 
-    /// Whether there is a change by the assistant to undo.
+    /// Whether there is a change by the assistant (or the analysis wizard)
+    /// to undo.
     pub fn can_undo_assistant_change(&self) -> bool {
         !self.assistant_undo.is_empty()
     }
 
-    /// Undo the last change the assistant made. False if there was none.
+    /// Undo the last change the assistant made, or the last analysis the
+    /// wizard set up. False if there was none.
     pub fn undo_assistant_change(&mut self) -> bool {
         let Some(snapshot) = self.assistant_undo.pop() else {
             return false;
@@ -2647,6 +2674,7 @@ impl StampApp {
             Ok(()) => {
                 // Changes to another dataset cannot be undone in this one.
                 self.assistant_undo.clear();
+                self.wizard_before = None;
                 self.filters = starting_filters();
                 self.selections = Default::default();
                 self.select_dialog = None;
@@ -2681,6 +2709,7 @@ impl StampApp {
         self.session.load_metadata(name, text)?;
         // Changes made with other metadata cannot be undone with this.
         self.assistant_undo.clear();
+        self.wizard_before = None;
         self.mode = Mode::TwoGroups;
         if !self.session.warnings.is_empty() {
             self.notice = Some(self.session.warnings.join("\n\n"));
@@ -3518,13 +3547,6 @@ impl StampApp {
             });
             ui.menu_button("Assistant", |ui| assistant::window::menu(self, ui));
             ui.menu_button("Help", |ui| {
-                if ui
-                    .add(item(icons::SLIDERS, "Analysis wizard...", None))
-                    .on_hover_text("A few questions that lead to the test and plots for your data")
-                    .clicked()
-                {
-                    self.show_wizard = true;
-                }
                 if ui.add(item(icons::INFO, "About STAMP", None)).clicked() {
                     self.show_about = true;
                 }
@@ -3700,24 +3722,19 @@ impl StampApp {
                     self.session
                         .set_group_color(name, stamp_plot::Color::rgb(rgb[0], rgb[1], rgb[2]));
                 }
+                // Ticked while any of its samples is switched on; unticking
+                // switches them all off, as the metadata table would.
                 let mut active = position.is_some();
                 let checkbox = egui::Checkbox::new(&mut active, format!("{name} ({size})"));
-                let members = groups.samples(name).unwrap_or_default();
                 let response = ui
-                    .add_enabled(size > 0, checkbox)
+                    .add(checkbox)
                     // The list of members is only made when it is shown.
                     .on_hover_ui(|ui| {
+                        let members = self.session.group_members(name);
                         ui.label(members.join("\n"));
-                    })
-                    .on_disabled_hover_text("Every sample of this group is switched off");
+                    });
                 if response.changed() {
-                    if active {
-                        self.session.multi.active_groups.push(name.clone());
-                        self.session.multi.active_groups.sort();
-                    } else {
-                        self.session.multi.active_groups.retain(|g| g != name);
-                    }
-                    self.session.invalidate(Mode::MultipleGroups);
+                    self.session.set_group_ticked(name, active);
                 }
             });
         }
@@ -4203,6 +4220,21 @@ impl StampApp {
                                 ui.weak(pairing);
                                 ui.end_row();
                             }
+                        }
+                        // Ticked groups the test cannot use.
+                        if !state.too_small.is_empty() {
+                            ui.label("");
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(format!(
+                                        "Left out of the test, with one sample: {}",
+                                        state.too_small.join(", ")
+                                    ))
+                                    .weak(),
+                                )
+                                .wrap(),
+                            );
+                            ui.end_row();
                         }
                         ui.label("Transform:").on_hover_text(TRANSFORM_HELP);
                         let transforms = named(&Transform::ALL, Transform::name);

@@ -108,6 +108,31 @@ fn empty_window_explains_how_to_start() {
     assert_eq!(harness.app.figure().shapes.len(), 1);
 }
 
+/// Unticking a group in the group list unticks its samples in the
+/// metadata table, and the group stays in the list to be ticked again.
+#[test]
+fn unticking_a_group_unticks_its_samples() {
+    let mut harness = Harness::enterotypes();
+    harness.app.show_metadata_table(true);
+    harness.settle();
+    let members = harness.app.session.group_members("Enterotype 1");
+    assert_eq!(members.len(), 8);
+    harness.app.session.set_group_ticked("Enterotype 1", false);
+    harness.settle();
+    harness.screenshot("group_unticked");
+    let metadata = harness.app.session.metadata.as_ref().unwrap();
+    assert!(members.iter().all(|s| !metadata.is_switched_on(s)));
+    assert!(!harness
+        .app
+        .session
+        .multi
+        .active_groups
+        .contains(&"Enterotype 1".to_string()));
+    harness.app.session.set_group_ticked("Enterotype 1", true);
+    harness.settle();
+    assert_eq!(harness.app.session.multi.active_groups.len(), 6);
+}
+
 #[test]
 fn two_group_analysis_draws_an_extended_error_bar_plot() {
     let mut harness = Harness::enterotypes();
@@ -119,7 +144,8 @@ fn two_group_analysis_draws_an_extended_error_bar_plot() {
         harness.app.session.error(Mode::TwoGroups)
     );
     assert_eq!(harness.app.session.feature_counts(Mode::TwoGroups).0, 17);
-    assert_eq!(harness.app.session.multi.active_groups.len(), 5);
+    // Every group starts ticked, the one-sample "Enterotype 3 - twin" too.
+    assert_eq!(harness.app.session.multi.active_groups.len(), 6);
     assert_eq!(harness.app.plot_kind(), PlotKind::ExtendedErrorBar);
     assert_eq!(harness.app.figure().regions.len(), 17);
 
@@ -433,8 +459,8 @@ fn light_and_dark_modes() {
     assert_eq!(light.pixel(corner.0, corner.1), egui::Color32::WHITE);
 }
 
-/// Each Catppuccin scheme colours the panels, dark ones dark and Latte
-/// light, and leaves the plot's page white; it is remembered for the next
+/// Each Catppuccin and Solarized scheme colours the panels, dark ones dark
+/// and light ones light, and leaves the plot's page white; it is remembered for the next
 /// run, and what an earlier version saved (only light or dark) still
 /// chooses the scheme.
 #[test]
@@ -451,6 +477,8 @@ fn colour_schemes() {
         ColorScheme::CatppuccinFrappe,
         ColorScheme::CatppuccinMacchiato,
         ColorScheme::CatppuccinMocha,
+        ColorScheme::SolarizedLight,
+        ColorScheme::SolarizedDark,
     ] {
         let ctx = harness.renderer.ctx.clone();
         harness.app.set_color_scheme(&ctx, scheme);
@@ -469,7 +497,7 @@ fn colour_schemes() {
         panels.push(pixel);
     }
     panels.dedup();
-    assert_eq!(panels.len(), 4);
+    assert_eq!(panels.len(), 6);
     // Chosen in Preferences.
     harness.app.show_preferences(true);
     harness.settle();
@@ -480,11 +508,11 @@ fn colour_schemes() {
 
     // Remembered between runs.
     let saved = harness.app.saved();
-    assert_eq!(saved.color_scheme, Some(ColorScheme::CatppuccinMocha));
+    assert_eq!(saved.color_scheme, Some(ColorScheme::SolarizedDark));
     let mut again = Harness::enterotypes();
     let ctx = again.renderer.ctx.clone();
     again.app.restore(&ctx, saved);
-    assert_eq!(again.app.color_scheme(), ColorScheme::CatppuccinMocha);
+    assert_eq!(again.app.color_scheme(), ColorScheme::SolarizedDark);
     assert_eq!(ctx.theme(), egui::Theme::Dark);
 
     // Saved by a version without colour schemes: light mode.
@@ -4429,12 +4457,26 @@ fn documentation_screenshots_of_the_wizard() {
     assert!(harness.app.wizard.follow(row("PERMANOVA"), &facts));
     harness.settle();
     assert!(!harness.app.wizard.glance);
+    let other = *PlotKind::available(Mode::MultipleGroups)
+        .iter()
+        .find(|kind| **kind != PlotKind::Pcoa)
+        .unwrap();
+    harness.app.set_plot_kind(other);
+    harness.settle();
+    let (mode, plot) = (harness.app.mode, harness.app.plot_kind());
+    assert!(!harness.app.can_undo_assistant_change());
     assert!(harness.app.apply_wizard(None));
     // The wizard stays open, so that its other plots can be shown.
     assert!(harness.app.wizard_shown());
     harness.settle();
     assert_eq!(harness.app.mode, Mode::MultipleGroups);
     assert_eq!(harness.app.plot_kind(), PlotKind::Pcoa);
+    // Assistant > Undo assistant's last change puts back what was there.
+    assert!(harness.app.can_undo_assistant_change());
+    assert!(harness.app.undo_assistant_change());
+    harness.settle();
+    assert_eq!((harness.app.mode, harness.app.plot_kind()), (mode, plot));
+    assert!(!harness.app.can_undo_assistant_change());
 }
 
 /// The analysis wizard: every choice is drawn, the ones the data cannot
@@ -4572,6 +4614,78 @@ fn the_wizard_leads_to_an_analysis() {
     // No recommendation yet: nothing to set up.
     harness.app.wizard.restart();
     assert!(!harness.app.apply_wizard(None));
+}
+
+/// The wizard's result page lets the data used be chosen (here the numeric
+/// field the features are correlated with), and its first page the profile
+/// level. Undoing the analysis the wizard set up puts those choices back
+/// too.
+#[test]
+fn the_wizard_lets_the_data_used_be_chosen() {
+    use stamp_gui::app::Example;
+    use stamp_gui::wizard::{Choice, Comparison, Question};
+    let mut harness = Harness::new();
+    harness.app.load_example_data(Example::GlacierFedStreams);
+    harness.settle();
+    harness.app.show_wizard(true);
+    harness.settle();
+    harness.screenshot("wizard_profile_level");
+    // The "i" beside Parent level explains it above the choices.
+    harness.app.wizard.setting_info = Some(stamp_gui::wizard::Setting::ParentLevel);
+    harness.settle();
+    harness.screenshot("wizard_parent_level_info");
+    harness.app.wizard.setting_info = None;
+    harness.settle();
+    // Pointing at a choice's "i" shows its explanation in full.
+    let app = &mut harness.app;
+    harness.renderer.move_pointer(egui::pos2(241.0, 262.0));
+    harness.renderer.run(60, |ui| app.draw(ui));
+    harness.screenshot("wizard_info_tooltip");
+    harness.renderer.move_pointer(egui::pos2(1200.0, 700.0));
+    let level = harness.app.session.profile_level.clone();
+    let field = harness.app.session.correlation.field.clone();
+    let facts = harness.app.wizard_facts();
+    assert!(facts.numeric_fields.len() > 5);
+    let chosen = facts
+        .numeric_fields
+        .iter()
+        .find(|f| Some(f.as_str()) != field.as_deref())
+        .unwrap()
+        .clone();
+    let wizard = &mut harness.app.wizard;
+    assert!(wizard.choose(Choice::Comparison(Comparison::Variable), &facts));
+    assert!(wizard.choose(Choice::Question(Question::Follow), &facts));
+    harness.settle();
+    harness.screenshot("wizard_numeric_field");
+
+    // As the drop-down boxes do: another profile level and numeric field.
+    let levels = harness
+        .app
+        .session
+        .tree
+        .as_ref()
+        .unwrap()
+        .hierarchy_headings()
+        .to_vec();
+    let other = levels.iter().find(|l| **l != level).unwrap().clone();
+    harness.app.wizard_will_change();
+    harness.app.set_profile_level(&other, None);
+    harness.app.wizard_will_change();
+    harness.app.session.correlation.field = Some(chosen.clone());
+    harness.settle();
+    assert_eq!(harness.app.wizard_facts().variable, Some(chosen.clone()));
+    assert!(harness.app.apply_wizard(None));
+    harness.settle();
+    assert_eq!(harness.app.mode, Mode::Correlation);
+    assert_eq!(harness.app.session.correlation.field, Some(chosen));
+    assert_eq!(harness.app.session.profile_level, other);
+
+    // One undo puts back the level and field from before the wizard.
+    assert!(harness.app.undo_assistant_change());
+    harness.settle();
+    assert_eq!(harness.app.session.profile_level, level);
+    assert_eq!(harness.app.session.correlation.field, field);
+    assert!(!harness.app.can_undo_assistant_change());
 }
 
 /// The wizard checks the spread of every feature with the Brown-Forsythe

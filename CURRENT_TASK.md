@@ -6,6 +6,34 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-27, the layout/assistant session):
+**Assistant menu**. Analysis wizard moved from Help to the top of the
+Assistant menu (own group); the Copy items moved to their own group just
+above Undo; `apply_wizard` calls `remember_for_undo`, so Undo assistant's
+last change undoes the wizard's set-up (test in
+`documentation_screenshots_of_the_wizard`). Docs: wizard.rst,
+choosing_a_test.rst, assistant.rst, NEW_FEATURES. Then: Solarized Light and
+Dark colour schemes in theme.rs (palette copied, not the egui_solarized
+crate, whose light scheme is marked dark), ui.rs `colour_schemes`,
+main_window.rst, NEW_FEATURES, CHANGES #27. Then: wizard data choices:
+Profile level drop-down on the Comparison page (`data_summary`); "Data used"
+section on the result page (`wizard_ui::data_used`: samples, groups, pair or
+subject field, group tick boxes, numeric field), rows removed from "What
+will be set"; `StampApp::wizard_will_change` keeps a snapshot from before
+the wizard's first change so undo covers it; test
+`the_wizard_lets_the_data_used_be_chosen`; wizard.rst, NEW_FEATURES. Then:
+Parent level drop-down; "i" buttons for Parent level, Profile level and
+Group field (`wizard::Setting`, `Wizard::setting_info`, `setting_info` in
+wizard_ui.rs); every "i" tooltip shows the full explanation
+(`explanation_tip`). Plot list: the line before the checks on the tests
+(p-value histogram, multiple comparison plots) removed; they stay last.
+Then: group ticks switch samples off (`Session::set_group_ticked`,
+`group_members`, `samples_switched`; active_groups = groups with a sample
+switched on; every group starts ticked; multi-group tests skip one-sample
+groups, `MultiState::too_small`, shown in the Statistics panel; wizard
+`Facts.groups` only groups of 2+; assistant `set_analysis` groups switch
+samples). Docs: main_window.rst, faq.rst, quick_start.rst, CHANGES #73.
+
 Finished and committed (2026-11-27, the layout/assistant session): **two-sample test
 order**. Asked for: list the preferred tests first and say the others are
 kept for compatibility. Done: `SampleTest::PREFERRED`/`OTHERS` (two_sample.rs,

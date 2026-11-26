@@ -115,8 +115,13 @@ pub struct CorrelationState {
 
 /// A multiple-group analysis.
 pub struct MultiState {
-    /// Groups included in the analysis.
+    /// The groups ticked in the group list: those with at least one sample
+    /// switched on. Unticking a group switches its samples off
+    /// ([`Session::set_group_ticked`]).
     pub active_groups: Vec<String>,
+    /// Ticked groups the last analysis left out because they have a single
+    /// sample switched on, which a multiple-group test cannot use.
+    pub too_small: Vec<String>,
     /// The metadata field that says which samples of the groups came from
     /// the same subject, for the tests of matched groups (Friedman).
     pub pair_field: Option<String>,
@@ -274,6 +279,7 @@ impl Default for Session {
             },
             multi: MultiState {
                 active_groups: Vec::new(),
+                too_small: Vec::new(),
                 analysis: MultiGroupAnalysis {
                     test: MultiGroupTest::Anova,
                     effect_size: MultiGroupEffectSize::EtaSquared,
@@ -477,11 +483,11 @@ impl Session {
         self.group_field = Some(field.to_string());
         // Colours belong to the groups of one field.
         self.group_colors.clear();
+        // The two groups compared start as the first two that can be
+        // tested, with two samples or more.
         let names: Vec<String> = match self.grouping() {
             Some(groups) => groups
                 .names()
-                // Groups of a single sample cannot be tested, so they start
-                // out switched off; the user can still include them.
                 .filter(|g| groups.samples(g).is_some_and(|s| s.len() >= 2))
                 .map(str::to_string)
                 .collect(),
@@ -489,7 +495,7 @@ impl Session {
         };
         self.groups.group1 = names.first().cloned().unwrap_or_default();
         self.groups.group2 = names.get(1).cloned();
-        self.multi.active_groups = names;
+        self.multi.active_groups = self.groups_with_samples();
         self.invalidate(Mode::TwoGroups);
         self.invalidate(Mode::MultipleGroups);
     }
@@ -568,7 +574,54 @@ impl Session {
         {
             self.groups.group2 = names.iter().find(|g| **g != self.groups.group1).cloned();
         }
-        self.multi.active_groups = names;
+        self.multi.active_groups = self.groups_with_samples();
+    }
+
+    /// The groups of the group field with at least one sample switched on
+    /// (and kept by the sample filter): the groups ticked in the group list.
+    fn groups_with_samples(&self) -> Vec<String> {
+        let Some(groups) = self.grouping() else {
+            return Vec::new();
+        };
+        groups
+            .names()
+            .filter(|g| groups.samples(g).is_some_and(|s| !s.is_empty()))
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// Every sample of a group of the group field that the sample filter
+    /// keeps, switched on or not.
+    pub fn group_members(&self, group: &str) -> Vec<String> {
+        let (Some(metadata), Some(field)) = (&self.metadata, &self.group_field) else {
+            return Vec::new();
+        };
+        metadata
+            .samples()
+            .iter()
+            .filter(|s| metadata.is_selected(s) && metadata.value(s, field) == Some(group))
+            .cloned()
+            .collect()
+    }
+
+    /// Tick or untick a group in the group list: switch every sample of the
+    /// group on or off, as the metadata table does, so that the group's
+    /// samples take part in every analysis or in none.
+    pub fn set_group_ticked(&mut self, group: &str, ticked: bool) {
+        let members = self.group_members(group);
+        self.set_samples_active(&members, ticked);
+    }
+
+    /// After samples are switched on or off: the ticked groups are those
+    /// with a sample switched on, and the two groups compared stay as they
+    /// were while they have samples.
+    fn samples_switched(&mut self) {
+        self.refresh_groups();
+        self.invalidate(Mode::TwoSamples);
+        self.invalidate(Mode::TwoGroups);
+        self.invalidate(Mode::MultipleGroups);
+        self.invalidate(Mode::Correlation);
+        self.generation += 1;
     }
 
     /// The metadata fields a correlation can be made with: those that hold
@@ -624,10 +677,7 @@ impl Session {
             }
         }
         if changed {
-            self.invalidate(Mode::TwoGroups);
-            self.invalidate(Mode::MultipleGroups);
-            self.invalidate(Mode::Correlation);
-            self.generation += 1;
+            self.samples_switched();
         }
     }
 
@@ -660,10 +710,7 @@ impl Session {
             }
         }
         if changed {
-            self.invalidate(Mode::TwoGroups);
-            self.invalidate(Mode::MultipleGroups);
-            self.invalidate(Mode::Correlation);
-            self.generation += 1;
+            self.samples_switched();
         }
     }
 
@@ -955,12 +1002,22 @@ impl Session {
                     return None;
                 };
                 // A chosen group whose samples are all switched off takes no
-                // part, rather than making every test degenerate.
+                // part, rather than making every test degenerate, and nor
+                // does one with a single sample, which no multiple-group
+                // test can use; those are listed beside the analysis.
+                let size = |g: &String| groups.samples(g).map_or(0, <[String]>::len);
                 let active: Vec<String> = self
                     .multi
                     .active_groups
                     .iter()
-                    .filter(|g| groups.samples(g).is_some_and(|s| !s.is_empty()))
+                    .filter(|g| size(g) >= 2)
+                    .cloned()
+                    .collect();
+                self.multi.too_small = self
+                    .multi
+                    .active_groups
+                    .iter()
+                    .filter(|g| size(g) == 1)
                     .cloned()
                     .collect();
                 let analysis = self.multi.analysis;
@@ -971,8 +1028,8 @@ impl Session {
                         if self.multi.active_groups.len() < 2 {
                             "Select at least two groups."
                         } else {
-                            "At least two of the selected groups need samples that are \
-                             switched on."
+                            "At least two of the selected groups need two or more samples \
+                             that are switched on."
                         },
                     );
                     return None;
@@ -1302,9 +1359,10 @@ mod tests {
             session.sample_filter(),
             Some(("Site".to_string(), gut.to_vec()))
         );
-        // B keeps one sample, too few to take part in the multiple-group
-        // analysis; the two groups compared stay as they were.
-        assert_eq!(session.multi.active_groups, ["A", "C"]);
+        // B keeps one sample: it stays ticked, but is too small to take
+        // part in the multiple-group analysis, which says so; the two
+        // groups compared stay as they were.
+        assert_eq!(session.multi.active_groups, ["A", "B", "C"]);
         assert_eq!(
             (
                 session.groups.group1.as_str(),
@@ -1313,6 +1371,7 @@ mod tests {
             ("A", Some("B"))
         );
         session.run_to_completion(Mode::MultipleGroups);
+        assert_eq!(session.multi.too_small, ["B"]);
         let (profile, _) = session.multi.output.as_ref().unwrap();
         assert_eq!(profile.group_names, ["A", "C"]);
         assert_eq!(profile.profile.sample_names, ["A1", "A2", "C1", "C2"]);
@@ -1462,6 +1521,32 @@ mod tests {
         assert!(!empty.update(Mode::TwoSamples));
     }
 
+    /// Unticking a group in the group list switches its samples off, so
+    /// they leave every analysis, the correlation included, and show as
+    /// switched off in the metadata table; ticking it switches them on.
+    #[test]
+    fn unticking_a_group_switches_its_samples_off() {
+        let mut session = loaded();
+        session.set_group_field("Site");
+        session.run_to_completion(Mode::Correlation);
+        let before = session.correlation.output.as_ref().unwrap().0.values.len();
+        let gut = session.group_members("gut");
+        assert!(!gut.is_empty());
+        session.set_group_ticked("gut", false);
+        let metadata = session.metadata.as_ref().unwrap();
+        assert!(gut.iter().all(|s| !metadata.is_switched_on(s)));
+        assert_eq!(session.multi.active_groups, ["skin"]);
+        // The members of an unticked group are still known, to tick it again.
+        assert_eq!(session.group_members("gut"), gut);
+        session.run_to_completion(Mode::Correlation);
+        let after = session.correlation.output.as_ref().unwrap().0.values.len();
+        assert_eq!(after, before - gut.len());
+        session.set_group_ticked("gut", true);
+        let metadata = session.metadata.as_ref().unwrap();
+        assert!(gut.iter().all(|s| metadata.is_switched_on(s)));
+        assert_eq!(session.multi.active_groups, ["gut", "skin"]);
+    }
+
     #[test]
     fn a_group_with_every_sample_switched_off_takes_no_part() {
         let mut session = loaded();
@@ -1470,15 +1555,16 @@ mod tests {
         let gut: Vec<String> = session.grouping().unwrap().samples("gut").unwrap().to_vec();
         session.set_samples_active(&gut, false);
         session.run_to_completion(Mode::MultipleGroups);
-        // Only one group has samples left.
+        // Only one group has samples left, and the other is unticked.
         assert!(session.multi.output.is_none());
-        assert!(session
-            .error(Mode::MultipleGroups)
-            .unwrap()
-            .contains("switched on"));
-        // The choice of groups is kept for when the samples come back.
-        assert_eq!(session.multi.active_groups, ["gut", "skin"]);
+        assert_eq!(session.multi.active_groups, ["skin"]);
+        assert_eq!(
+            session.error(Mode::MultipleGroups),
+            Some("Select at least two groups.")
+        );
+        // Switching a sample back on ticks the group again.
         session.set_samples_active(&gut, true);
+        assert_eq!(session.multi.active_groups, ["gut", "skin"]);
         session.run_to_completion(Mode::MultipleGroups);
         assert_eq!(
             session.multi.output.as_ref().unwrap().0.group_names,

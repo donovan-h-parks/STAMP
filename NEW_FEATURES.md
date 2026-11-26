@@ -350,7 +350,7 @@ Add an entry here whenever a feature is added that v2 did not have.
 
 ## Window
 
-- **Analysis wizard** (Help > Analysis wizard, and a button at the top of
+- **Analysis wizard** (Assistant > Analysis wizard, and a button at the top of
   the Statistics panel; `crates/stamp-gui/src/wizard.rs`, `wizard_ui.rs`,
   `docs/site/wizard.rst`), in front of STAMP's other windows; it stays open
   after setting up an analysis, so that each recommended plot can be shown in
@@ -379,7 +379,12 @@ Add an entry here whenever a feature is added that v2 did not have.
   tests as one table (`wizard::GLANCE`): a row for each of 18 tests under
   what it is for, with its drawing, when to use it, what it does and what
   it assumes; rows the data cannot support are greyed with the reason, and
-  "Show" on a row opens its recommendation.
+  "Show" on a row opens its recommendation. The first page chooses the
+  parent level, profile level and group field, each with an "i" that
+  explains it (as each choice's "i" does, in its tooltip and when clicked), and the recommendation's "Data used"
+  chooses the samples, groups, pairing or subject field, or numeric field
+  among those the data allow; undoing the analysis the wizard set up
+  (Assistant > Undo assistant's last change) puts these back too.
 - **Sample filter.** Below the group field, a metadata field and the values
   whose samples every analysis and plot uses (tick or untick each value);
   samples left out are excluded from everything, groups left empty
@@ -389,9 +394,9 @@ Add an entry here whenever a feature is added that v2 did not have.
   all match), numeric `--where "FIELD>=X"` (`<`, `<=`, `>`, `>=`), and
   `--where-not FIELD=VALUE`. Both use `SampleSelection` in
   `stamp-core/src/selection.rs`.
-- **Colour schemes** [27]: Settings > Preferences > Colour scheme chooses dark, light, or
-  one of the four Catppuccin schemes (Latte, Frappé, Macchiato, Mocha;
-  `crates/stamp-gui/src/theme.rs`).
+- **Colour schemes** [27]: Settings > Preferences > Colour scheme chooses dark, light,
+  one of the four Catppuccin schemes (Latte, Frappé, Macchiato, Mocha), or
+  Solarized Light or Dark (`crates/stamp-gui/src/theme.rs`).
 - **A colour for each group**, kept across every plot and chosen with a
   colour picker in the group list [27, 28].
 - **Sortable tables.** The feature, results and metadata tables sort by any

@@ -20,9 +20,14 @@ click a tab to bring it to the front.
 * **Parent level**, **Profile level** and **Unclassified** choose what is
   analysed; see :doc:`input_files`.
 * **Group field** chooses the metadata field whose values form the groups.
-  Each group is listed with its number of samples. Untick a group to leave it
-  out of every analysis; groups with a single sample start unticked, since
-  they cannot be tested. Click a group's colour to change it; the colour is
+  Each group is listed with its number of samples switched on. Untick a
+  group to switch all its samples off: they leave every analysis and plot
+  (the two-sample and correlation analyses too) and are unticked in the
+  metadata table, where they stay off, whatever the group field, until the
+  group is ticked again or they are ticked there. A group is ticked while any
+  of its samples is switched on. A group with a single sample is ticked, but
+  the multiple-group tests cannot use it: they leave it out and say so in
+  the Statistics panel. Click a group's colour to change it; the colour is
   used in every plot.
 * **Sample filter** chooses the samples of every analysis by a metadata
   field: pick a field, then untick the values whose samples should be left
@@ -215,10 +220,11 @@ Preferences
 
 **Settings > Preferences** holds settings that apply everywhere:
 
-* the **colour scheme** of the window: **Dark** (the default), **Light**, or
+* the **colour scheme** of the window: **Dark** (the default), **Light**,
   one of the four `Catppuccin <https://catppuccin.com>`_ schemes, **Latte**
-  (light), **Frappé**, **Macchiato** and **Mocha** (dark). Plots keep their
-  own colours, on a white page, whatever the scheme;
+  (light), **Frappé**, **Macchiato** and **Mocha** (dark), or `Solarized
+  <https://ethanschoonover.com/solarized/>`_ **Light** or **Dark**. Plots
+  keep their own colours, on a white page, whatever the scheme;
 * the **random seed** and number of **replicates** of the resampling methods
   (bootstrap, permutation, White's test, Storey's FDR, the community tests).
   The same seed gives the same results every time;

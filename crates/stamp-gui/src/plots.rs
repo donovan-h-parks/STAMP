@@ -362,7 +362,7 @@ impl PlotKind {
     }
 
     /// True for the plots that check the tests themselves rather than show
-    /// their results; they are listed last in their group, after a divider.
+    /// their results; they are listed last in their group.
     pub fn checks_the_tests(self) -> bool {
         matches!(
             self,

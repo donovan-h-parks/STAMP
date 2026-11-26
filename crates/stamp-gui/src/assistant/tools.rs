@@ -217,7 +217,11 @@ pub fn list() -> Vec<ToolInfo> {
                                "description": "null or 'All other samples' compares group 1 \
                                                with every other sample."},
                     "groups": {"type": "array", "items": {"type": "string"},
-                               "description": "Groups compared in a multiple-group analysis."},
+                               "description": "Groups compared in a multiple-group analysis. \
+                                               As in the group list, the samples of the \
+                                               other groups are switched off, so they take \
+                                               part in no analysis until their group is \
+                                               named again."},
                     "pair_field": {"type": ["string", "null"],
                                    "description": "Metadata field naming the subject of each \
                                                    sample, for the paired two-group tests and \
@@ -1688,7 +1692,16 @@ fn set_analysis(app: &mut StampApp, args: &Map<String, Value>) -> Result<Outcome
         rerun = true;
     }
     if let Some(groups) = groups {
-        s.multi.active_groups = groups;
+        // As ticking and unticking in the group list: the samples of the
+        // groups left out are switched off, those of the groups named on.
+        let all: Vec<String> = s
+            .grouping()
+            .map(|g| g.names().map(str::to_string).collect())
+            .unwrap_or_default();
+        for group in all {
+            let ticked = groups.contains(&group);
+            s.set_group_ticked(&group, ticked);
+        }
         rerun = true;
     }
     if let Some(field) = correlation_field {

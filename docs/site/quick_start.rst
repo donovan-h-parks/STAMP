@@ -23,7 +23,8 @@ The window has these parts:
 * **Left: profile and groups.** The level to analyse (phyla or genera), and
   the groups of samples defined by a metadata field. Here the field is
   *Enterotype*, giving groups such as *Enterotype 1 (8)*, with the number of
-  samples in brackets. Untick a group to leave it out.
+  samples in brackets. Untick a group to switch its samples off, which leaves
+  them out of every analysis.
 * **Left, the Statistics tab.** The kind of analysis (tabs at the top), the
   statistical test, and the filters that decide which features count as
   "active". Click the tab beside *Profile and groups* to see it.

@@ -4,15 +4,16 @@ The analysis wizard
 The wizard asks a few questions about what you want to know and leads to
 the analysis, statistical test and plots in STAMP that answer it. It is for
 anyone who is unsure which test suits their data; it chooses nothing that
-cannot also be chosen by hand in the Statistics panel. Open it with **Help >
+cannot also be chosen by hand in the Statistics panel. Open it with **Assistant >
 Analysis wizard**, or with the *Analysis wizard* button at the top of the
 Statistics panel.
 
 Every choice is always shown. A choice that the loaded data cannot support
 is greyed and says why (for example, "No metadata field holds a number"),
 so that the wizard also shows what a data set would need for an analysis.
-Each choice has a small drawing of what it means and an **i** button that
-opens a longer explanation with an example.
+Each choice has a small drawing of what it means and an **i** button with
+a longer explanation and an example: pointing at it shows the explanation,
+and clicking it shows it above the choices until closed.
 
 .. figure:: images/gui_wizard_question.png
    :width: 100%
@@ -33,8 +34,11 @@ The questions
    * *Samples along a measured variable*: each sample has a number (pH,
      age, depth) in the metadata.
 
-   Groups come from the **group field**, which can be changed at the top of
-   this step; the groups and their sizes are listed beside it.
+   The **parent level** (what each feature's proportion is a proportion
+   of), the **profile level** (the level of the hierarchy whose features
+   are compared) and the **group field** can be changed at the top of this
+   step; the groups and their sizes are listed beside them. The **i**
+   beside each explains it, as the **i** on a choice does.
 
 2. **What is your research question?**
 
@@ -86,8 +90,15 @@ The recommendation
 The last page names the recommended test (or, for a question without a
 test, the plot), and gives:
 
-* **What will be set**: the groups or samples compared, the test, the
-  post-hoc test, any transform, and the multiple test correction.
+* **Data used**: the data the analysis compares, each a drop-down box (or
+  tick boxes) of the choices the loaded data allow: the two samples; the two
+  groups and, for a paired test, the field that pairs them; the groups
+  compared (at least three) and, for matched groups, the field that names
+  the subjects; or the numeric field the features are correlated with.
+  Changing one changes the Statistics panel at once, and the
+  recommendation follows it.
+* **What will be set**: the test, the post-hoc test, any transform, and
+  the multiple test correction.
 * **Why** this test suits the answers given, in a paragraph, and anything
   the analysis cannot show.
 * **Plots to look at**, each with what it is for.
@@ -103,7 +114,11 @@ test, the plot), and gives:
 **Set up this analysis** chooses those settings in the Statistics panel,
 runs the analysis and shows the first of the plots. The wizard stays open,
 in front of the other windows, so that *Show* beside another plot can show
-that plot; **Close** at its bottom closes it. For a test of many
+that plot; **Close** at its bottom closes it. **Assistant > Undo
+assistant's last change** (or *Undo assistant's change* in the status bar)
+puts back the analysis and plot as they were before the wizard set them up,
+including the profile level and data chosen in the wizard, as it does for an
+AI assistant's changes. For a test of many
 features the wizard always chooses the Benjamini-Hochberg FDR correction;
 everything it sets can be changed afterwards in the Statistics panel. The
 two samples, or the two groups, compared are those chosen there.
