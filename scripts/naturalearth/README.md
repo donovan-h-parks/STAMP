@@ -57,9 +57,8 @@ is 0.0055° of longitude and 0.0027° of latitude (about 600 m and 300 m),
 well below what the simplified outlines can show. `zigzag(v)` is `2v` for
 `v >= 0` and `-2v - 1` for `v < 0`.
 
-The files are stored uncompressed: the browser build is sent gzipped, which
-compresses them as well as zlib would (151 KB for all four), and no
-decompression code is needed.
+The files are stored uncompressed (151 KB for all four once gzipped), so
+no decompression code is needed.
 
 ## Caveats
 

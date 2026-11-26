@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-STAMP (statistical analysis of taxonomic and functional profiles) being ported from Python 2 / PyQt4 to Rust. The Rust port lives in `crates/` on the `rust-port` branch; the original application is kept, unmodified, in `legacy/` as the reference for behaviour. The port must run as a desktop application on Linux, Windows and macOS and as a web page (WebAssembly).
+STAMP (statistical analysis of taxonomic and functional profiles) being ported from Python 2 / PyQt4 to Rust. The Rust port lives in `crates/` on the `rust-port` branch; the original application is kept, unmodified, in `legacy/` as the reference for behaviour. The port runs as a desktop application on Linux, Windows and macOS and as a command-line program. (A browser/WebAssembly build existed earlier and was removed in November 2026; there is no web target.)
 
 `docs/CHANGES_FROM_PYTHON.md` is the record of every deliberate difference from the Python version: bugs fixed, behaviour changes, what is not yet ported, and open questions. **Any change that makes the port behave differently from STAMP v2, or that fixes a v2 bug, gets an entry there.** Read it before concluding that a difference from the Python code is a mistake.
 
@@ -20,7 +20,7 @@ The Rust port is **STAMP v3.0.0**. The version is set once, in `[workspace.packa
 
 ## Commands
 
-The compiler is pinned in `rust-toolchain.toml` (rustup installs it on first use, with the wasm target).
+The compiler is pinned in `rust-toolchain.toml` (rustup installs it on first use).
 
 ```bash
 cargo build --release                          # everything; binaries: target/release/stamp (GUI), stamp-cli
@@ -29,16 +29,9 @@ cargo test -p stamp-core --release --lib dist  # tests whose name contains "dist
 cargo test -p stamp-gui --release --test ui tables_are_sorted   # one GUI test
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
-cargo clippy -p stamp-gui --target wasm32-unknown-unknown -- -D warnings   # the browser build must stay warning-free too
 ```
 
-CI (`.github/workflows/ci.yml`) runs fmt, clippy for both targets, and the tests on Linux, Windows and macOS; all three checks above must pass before a change is done.
-
-Browser build (needs `trunk`, `cargo install trunk --locked`):
-
-```bash
-cd crates/stamp-gui && trunk build --release   # writes crates/stamp-gui/dist (untracked); uses the `web` profile (fat LTO), a few minutes
-```
+CI (`.github/workflows/ci.yml`) runs fmt, clippy for both targets, and the tests on Linux, Windows and macOS; all of the checks above must pass before a change is done.
 
 GUI screenshots: the GUI tests render the real interface with a software rasteriser and can write PNGs, which is the only way to look at the interface on a machine without a display:
 
@@ -59,7 +52,7 @@ cd legacy/golden && pixi run golden      # regenerates tests/golden from the Pyt
 cd legacy/golden && pixi run unittests   # the original Python unit tests
 ```
 
-User documentation (Sphinx, Read the Docs theme, in the style of CheckM's) is in `docs/site`; the Pages workflow publishes it under `docs/` beside the browser version. Build it locally with:
+User documentation (Sphinx, Read the Docs theme, in the style of CheckM's) is in `docs/site`; the Pages workflow publishes it under `docs/`. Build it locally with:
 
 ```bash
 pip install -r docs/site/requirements.txt
@@ -74,16 +67,16 @@ Packaging and releases are described in `docs/RELEASING.md` (`scripts/package.sh
 
 Four crates, each depending only on those above it:
 
-- **`stamp-core`** — profiles, metadata, file import and all statistics. No file system access, threads or UI, so it compiles unchanged to WebAssembly; callers hand it text or bytes. Long analyses take a progress callback and exist in a resumable form (`SampleRun`, `GroupRun`, `MultiGroupRun` in `stats/results.rs`) that can pause between features and gives identical results wherever it pauses.
-- **`stamp-plot`** — every plot builds a backend-neutral `Figure` (sizes in points; shapes plus `regions` that carry tooltips and the item each area stands for). `svg.rs` writes SVG and `pdf.rs` writes PDF directly (embedding the used glyphs of the figure's font); PNG is drawn from the SVG with resvg (`export.rs`, the optional `png` feature, on for the desktop and the CLI). The browser build leaves resvg out: `stamp-gui`'s `platform.rs` has the browser draw the SVG (with the font embedded, `svg::to_svg_with_font`) into a canvas for PNG images. Text is drawn and measured with bundled fonts (`text.rs`: Liberation Sans, Serif and Mono, which have the letter widths of Arial, Times New Roman and Courier New, and DejaVu Sans; Arial by default), so layout is the same everywhere; each `Figure` records the font it was built with.
+- **`stamp-core`** — profiles, metadata, file import and all statistics. No file system access, threads or UI, which keeps it easy to test and shared by the GUI and the CLI; callers hand it text or bytes. Long analyses take a progress callback and exist in a resumable form (`SampleRun`, `GroupRun`, `MultiGroupRun` in `stats/results.rs`) that can pause between features and gives identical results wherever it pauses.
+- **`stamp-plot`** — every plot builds a backend-neutral `Figure` (sizes in points; shapes plus `regions` that carry tooltips and the item each area stands for). `svg.rs` writes SVG and `pdf.rs` writes PDF directly (embedding the used glyphs of the figure's font); PNG is drawn from the SVG with resvg (`export.rs`). Text is drawn and measured with bundled fonts (`text.rs`: Liberation Sans, Serif and Mono, which have the letter widths of Arial, Times New Roman and Courier New, and DejaVu Sans; Arial by default), so layout is the same everywhere; each `Figure` records the font it was built with.
 - **`stamp-cli`** — analyses, plots and file conversion from the command line; output tables keep STAMP v2's column headings.
-- **`stamp-gui`** — egui/eframe application, built both as the `stamp` binary and as the web page.
+- **`stamp-gui`** — egui/eframe application, built as the `stamp` binary.
 
 Inside `stamp-gui`:
 
 - `session.rs` holds the state and logic of an analysis session (loaded data, settings, results, running jobs) with no UI code, so it is tested on its own. `app.rs` is the window and owns only presentation state.
 - The same `Figure` is drawn on screen by `figure_painter.rs` using egui's painter (the "two renderers" design: native drawing on screen, SVG for export). `plots.rs` chooses and builds the figure from the session and holds `PlotSettings`, one options struct per plot, edited by `plot_config.rs`.
-- `jobs.rs` runs analyses on a thread on the desktop and in short time slices on the page's single thread in the browser. `platform.rs` hides file access behind a request/event queue: native dialogs on the desktop, the browser's file picker and downloads on the web. Code that must differ between the two targets belongs in these two modules, behind `cfg(target_arch = "wasm32")`.
+- `jobs.rs` runs analyses on their own thread, with shared progress and cancelling. `platform.rs` puts file access (the system's file dialogs) behind a request/event queue, so tests can deliver files as events.
 - `headless.rs` is the software renderer used by `tests/ui.rs`. GUI behaviour is exposed through public methods on `StampApp` (for example `set_plot_settings`, `open_profile_file`, `sort_feature_table`) so tests drive the same code paths as the controls.
 
 ## Testing against the Python version
@@ -97,6 +90,6 @@ Inside `stamp-gui`:
 - Numerics: `libm` for `erfc`/`lgamma` and the project's own distribution functions in `stats/dist.rs`; do not swap in another crate's special functions without re-checking the reference tests, which are sensitive at the 1e-9 level.
 - Random numbers are seeded (ChaCha8) so resampling results are repeatable; a change in the order random numbers are drawn changes results and reference tests.
 - User-visible labels follow STAMP v2's wording where v2 has the control (see the Python `*.ui` files and `configGUI/*UI.py`).
-- Dependencies must build for `wasm32-unknown-unknown`; nothing that needs a C library.
+- Prefer pure-Rust dependencies; nothing that needs a C library to be installed, so the release binaries stay self-contained.
 - Plot settings are remembered between runs. When a default in `PlotSettings::default()` changes, increase `DEFAULTS_VERSION` in `crates/stamp-gui/src/app.rs`; otherwise anyone who has run an earlier build keeps the old value.
 - rustfmt rewraps code narrowly, so re-read a file after `cargo fmt` before making exact-text edits to it.

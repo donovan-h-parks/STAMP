@@ -1,7 +1,0 @@
-# Build the browser version of STAMP:  trunk build --release
-# Try it locally:                      trunk serve
-[build]
-target = "index.html"
-dist = "dist"
-# Relative links, so the site works from any directory of a web server.
-public_url = "./"

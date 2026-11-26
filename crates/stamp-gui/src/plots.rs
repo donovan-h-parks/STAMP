@@ -25,8 +25,7 @@ use crate::session::{Mode, Session};
 ///
 /// A plot whose slow part is not kept asks for it to be computed
 /// ([`take_request`](Self::take_request)) and is drawn as a placeholder; the
-/// window computes it in a job (on another thread on the desktop, in time
-/// slices in the browser), showing its progress, keeps the outcome here
+/// window computes it in a job on another thread, showing its progress, keeps the outcome here
 /// and draws the plot again.
 #[derive(Default)]
 pub struct OrdinationCache {
@@ -165,8 +164,8 @@ pub const COMPUTING: &str = "Computing the plot...";
 
 /// How a run inside a [`Work`] paces itself: it reports what it is doing,
 /// stops once cancelled, pauses when its time is up, and pauses too
-/// whenever it starts something new, so that in the browser the page says
-/// so before a piece of work that cannot be divided.
+/// whenever it starts something new, so that the progress label says so
+/// before a piece of work that cannot be divided.
 fn stage_pace<'a>(
     progress: &'a crate::jobs::Progress,
     out_of_time: &'a dyn Fn() -> bool,
@@ -1610,7 +1609,7 @@ fn community_work(
                 return Some(None);
             }
             if last != stage {
-                // Said first, so that the page shows it.
+                // Said first, so that the progress label shows it.
                 last = stage.to_string();
                 return None;
             }

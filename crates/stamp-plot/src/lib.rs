@@ -7,8 +7,7 @@
 //!   sharp on screen and leaves room for interaction such as hover, selection
 //!   and zoom;
 //! * this crate exports it as SVG and PDF, each written directly from the
-//!   figure, and as PNG drawn from the SVG (with resvg, the `png` feature;
-//!   the browser build has the browser draw the SVG instead).
+//!   figure, and as PNG drawn from the SVG (with resvg).
 //!
 //! Both renderers share one bundled font (DejaVu Sans, the font of STAMP v2's
 //! plots) and one text-measurement routine, so that on-screen layout and

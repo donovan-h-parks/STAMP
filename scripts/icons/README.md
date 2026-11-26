@@ -3,8 +3,7 @@
 The menu icons come from [Phosphor Icons](https://phosphoricons.com/) (MIT
 licence, `crates/stamp-gui/assets/Phosphor-LICENSE.txt`). `Phosphor.ttf`
 here is the whole regular-weight font, about 480 KB. STAMP compiles in only
-the icons it uses (`crates/stamp-gui/assets/Phosphor.ttf`, about 6 KB), so
-that the browser version downloads less.
+the icons it uses (`crates/stamp-gui/assets/Phosphor.ttf`, about 6 KB).
 
 After adding an icon to `crates/stamp-gui/src/icons.rs` (and to its `ALL`
 list), regenerate the subset from the repository root:

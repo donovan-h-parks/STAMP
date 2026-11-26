@@ -1,9 +1,7 @@
 //! Export of figures to image files, as bytes.
 //!
 //! SVG and PDF are written directly from the figure ([`crate::svg`],
-//! [`crate::pdf`]). PNG images are drawn from the SVG with resvg, with the
-//! `png` feature; the browser build leaves it out and has the browser draw
-//! the SVG instead.
+//! [`crate::pdf`]). PNG images are drawn from the SVG with resvg.
 
 use crate::figure::Figure;
 use crate::svg::to_svg;
@@ -52,7 +50,6 @@ pub fn export(figure: &Figure, format: Format, dpi: f64) -> Result<Vec<u8>, Expo
 }
 
 /// Render a figure as a PNG image at the given resolution.
-#[cfg(feature = "png")]
 pub fn to_png(figure: &Figure, dpi: f64) -> Result<Vec<u8>, ExportError> {
     use resvg::{tiny_skia, usvg};
 
@@ -91,13 +88,6 @@ pub fn to_png(figure: &Figure, dpi: f64) -> Result<Vec<u8>, ExportError> {
         .map_err(|e| ExportError(format!("Could not encode the image: {e}")))
 }
 
-#[cfg(not(feature = "png"))]
-pub fn to_png(_figure: &Figure, _dpi: f64) -> Result<Vec<u8>, ExportError> {
-    Err(ExportError(
-        "This build does not include PNG export.".to_string(),
-    ))
-}
-
 /// Render a figure as a single-page PDF document (see [`crate::pdf`]).
 pub fn to_pdf(figure: &Figure) -> Result<Vec<u8>, ExportError> {
     Ok(crate::pdf::to_pdf(figure))
@@ -129,7 +119,6 @@ mod tests {
         assert_eq!(Format::from_file_name("plot"), None);
     }
 
-    #[cfg(feature = "png")]
     #[test]
     fn png_has_the_requested_resolution_and_content() {
         use resvg::tiny_skia::Pixmap;
@@ -160,7 +149,6 @@ mod tests {
 
     /// Every font is drawn, and draws differently: the bundled font is the
     /// one used, whatever is installed on the machine.
-    #[cfg(feature = "png")]
     #[test]
     fn png_text_is_drawn_in_the_figure_font() {
         use crate::text::PlotFont;

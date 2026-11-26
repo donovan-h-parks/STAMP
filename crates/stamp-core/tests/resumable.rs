@@ -1,7 +1,7 @@
 //! The long calculations behind the community plots (distances, NMDS, the
 //! community tests, the Mantel test and ANCOM) can be carried out a piece
-//! at a time: whatever runs them pauses between pieces to show progress or,
-//! in the browser, to let the page redraw. The results must not depend on
+//! at a time: whatever runs them pauses between pieces to show progress or
+//! to stop when cancelled. The results must not depend on
 //! where they pause, and the progress they report must only go forwards.
 
 use stamp_core::stats::ancom::{ancom, AncomRun};

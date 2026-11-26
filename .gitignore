@@ -61,7 +61,7 @@ pip-log.txt
 .pixi/
 
 #############
-## Web build
+## Packages (scripts/package.sh)
 #############
 
 dist/

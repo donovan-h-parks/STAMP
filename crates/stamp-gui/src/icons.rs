@@ -3,7 +3,7 @@
 //! draws as that icon, so an icon is written as part of a label's text.
 //!
 //! The font compiled in holds only these icons (6 KB instead of 480 KB for
-//! the whole font, which matters for the browser download). After adding
+//! the whole font). After adding
 //! one, run `scripts/icons/subset.sh`, which cuts the full font in
 //! `scripts/icons/` down to the characters named in this file; the test
 //! below fails until then.

@@ -1,8 +1,8 @@
 //! Core of STAMP: profiles, metadata, file parsers, statistical tests,
 //! multiple-test corrections and filtering.
 //!
-//! Rules for this crate, so that it compiles unchanged for desktop and for
-//! WebAssembly:
+//! Rules for this crate, which keep it easy to test and let the GUI and the
+//! command line share it:
 //!
 //! * no filesystem access: parsers take bytes or strings, never paths;
 //! * no threads: callers decide how to schedule work;

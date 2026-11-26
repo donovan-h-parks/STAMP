@@ -3,7 +3,6 @@
 use eframe::egui;
 
 use super::describe;
-#[cfg(not(target_arch = "wasm32"))]
 use super::launch::Agent;
 use crate::icons;
 use crate::StampApp;
@@ -37,49 +36,46 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
     if image.clicked() {
         app.copy_plot_image(ui.ctx());
     }
-    #[cfg(not(target_arch = "wasm32"))]
+    ui.separator();
+    let sharing = app.assistant.server.is_some();
+    for agent in Agent::ALL {
+        if ui
+            .button(icons::label(
+                icons::TERMINAL,
+                &format!("Open {}...", agent.name()),
+            ))
+            .on_hover_text(format!(
+                "Ask {}, in a panel at the bottom of the window, about your data and plots, \
+                 and have it change them. Needs {}.",
+                agent.name(),
+                agent.accounts()
+            ))
+            .clicked()
+        {
+            show_agent(app, ui.ctx(), agent);
+        }
+    }
+    if ui
+        .add_enabled(
+            sharing,
+            egui::Button::new(icons::label(icons::PLUGS, "Stop sharing")),
+        )
+        .on_hover_text(
+            "Stop letting the assistant reach this session. The program keeps running, but \
+             can no longer read or change anything in STAMP.",
+        )
+        .clicked()
     {
-        ui.separator();
-        let sharing = app.assistant.server.is_some();
-        for agent in Agent::ALL {
-            if ui
-                .button(icons::label(
-                    icons::TERMINAL,
-                    &format!("Open {}...", agent.name()),
-                ))
-                .on_hover_text(format!(
-                    "Ask {}, in a panel at the bottom of the window, about your data and plots, \
-                     and have it change them. Needs {}.",
-                    agent.name(),
-                    agent.accounts()
-                ))
-                .clicked()
-            {
-                show_agent(app, ui.ctx(), agent);
-            }
-        }
-        if ui
-            .add_enabled(
-                sharing,
-                egui::Button::new(icons::label(icons::PLUGS, "Stop sharing")),
-            )
-            .on_hover_text(
-                "Stop letting the assistant reach this session. The program keeps running, but \
-                 can no longer read or change anything in STAMP.",
-            )
-            .clicked()
-        {
-            app.assistant.server = None;
-        }
-        if ui
-            .add(
-                egui::Button::new(icons::label(icons::PULSE, "Assistant activity"))
-                    .selected(app.assistant.show_window),
-            )
-            .clicked()
-        {
-            app.assistant.show_window = !app.assistant.show_window;
-        }
+        app.assistant.server = None;
+    }
+    if ui
+        .add(
+            egui::Button::new(icons::label(icons::PULSE, "Assistant activity"))
+                .selected(app.assistant.show_window),
+        )
+        .clicked()
+    {
+        app.assistant.show_window = !app.assistant.show_window;
     }
     ui.separator();
     if ui
@@ -99,7 +95,6 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
 /// The assistant's part of the status bar: that an assistant is connected,
 /// and an Undo button for its changes.
 pub(crate) fn status(app: &mut StampApp, ui: &mut egui::Ui) {
-    #[cfg(not(target_arch = "wasm32"))]
     if let Some(server) = &app.assistant.server {
         let text = if server.clients() > 0 {
             "Assistant connected"
@@ -132,17 +127,11 @@ pub(crate) fn status(app: &mut StampApp, ui: &mut egui::Ui) {
 
 /// The assistant's windows.
 pub(crate) fn windows(app: &mut StampApp, ctx: &egui::Context) {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        asking_window(app, ctx);
-        activity_window(app, ctx);
-    }
-    #[cfg(target_arch = "wasm32")]
-    let _ = (app, ctx);
+    asking_window(app, ctx);
+    activity_window(app, ctx);
 }
 
 /// What sharing means, said before it starts, with `agent`.
-#[cfg(not(target_arch = "wasm32"))]
 fn sharing(agent: Agent) -> String {
     let who = agent.name();
     let sent_to = match agent {
@@ -160,7 +149,6 @@ fn sharing(agent: Agent) -> String {
     )
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
     let Some(ask) = app.assistant.asking.clone() else {
         return;
@@ -268,7 +256,6 @@ fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
 
 /// Assistant > Open Claude Code (or another assistant): its tab if it is
 /// already running in the panel, otherwise [`open_agent_or_ask`].
-#[cfg(not(target_arch = "wasm32"))]
 pub fn show_agent(app: &mut StampApp, ctx: &egui::Context, agent: Agent) {
     if let Some(index) = app.assistant.tab_of(agent) {
         if !app.assistant.tabs[index].terminal.has_exited() {
@@ -285,7 +272,6 @@ pub fn show_agent(app: &mut StampApp, ctx: &egui::Context, agent: Agent) {
 /// chose not to see it again and the program is installed, the program at
 /// once, in its tab (a new one, or replacing what ran in its tab before).
 /// Installing it always asks first.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn open_agent_or_ask(app: &mut StampApp, ctx: &egui::Context, agent: Agent) {
     if app.assistant.skip_claude_code_dialog && agent.find().is_some() {
         if let Err(message) = open_agent(app, ctx, agent, false) {
@@ -299,7 +285,6 @@ pub fn open_agent_or_ask(app: &mut StampApp, ctx: &egui::Context, agent: Agent) 
 /// Start sharing (if not already), prepare the working folder for `agent`
 /// and run it in the assistant panel, or its installer first when
 /// `install` is set.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn open_agent(
     app: &mut StampApp,
     ctx: &egui::Context,
@@ -345,7 +330,6 @@ pub fn open_agent(
 
 /// Run `program` in the assistant panel, in `folder`, in the tab of `agent`
 /// (ending what ran there before) or a new one, and show that tab.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn run_in_panel(
     app: &mut StampApp,
     ctx: &egui::Context,
@@ -375,7 +359,6 @@ pub fn run_in_panel(
 }
 
 /// Open `agent` in the computer's own terminal instead of the panel.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn open_agent_outside(
     app: &mut StampApp,
     ctx: &egui::Context,
@@ -403,7 +386,6 @@ pub fn open_agent_outside(
 /// Code, OpenCode, Antigravity), on the right of the window to start with;
 /// it can be moved. A program ends when it is quit in its tab (`/exit`); its
 /// tab then says so, and can be closed or the program restarted.
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
     let ctx = ui.ctx().clone();
     let mut restart = None;
@@ -516,7 +498,6 @@ pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
 }
 
 /// Start the server if it is not running, and return it.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn start_sharing<'a>(
     app: &'a mut StampApp,
     ctx: &egui::Context,
@@ -530,7 +511,6 @@ pub fn start_sharing<'a>(
     Ok(app.assistant.server.as_ref().expect("just started"))
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn activity_window(app: &mut StampApp, ctx: &egui::Context) {
     let mut open = app.assistant.show_window;
     let mut stop = false;

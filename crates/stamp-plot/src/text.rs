@@ -1,5 +1,5 @@
 //! The fonts of plot text, bundled so that plots look and measure the same
-//! everywhere, including in the browser, which cannot read system fonts.
+//! everywhere, whatever fonts are installed.
 
 use std::sync::OnceLock;
 

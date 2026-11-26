@@ -3594,16 +3594,12 @@ dependencies = [
  "egui_extras",
  "egui_tiles",
  "flate2",
- "js-sys",
  "png 0.17.16",
  "rfd",
  "serde",
  "serde_json",
  "stamp-core",
  "stamp-plot",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
  "winresource",
 ]
 

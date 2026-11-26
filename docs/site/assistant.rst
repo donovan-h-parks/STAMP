@@ -16,7 +16,7 @@ large enough to matter?* There are four ways to do it, all in the
 - **Google Antigravity** (desktop application): the same, with Google's
   Antigravity CLI in that panel, for a **Google account**, free or with a
   **Google AI Pro or Ultra** plan.
-- **Copy and paste** (desktop and browser): copy a description of the
+- **Copy and paste**: copy a description of the
   session into any chat assistant. It cannot change anything in STAMP.
 
 OpenCode, Claude Code and Google Antigravity can be open at once, each in a
@@ -374,7 +374,5 @@ Paste it into a chat with Claude, ChatGPT, Gemini or another assistant, and
 ask your question below it. **Assistant > Copy plot image** copies the plot
 itself, for assistants that read images; paste it into the same message.
 
-This works in the desktop application and in the browser version, with any
-subscription. The assistant sees only what you paste, and cannot change
-anything in STAMP. The browser version cannot reach programs on your
-computer, so it offers only this route.
+This works with any subscription. The assistant sees only what you paste,
+and cannot change anything in STAMP.

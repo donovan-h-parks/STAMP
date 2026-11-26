@@ -1317,7 +1317,6 @@ fn load_profile(
 }
 
 /// Read a file named by the assistant, by its full path.
-#[cfg(not(target_arch = "wasm32"))]
 fn read_file(path: &str) -> Result<crate::platform::OpenedFile, String> {
     use std::path::{Path, PathBuf};
     let home = || {
@@ -1348,14 +1347,6 @@ fn read_file(path: &str) -> Result<crate::platform::OpenedFile, String> {
         .file_name()
         .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
     crate::platform::OpenedFile::new(name, bytes)
-}
-
-/// In the browser, files are only opened by the user.
-#[cfg(target_arch = "wasm32")]
-fn read_file(path: &str) -> Result<crate::platform::OpenedFile, String> {
-    Err(format!(
-        "{path} cannot be opened: in the browser, only the user can open files."
-    ))
 }
 
 fn optional_str<'a>(args: &'a Map<String, Value>, key: &str) -> Result<Option<&'a str>, String> {

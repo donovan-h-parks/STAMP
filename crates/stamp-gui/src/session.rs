@@ -804,8 +804,6 @@ impl Session {
     /// Run the analysis of `mode` to completion. For tests and scripts.
     pub fn run_to_completion(&mut self, mode: Mode) {
         while self.update(mode) {
-            // In the browser the work runs inside `update` itself.
-            #[cfg(not(target_arch = "wasm32"))]
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
     }

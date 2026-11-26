@@ -88,51 +88,6 @@ pub fn to_svg(figure: &Figure) -> String {
     out
 }
 
-/// The family name under which [`to_svg_with_font`] embeds the font.
-pub const EMBEDDED_FAMILY: &str = "STAMP plot font";
-
-/// As [`to_svg`], but `width` by `height` pixels and carrying the figure's
-/// bundled font, for drawing where no font can be loaded from elsewhere (a
-/// browser drawing the SVG as an image). The font is embedded whole, as a
-/// `data:` URL, and is the only font the text asks for.
-pub fn to_svg_with_font(figure: &Figure, width: u32, height: u32) -> String {
-    let (w, h) = (n(figure.width), n(figure.height));
-    let mut out = String::new();
-    let _ = writeln!(
-        out,
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {w} {h}\" preserveAspectRatio=\"none\" font-family=\"{EMBEDDED_FAMILY}\">"
-    );
-    let _ = writeln!(
-        out,
-        "<style>@font-face {{ font-family: \"{EMBEDDED_FAMILY}\"; src: url(data:font/ttf;base64,{}) format(\"truetype\"); }}</style>",
-        base64(figure.font.data())
-    );
-    write_body(figure, &mut out);
-    out
-}
-
-/// Standard base64, with padding.
-fn base64(data: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
-    for chunk in data.chunks(3) {
-        let b = [
-            chunk[0],
-            chunk.get(1).copied().unwrap_or(0),
-            chunk.get(2).copied().unwrap_or(0),
-        ];
-        let v = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
-        for i in 0..4 {
-            if i <= chunk.len() {
-                out.push(char::from(ALPHABET[(v >> (18 - 6 * i)) as usize & 63]));
-            } else {
-                out.push('=');
-            }
-        }
-    }
-    out
-}
-
 /// The background and shapes of a figure, and the closing tag.
 fn write_body(figure: &Figure, out: &mut String) {
     let (w, h) = (n(figure.width), n(figure.height));
@@ -290,33 +245,6 @@ mod tests {
             .contains("text-anchor=\"end\" fill=\"#000000\">a &lt; b &amp; &quot;c&quot;</text>"));
         assert!(svg.contains("transform=\"rotate(-90 90 25)\">p-value</text>"));
         assert!(svg.ends_with("</svg>\n"));
-    }
-
-    #[test]
-    fn base64_encoding() {
-        assert_eq!(base64(b""), "");
-        assert_eq!(base64(b"f"), "Zg==");
-        assert_eq!(base64(b"fo"), "Zm8=");
-        assert_eq!(base64(b"foo"), "Zm9v");
-        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
-        assert_eq!(base64(&[0xff, 0xfe, 0x00]), "//4A");
-    }
-
-    #[test]
-    fn the_font_can_be_embedded() {
-        let mut figure = Figure::new(100.0, 50.0);
-        figure.text(1.0, 2.0, "x", TextStyle::new(8.0));
-        let svg = to_svg_with_font(&figure, 400, 200);
-        assert!(svg.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"200\" viewBox=\"0 0 100 50\""));
-        assert!(svg.contains(&format!("font-family=\"{EMBEDDED_FAMILY}\"")));
-        assert!(svg.contains(&format!(
-            "src: url(data:font/ttf;base64,{}) format",
-            base64(figure.font.data())
-        )));
-        // The same drawing as the plain SVG.
-        let plain = to_svg(&figure);
-        let body = |svg: &str| svg.split_once("<rect").unwrap().1.to_string();
-        assert_eq!(body(&svg), body(&plain));
     }
 
     #[test]

@@ -1,7 +1,6 @@
 //! STAMP graphical application.
 //!
-//! The same code is built as a native window on Windows, Linux and macOS and,
-//! later, as WebAssembly for the browser.
+//! A native window on Windows, Linux and macOS.
 
 pub mod app;
 pub mod assistant;

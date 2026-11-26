@@ -20,8 +20,6 @@ unpack it, and run it.
    * - ``stamp-<version>-macos-arm64.zip`` (Apple silicon) and
        ``stamp-<version>-macos-x86_64.zip`` (Intel)
      - ``STAMP.app``, ``stamp-cli``, example data
-   * - ``stamp-<version>-web.zip``
-     - The browser version, as static files for any web server
 
 Each package also holds the licences of STAMP and of the fonts it uses.
 
@@ -51,28 +49,6 @@ application::
 
    stamp my_profile.spf my_metadata.tsv
 
-In the browser
---------------
-
-The browser version is the same application compiled to WebAssembly. It
-runs entirely on your own computer: files are opened with the browser's
-file picker and never uploaded, and results are saved as downloads. It
-needs a current browser with WebGL 2 (any recent Chrome, Edge, Firefox or
-Safari).
-
-The download is about 5 MB. While it loads, a bar shows its progress.
-
-.. note::
-
-   The browser runs analyses on the page's only thread, a few features at a
-   time, so the page keeps responding during long resampling tests. White's
-   non-parametric t-test is the exception: it holds the page until it has
-   finished.
-
-To host the browser version yourself, unpack ``stamp-<version>-web.zip``
-into any directory served by a web server. No server-side software is
-needed.
-
 Command line program
 --------------------
 
@@ -96,13 +72,6 @@ STAMP is written in `Rust <https://www.rust-lang.org>`_. With
 The programs are written to ``target/release/stamp`` and
 ``target/release/stamp-cli``. The compiler version is pinned by the
 repository, and rustup installs it on first use.
-
-The browser version is built with `trunk <https://trunkrs.dev>`_::
-
-   cargo install trunk --locked
-   cd crates/stamp-gui
-   trunk build --release      # writes the site to crates/stamp-gui/dist
-   trunk serve --release      # or build it and open it at http://127.0.0.1:8080
 
 Testing the installation
 ------------------------

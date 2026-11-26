@@ -16,15 +16,14 @@ difference is large enough to matter as well as whether it is real.
 .. important::
 
    This is the documentation of **STAMP 3**, a rewrite of STAMP in Rust. It
-   runs as a desktop application on Linux, Windows and macOS, as a command
-   line program, and in a web browser, where your data never leaves your
-   computer. It keeps the analyses and plots of STAMP 2 and adds new ones;
+   runs as a desktop application on Linux, Windows and macOS, and as a command
+   line program. It keeps the analyses and plots of STAMP 2 and adds new ones;
    the differences are listed in :doc:`changes`.
 
 Running STAMP
 -------------
 
-1. :doc:`Install STAMP <installing>`, or open the browser version.
+1. :doc:`Install STAMP <installing>`.
 2. Load a **profile** (File > Load profile file, or Load profile directory for a
    directory of SingleM profiles) and, to compare groups of
    samples, its **metadata** (File > Load metadata). File > Open example data

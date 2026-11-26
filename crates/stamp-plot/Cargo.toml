@@ -8,12 +8,6 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
-[features]
-default = ["png"]
-# PNG export through resvg. SVG and PDF export are always available (PDF is
-# written directly, see src/pdf.rs).
-png = ["dep:resvg"]
-
 [dependencies]
 stamp-core = { workspace = true }
 ttf-parser = { workspace = true }
@@ -23,4 +17,5 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 # Compresses the streams of PDF files.
 flate2 = { workspace = true }
-resvg = { workspace = true, optional = true }
+# PNG export. SVG and PDF are written directly (src/svg.rs, src/pdf.rs).
+resvg = { workspace = true }

@@ -7,6 +7,7 @@ behaviour. Where a fix changes numbers, the affected reference case in
 `tests/golden` is marked as an expected difference rather than regenerated.
 
 Status: **planned** = found, not yet ported. **done** = ported and tested.
+**removed** = was done, later taken out (with the date or issue).
 
 ## Bugs fixed
 
@@ -56,7 +57,7 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 6 | done | Benjamini-Hochberg uses the standard adjustment (as R's `p.adjust(method = "BH")`): `p * n / rank` followed by a running minimum from the largest p-value down, capped at 1. Python omitted the running minimum, so tied p-values could get different corrected values and corrected values were not monotonic. Corrected p-values can therefore be smaller than in STAMP v2, never larger. The `corr:Benjamini-Hochberg FDR` columns in `tests/golden` hold the old values and are an expected difference. |
 | 7 | done | Features, and the rows of converted profiles, are kept in order of first appearance in the input. Python used dictionary order, which was arbitrary. |
 | 8 | done | Counts written by the BIOM converter (and the CoMet converter, before it was removed in #69) use the shortest exact decimal form instead of Python's 12 significant digits. |
-| 9 | done | BIOM 2.x (HDF5) tables are read as well as BIOM 1.0 (JSON) tables, which is all v2 read. The `hdf5-pure` crate reads them without the HDF5 C library, so this also works in the browser. Tables written by biom-format 2.1 give the same profile from either format. |
+| 9 | done | BIOM 2.x (HDF5) tables are read as well as BIOM 1.0 (JSON) tables, which is all v2 read. The `hdf5-pure` crate reads them without the HDF5 C library, so nothing has to be installed. Tables written by biom-format 2.1 give the same profile from either format. |
 | 10 | done | The COG lookup table is a compact extract (`crates/stamp-core/data/cog_codes.tsv`) of `whog.txt`, embedded in the program. |
 | 11 | done | Bonferroni-corrected p-values are capped at 1. Python reported `p * n` even when it exceeded 1. |
 | 12 | done | Resampling methods (bootstrap, permutation, White's test, Storey's FDR) draw from a ChaCha8 generator seeded by the user, so results are reproducible but are not the same random draws as any Python run. Storey's bootstrap draws from the generator as it was seeded, before any test draws from it, so its q-values do not depend on the test or on whether the correction was chosen before or after the run. |
@@ -72,7 +73,7 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 22 | done | The graphical application is rebuilt with egui: one window with the profile and groups on the left, the plot in the middle and statistics and filtering on the right. Analyses run in the background with a progress bar and can be cancelled. |
 | 23 | done | In the graphical application, groups with a single sample start out switched off for multiple-group analyses, because they make ANOVA undefined for every feature. They can be switched on in the group list. |
 | 24 | done | Changing only the multiple-test correction no longer re-runs the statistical tests. |
-| 25 | done | STAMP also runs in a web browser (WebAssembly), entirely on the user's computer. Files come from the browser's file picker and are saved as downloads. |
+| 25 | removed (2026-11-26) | STAMP also ran in a web browser (WebAssembly). The browser version was dropped: STAMP v3 is a desktop application (Linux, Windows, macOS) and a command-line program. |
 | 26 | done | Plots are saved through File > Save plot as > PNG, SVG or PDF, rather than by choosing the format in the save dialog. A built-in example dataset can be opened from the File menu. |
 | 27 | done | In the graphical application: the plot is centred in its area; Settings has a light/dark mode switch; a Reset button returns the zoom to its default; each group's colour can be changed with a colour picker in the group list; and the results table window has a Download button. |
 | 28 | done | A group keeps one colour in every plot, taken from its position among all groups of the metadata field (or chosen by the user). The second group of a two-group comparison is no longer always orange. |
@@ -96,9 +97,9 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 46 | done | The "Configure plot" window groups related options in titled frames as v2 does ("Figure size", "Sort rows", "Legend position" and so on), under v2's labels. An option that depends on another is greyed out rather than hidden: the height of the PCA plot under "Fixed pixels per unit distance", for example. Legend positions are chosen from a list instead of radio buttons, and the options v2 left outside any frame are gathered in an "Other options" frame at the bottom. |
 | 47 | done | Tukey-Kramer and Games-Howell report computed p-values and confidence limits from the studentized range distribution, where v2 reported a bound read from tables (`< 0.05`) and limits from the same tables, interpolated for Games-Howell. Every computed p-value of the reference cases lies within v2's bound, and the limits differ from v2's by at most 0.25%. Any coverage can be used, not only the five that had tables. A comparison that cannot be made (a single-sample group under Games-Howell) has no p-value rather than ">= 0.1". |
 | 48 | done | File > Load profile opens BIOM tables and mothur taxonomy files as well as STAMP profiles, telling them apart by their content or name. A BIOM table with observation metadata asks which field gives the hierarchy; a mothur taxonomy file asks for its groups file and, optionally, its names file. The profile is loaded without first being saved as a file. |
-| 49 | done | Added to the graphical application from v2: keyboard shortcuts (Ctrl+O, Ctrl+S, Ctrl+Q, Ctrl+W, Ctrl+P, Ctrl+L, Ctrl+M, Ctrl+T; in a browser those the browser keeps for itself do not reach the page); sending a copy of the plot to a window of its own (a separate window on the desktop, a floating one in the browser); remembering the layout, preferences and plot settings between runs; preferences for the smallest p-value reported and for the colours of the two samples, of "All other samples" and of axes; a tooltip listing the samples of each group; and "q-value filter" as the name of the p-value filter under a false discovery rate correction. Menu items have icons (Phosphor Icons, MIT licence). |
+| 49 | done | Added to the graphical application from v2: keyboard shortcuts (Ctrl+O, Ctrl+S, Ctrl+Q, Ctrl+W, Ctrl+P, Ctrl+L, Ctrl+M, Ctrl+T); sending a copy of the plot to a window of its own; remembering the layout, preferences and plot settings between runs; preferences for the smallest p-value reported and for the colours of the two samples, of "All other samples" and of axes; a tooltip listing the samples of each group; and "q-value filter" as the name of the p-value filter under a false discovery rate correction. Menu items have icons (Phosphor Icons, MIT licence). |
 | 50 | done | As in v2, a group unticked in the group list is no longer offered as Group 1 or Group 2, and a sample switched off in the metadata table is no longer offered in the two-sample analysis. If the group or sample in use is removed this way, the next one takes its place. |
-| 51 | done | In the browser, analyses are carried out a few features at a time between redraws, so the page keeps responding and shows progress during long resampling tests, and they can be cancelled. This is done on the page's own thread rather than in a web worker. White's test, which works on all features at once, is still done in one piece. |
+| 51 | removed (2026-11-26) | In the browser, analyses were carried out a few features at a time between redraws. Removed with the browser version (change 25); on the desktop analyses run on their own thread, with progress and cancelling. |
 | 52 | done | Start-up settings follow v2: the two-sample analysis begins with "G-test (w/ Yates') + Fisher's" and the "DP: Asymptotic-CC" confidence interval; samples are listed in alphabetical order and the first two are compared; the sequence filters start at 5, the parent sequence filters at 1 and the multiple-group effect-size filter at 0.8; and the kinds of the two-group sequence filter are listed in v2's order. |
 | 53 | done | Every plot that can show a legend starts with one, placed by "Best" (the bar, profile bar, sequence histogram, PCA and heatmap plots). v2 started most of them without a legend. The extended error bar plot keeps its legend beneath the plot, since its legend sits outside the plotted area and has no "Best". |
 | 54 | done | Scatter plot tooltips give what v2's did: for two samples the sequence counts, the two percentages, their difference and ratio, and the p-value and corrected p-value; for two groups the mean proportions, their difference and ratio, and the p-values. They are shown on hover rather than on a click. |
@@ -158,9 +159,6 @@ numerical methods rather than from different formulas:
 
 ## Open questions
 
-* **White's test in the browser.** It is the one analysis still done in a
-  single piece there (behaviour change 51). Making it resumable, or moving
-  analyses to a web worker, would remove the pause on very large profiles.
 * **Example profiles the reader rejects.** `examples/EBPR/MartinEBPR.spf`,
   `examples/EBPR/MartinEBPR_A_phosphatis.spf`, `examples/FinegoldAutism/Autism.spf`
   and `examples/MouseGut-IMG-M/MouseGut.COG.profile.tsv` fail the hierarchy

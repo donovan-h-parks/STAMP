@@ -55,10 +55,6 @@ Are the results the same as STAMP 2?
    with the standard one (for example, the Benjamini-Hochberg correction).
    See :doc:`changes`.
 
-Is my data uploaded when I use STAMP in a browser?
-   No. The browser version runs entirely on your computer; files are read
-   with the browser's file picker and results saved as downloads.
-
 How do I make plots for a paper?
    Use **File > Save plot as** with SVG or PDF to keep text editable in a
    drawing program, or PNG at 300 dots per inch or more. Set the font and
@@ -71,8 +67,7 @@ How long do the ordination plots take with many samples?
    profile of about 6,000 genera on a desktop computer: with 619 samples
    the PCoA with its three community tests (999 permutations) takes about
    1.5 seconds and the NMDS about 2 seconds; with 1,307 samples about 7
-   and 10 seconds. The browser version is
-   slower. While a plot is computed, the window stays usable and shows
+   and 10 seconds. While a plot is computed, the window stays usable and shows
    what is being done and how far it has got, with a button to cancel (see
    :doc:`main_window`). Once computed, a plot is kept: changing only how it looks
    (colours, shapes, marker size, opacity, legend, fonts) redraws it at

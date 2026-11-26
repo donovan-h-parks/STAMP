@@ -1,15 +1,10 @@
 //! File access: opening, converting and saving files.
 //!
 //! The interface asks for something with [`Platform::request`] and later
-//! receives the outcome from [`Platform::poll`]. On the desktop the request
-//! is answered at once with native dialogs. In the browser, files come from
-//! the browser's file picker and are saved as downloads, both of which
-//! finish some time after they are asked for.
-//!
-//! PNG images of plots are drawn with resvg on the desktop. The browser
-//! build leaves resvg out and has the browser draw the plot's SVG into a
-//! canvas, which also finishes later, so PNG images are asked for in the
-//! same way.
+//! receives the outcome from [`Platform::poll`]. Requests are answered at
+//! once with the system's file dialogs; outcomes go through the queue so
+//! that tests (and the assistant) can deliver them with [`Platform::push`].
+//! PNG images of plots are drawn with resvg.
 
 use std::sync::mpsc::{channel, Receiver, Sender};
 
@@ -219,15 +214,14 @@ pub fn convert_files(source: Source, files: &[OpenedFile]) -> Result<String, Str
 pub const DEFAULT_DPI: f64 = 300.0;
 
 /// Encode a figure in the format implied by a file name. `dpi` sets the
-/// resolution of a PNG image. The browser build cannot make PNG images this
-/// way: ask for them with [`Request::SavePng`] or [`Request::PlotImage`].
+/// resolution of a PNG image.
 pub fn encode_plot(figure: &Figure, file_name: &str, dpi: f64) -> Result<Vec<u8>, String> {
     let format = Format::from_file_name(file_name)
         .ok_or("Use a file name ending in .png, .svg or .pdf to choose the image format.")?;
     export(figure, format, dpi).map_err(|e| e.to_string())
 }
 
-/// The application's connection to the file system or the browser.
+/// The application's connection to the file system.
 pub struct Platform {
     sender: Sender<Event>,
     receiver: Receiver<Event>,
@@ -262,25 +256,23 @@ impl Platform {
     /// Ask for something to be done. The outcome, if there is one, arrives
     /// through [`Platform::poll`]; `ctx` is asked to repaint when it does.
     pub fn request(&self, request: Request, ctx: &egui::Context) {
-        imp::request(request, self.sender.clone(), ctx.clone());
+        deliver(perform(request), &self.sender, ctx);
     }
 }
 
-/// Carry out a request once its dialogs have been answered. Shared by the
-/// desktop and browser implementations, which differ only in how they ask.
-async fn perform(request: Request) -> Result<Option<Event>, String> {
+/// Carry out a request, asking with the system's file dialogs.
+fn perform(request: Request) -> Result<Option<Event>, String> {
     match request {
         Request::OpenProfile => {
             // Several files can be chosen: profilers usually write one file
             // per sample.
-            let files = imp::open("Load profile file", &PROFILE_EXTENSIONS, true).await?;
+            let files = open("Load profile file", &PROFILE_EXTENSIONS, true)?;
             Ok((!files.is_empty()).then_some(Event::Profile(files)))
         }
-        Request::OpenProfileDirectory => Ok(imp::open_directory("Load profile directory")
-            .await?
-            .map(Event::ProfileDirectory)),
-        Request::OpenMetadata => Ok(imp::open("Load metadata", &METADATA_EXTENSIONS, false)
-            .await?
+        Request::OpenProfileDirectory => {
+            Ok(open_directory("Load profile directory")?.map(Event::ProfileDirectory))
+        }
+        Request::OpenMetadata => Ok(open("Load metadata", &METADATA_EXTENSIONS, false)?
             .pop()
             .map(Event::Metadata)),
         Request::OpenAuxiliary(which) => {
@@ -288,30 +280,27 @@ async fn perform(request: Request) -> Result<Option<Event>, String> {
                 Auxiliary::MothurGroups => ("mothur groups file", &["groups", "gz"]),
                 Auxiliary::MothurNames => ("mothur names file", &["names", "gz"]),
             };
-            Ok(imp::open(title, extensions, false)
-                .await?
+            Ok(open(title, extensions, false)?
                 .pop()
                 .map(|file| Event::Auxiliary(which, file)))
         }
-        Request::Save { name, bytes } => imp::save(&name, bytes).await.map(|_| None),
+        Request::Save { name, bytes } => save(&name, bytes).map(|_| None),
         Request::SavePng { figure, dpi } => {
-            let bytes = imp::png(&figure, dpi).await?;
-            imp::save("plot.png", bytes).await.map(|_| None)
+            let bytes = encode_png(&figure, dpi)?;
+            save("plot.png", bytes).map(|_| None)
         }
-        Request::PlotImage { figure, dpi } => {
-            Ok(Some(Event::PlotImage(imp::image(&figure, dpi).await?)))
-        }
+        Request::PlotImage { figure, dpi } => Ok(Some(Event::PlotImage(image(&figure, dpi)?))),
         Request::Convert(source) => {
             let mut files = Vec::new();
             for (title, extensions, several, optional) in source.steps() {
-                let chosen = imp::open(title, extensions, *several).await?;
+                let chosen = open(title, extensions, *several)?;
                 if chosen.is_empty() && !optional {
                     return Ok(None); // cancelled
                 }
                 files.extend(chosen);
             }
             let spf = convert_files(source, &files)?;
-            let name = imp::save("profile.spf", spf.clone().into_bytes()).await?;
+            let name = save("profile.spf", spf.clone().into_bytes())?;
             Ok(Some(Event::Converted {
                 name: name.unwrap_or_else(|| "profile.spf".to_string()),
                 spf,
@@ -330,396 +319,116 @@ fn deliver(outcome: Result<Option<Event>, String>, sender: &Sender<Event>, ctx: 
     ctx.request_repaint();
 }
 
-/// Read the profiles of a directory as Load profile directory does.
-#[cfg(not(target_arch = "wasm32"))]
-pub use imp::read_directory;
+fn read(path: &std::path::Path) -> Result<OpenedFile, String> {
+    let bytes =
+        std::fs::read(path).map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+    let name = path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    OpenedFile::new(name, bytes)
+}
 
-#[cfg(not(target_arch = "wasm32"))]
-mod imp {
-    use super::*;
+fn open(title: &str, extensions: &[&str], several: bool) -> Result<Vec<OpenedFile>, String> {
+    let dialog = rfd::FileDialog::new()
+        .set_title(title)
+        .add_filter(title, extensions)
+        .add_filter("All files", &["*"]);
+    let paths = if several {
+        dialog.pick_files().unwrap_or_default()
+    } else {
+        dialog.pick_file().into_iter().collect()
+    };
+    paths.iter().map(|p| read(p)).collect()
+}
 
-    /// Run a future that never actually waits: on the desktop every dialog
-    /// answers before its function returns.
-    fn run_now<T>(future: impl std::future::Future<Output = T>) -> T {
-        let mut future = std::pin::pin!(future);
-        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
-        match future.as_mut().poll(&mut context) {
-            std::task::Poll::Ready(value) => value,
-            std::task::Poll::Pending => unreachable!("desktop file dialogs complete immediately"),
-        }
-    }
-
-    pub fn request(request: Request, sender: Sender<Event>, ctx: egui::Context) {
-        deliver(run_now(perform(request)), &sender, &ctx);
-    }
-
-    fn read(path: &std::path::Path) -> Result<OpenedFile, String> {
-        let bytes =
-            std::fs::read(path).map_err(|e| format!("Could not read {}: {e}", path.display()))?;
-        let name = path.file_name().map_or_else(
-            || path.display().to_string(),
-            |n| n.to_string_lossy().into_owned(),
-        );
-        OpenedFile::new(name, bytes)
-    }
-
-    pub async fn open(
-        title: &str,
-        extensions: &[&str],
-        several: bool,
-    ) -> Result<Vec<OpenedFile>, String> {
-        let dialog = rfd::FileDialog::new()
-            .set_title(title)
-            .add_filter(title, extensions)
-            .add_filter("All files", &["*"]);
-        let paths = if several {
-            dialog.pick_files().unwrap_or_default()
-        } else {
-            dialog.pick_file().into_iter().collect()
-        };
-        paths.iter().map(|p| read(p)).collect()
-    }
-
-    pub async fn open_directory(title: &str) -> Result<Option<ProfileDirectory>, String> {
-        match rfd::FileDialog::new().set_title(title).pick_folder() {
-            Some(path) => read_directory(&path).map(Some),
-            None => Ok(None),
-        }
-    }
-
-    /// The files directly in a directory (not in its subdirectories) that
-    /// may be profilers' outputs. Only the start of other files
-    /// is read, so that large files beside the profiles, such as reads,
-    /// cost little. Hidden files are left out.
-    pub fn read_directory(path: &std::path::Path) -> Result<ProfileDirectory, String> {
-        use std::io::Read;
-        let failed = |e: std::io::Error| format!("Could not read {}: {e}", path.display());
-        let mut entries: Vec<(String, std::path::PathBuf)> = std::fs::read_dir(path)
-            .map_err(failed)?
-            .filter_map(|entry| {
-                let entry = entry.ok()?;
-                let name = entry.file_name().to_string_lossy().into_owned();
-                let path = entry.path();
-                // Follows links, unlike the entry's own file type.
-                let is_file = std::fs::metadata(&path).is_ok_and(|m| m.is_file());
-                (is_file && profiler::is_candidate(&name)).then_some((name, path))
-            })
-            .collect();
-        entries.sort();
-        let mut directory = ProfileDirectory {
-            name: path.file_name().map_or_else(
-                || path.display().to_string(),
-                |n| n.to_string_lossy().into_owned(),
-            ),
-            files: Vec::new(),
-            skipped: Vec::new(),
-        };
-        for (name, path) in entries {
-            let mut start = Vec::new();
-            let opened = std::fs::File::open(&path)
-                .and_then(|file| file.take(DETECTION_BYTES as u64).read_to_end(&mut start));
-            if opened.is_ok() && starts_like_profile(&start) {
-                directory.files.push(read(&path)?);
-            } else {
-                directory.skipped.push(name);
-            }
-        }
-        Ok(directory)
-    }
-
-    /// Ask where to save, and save. Returns the chosen file name, or `None`
-    /// if the user cancelled.
-    pub async fn save(default_name: &str, bytes: Vec<u8>) -> Result<Option<String>, String> {
-        let extension = default_name.rsplit_once('.').map_or("", |(_, e)| e);
-        let Some(path) = rfd::FileDialog::new()
-            .set_title("Save")
-            .set_file_name(default_name)
-            .add_filter(extension, &[extension])
-            .save_file()
-        else {
-            return Ok(None);
-        };
-        std::fs::write(&path, bytes)
-            .map_err(|e| format!("Could not write {}: {e}", path.display()))?;
-        Ok(path.file_name().map(|n| n.to_string_lossy().into_owned()))
-    }
-
-    /// A PNG image of a figure, drawn with resvg.
-    pub async fn png(figure: &Figure, dpi: f64) -> Result<Vec<u8>, String> {
-        encode_plot(figure, "plot.png", dpi)
-    }
-
-    /// An image of a figure, drawn with resvg.
-    pub async fn image(figure: &Figure, dpi: f64) -> Result<egui::ColorImage, String> {
-        let bytes = png(figure, dpi).await?;
-        let failed = |_| "The plot could not be turned into an image.".to_string();
-        let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
-            .read_info()
-            .map_err(failed)?;
-        let mut buffer = vec![0; reader.output_buffer_size()];
-        let info = reader.next_frame(&mut buffer).map_err(failed)?;
-        let size = [info.width as usize, info.height as usize];
-        match (info.color_type, info.bit_depth) {
-            (png::ColorType::Rgba, png::BitDepth::Eight) => Ok(
-                egui::ColorImage::from_rgba_unmultiplied(size, &buffer[..info.buffer_size()]),
-            ),
-            (png::ColorType::Rgb, png::BitDepth::Eight) => Ok(egui::ColorImage::from_rgb(
-                size,
-                &buffer[..info.buffer_size()],
-            )),
-            _ => Err("The plot could not be turned into an image.".to_string()),
-        }
+fn open_directory(title: &str) -> Result<Option<ProfileDirectory>, String> {
+    match rfd::FileDialog::new().set_title(title).pick_folder() {
+        Some(path) => read_directory(&path).map(Some),
+        None => Ok(None),
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-mod imp {
-    use super::*;
-    use wasm_bindgen::JsCast;
-
-    pub fn request(request: Request, sender: Sender<Event>, ctx: egui::Context) {
-        wasm_bindgen_futures::spawn_local(async move {
-            deliver(perform(request).await, &sender, &ctx);
-        });
-    }
-
-    pub async fn open(
-        title: &str,
-        extensions: &[&str],
-        several: bool,
-    ) -> Result<Vec<OpenedFile>, String> {
-        let dialog = rfd::AsyncFileDialog::new()
-            .set_title(title)
-            .add_filter(title, extensions);
-        let handles = if several {
-            dialog.pick_files().await.unwrap_or_default()
+/// The files directly in a directory (not in its subdirectories) that
+/// may be profilers' outputs. Only the start of other files
+/// is read, so that large files beside the profiles, such as reads,
+/// cost little. Hidden files are left out.
+pub fn read_directory(path: &std::path::Path) -> Result<ProfileDirectory, String> {
+    use std::io::Read;
+    let failed = |e: std::io::Error| format!("Could not read {}: {e}", path.display());
+    let mut entries: Vec<(String, std::path::PathBuf)> = std::fs::read_dir(path)
+        .map_err(failed)?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let path = entry.path();
+            // Follows links, unlike the entry's own file type.
+            let is_file = std::fs::metadata(&path).is_ok_and(|m| m.is_file());
+            (is_file && profiler::is_candidate(&name)).then_some((name, path))
+        })
+        .collect();
+    entries.sort();
+    let mut directory = ProfileDirectory {
+        name: path.file_name().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        ),
+        files: Vec::new(),
+        skipped: Vec::new(),
+    };
+    for (name, path) in entries {
+        let mut start = Vec::new();
+        let opened = std::fs::File::open(&path)
+            .and_then(|file| file.take(DETECTION_BYTES as u64).read_to_end(&mut start));
+        if opened.is_ok() && starts_like_profile(&start) {
+            directory.files.push(read(&path)?);
         } else {
-            dialog.pick_file().await.into_iter().collect()
-        };
-        let mut files = Vec::new();
-        for handle in handles {
-            files.push(OpenedFile::new(handle.file_name(), handle.read().await)?);
+            directory.skipped.push(name);
         }
-        Ok(files)
     }
+    Ok(directory)
+}
 
-    /// The contents of a blob, such as a file or part of one.
-    async fn blob_bytes(blob: &web_sys::Blob) -> Result<Vec<u8>, String> {
-        let buffer = wasm_bindgen_futures::JsFuture::from(blob.array_buffer())
-            .await
-            .map_err(|_| "The browser could not read a file.".to_string())?;
-        Ok(js_sys::Uint8Array::new(&buffer).to_vec())
-    }
+/// Ask where to save, and save. Returns the chosen file name, or `None`
+/// if the user cancelled.
+fn save(default_name: &str, bytes: Vec<u8>) -> Result<Option<String>, String> {
+    let extension = default_name.rsplit_once('.').map_or("", |(_, e)| e);
+    let Some(path) = rfd::FileDialog::new()
+        .set_title("Save")
+        .set_file_name(default_name)
+        .add_filter(extension, &[extension])
+        .save_file()
+    else {
+        return Ok(None);
+    };
+    std::fs::write(&path, bytes).map_err(|e| format!("Could not write {}: {e}", path.display()))?;
+    Ok(path.file_name().map(|n| n.to_string_lossy().into_owned()))
+}
 
-    /// Ask for a directory with the browser's folder picker (an input
-    /// element with `webkitdirectory`, which rfd does not offer), and read
-    /// the files directly in it that may be profilers' outputs.
-    /// The browser asks the user to allow the page to read the folder.
-    pub async fn open_directory(_title: &str) -> Result<Option<ProfileDirectory>, String> {
-        let failed = |_| "The browser could not open a folder picker.".to_string();
-        let document = web_sys::window()
-            .and_then(|w| w.document())
-            .ok_or("No page to open a folder from.")?;
-        let input: web_sys::HtmlInputElement = document
-            .create_element("input")
-            .map_err(failed)?
-            .dyn_into()
-            .map_err(|_| "No input element.".to_string())?;
-        input.set_type("file");
-        input.set_attribute("webkitdirectory", "").map_err(failed)?;
-        input
-            .set_attribute("style", "display: none")
-            .map_err(failed)?;
-        let body = document.body().ok_or("No page to open a folder from.")?;
-        body.append_child(&input).map_err(failed)?;
-        // Settled when files are chosen or the picker is cancelled. A
-        // browser that refuses to show the picker settles nothing, which
-        // leaves this request waiting harmlessly.
-        let chosen = js_sys::Promise::new(&mut |resolve, _| {
-            input.set_onchange(Some(&resolve));
-            let _ = input.add_event_listener_with_callback("cancel", &resolve);
-        });
-        input.click();
-        let _ = wasm_bindgen_futures::JsFuture::from(chosen).await;
-        input.set_onchange(None);
-        let _ = body.remove_child(&input);
+/// A PNG image of a figure, drawn with resvg.
+fn encode_png(figure: &Figure, dpi: f64) -> Result<Vec<u8>, String> {
+    encode_plot(figure, "plot.png", dpi)
+}
 
-        let Some(list) = input.files().filter(|list| list.length() > 0) else {
-            return Ok(None);
-        };
-        let mut name = String::new();
-        let mut entries = Vec::new();
-        for index in 0..list.length() {
-            let Some(file) = list.get(index) else {
-                continue;
-            };
-            // `folder/file`; files in subdirectories have more parts.
-            // web-sys has no binding for this property.
-            let path = js_sys::Reflect::get(&file, &"webkitRelativePath".into())
-                .ok()
-                .and_then(|path| path.as_string())
-                .unwrap_or_default();
-            let parts: Vec<&str> = path.split('/').collect();
-            if let [folder, file_name] = parts.as_slice() {
-                name = folder.to_string();
-                if profiler::is_candidate(file_name) {
-                    entries.push((file_name.to_string(), file));
-                }
-            }
-        }
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
-        let mut directory = ProfileDirectory {
-            name,
-            files: Vec::new(),
-            skipped: Vec::new(),
-        };
-        for (name, file) in entries {
-            let start = file
-                .slice_with_f64_and_f64(0.0, DETECTION_BYTES as f64)
-                .map_err(|_| "The browser could not read a file.".to_string())?;
-            if starts_like_profile(&blob_bytes(&start).await?) {
-                let bytes = blob_bytes(&file).await?;
-                directory.files.push(OpenedFile::new(name, bytes)?);
-            } else {
-                directory.skipped.push(name);
-            }
-        }
-        Ok(Some(directory))
-    }
-
-    /// Hand the data to the browser as a download.
-    pub async fn save(default_name: &str, bytes: Vec<u8>) -> Result<Option<String>, String> {
-        let failed = |_| "The browser refused the download.".to_string();
-        let parts = js_sys::Array::new();
-        parts.push(&js_sys::Uint8Array::from(bytes.as_slice()).buffer());
-        let blob = web_sys::Blob::new_with_u8_array_sequence(&parts).map_err(failed)?;
-        let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(failed)?;
-
-        let document = web_sys::window()
-            .and_then(|w| w.document())
-            .ok_or("No page to download from.")?;
-        let anchor: web_sys::HtmlAnchorElement = document
-            .create_element("a")
-            .map_err(failed)?
-            .dyn_into()
-            .map_err(|_| "No link element.".to_string())?;
-        anchor.set_href(&url);
-        anchor.set_download(default_name);
-        anchor.click();
-        let _ = web_sys::Url::revoke_object_url(&url);
-        Ok(Some(default_name.to_string()))
-    }
-
-    /// The largest canvas, in pixels, that every common browser can draw
-    /// (Chrome's and Safari's limit).
-    const MAX_PIXELS: f64 = 268_435_456.0;
-
-    fn drawing_failed(_: wasm_bindgen::JsValue) -> String {
-        "The browser could not draw the plot.".to_string()
-    }
-
-    /// Have the browser draw a figure into a new canvas: its SVG, carrying
-    /// the figure's font, loaded as an image and drawn at the size the
-    /// resolution asks for. Returns the canvas's drawing context.
-    async fn draw(figure: &Figure, dpi: f64) -> Result<web_sys::CanvasRenderingContext2d, String> {
-        if !(dpi.is_finite() && dpi > 0.0) {
-            return Err(format!("Invalid resolution: {dpi} dpi."));
-        }
-        let scale = dpi / 72.0;
-        let width = (figure.width * scale).round().max(1.0);
-        let height = (figure.height * scale).round().max(1.0);
-        if width * height > MAX_PIXELS {
-            return Err(format!(
-                "The image would be {width} by {height} pixels, which is more than the browser can draw. Use a lower resolution or a vector format."
-            ));
-        }
-        let (width, height) = (width as u32, height as u32);
-
-        let svg = stamp_plot::svg::to_svg_with_font(figure, width, height);
-        let options = web_sys::BlobPropertyBag::new();
-        options.set_type("image/svg+xml");
-        let parts = js_sys::Array::of1(&wasm_bindgen::JsValue::from_str(&svg));
-        let blob = web_sys::Blob::new_with_str_sequence_and_options(&parts, &options)
-            .map_err(drawing_failed)?;
-        let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(drawing_failed)?;
-        let image = web_sys::HtmlImageElement::new().map_err(drawing_failed)?;
-        let loaded = js_sys::Promise::new(&mut |resolve, reject| {
-            image.set_onload(Some(&resolve));
-            image.set_onerror(Some(&reject));
-        });
-        image.set_src(&url);
-        let outcome = wasm_bindgen_futures::JsFuture::from(loaded).await;
-        if outcome.is_ok() {
-            // Wait until the image, with its font, is ready to be drawn;
-            // a browser that cannot say so draws it as it is.
-            let _ = wasm_bindgen_futures::JsFuture::from(image.decode()).await;
-        }
-        image.set_onload(None);
-        image.set_onerror(None);
-        let _ = web_sys::Url::revoke_object_url(&url);
-        outcome.map_err(drawing_failed)?;
-
-        let canvas: web_sys::HtmlCanvasElement = web_sys::window()
-            .and_then(|w| w.document())
-            .ok_or("No page to draw on.")?
-            .create_element("canvas")
-            .map_err(drawing_failed)?
-            .dyn_into()
-            .map_err(|_| "No canvas element.".to_string())?;
-        canvas.set_width(width);
-        canvas.set_height(height);
-        let context: web_sys::CanvasRenderingContext2d = canvas
-            .get_context("2d")
-            .map_err(drawing_failed)?
-            .ok_or("The browser could not draw the plot.")?
-            .dyn_into()
-            .map_err(|_| "No canvas drawing context.".to_string())?;
-        context
-            .draw_image_with_html_image_element_and_dw_and_dh(
-                &image,
-                0.0,
-                0.0,
-                f64::from(width),
-                f64::from(height),
-            )
-            .map_err(drawing_failed)?;
-        Ok(context)
-    }
-
-    /// A PNG image of a figure, drawn by the browser.
-    pub async fn png(figure: &Figure, dpi: f64) -> Result<Vec<u8>, String> {
-        let context = draw(figure, dpi).await?;
-        let canvas = context.canvas().ok_or("No canvas.")?;
-        let encoded = js_sys::Promise::new(&mut |resolve, reject| {
-            if let Err(error) = canvas.to_blob_with_type(&resolve, "image/png") {
-                let _ = reject.call1(&wasm_bindgen::JsValue::NULL, &error);
-            }
-        });
-        let blob: web_sys::Blob = wasm_bindgen_futures::JsFuture::from(encoded)
-            .await
-            .map_err(drawing_failed)?
-            .dyn_into()
-            // No image (null) when the canvas is too large to encode.
-            .map_err(|_| "The browser could not make the image.".to_string())?;
-        let buffer = wasm_bindgen_futures::JsFuture::from(blob.array_buffer())
-            .await
-            .map_err(drawing_failed)?;
-        Ok(js_sys::Uint8Array::new(&buffer).to_vec())
-    }
-
-    /// An image of a figure, drawn by the browser.
-    pub async fn image(figure: &Figure, dpi: f64) -> Result<egui::ColorImage, String> {
-        let context = draw(figure, dpi).await?;
-        let canvas = context.canvas().ok_or("No canvas.")?;
-        let (width, height) = (canvas.width(), canvas.height());
-        let pixels = context
-            .get_image_data(0.0, 0.0, f64::from(width), f64::from(height))
-            .map_err(drawing_failed)?
-            .data();
-        Ok(egui::ColorImage::from_rgba_unmultiplied(
-            [width as usize, height as usize],
-            &pixels,
-        ))
+/// An image of a figure, drawn with resvg.
+fn image(figure: &Figure, dpi: f64) -> Result<egui::ColorImage, String> {
+    let bytes = encode_png(figure, dpi)?;
+    let failed = |_| "The plot could not be turned into an image.".to_string();
+    let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
+        .read_info()
+        .map_err(failed)?;
+    let mut buffer = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buffer).map_err(failed)?;
+    let size = [info.width as usize, info.height as usize];
+    match (info.color_type, info.bit_depth) {
+        (png::ColorType::Rgba, png::BitDepth::Eight) => Ok(
+            egui::ColorImage::from_rgba_unmultiplied(size, &buffer[..info.buffer_size()]),
+        ),
+        (png::ColorType::Rgb, png::BitDepth::Eight) => Ok(egui::ColorImage::from_rgb(
+            size,
+            &buffer[..info.buffer_size()],
+        )),
+        _ => Err("The plot could not be turned into an image.".to_string()),
     }
 }
 

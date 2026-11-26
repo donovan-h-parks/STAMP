@@ -7,8 +7,8 @@ says what is known about each sample and so defines groups of samples.
 
 Every file STAMP reads can be **gzip-compressed** (``profile.spf.gz``,
 ``metadata.tsv.gz``, ``H01.k2report.gz``): profiles, metadata, the outputs
-of profilers and the other formats below, in the window, the browser and
-on the command line, and in directories of profiles. STAMP tells a
+of profilers and the other formats below, in the window and on the
+command line, and in directories of profiles. STAMP tells a
 compressed file by its contents rather than its name, and leaves ``.gz`` out
 of the sample names it takes from file names.
 
@@ -213,8 +213,7 @@ A directory may hold profiles of several kinds: HUMAnN writes three tables
 for each sample, and a Bracken run leaves Kraken's reports beside
 Bracken's. STAMP then asks which kind to load, offering the kind with the
 most files first; the files of the other kinds are skipped. Files of two
-kinds are never combined. In the browser, the browser asks before letting
-STAMP read the folder.
+kinds are never combined.
 
 On the command line, ``--profile`` takes any of these files, or a directory
 of them, in the same way; ``--profile-format`` chooses the kind to read from

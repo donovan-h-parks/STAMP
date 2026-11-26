@@ -7,7 +7,6 @@
 | `stamp-<version>-linux-x86_64.tar.gz` | `stamp` (application), `stamp-cli`, a `.desktop` entry and icon, examples, documentation |
 | `stamp-<version>-windows-x86_64.zip` | `stamp.exe`, `stamp-cli.exe`, examples, documentation |
 | `stamp-<version>-macos-arm64.zip`, `-macos-x86_64.zip` | `STAMP.app`, `stamp-cli`, examples, documentation |
-| `stamp-<version>-web.zip` | The browser version: static files for any web server |
 
 Each desktop program is a single executable with nothing to install.
 
@@ -18,13 +17,7 @@ cargo build --release -p stamp-gui -p stamp-cli
 scripts/package.sh linux target/release linux-x86_64     # or: macos, windows
 ```
 
-The archive is written to `dist/`. The browser version is built with
-[trunk](https://trunkrs.dev):
-
-```bash
-cargo install trunk --locked
-cd crates/stamp-gui && trunk build --release             # writes crates/stamp-gui/dist
-```
+The archive is written to `dist/`.
 
 The compiler version is pinned in `rust-toolchain.toml`; `rustup` installs it
 on first use.
@@ -52,8 +45,7 @@ before release.
 
 `.github/workflows/ci.yml` runs on every push to `master` or `rust-port` and
 on pull requests. It checks formatting, runs the linter with warnings as
-errors, runs the tests on Linux, Windows and macOS, and builds the browser
-version. The interface tests need no display.
+errors, and runs the tests on Linux, Windows and macOS. The interface tests need no display.
 
 ## Making a release
 
@@ -74,10 +66,11 @@ The workflow can also be started by hand from the Actions tab to try the
 builds without creating a release; the packages are then available as
 artifacts of the run.
 
-## Publishing the browser version
+## Publishing the documentation
 
-`.github/workflows/pages.yml` publishes the browser version to GitHub Pages,
-with the documentation (`docs/site`, built by Sphinx) under `docs/`. It runs
+`.github/workflows/pages.yml` publishes the documentation (`docs/site`, built
+by Sphinx) to GitHub Pages under `docs/`; the site's root, where the browser
+version used to be, sends visitors there. It runs
 only when started by hand, and needs Pages enabled for the repository with
 "GitHub Actions" as the source (Settings > Pages). Run it after a release so
 that the published documentation matches the released version.

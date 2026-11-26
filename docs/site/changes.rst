@@ -4,8 +4,8 @@ Changes from STAMP 2
 STAMP 3 is a rewrite of STAMP 2 (Python 2 and PyQt4) in Rust. It keeps
 STAMP 2's analyses, plots, file formats and the column headings of its
 result tables, and gives the same results for almost every test. It runs as
-a desktop program on Linux, Windows and macOS, as a command line program and
-in a web browser.
+a desktop program on Linux, Windows and macOS, and as a command line
+program.
 
 New in STAMP 3
 --------------
@@ -28,7 +28,7 @@ Plots
    tooltips; zoom; a colour for each group, used in every plot.
 
 Program
-   The browser version; the command line program, with converters for
+   The command line program, with converters for
    other tools' output; BIOM 2 (HDF5) tables; built-in example data;
    repeatable resampling with a set seed; light and dark themes.
 

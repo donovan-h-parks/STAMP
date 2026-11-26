@@ -5,7 +5,7 @@
 /// Write a gzip-compressed copy of an example file to the build directory,
 /// for the program to carry inside it. The coal-seam profile is 4 MB of
 /// text and about 80 kB compressed, the glacier-fed stream profile 6 MB and
-/// 890 kB, which matters for the web page.
+/// 890 kB.
 fn compress_example(source: &str, name: &str) {
     use std::io::Write;
     println!("cargo:rerun-if-changed={source}");

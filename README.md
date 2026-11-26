@@ -13,12 +13,12 @@ The STAMP Google Group can be found [here](https://groups.google.com/forum/?hl=e
 
 ## Rust port (in progress)
 
-STAMP is being ported from Python to Rust, to run as a standalone application on Linux, Windows and macOS and in the browser. The port is not yet usable; STAMP v2 on the Releases page remains the current version.
+STAMP is being ported from Python to Rust, to run as a standalone application on Linux, Windows and macOS, with a command-line program. The port is not yet usable; STAMP v2 on the Releases page remains the current version.
 
 - `crates/stamp-core`: data model, file parsers and statistics
 - `crates/stamp-plot`: plots, with PNG, SVG and PDF export
 - `crates/stamp-cli`: command-line interface
-- `crates/stamp-gui`: graphical application (egui), for desktop and browser
+- `crates/stamp-gui`: graphical application (egui)
 - `legacy/`: the Python implementation, kept as the reference
 - `tests/golden/`: reference outputs generated from the Python implementation
 - `docs/CHANGES_FROM_PYTHON.md`: deliberate differences from STAMP v2
@@ -36,20 +36,7 @@ target/release/stamp examples/EnterotypesArumugam/Enterotypes.profile.spf \
 
 ![The STAMP window with the enterotype example](docs/images/gui.png)
 
-It offers the three kinds of analysis of STAMP v2 (multiple groups, two groups, two samples) and a fourth, correlation with a numeric metadata field; every statistical test, correction and filter, all the plots with tooltips, a results table, export of plots (PNG, SVG, PDF) and tables, and conversion from the other file formats. It is new: the browser version has been tried by hand, but the desktop window has so far been exercised only through automated tests.
-
-### In the browser
-
-The same application runs in a web browser, compiled to WebAssembly. Everything is computed on your own computer: no data is uploaded, and the site is just static files that any web server can host.
-
-```bash
-cargo install trunk --locked     # once
-cd crates/stamp-gui
-trunk build --release            # writes the site to crates/stamp-gui/dist
-trunk serve --release            # or: build and open it at http://127.0.0.1:8080
-```
-
-In the browser, files are opened with the browser's file picker and results are saved as downloads. File > Open example data loads one of the built-in datasets: Enterotypes, Coal seam gas, and Glacier-fed streams (158 sediment metagenomes of glacier-fed streams profiled by SingleM, an upstream and a downstream reach of each stream; see `examples/GlacierFedStreams/readme.txt`). Analyses run on the page's single thread, a few features at a time, so the page keeps responding and shows progress during a long resampling test; White's test is the exception and holds the page until it finishes.
+It offers the three kinds of analysis of STAMP v2 (multiple groups, two groups, two samples) and a fourth, correlation with a numeric metadata field; every statistical test, correction and filter, all the plots with tooltips, a results table, export of plots (PNG, SVG, PDF) and tables, and conversion from the other file formats. File > Open example data loads one of the built-in datasets: Enterotypes, Coal seam gas, and Glacier-fed streams (158 sediment metagenomes of glacier-fed streams profiled by SingleM, an upstream and a downstream reach of each stream; see `examples/GlacierFedStreams/readme.txt`). It is new: the desktop window has so far been exercised mostly through automated tests.
 
 ### Command line
 

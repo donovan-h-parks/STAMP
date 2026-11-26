@@ -1,7 +1,7 @@
-name: Publish browser version and documentation
+name: Publish documentation
 
-# Publishes the browser version of STAMP to GitHub Pages, with the
-# documentation (docs/site, built by Sphinx) under docs/. It only runs when
+# Publishes the documentation (docs/site, built by Sphinx) to GitHub Pages,
+# under docs/, with the site's root sending visitors there. It only runs when
 # started by hand from the Actions tab, and needs Pages to be enabled for the
 # repository with "GitHub Actions" as the source (Settings > Pages).
 on:
@@ -24,20 +24,16 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - run: rustup show
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: trunk
-      - run: trunk build --release
-        working-directory: crates/stamp-gui
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r docs/site/requirements.txt
-      - run: sphinx-build -b html -W docs/site crates/stamp-gui/dist/docs
+      - run: sphinx-build -b html -W docs/site site/docs
+      # The documentation keeps its address under docs/; the root, where the
+      # browser version used to be, sends visitors to it.
+      - run: printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=docs/"><a href="docs/">STAMP documentation</a>\n' > site/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: crates/stamp-gui/dist
+          path: site
       - id: deploy
         uses: actions/deploy-pages@v4

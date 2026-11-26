@@ -789,8 +789,7 @@ const GROUP_COUNT_KINDS: [&str; 4] = [
     "independent, minimum",
 ];
 
-/// Keyboard shortcuts, as in STAMP v2. In a browser some of them belong to
-/// the browser itself and never reach the page.
+/// Keyboard shortcuts, as in STAMP v2.
 mod shortcut {
     use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 
@@ -1535,8 +1534,7 @@ impl StampApp {
     }
 
     /// Read (and convert) files that make a profile without asking
-    /// anything, in a job: large ones take a while, in the browser most of
-    /// all. Files that first need choices (BIOM, mothur) are opened at once.
+    /// anything, in a job: large ones take a while. Files that first need choices (BIOM, mothur) are opened at once.
     fn start_loading(&mut self, files: Vec<OpenedFile>) {
         use stamp_core::import::biom;
         let needs_choices = matches!(files.as_slice(), [file]
@@ -1587,8 +1585,7 @@ impl StampApp {
                 if loading.started.is_none() {
                     loading.started = Some(ctx.input(|i| i.time));
                 }
-                let wait = if cfg!(target_arch = "wasm32") { 0 } else { 50 };
-                ctx.request_repaint_after(std::time::Duration::from_millis(wait));
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
             }
             outcome => {
                 let note = self.loading.take().and_then(|loading| loading.note);
@@ -1926,33 +1923,18 @@ impl StampApp {
     /// The name of the program the assistant panel runs: Claude Code, or
     /// the last assistant opened.
     pub fn assistant_program(&self) -> &'static str {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.assistant.agent.name()
-        }
-        #[cfg(target_arch = "wasm32")]
-        "Claude Code"
+        self.assistant.agent.name()
     }
 
     /// Whether Assistant > Open Claude Code (or OpenCode) skips its dialog.
     pub fn skip_claude_code_dialog(&self) -> bool {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.assistant.skip_claude_code_dialog
-        }
-        #[cfg(target_arch = "wasm32")]
-        false
+        self.assistant.skip_claude_code_dialog
     }
 
     /// Skip (or show again) the dialog of Assistant > Open Claude Code, as
     /// its "Don't show this again" box and Preferences do.
     pub fn set_skip_claude_code_dialog(&mut self, skip: bool) {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.assistant.skip_claude_code_dialog = skip;
-        }
-        #[cfg(target_arch = "wasm32")]
-        let _ = skip;
+        self.assistant.skip_claude_code_dialog = skip;
     }
 
     /// Return to what was remembered from an earlier run.
@@ -1969,7 +1951,6 @@ impl StampApp {
         self.session.other_samples_color = saved.other_samples_color;
         self.plot_settings = saved.plots;
         self.set_skip_claude_code_dialog(saved.skip_claude_code_dialog);
-        #[cfg(not(target_arch = "wasm32"))]
         if let Some(agent) = assistant::launch::Agent::ALL
             .into_iter()
             .find(|agent| agent.name() == saved.assistant_program)
@@ -2047,7 +2028,7 @@ impl StampApp {
         if pressed(&shortcut::RESULTS) {
             self.toggle_frame(Frame::Results);
         }
-        if cfg!(not(target_arch = "wasm32")) && pressed(&shortcut::EXIT) {
+        if pressed(&shortcut::EXIT) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
@@ -2279,65 +2260,42 @@ impl StampApp {
     /// Whether the assistant panel (the terminal of its tab shown) has the
     /// keyboard.
     pub fn assistant_terminal_has_focus(&self) -> bool {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.assistant.show_terminal
-                && self
-                    .assistant
-                    .active_tab()
-                    .is_some_and(|tab| tab.terminal.has_focus())
-        }
-        #[cfg(target_arch = "wasm32")]
-        false
+        self.assistant.show_terminal
+            && self
+                .assistant
+                .active_tab()
+                .is_some_and(|tab| tab.terminal.has_focus())
     }
 
     /// The text on the screen of the assistant panel's tab shown, if there
     /// is one.
     pub fn assistant_terminal_text(&self) -> Option<String> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.assistant
-                .active_tab()
-                .map(|tab| tab.terminal.screen_text())
-        }
-        #[cfg(target_arch = "wasm32")]
-        None
+        self.assistant
+            .active_tab()
+            .map(|tab| tab.terminal.screen_text())
     }
 
     /// The names on the assistant panel's tabs, in order, and which is
     /// shown.
     pub fn assistant_tabs(&self) -> (Vec<String>, usize) {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let names = self
-                .assistant
-                .tabs
-                .iter()
-                .map(|tab| tab.terminal.label.clone())
-                .collect();
-            (names, self.assistant.active)
-        }
-        #[cfg(target_arch = "wasm32")]
-        (Vec::new(), 0)
+        let names = self
+            .assistant
+            .tabs
+            .iter()
+            .map(|tab| tab.terminal.label.clone())
+            .collect();
+        (names, self.assistant.active)
     }
 
     /// How many times a program has connected to the session being shared
     /// (zero when it is not shared).
     pub fn assistant_connections(&self) -> usize {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.assistant.server.as_ref().map_or(0, |s| s.clients())
-        }
-        #[cfg(target_arch = "wasm32")]
-        0
+        self.assistant.server.as_ref().map_or(0, |s| s.clients())
     }
 
     /// Stop sharing the session, as Assistant > Stop sharing does.
     pub fn assistant_stop_sharing(&mut self) {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.assistant.server = None;
-        }
+        self.assistant.server = None;
     }
 
     /// The assistant's tool calls so far, oldest first.
@@ -2768,8 +2726,7 @@ impl StampApp {
         self.platform.push(event);
     }
 
-    /// Save the results table as it is shown, through the platform's save
-    /// dialog or as a browser download.
+    /// Save the results table as it is shown, through the save dialog.
     pub fn download_table(&mut self, ctx: &egui::Context) {
         self.table_context = Some(ctx.clone());
         match &mut self.table_pending {
@@ -2797,7 +2754,7 @@ impl StampApp {
     }
 
     /// Save the plot as a PNG image of the given resolution, through the
-    /// platform's save dialog or as a browser download.
+    /// save dialog.
     pub fn save_png(&mut self, ctx: &egui::Context, dpi: f64) {
         self.platform.request(
             Request::SavePng {
@@ -3226,12 +3183,10 @@ impl StampApp {
             self.session.invalidate(self.mode);
         }
         if self.session.update(self.mode) {
-            // On the desktop the work is on another thread and is looked in
-            // on now and then. In the browser each frame does a slice of
-            // it, so the next frame should follow at once.
-            let wait = if cfg!(target_arch = "wasm32") { 0 } else { 50 };
+            // The work is on another thread and is looked in on now and
+            // then.
             ui.ctx()
-                .request_repaint_after(std::time::Duration::from_millis(wait));
+                .request_repaint_after(std::time::Duration::from_millis(50));
         }
         if self.session.generation != self.seen_generation {
             self.seen_generation = self.session.generation;
@@ -3268,10 +3223,7 @@ impl StampApp {
             Frame::Metadata => self.show_metadata_table,
             Frame::Results => self.show_table,
             Frame::ConfigurePlot => self.show_plot_config,
-            #[cfg(not(target_arch = "wasm32"))]
             Frame::ClaudeCode => self.assistant.show_terminal,
-            #[cfg(target_arch = "wasm32")]
-            Frame::ClaudeCode => false,
         }
     }
 
@@ -3285,10 +3237,7 @@ impl StampApp {
             Frame::Metadata => self.show_metadata_table = shown,
             Frame::Results => self.show_table = shown,
             Frame::ConfigurePlot => self.show_plot_config = shown,
-            #[cfg(not(target_arch = "wasm32"))]
             Frame::ClaudeCode => self.assistant.show_terminal = shown,
-            #[cfg(target_arch = "wasm32")]
-            Frame::ClaudeCode => {}
         }
     }
 
@@ -3397,7 +3346,6 @@ impl StampApp {
                 padded.show(ui, |ui| self.plot_config_ui(ui));
             }
             Frame::ClaudeCode => {
-                #[cfg(not(target_arch = "wasm32"))]
                 assistant::window::terminal_frame(self, ui);
             }
         }
@@ -3485,13 +3433,10 @@ impl StampApp {
                 {
                     self.download_table(&ctx);
                 }
-                // A web page is closed with its tab.
-                if cfg!(not(target_arch = "wasm32")) {
-                    ui.separator();
-                    let exit = item(icons::SIGN_OUT, "Exit", Some(&shortcut::EXIT));
-                    if ui.add(exit).clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
+                ui.separator();
+                let exit = item(icons::SIGN_OUT, "Exit", Some(&shortcut::EXIT));
+                if ui.add(exit).clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             });
             ui.menu_button("View", |ui| {
@@ -3518,7 +3463,6 @@ impl StampApp {
                 );
                 toggle(ui, Frame::Features, icons::LIST, None);
                 toggle(ui, Frame::Metadata, icons::ROWS, Some(&shortcut::METADATA));
-                #[cfg(not(target_arch = "wasm32"))]
                 toggle(ui, Frame::ClaudeCode, icons::TERMINAL, None);
                 ui.separator();
                 toggle(ui, Frame::Results, icons::TABLE, Some(&shortcut::RESULTS));
@@ -4423,10 +4367,7 @@ impl StampApp {
                 if started.is_none() {
                     *started = Some(ctx.input(|i| i.time));
                 }
-                // As for the analyses: in the browser each frame does a
-                // slice of the work.
-                let wait = if cfg!(target_arch = "wasm32") { 0 } else { 50 };
-                ctx.request_repaint_after(std::time::Duration::from_millis(wait));
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
             }
             plots::PlotPoll::Finished => {
                 self.plot_job = None;
@@ -5286,19 +5227,16 @@ impl StampApp {
                         redraw |= row(ui, "Legend font size:", |ui| font(ui, &mut fonts.legend));
                     });
                 ui.label("Font sizes particular to a plot are set in its Configure plot window.");
-                #[cfg(not(target_arch = "wasm32"))]
+                ui.separator();
+                let mut ask = !self.assistant.skip_claude_code_dialog;
+                if ui
+                    .checkbox(
+                        &mut ask,
+                        "Explain what is shared before opening an assistant",
+                    )
+                    .changed()
                 {
-                    ui.separator();
-                    let mut ask = !self.assistant.skip_claude_code_dialog;
-                    if ui
-                        .checkbox(
-                            &mut ask,
-                            "Explain what is shared before opening an assistant",
-                        )
-                        .changed()
-                    {
-                        self.assistant.skip_claude_code_dialog = !ask;
-                    }
+                    self.assistant.skip_claude_code_dialog = !ask;
                 }
                 ui.horizontal(|ui| {
                     if ui.button("Restore defaults").clicked() {
@@ -5333,8 +5271,7 @@ impl StampApp {
             self.session.invalidate_all();
         }
 
-        // Plots in windows of their own: separate windows on the desktop,
-        // floating ones in the browser.
+        // Plots in windows of their own.
         let mut closed = Vec::new();
         for window in &self.plot_windows {
             let size = [
@@ -5571,8 +5508,7 @@ struct Loading {
 }
 
 impl Loading {
-    /// Do `read` in a job, saying `label` meanwhile (first, in the browser,
-    /// so that the page shows it before the work begins).
+    /// Do `read` in a job, saying `label` meanwhile.
     fn start(
         label: String,
         read: impl FnOnce() -> Result<(String, stamp_core::ProfileTree), String> + Send + 'static,

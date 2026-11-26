@@ -315,8 +315,7 @@ fn built_in_example_and_opened_files_are_loaded() {
     assert_eq!(harness.app.session.profile_name, "Enterotypes.profile.spf");
     assert_eq!(harness.app.session.feature_counts(Mode::TwoGroups).0, 17);
 
-    // Files arrive from the file dialogs as events, on the desktop and in
-    // the browser alike.
+    // Files arrive from the file dialogs as events.
     let file = |name: &str, text: &str| OpenedFile {
         name: name.to_string(),
         bytes: text.as_bytes().to_vec(),

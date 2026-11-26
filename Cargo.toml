@@ -12,18 +12,16 @@ repository = "https://github.com/donovan-h-parks/STAMP"
 
 [workspace.dependencies]
 stamp-core = { path = "crates/stamp-core" }
-# PNG export (resvg) is a feature, enabled by the crates that want it: the
-# browser build draws PNG images with the browser instead.
-stamp-plot = { path = "crates/stamp-plot", default-features = false }
+stamp-plot = { path = "crates/stamp-plot" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
-# Reads BIOM 2.x tables (HDF5) without the C library, so that it also works in
-# the browser.
+# Reads BIOM 2.x tables (HDF5) without the C library, so that nothing has to
+# be installed or linked.
 hdf5-pure = { version = "0.48", default-features = false, features = ["std", "deflate"] }
 clap = { version = "4", features = ["derive"] }
-# OpenGL / WebGL2 rendering: the most widely supported backend on older
-# desktops, remote sessions and every current browser.
+# OpenGL rendering: the most widely supported backend on older desktops and
+# remote sessions.
 eframe = { version = "0.37", default-features = false, features = [
     "accesskit",
     "clipboard",
@@ -33,7 +31,6 @@ eframe = { version = "0.37", default-features = false, features = [
     # Remembers the window layout and the user's settings between runs.
     "persistence",
     "wayland",
-    "web_screen_reader",
     "x11",
 ] }
 egui_extras = "0.37"
@@ -53,21 +50,12 @@ ttf-parser = "0.25"
 # Triangulates the filled outlines of the map plot for the on-screen painter
 # (pure Rust).
 earcut = "0.4"
-# Renders STAMP's own SVG as PNG on the desktop and in stamp-cli (not in the
-# browser build). Only text is needed: no system fonts (the fonts are
+# Renders STAMP's own SVG as PNG. Only text is needed: no system fonts (the fonts are
 # bundled), raster images or filters.
 resvg = { version = "0.45", default-features = false, features = ["text"] }
 
 [profile.release]
 lto = "thin"
-# Smaller downloads. Only debug information is removed: the browser build's
-# optimiser needs the other sections, and panics keep their location.
-strip = "debuginfo"
-
-# The browser build: whole-program optimisation in one unit, which makes the
-# download smaller and the code faster, at the cost of a longer build. Used
-# by trunk (crates/stamp-gui/index.html).
-[profile.web]
-inherits = "release"
-lto = "fat"
-codegen-units = 1
+# Smaller downloads: debug information and the symbol table are removed.
+# Panic messages keep their file and line.
+strip = "symbols"

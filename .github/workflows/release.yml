@@ -1,7 +1,7 @@
 name: Release
 
-# Builds the desktop applications, the command-line tool and the browser
-# version, and collects them in a draft GitHub release for review.
+# Builds the desktop applications and the command-line tool, and collects
+# them in a draft GitHub release for review.
 #
 # Start it by pushing a tag that matches the version in Cargo.toml, for
 # example `v3.0.0`, or run it by hand from the Actions tab to try the build
@@ -46,35 +46,10 @@ jobs:
             dist/*.zip
           if-no-files-found: error
 
-  web:
-    name: web
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup show
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: trunk
-      - run: trunk build --release
-        working-directory: crates/stamp-gui
-      - name: Package
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
-          mkdir -p dist
-          cp -r crates/stamp-gui/dist "dist/stamp-$version-web"
-          rm -f "dist/stamp-$version-web/.trunk-lock"
-          (cd dist && zip -qr "stamp-$version-web.zip" "stamp-$version-web")
-      - uses: actions/upload-artifact@v4
-        with:
-          name: stamp-web
-          path: dist/*.zip
-          if-no-files-found: error
-
   release:
     name: Draft release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [desktop, web]
+    needs: [desktop]
     runs-on: ubuntu-22.04
     permissions:
       contents: write

@@ -96,10 +96,8 @@ Progress and cancelling
 -----------------------
 
 Work that can take more than a moment is done in the background, so the
-window keeps answering while it runs (on the desktop it runs alongside the
-window; in the browser it is done in short pieces between redraws, which is
-slower). Its progress is shown in the status bar at the bottom of the window,
-with a **Cancel** button:
+window keeps answering while it runs. Its progress is shown in the status
+bar at the bottom of the window, with a **Cancel** button:
 
 * **Analyses.** While the test of every feature runs, the status bar shows
   *Running test...* with a progress bar. **Cancel** stops it and clears
@@ -204,10 +202,6 @@ Saving plots
   programs such as Inkscape or Adobe Illustrator. The text of a PDF is real
   text in the plot's font, which is embedded, so it can be searched and
   copied.
-
-In the browser version the PNG image is drawn by the browser from the SVG
-drawing, so its text may be placed very slightly differently from the
-desktop version's image.
 
 **View > Send plot to window** opens the current plot in a window of its own,
 so that several plots can be compared side by side.

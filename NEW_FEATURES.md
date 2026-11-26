@@ -89,10 +89,6 @@ Add an entry here whenever a feature is added that v2 did not have.
   (`plot`) and replaces it in place; `show_plot` shows a plot drawn earlier
   by its name. Undone
   like any change of the assistant's.
-- **In the browser.** STAMP runs as a web page (WebAssembly), entirely on the
-  user's computer: files are read with the browser's file picker and saved as
-  downloads, and nothing is uploaded [25]. Long tests are carried out in
-  short pieces so the page keeps responding [51].
 - **One program per platform, no Python.** A single executable for Linux,
   Windows and macOS with no interpreter or libraries to install.
 - **Command line.** `stamp-cli` runs every analysis, writes the result
@@ -111,16 +107,14 @@ Add an entry here whenever a feature is added that v2 did not have.
   example on it (`docs/site/example_glacier_streams.rst`): map, PCoA and
   group heatmap of the mountain ranges, the paired test with the paired
   box plot, correlation with pH, co-occurrence.
-- **Online documentation** (`docs/site`, published beside the browser
-  version), replacing v2's PDF user's guide: installation, a quick start on
+- **Online documentation** (`docs/site`, published on GitHub Pages), replacing v2's PDF user's guide: installation, a quick start on
   the example data, every control of the window and command, and pages
   that explain each test, post-hoc test, correction and plot for
   biologists, with worked examples and what to look for.
 - **Progress of slow work, and cancelling it.** Analyses, plots that
   take a while to compute (PCoA with its community tests, NMDS, the
   distance box and Mantel plots, ANCOM), reading large profiles and building
-  large results tables run in the background (on another thread on the
-  desktop, in time slices in the browser) and show what they are doing with
+  large results tables run in the background (on another thread) and show what they are doing with
   a progress bar ("PERMANOVA 412/999") or a spinner, in the status bar and,
   for plots and loading, over the plot area, with a Cancel button; the
   window stays usable meanwhile. `stamp-cli` shows progress bars and
@@ -137,7 +131,7 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Profiles in other formats open directly.** BIOM tables and mothur files
   are loaded from File > Load profile without first being converted and
   saved [48].
-- **PDF export** of plots, alongside PNG and SVG, in the browser too. The
+- **PDF export** of plots, alongside PNG and SVG. The
   PDF is written directly from the plot, with its text as selectable text
   in the embedded plot font.
 - **SingleM and Sandpiper profiles.** SingleM condensed taxonomic profiles
@@ -157,8 +151,7 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Load profile directory.** File > Load profile directory loads the
   SingleM or Sandpiper profiles directly in a directory (typically one
   `singlem pipe -p` output per sample) as one profile, skipping other files
-  (only their first 64 KB are read) and naming them in a message. Works in
-  the browser too (its folder picker). `stamp-cli --profile` and
+  (only their first 64 KB are read) and naming them in a message. `stamp-cli --profile` and
   `stamp-cli convert singlem|sandpiper` take a directory as well.
 - **mOTUs, MetaPhlAn, Kraken, Bracken and HUMAnN outputs**, read directly
   and recognised by their contents: mOTUs 2, 3 and 4 profiles and merged
@@ -173,7 +166,7 @@ Add an entry here whenever a feature is added that v2 did not have.
   `unclassified Root`, missing NCBI ranks `<parent> (no <rank>)`. From a
   file, several files of one tool, or a directory (the window asks which
   kind to load when a directory holds several, such as HUMAnN's three
-  tables; `--profile-format` on the command line), in the browser too, and
+  tables; `--profile-format` on the command line), and
   `stamp-cli convert profiles`. Design notes and supported versions:
   `docs/PROFILER_FORMATS.md`.
 - **Example inputs in every format read**, in
@@ -187,7 +180,7 @@ Add an entry here whenever a feature is added that v2 did not have.
   gzip-compressed.
 - **Gzip-compressed files** (`stamp_core::text::decompress`): every file
   STAMP reads, profiles, metadata, profilers' outputs and the other formats,
-  can be gzip-compressed, in the window, the browser and on the command line,
+  can be gzip-compressed, in the window and on the command line,
   and in directories of profiles. A compressed file is told by its contents,
   not its name; `.gz` is left out of sample names taken from file names. A
   compressed file cut short is reported as such. (STAMP v2 read only plain
@@ -370,12 +363,8 @@ Add an entry here whenever a feature is added that v2 did not have.
   text: Arial (the default), Times New Roman, Courier New or DejaVu Sans
   (v2's font) [58]. The fonts are bundled (Liberation Sans, Serif and Mono,
   free fonts with the same letter widths as Arial, Times New Roman and
-  Courier New), so plots look the same on every system and in the browser;
+  Courier New), so plots look the same on every system;
   SVG files name the original font first. On the command line: `--font`.
-- **Loading progress in the browser.** While the page downloads STAMP, a
-  bar shows how much has arrived (or keeps moving, where the server does
-  not say how much there is), and "Starting STAMP..." follows while it
-  starts.
 - **Plots kept once drawn.** A plot is redrawn only when something it is
   drawn from changes: its data, filters, colours or settings, or the
   selected feature for plots of one feature. Returning to a plot, or

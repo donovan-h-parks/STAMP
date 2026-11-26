@@ -28,7 +28,6 @@ struct Harness {
 
 impl Harness {
     /// A point in the middle of the assistant panel, wherever it is.
-    #[cfg(not(target_arch = "wasm32"))]
     fn in_panel(&self) -> eframe::egui::Pos2 {
         let layout = self.app.layout();
         let tile = stamp_gui::layout::tile_of(layout, stamp_gui::layout::Frame::ClaudeCode)
@@ -770,7 +769,6 @@ fn set_analysis_runs_the_analysis_again_before_answering() {
     );
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn claude_code_reaches_the_tools_over_http() {
     use std::io::{Read, Write};
@@ -832,7 +830,6 @@ fn claude_code_reaches_the_tools_over_http() {
 /// `STAMP_ASSISTANT_FOLDER`. Run with `--ignored --nocapture`, then run
 /// the folder's start script (or `claude -p ... --mcp-config
 /// stamp-mcp.json` there).
-#[cfg(not(target_arch = "wasm32"))]
 #[test]
 #[ignore]
 fn serve_for_claude_code() {

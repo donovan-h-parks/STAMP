@@ -6,7 +6,24 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Finished and committed (2026-11-26, the glacier-fed stream session):
+Finished and committed (2026-11-26): **removed the browser (WebAssembly)
+build**. Asked for: STAMP is now only a desktop (Linux, Windows, macOS) and
+CLI tool. Done: wasm32 code paths removed (platform.rs is now synchronous
+native dialogs, no async/run_now; jobs.rs threads only; main.rs, app.rs,
+assistant/*); wasm-only deps, trunk files (index.html, initializer.js,
+Trunk.toml), the `web` profile and the wasm target in rust-toolchain.toml
+removed; stamp-plot's optional `png` feature and `svg::to_svg_with_font`
+(+ base64) removed, resvg always on; release profile `strip = "symbols"`
+(GUI 44.8 -> 34.8 MB, CLI 16.0 -> 12.2 MB on Linux); CI/release workflows
+without the web jobs; Pages publishes only the docs, with a redirect from
+the site root to docs/. Docs: CLAUDE.md, README, NEW_FEATURES,
+CHANGES_FROM_PYTHON (behaviour changes 25 and 51 marked removed, White's
+test open question dropped), RELEASING, docs/site (installing, faq,
+assistant, main_window, input_files, index, changes), scripts READMEs.
+docs/ASSISTANT_PLAN.md and LAYOUT_PLAN.md left as historical plans. Checks:
+fmt, clippy (native), full release test suite, Sphinx -W all pass.
+
+Previous task, finished and committed (2026-11-26, the glacier-fed stream session):
 **glacier-fed streams replace the Eggerthellaceae examples**. Asked for:
 add the 158 analysed glacier-fed stream samples and metadata as an example
 data set; remove the Eggerthellaceae data sets as examples. Done:
