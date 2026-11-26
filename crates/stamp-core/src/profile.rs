@@ -7,16 +7,53 @@ use crate::error::{Result, StampError};
 use crate::metadata::{Groups, Metadata};
 use crate::profile_tree::{ProfileTree, ENTIRE_SAMPLE};
 
-/// What to do with features that are unclassified at the profile level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What to do with features that are unclassified at the profile level:
+/// those with "unclassified" in their name, whatever the case of the
+/// letters (see [`is_unclassified_feature`]). Every analysis and plot is
+/// given the profile this makes, so all of them treat such features alike.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Unclassified {
     /// Treat them like any other feature.
     Retain,
     /// Drop their reads entirely.
     Remove,
     /// Drop them as features but keep their reads in the parent totals, so
-    /// the relative frequencies of the other features are unchanged.
-    FrequencyOnly,
+    /// the proportions of the other features are unchanged.
+    ProportionsOnly,
+    /// Add them together into one feature, [`POOLED_UNCLASSIFIED`]. With a
+    /// parent level there is one for each parent category that has
+    /// unclassified features, named for it ("Unclassified (Firmicutes)"),
+    /// as each is a proportion of its own parent.
+    Pool,
+}
+
+impl Unclassified {
+    pub const ALL: [Unclassified; 4] = [
+        Unclassified::Retain,
+        Unclassified::Remove,
+        Unclassified::ProportionsOnly,
+        Unclassified::Pool,
+    ];
+
+    /// The name of the choice, as the window shows it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Unclassified::Retain => "Retain unclassified features",
+            Unclassified::Remove => "Remove unclassified features",
+            Unclassified::ProportionsOnly => "Use only for calculating feature proportions",
+            Unclassified::Pool => "Pool into a single feature",
+        }
+    }
+}
+
+/// The name of the feature that [`Unclassified::Pool`] makes.
+pub const POOLED_UNCLASSIFIED: &str = "Unclassified";
+
+/// Whether a feature stands for sequences that could not be classified at
+/// its level: "unclassified" anywhere in its name, in any case. This is
+/// what the [`Unclassified`] treatments act on.
+pub fn is_unclassified_feature(name: &str) -> bool {
+    name.to_ascii_lowercase().contains("unclassified")
 }
 
 /// One feature of a profile.
@@ -137,14 +174,31 @@ impl ProfileTree {
         for leaf in self.leaves() {
             let node_name = self.node_name(leaf.path[profile_depth - 1]);
 
+            let parent_name = if parent_depth == 0 {
+                ENTIRE_SAMPLE
+            } else {
+                self.node_name(leaf.path[parent_depth - 1])
+            };
+
             let mut as_feature = true;
-            if node_name.to_ascii_lowercase().contains("unclassified") {
+            // The name of the feature its unclassified sequences are pooled
+            // into, if they are.
+            let mut pooled: Option<String> = None;
+            if is_unclassified_feature(node_name) {
                 match unclassified {
                     Unclassified::Retain => {}
                     Unclassified::Remove => continue,
-                    Unclassified::FrequencyOnly => as_feature = false,
+                    Unclassified::ProportionsOnly => as_feature = false,
+                    Unclassified::Pool => {
+                        pooled = Some(if parent_depth == 0 {
+                            POOLED_UNCLASSIFIED.to_string()
+                        } else {
+                            format!("{POOLED_UNCLASSIFIED} ({parent_name})")
+                        });
+                    }
                 }
             }
+            let node_name = pooled.as_deref().unwrap_or(node_name);
 
             let mut feature_index = None;
             if as_feature {
@@ -181,11 +235,6 @@ impl ProfileTree {
                 feature_index = Some(i);
             }
 
-            let parent_name = if parent_depth == 0 {
-                ENTIRE_SAMPLE
-            } else {
-                self.node_name(leaf.path[parent_depth - 1])
-            };
             let p = *parent_index.entry(parent_name).or_insert_with(|| {
                 parents.push(vec![0.0; columns.len()]);
                 parents.len() - 1
@@ -196,9 +245,15 @@ impl ProfileTree {
 
             if let Some(i) = feature_index {
                 features[i].parent = p;
+                // A pooled feature has the names of its parent category and
+                // above, and its own name at every level beneath.
                 features[i].hierarchy = leaf.path[..profile_depth]
                     .iter()
-                    .map(|&n| self.node_name(n).to_string())
+                    .enumerate()
+                    .map(|(depth, &n)| match &pooled {
+                        Some(name) if depth >= parent_depth => name.clone(),
+                        _ => self.node_name(n).to_string(),
+                    })
                     .collect();
             }
         }
@@ -518,6 +573,76 @@ mod tests {
     }
 
     #[test]
+    fn unclassified_features_are_pooled_into_one() {
+        let spf = "Phylum\tFamily\tGenus\tS1\tS2\n\
+            Firmicutes\tBacillaceae\tBacillus\t10\t20\n\
+            Firmicutes\tBacillaceae\tunclassified f__Bacillaceae\t5\t0\n\
+            Firmicutes\tunclassified p__Firmicutes\tunclassified p__Firmicutes\t3\t4\n\
+            Proteobacteria\tEnterobacteriaceae\tEscherichia\t1\t2\n\
+            Proteobacteria\tEnterobacteriaceae\tUNCLASSIFIED\t1\t4\n";
+        let tree = ProfileTree::read(spf).unwrap();
+        let profile = |parent, unclassified| {
+            tree.profile(&["S1", "S2"], parent, "Genus", unclassified)
+                .unwrap()
+        };
+
+        // Against the entire sample: one feature, last where the first
+        // unclassified one was, holding the sum of them all.
+        let pooled = profile(None, Unclassified::Pool);
+        assert_eq!(names(&pooled), ["Bacillus", "Unclassified", "Escherichia"]);
+        let feature = pooled.feature(POOLED_UNCLASSIFIED).unwrap();
+        assert_eq!(feature.counts, [9.0, 8.0]);
+        assert_eq!(feature.hierarchy, ["Unclassified"; 3]);
+        assert_eq!(pooled.percentages(feature), [45.0, 80.0 / 3.0]);
+        // Everything of the sample is in a feature, as when retained.
+        let total = |p: &Profile, sample: usize| -> f64 {
+            p.features().iter().map(|f| p.percentages(f)[sample]).sum()
+        };
+        assert!((total(&pooled, 0) - 100.0).abs() < 1e-9);
+        let retained = profile(None, Unclassified::Retain);
+        assert_eq!(retained.num_features(), 5);
+        // The named features are as they are with any other treatment that
+        // keeps the unclassified sequences in the totals.
+        let set_aside = profile(None, Unclassified::ProportionsOnly);
+        assert_eq!(names(&set_aside), ["Bacillus", "Escherichia"]);
+        for feature in set_aside.features() {
+            let same = pooled.feature(&feature.name).unwrap();
+            assert_eq!(set_aside.percentages(feature), pooled.percentages(same));
+        }
+
+        // With a parent level: one for each parent category, named for it,
+        // as a proportion of that parent.
+        let by_phylum = profile(Some("Phylum"), Unclassified::Pool);
+        assert_eq!(
+            names(&by_phylum),
+            [
+                "Bacillus",
+                "Unclassified (Firmicutes)",
+                "Escherichia",
+                "Unclassified (Proteobacteria)"
+            ]
+        );
+        let firmicutes = by_phylum.feature("Unclassified (Firmicutes)").unwrap();
+        assert_eq!(firmicutes.counts, [8.0, 4.0]);
+        assert_eq!(
+            firmicutes.hierarchy,
+            [
+                "Firmicutes",
+                "Unclassified (Firmicutes)",
+                "Unclassified (Firmicutes)"
+            ]
+        );
+        assert_eq!(by_phylum.percentages(firmicutes)[0], 800.0 / 18.0);
+        let proteobacteria = by_phylum.feature("Unclassified (Proteobacteria)").unwrap();
+        assert_eq!(by_phylum.percentages(proteobacteria), [50.0, 400.0 / 6.0]);
+
+        assert!(is_unclassified_feature("unclassified f__Bacillaceae"));
+        assert!(is_unclassified_feature("Unclassified"));
+        assert!(!is_unclassified_feature("Bacillus"));
+        assert_eq!(Unclassified::Pool.name(), "Pool into a single feature");
+    }
+
+    #[test]
     fn leaf_level_against_entire_sample() {
         let p = tree()
             .sample_profile("S1", "S2", None, "Genus", Unclassified::Retain)
@@ -579,7 +704,7 @@ mod tests {
         assert_eq!(removed.counts(bacillus).parent_seq1, 15.0);
 
         let freq = t
-            .sample_profile("S1", "S2", None, "Genus", Unclassified::FrequencyOnly)
+            .sample_profile("S1", "S2", None, "Genus", Unclassified::ProportionsOnly)
             .unwrap();
         assert_eq!(
             names(&freq.profile),

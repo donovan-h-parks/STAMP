@@ -50,6 +50,10 @@ impl Harness {
             "Enterotypes.metadata.tsv",
             &example("EnterotypesArumugam/Enterotypes.metadata.tsv"),
         );
+        // These tests were written with unclassified categories as
+        // features (the one phylum that differs is "Unclassified").
+        app.session.unclassified = stamp_core::Unclassified::Retain;
+        app.session.invalidate_all();
         let mut harness = Harness { renderer, app };
         harness.settle();
         harness

@@ -492,8 +492,8 @@ Each feature's p-value is in the last column of the results table,
 **Equal spread p-value (Brown-Forsythe)**, uncorrected. Under the
 statistics a summary counts the features whose spread differs (p < 0.05):
 
-   Brown-Forsythe test: the spread differs between the groups for 814 of
-   1936 features (42%; p < 0.05, 5% expected by chance).
+   Brown-Forsythe test: the spread differs between the groups for 673 of
+   1392 features (48%; p < 0.05, 5% expected by chance).
 
 By chance alone about 5% of the features would differ. When clearly more
 do (over 10%) and the test is ANOVA, a caution suggests **Welch's ANOVA**
@@ -646,7 +646,10 @@ Whole communities
 The tests above look at one feature at a time. The following describe or
 compare whole communities. They are shown in the plots of the
 *Diversity* and *Similarity between samples* groups (see :doc:`plots`).
-Unclassified categories are never counted as features here.
+They are given the same profiles as the tests of features, so the
+*Unclassified* choice applies to them too (see :doc:`input_files`, which
+also says how distances and alpha diversity treat unclassified sequences
+that are used only for calculating proportions).
 
 Making samples comparable
 ^^^^^^^^^^^^^^^^^^^^^^^^^

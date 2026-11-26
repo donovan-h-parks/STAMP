@@ -115,8 +115,8 @@ pub struct ProfileArgs {
     /// Level that relative frequencies are taken against [default: the entire sample]
     #[arg(long, value_name = "HEADING")]
     pub parent_level: Option<String>,
-    /// Treatment of unclassified reads
-    #[arg(long, value_enum, default_value_t = UnclassifiedArg::Retain)]
+    /// Treatment of unclassified features (those with "unclassified" in their name), in every analysis and plot
+    #[arg(long, value_enum, default_value_t = UnclassifiedArg::ProportionsOnly)]
     pub unclassified: UnclassifiedArg,
     /// Write the results table to this file instead of standard output
     #[arg(long, short)]
@@ -1303,12 +1303,14 @@ impl From<ColorMapArg> for stamp_plot::heatmap::ColorMap {
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum UnclassifiedArg {
-    /// Treat unclassified reads like any other feature
+    /// Keep unclassified features as features like any other
     Retain,
-    /// Drop unclassified reads entirely
+    /// Drop unclassified features entirely, from the totals too
     Remove,
-    /// Drop them as features but keep them in the totals
-    FrequencyOnly,
+    /// Count unclassified features in the total of each sample, then set them aside
+    ProportionsOnly,
+    /// Add unclassified features together into one feature, "Unclassified"
+    Pool,
 }
 
 impl From<UnclassifiedArg> for Unclassified {
@@ -1316,7 +1318,8 @@ impl From<UnclassifiedArg> for Unclassified {
         match value {
             UnclassifiedArg::Retain => Unclassified::Retain,
             UnclassifiedArg::Remove => Unclassified::Remove,
-            UnclassifiedArg::FrequencyOnly => Unclassified::FrequencyOnly,
+            UnclassifiedArg::ProportionsOnly => Unclassified::ProportionsOnly,
+            UnclassifiedArg::Pool => Unclassified::Pool,
         }
     }
 }

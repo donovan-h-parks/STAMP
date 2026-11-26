@@ -28,8 +28,8 @@ Files
 
 glacier_streams.spf
   STAMP profile: 158 metagenomes x 12,446 rows, seven levels Domain, Phylum,
-  Class, Order, Family, Genus, Species (GTDB R232 taxonomy; 80 phyla, 1,936
-  families, 6,691 genera). Values are SingleM estimates of genome coverage;
+  Class, Order, Family, Genus, Species (GTDB R232 taxonomy; 78 phyla, 1,392
+  families and 5,015 genera with a name). Values are SingleM estimates of genome coverage;
   they are NOT counts of reads. Coverage that SingleM could only place at a
   higher rank is in "unclassified <rank>__<taxon>" rows, as
   `stamp-cli convert singlem` writes them. 156 rows are zero in every
@@ -131,7 +131,7 @@ Things to keep in mind
 What to try
 -----------
 
-  # Families that differ between the reaches of a stream (23 at q <= 0.05)
+  # Families that differ between the reaches of a stream (37 at q <= 0.05)
   stamp-cli two-groups --profile glacier_streams.spf \
       --metadata glacier_streams.metadata.tsv --profile-level Family \
       --field Reach --group1 Downstream --group2 Upstream \

@@ -245,7 +245,7 @@ impl Default for Session {
             numeric_fields: Vec::new(),
             profile_level: String::new(),
             parent_level: None,
-            unclassified: Unclassified::Retain,
+            unclassified: Unclassified::ProportionsOnly,
             group_field: None,
             stats: StatsSettings::default(),
             seed: 1,

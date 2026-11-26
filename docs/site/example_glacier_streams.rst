@@ -22,8 +22,8 @@ from Sandpiper (``https://sandpiper.qut.edu.au``), as described in
 the source repository, with a ``readme.txt`` that says how they were made:
 
 ``glacier_streams.spf``
-   The whole community of each sample, Domain to Species (80 phyla, 1,936
-   families, 6,691 genera).
+   The whole community of each sample, Domain to Species (78 phyla, 1,392
+   families and 5,015 genera with a name).
 ``glacier_streams.metadata.tsv``
    One row per sample: ``Glacier`` (the same for the two reaches of a
    stream), ``Mountain_range`` (nine), ``Country``, ``Reach`` (Upstream or
@@ -95,9 +95,11 @@ A PCoA plot (see :ref:`ordination-colours`) of the families, with its community 
    Samples placed by the Bray-Curtis distances between their families.
 
 They do (PERMANOVA pseudo-F = 6.9, p = 0.001), and their dispersions do not
-(PERMDISP p = 0.76), so the ranges differ in where their communities lie,
+(PERMDISP p = 0.75), so the ranges differ in where their communities lie,
 not in how variable they are. The table lists the test of each family
-across the ranges; 1,038 of the 1,936 differ at q <= 0.05.
+across the ranges; 806 of the 1,392 named families differ at q <= 0.05
+(coverage that SingleM could not place in a family counts towards the
+total of each sample but is not tested; see :doc:`input_files`).
 
 The :ref:`group heatmap <plot-group-heatmap>` summarises each range in one
 column; here the mean percentage of the twenty most abundant phyla among
@@ -146,12 +148,12 @@ left out``.
 .. figure:: images/glacier_reach_families.png
    :width: 100%
 
-   The 23 families that differ between the reaches at q <= 0.05: mean
+   The 37 families that differ between the reaches at q <= 0.05: mean
    proportion in each reach, and the difference with its 95% confidence
    interval.
 
-Most of the 23 are more abundant downstream; a few (Nanopelagicaceae,
-Burkholderiaceae_D) are more abundant beside the glacier. The differences
+Most of the 37 are more abundant downstream; eight (Nanopelagicaceae and
+Burkholderiaceae_D among them) are more abundant beside the glacier. The differences
 are small in absolute terms, a fraction of a percent of the community,
 which is why they are invisible without the pairing.
 
@@ -190,7 +192,7 @@ difference of means would be.
    The same analysis with ``--transform clr`` (centred log ratios) or
    ``--test paired-t`` is a useful check that a result does not depend on
    the test or on the proportions summing to one. JACQAP01 and RBC074 pass
-   all of them; some of the 23 do not.
+   all of them; some of the 37 do not.
 
 Which families follow the water chemistry
 -----------------------------------------

@@ -93,7 +93,7 @@ fn treatment(case: &Case) -> Unclassified {
     match case.unclassified.as_deref().unwrap() {
         "Retain unclassified reads" => Unclassified::Retain,
         "Remove unclassified reads" => Unclassified::Remove,
-        "Use only for calculating frequency profiles" => Unclassified::FrequencyOnly,
+        "Use only for calculating frequency profiles" => Unclassified::ProportionsOnly,
         other => panic!("unknown treatment {other}"),
     }
 }

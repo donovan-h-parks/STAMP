@@ -26,8 +26,8 @@ pub mod text;
 pub use error::{Result, StampError};
 pub use metadata::{Groups, Metadata, Pairing};
 pub use profile::{
-    CorrelationProfile, Feature, GroupProfile, MultiGroupProfile, Profile, SampleProfile,
-    SecondGroup, Unclassified, ALL_OTHER_SAMPLES,
+    is_unclassified_feature, CorrelationProfile, Feature, GroupProfile, MultiGroupProfile, Profile,
+    SampleProfile, SecondGroup, Unclassified, ALL_OTHER_SAMPLES, POOLED_UNCLASSIFIED,
 };
 pub use profile_tree::{ProfileTree, ENTIRE_SAMPLE};
 pub use selection::{Comparison, Condition, SampleSelection};

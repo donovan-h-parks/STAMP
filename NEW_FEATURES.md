@@ -341,8 +341,8 @@ Add an entry here whenever a feature is added that v2 did not have.
   sample as they are, or every sample rarefied (randomly subsampled,
   seeded) to the depth of the smallest sample, which the plot then states.
   Rarefying needs counts of sequences, as does Chao1; a profile of
-  fractional values is refused with a message. As for rarefaction curves,
-  unclassified categories are not counted as features.
+  fractional values is refused with a message. Unclassified features are
+  treated as the "Unclassified" setting says, as everywhere else.
 
 - **Computed post-hoc p-values.** Tukey-Kramer and Games-Howell report a
   p-value rather than a bound such as `< 0.05`, and confidence intervals at
@@ -403,6 +403,13 @@ Add an entry here whenever a feature is added that v2 did not have.
   is the default.
 - **A colour for each group**, kept across every plot and chosen with a
   colour picker in the group list [27, 28].
+- **Pool unclassified features into one** ("Pool into a single feature" in
+  the Unclassified box, `--unclassified pool`): all the unclassified
+  features of a profile level are added together into one feature,
+  "Unclassified", which is tested and plotted like any other; with a parent
+  level, one per parent category ("Unclassified (Firmicutes)"). Useful for
+  profiles such as SingleM's, where each taxon has its own unclassified
+  row [75].
 - **Sortable tables.** The feature, results and metadata tables sort by any
   column [38].
 - **Profile table** (View > Profile table; `crates/stamp-gui/src/profile_table.rs`).
@@ -653,10 +660,9 @@ Add an entry here whenever a feature is added that v2 did not have.
   - The expectation is exact (the hypergeometric formula of Hurlbert 1971),
     not an average of random subsamples, so the curves are smooth and the
     same every time.
-  - Features are the categories at the profile level. Unclassified
-    categories are not counted as features, whatever the "Unclassified"
-    setting, but their sequences are part of the sample and are drawn like
-    any others.
+  - Features are the categories at the profile level, with unclassified
+    ones treated as the "Unclassified" setting says (used only for
+    calculating proportions, they count as one category, as when pooled).
   - For groups, "Curves for" offers two further kinds, one curve per group:
     - pooled sequences: the counts of a group's samples added up and
       rarefied as one sample, to see whether the group as a whole has been

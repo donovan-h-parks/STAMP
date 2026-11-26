@@ -7,8 +7,8 @@ use stamp_core::stats::community::{
 };
 use stamp_core::stats::correlation::CorrelationMethod;
 use stamp_core::stats::diversity::{
-    distances, nmds, pcoa, pcoa_leading, AlphaMetric, CommunityTable, Distance, DistanceMatrix,
-    DistanceRun, NmdsRun, Normalisation, Ordination,
+    nmds, pcoa, pcoa_leading, AlphaMetric, CommunityTable, Distance, DistanceMatrix, DistanceRun,
+    NmdsRun, Normalisation, Ordination,
 };
 use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::results::format_p_value;
@@ -38,12 +38,14 @@ pub struct Community {
 
 impl Community {
     /// The community of some samples of a profile tree at a hierarchical
-    /// level, whatever treatment of unclassified sequences the feature
-    /// tests use: unclassified categories are never features here.
+    /// level, with the treatment of unclassified features that the feature
+    /// tests use, so that every analysis compares the same profiles.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_tree(
         tree: &ProfileTree,
         samples: &[String],
         profile_level: &str,
+        unclassified: Unclassified,
         sample_groups: Vec<usize>,
         groups: Vec<String>,
         normalisation: Normalisation,
@@ -51,7 +53,7 @@ impl Community {
     ) -> Result<Community, String> {
         let names: Vec<&str> = samples.iter().map(String::as_str).collect();
         let profile = tree
-            .profile(&names, None, profile_level, Unclassified::Retain)
+            .profile(&names, None, profile_level, unclassified)
             .map_err(|e| e.to_string())?;
         Ok(Community {
             samples: samples.to_vec(),
@@ -112,11 +114,8 @@ impl Community {
 
 /// The value of an alpha diversity measure for each sample, in order.
 pub fn alpha_values(community: &Community, metric: AlphaMetric) -> Vec<f64> {
-    community
-        .table
-        .abundances
-        .iter()
-        .map(|sample| metric.value(sample))
+    (0..community.table.abundances.len())
+        .map(|sample| metric.value(&community.table.alpha_abundances(sample)))
         .collect()
 }
 
@@ -257,7 +256,7 @@ pub fn test_notes(
     permutations: usize,
     rng: &mut StampRng,
 ) -> Vec<String> {
-    let matrix = distances(&community.table.abundances, distance);
+    let matrix = community.table.distances(distance);
     test_lines(community, &matrix, permutations, rng, None)
 }
 
@@ -391,7 +390,7 @@ pub fn pcoa_layout(
     distance: Distance,
     tests: Option<(usize, &mut StampRng)>,
 ) -> Result<Layout, String> {
-    let matrix = distances(&community.table.abundances, distance);
+    let matrix = community.table.distances(distance);
     let (permutations, rng) = match tests {
         Some((permutations, rng)) => (Some(permutations), Some(rng)),
         None => (None, None),
@@ -456,7 +455,7 @@ pub fn draw_pcoa(
 /// The NMDS layout of a community by a distance, in two dimensions, with
 /// its stress. `Err` holds a message for the plot.
 pub fn nmds_layout(community: &Community, distance: Distance) -> Result<Layout, String> {
-    let matrix = distances(&community.table.abundances, distance);
+    let matrix = community.table.distances(distance);
     nmds_result(community, distance, nmds(&matrix, 2))
 }
 
@@ -560,7 +559,7 @@ pub fn mantel_plot(
     if values.len() != n || n < 3 {
         return Figure::message("The Mantel test needs at least three samples");
     }
-    let matrix = distances(&community.table.abundances, distance);
+    let matrix = community.table.distances(distance);
     let differences = differences_of(values);
     let test = mantel(&differences, &matrix, method, permutations, rng);
     draw_mantel(
@@ -645,7 +644,7 @@ pub fn distance_box_plot(
     distance: Distance,
     options: &BoxOptions,
 ) -> Figure {
-    let matrix = distances(&community.table.abundances, distance);
+    let matrix = community.table.distances(distance);
     draw_distance_box(community, distance, &matrix, options)
 }
 
@@ -804,7 +803,7 @@ impl CommunityRun {
         job: CommunityJob,
         rng: StampRng,
     ) -> CommunityRun {
-        let distances = DistanceRun::new(&community.table.abundances, distance);
+        let distances = community.table.distance_run(distance);
         CommunityRun {
             community,
             distance,
@@ -1058,8 +1057,14 @@ mod tests {
     use crate::figure::Shape;
     use stamp_core::stats::rng_from_seed;
 
-    /// Two groups of three samples that differ, at genus level.
+    /// Two groups of three samples that differ, at genus level, with the
+    /// unclassified genus used only for calculating proportions (what
+    /// STAMP starts with).
     fn community(normalisation: Normalisation) -> Community {
+        community_with(normalisation, Unclassified::ProportionsOnly)
+    }
+
+    fn community_with(normalisation: Normalisation, unclassified: Unclassified) -> Community {
         let spf = "Phylum\tGenus\tA1\tA2\tA3\tB1\tB2\tB3\n\
             P1\ta\t50\t45\t55\t5\t8\t4\n\
             P1\tb\t30\t35\t25\t10\t12\t9\n\
@@ -1076,6 +1081,7 @@ mod tests {
             &tree,
             &samples,
             "Genus",
+            unclassified,
             vec![0, 0, 0, 1, 1, 1],
             vec!["A".into(), "B".into()],
             normalisation,
@@ -1098,11 +1104,35 @@ mod tests {
     #[test]
     fn alpha_diversity_by_group() {
         let community = community(Normalisation::Proportions);
-        // Unclassified genera are not counted.
+        // The unclassified sequences of a sample, used only for calculating
+        // proportions, count as one category (A3 has none).
         assert_eq!(
             alpha_values(&community, AlphaMetric::Observed),
+            [6.0, 4.0, 4.0, 6.0, 5.0, 6.0]
+        );
+        // Removed, they are not counted; retained or pooled, they are the
+        // one unclassified genus of this profile.
+        let observed = |unclassified| {
+            let community = community_with(Normalisation::Proportions, unclassified);
+            alpha_values(&community, AlphaMetric::Observed)
+        };
+        assert_eq!(
+            observed(Unclassified::Remove),
             [5.0, 3.0, 4.0, 5.0, 4.0, 5.0]
         );
+        assert_eq!(observed(Unclassified::Pool), observed(Unclassified::Retain));
+        assert_eq!(observed(Unclassified::Pool), [6.0, 4.0, 4.0, 6.0, 5.0, 6.0]);
+        // The distances between samples follow the treatment too.
+        let first = |unclassified| {
+            community_with(Normalisation::Proportions, unclassified)
+                .table
+                .distances(Distance::BrayCurtis)
+                .get(0, 3)
+        };
+        let all = Unclassified::ALL.map(first);
+        assert!(all.iter().all(|d| (0.0..1.0).contains(d)));
+        assert!((first(Unclassified::Remove) - first(Unclassified::ProportionsOnly)).abs() > 1e-6);
+        assert!((first(Unclassified::Pool) - first(Unclassified::Remove)).abs() > 1e-6);
         let figure = alpha_plot(&community, AlphaMetric::Shannon, &BoxOptions::default());
         let texts = texts(&figure);
         for expected in ["Shannon index", "A", "B"] {
@@ -1354,7 +1384,7 @@ mod tests {
         assert_eq!(stages[1], "Arranging the samples by NMDS");
 
         let (output, _) = run_paused(CommunityJob::Distances);
-        let matrix = distances(&community.table.abundances, Distance::BrayCurtis);
+        let matrix = community.table.distances(Distance::BrayCurtis);
         assert_eq!(output, CommunityOutput::Distances(matrix.clone()));
 
         let values = vec![1.0, 2.0, 4.0, 8.0, 9.0, 3.0];

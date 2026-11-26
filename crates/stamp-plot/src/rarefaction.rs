@@ -46,10 +46,10 @@ impl Data {
     /// Rarefaction data for the samples of `profile`, where sample `i`
     /// belongs to group `sample_groups[i]`.
     ///
-    /// The profile should hold every category at its level, unclassified
-    /// ones included: those are not counted as features, being no taxon or
-    /// function of their own, but their sequences are part of the sample
-    /// and are drawn like any others.
+    /// Every feature of the profile is counted. Sequences of a sample
+    /// that are in none of its features (unclassified ones, in a profile
+    /// that uses them only for calculating proportions) are part of the
+    /// sample and are drawn like any others, but are not counted.
     ///
     /// Fails if the profile does not hold whole numbers of sequences.
     pub fn from_profile(
@@ -68,14 +68,14 @@ impl Data {
                 total: 0,
             })
             .collect();
+        let totals = whole_counts(&profile.sample_totals()).ok_or(NOT_COUNTS)?;
+        for (sample, total) in samples.iter_mut().zip(totals) {
+            sample.total = total;
+        }
         for feature in profile.features() {
             let counts = whole_counts(&feature.counts).ok_or(NOT_COUNTS)?;
-            let counted = !feature.name.to_ascii_lowercase().contains("unclassified");
             for (sample, count) in samples.iter_mut().zip(counts) {
-                sample.total += count;
-                if counted {
-                    sample.counts.push(count);
-                }
+                sample.counts.push(count);
             }
         }
         Ok(Data {
@@ -86,18 +86,30 @@ impl Data {
     }
 
     /// Rarefaction data for some samples of a profile tree at a
-    /// hierarchical level, whatever treatment of unclassified sequences the
-    /// analysis itself uses.
+    /// hierarchical level, with the treatment of unclassified features the
+    /// analysis itself uses. The curves count the features of a whole
+    /// sample, as the alpha diversity measures do, so unclassified
+    /// sequences used only for calculating proportions count as one more
+    /// category, as if they had been pooled into one.
     pub fn from_tree(
         tree: &ProfileTree,
         samples: &[String],
         profile_level: &str,
+        unclassified: Unclassified,
         sample_groups: Vec<usize>,
         groups: Vec<String>,
     ) -> Result<Data, String> {
         let names: Vec<&str> = samples.iter().map(String::as_str).collect();
         let profile = tree
-            .profile(&names, None, profile_level, Unclassified::Retain)
+            .profile(
+                &names,
+                None,
+                profile_level,
+                match unclassified {
+                    Unclassified::ProportionsOnly => Unclassified::Pool,
+                    other => other,
+                },
+            )
             .map_err(|e| e.to_string())?;
         Data::from_profile(&profile, sample_groups, groups).map_err(str::to_string)
     }
@@ -635,7 +647,12 @@ mod tests {
             P2\te\t1\t0\t0\n";
         let tree = ProfileTree::read(spf).unwrap();
         let profile = tree
-            .profile(&["A1", "A2", "B1"], None, "Genus", Unclassified::Retain)
+            .profile(
+                &["A1", "A2", "B1"],
+                None,
+                "Genus",
+                Unclassified::ProportionsOnly,
+            )
             .unwrap();
         Data::from_profile(&profile, vec![0, 0, 1], vec!["A".into(), "B".into()]).unwrap()
     }

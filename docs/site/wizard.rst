@@ -136,7 +136,7 @@ that transform). It recommends Welch's ANOVA if the groups differ twofold
 or more in size, or if the spread of more than 10% of the features differs
 (p < 0.05; about 5% would by chance), and the *Why* paragraph gives the
 count and the reason either way, for example "Brown-Forsythe test: the
-spread differs between the groups for 814 of 1936 features (42%; p < 0.05,
+spread differs between the groups for 673 of 1392 features (48%; p < 0.05,
 5% expected by chance)." (see :ref:`equal-spread`).
 
 The tests at a glance

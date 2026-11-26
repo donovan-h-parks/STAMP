@@ -2882,7 +2882,7 @@ impl StampApp {
     /// the two reaches of each stream were sampled for. Families, the
     /// samples grouped by reach, downstream against upstream with a
     /// Wilcoxon signed-rank test that pairs the two samples of a glacier,
-    /// and the Benjamini-Hochberg correction for the 1,936 families.
+    /// and the Benjamini-Hochberg correction for the 1,392 named families.
     /// Correlations are with pH.
     fn glacier_settings(&mut self) {
         use stamp_core::stats::correction::Correction;
@@ -3789,20 +3789,7 @@ impl StampApp {
                         ui,
                         "unclassified",
                         &mut self.session.unclassified,
-                        &[
-                            (
-                                Unclassified::Retain,
-                                "Retain unclassified reads".to_string(),
-                            ),
-                            (
-                                Unclassified::Remove,
-                                "Remove unclassified reads".to_string(),
-                            ),
-                            (
-                                Unclassified::FrequencyOnly,
-                                "Use only for calculating frequency profiles".to_string(),
-                            ),
-                        ],
+                        &named(&Unclassified::ALL, Unclassified::name),
                     )
                 });
             });

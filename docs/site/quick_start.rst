@@ -77,15 +77,17 @@ an **extended error bar plot**:
 Each row is a genus. On the left are its mean proportions in the two
 groups; in the middle, the difference between them with its 95% confidence
 interval; on the right, the p-value. Here *Bacteroides* makes up about 26
-percentage points more of Enterotype 1, while sequences that could not be
-assigned to a genus (*Unclassified*) make up about 20 points more of
-Enterotype 3.
+percentage points more of Enterotype 1. Sequences that could not be
+assigned to a genus (*Unclassified*) are not a row: they count towards the
+total of each sample, so the proportions are of the whole sample, but they
+are not tested (the *Unclassified* choice of *Profile and groups*; see
+:doc:`input_files`).
 
 .. tip::
 
-   Look at the rows below *Ruminococcus*: genera such as *Slackia* have
-   p-values below 0.05, but their difference is so close to zero that the
-   confidence interval is hidden behind the marker. A difference can be
+   Look at rows such as *Slackia*: its p-value is well below 0.05, but
+   the difference is so close to zero that the confidence interval is
+   hidden behind the marker. A difference can be
    *statistically* significant and still too small to matter biologically.
    This is why STAMP shows the size of every difference, and why it can
    filter features by effect size as well as by p-value (see

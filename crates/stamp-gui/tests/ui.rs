@@ -47,6 +47,10 @@ impl Harness {
         // Most tests look at every feature; the filter that is on when the
         // application starts has a test of its own.
         harness.app.set_p_value_filter(None);
+        // Likewise most were written with unclassified categories as
+        // features; the treatment STAMP starts with has a test of its own.
+        harness.app.session.unclassified = stamp_core::Unclassified::Retain;
+        harness.app.session.invalidate_all();
         harness
     }
 
@@ -382,7 +386,15 @@ fn built_in_example_and_opened_files_are_loaded() {
     harness.app.load_example();
     harness.settle();
     assert_eq!(harness.app.session.profile_name, "Enterotypes.profile.spf");
-    assert_eq!(harness.app.session.feature_counts(Mode::TwoGroups).0, 17);
+    // STAMP starts with unclassified categories used only for calculating
+    // frequency profiles: the 17th phylum, "Unclassified", is no feature.
+    assert_eq!(
+        harness.app.session.unclassified,
+        stamp_core::Unclassified::ProportionsOnly
+    );
+    assert_eq!(harness.app.session.feature_counts(Mode::TwoGroups).0, 16);
+    let (_, results) = harness.app.session.groups.output.as_ref().unwrap();
+    assert!(results.rows.iter().all(|r| r.feature != "Unclassified"));
 
     // Files arrive from the file dialogs as events.
     let file = |name: &str, text: &str| OpenedFile {
@@ -1025,6 +1037,60 @@ fn the_profile_table_shows_the_values_of_the_loaded_profile() {
 }
 
 #[test]
+fn every_analysis_follows_the_treatment_of_unclassified_features() {
+    use stamp_core::Unclassified;
+    // The four choices, as the Unclassified box of Profile and groups
+    // names them.
+    assert_eq!(
+        Unclassified::ALL.map(Unclassified::name),
+        [
+            "Retain unclassified features",
+            "Remove unclassified features",
+            "Use only for calculating feature proportions",
+            "Pool into a single feature"
+        ]
+    );
+    let mut harness = Harness::enterotypes();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::Pcoa);
+    // The features tested, and the PERMANOVA of the PCoA plot.
+    let mut run = |treatment: Unclassified| {
+        harness.app.session.unclassified = treatment;
+        harness.app.session.invalidate_all();
+        harness.settle();
+        let features: Vec<String> = harness
+            .app
+            .feature_table()
+            .iter()
+            .map(|row| row.feature.clone())
+            .collect();
+        let permanova = figure_texts(&harness.app)
+            .into_iter()
+            .find(|text| text.starts_with("PERMANOVA: pseudo-F = "))
+            .expect("the PCoA has its test");
+        (features, permanova)
+    };
+    let (retained, retained_test) = run(Unclassified::Retain);
+    let (removed, removed_test) = run(Unclassified::Remove);
+    let (set_aside, set_aside_test) = run(Unclassified::ProportionsOnly);
+    let (pooled, pooled_test) = run(Unclassified::Pool);
+    // At phylum level the one unclassified category is a feature when
+    // retained or pooled, and not otherwise.
+    let has = |features: &[String]| features.iter().any(|f| f == "Unclassified");
+    assert!(has(&retained) && has(&pooled));
+    assert!(!has(&removed) && !has(&set_aside));
+    assert_eq!(removed, set_aside);
+    assert_eq!(retained.len(), removed.len() + 1);
+    // The community test compares the same profiles as the feature tests,
+    // so it changes with the treatment: one unclassified category retained
+    // is the same as pooled.
+    assert_eq!(retained_test, pooled_test);
+    assert_ne!(removed_test, set_aside_test);
+    assert_ne!(removed_test, pooled_test);
+    assert_ne!(set_aside_test, pooled_test);
+}
+
+#[test]
 fn switching_a_sample_off_keeps_the_selected_feature() {
     for mode in [Mode::TwoGroups, Mode::MultipleGroups] {
         let mut harness = Harness::enterotypes();
@@ -1066,6 +1132,9 @@ fn switching_a_sample_off_keeps_the_selected_feature() {
 fn starts_with_the_p_value_filter_on() {
     let mut harness = Harness::new();
     harness.app.load_example();
+    // Written with unclassified categories as features.
+    harness.app.session.unclassified = stamp_core::Unclassified::Retain;
+    harness.app.session.invalidate_all();
     harness.settle();
     // One feature of the example differs at the 0.05 level.
     assert_eq!(harness.app.session.feature_counts(Mode::TwoGroups), (17, 1));
@@ -2198,6 +2267,9 @@ fn an_uncertain_storey_estimate_is_not_used_and_says_so() {
     harness
         .app
         .load_example_data(stamp_gui::app::Example::CoalSeamGas);
+    // Written with unclassified categories as features.
+    harness.app.session.unclassified = stamp_core::Unclassified::Retain;
+    harness.app.session.invalidate_all();
     harness.app.set_mode(Mode::TwoGroups);
     harness.app.set_p_value_filter(None);
     let session = &mut harness.app.session;
@@ -2286,8 +2358,14 @@ fn glacier_example_loads_with_its_own_settings() {
     );
     let (profile, results) = session.groups.output.as_ref().unwrap();
     assert_eq!(profile.samples_in_group1().len(), 73);
-    assert_eq!(results.rows.len(), 1936);
-    // Twenty-three families differ between the reaches at q <= 0.05, the
+    // 1,392 named families: the 544 "unclassified" categories are used
+    // only for calculating the proportions, STAMP's starting treatment.
+    assert_eq!(results.rows.len(), 1392);
+    assert!(results
+        .rows
+        .iter()
+        .all(|r| !r.feature.contains("nclassified")));
+    // Thirty-seven families differ between the reaches at q <= 0.05, the
     // family JACQAP01 most of all.
     let significant: Vec<&str> = results
         .rows
@@ -2295,7 +2373,7 @@ fn glacier_example_loads_with_its_own_settings() {
         .filter(|r| r.p_value_corrected <= 0.05)
         .map(|r| r.feature.as_str())
         .collect();
-    assert_eq!(significant.len(), 23, "{significant:?}");
+    assert_eq!(significant.len(), 37, "{significant:?}");
     assert!(significant.contains(&"JACQAP01") && significant.contains(&"RBC074"));
     harness.screenshot("glacier_two_groups");
 
@@ -2325,7 +2403,7 @@ fn glacier_example_loads_with_its_own_settings() {
     let session = &harness.app.session;
     assert!(session.error(Mode::MultipleGroups).is_none());
     assert_eq!(session.multi.active_groups.len(), 9);
-    assert_eq!(session.feature_counts(Mode::MultipleGroups).0, 1936);
+    assert_eq!(session.feature_counts(Mode::MultipleGroups).0, 1392);
     harness.app.set_plot_kind(PlotKind::Map);
     harness.settle();
     assert!(figure_texts(&harness.app)
@@ -3460,6 +3538,9 @@ fn plots_and_tests_the_wizard_leads_to() {
     harness
         .app
         .load_example_data(stamp_gui::app::Example::CoalSeamGas);
+    // Written with unclassified categories as features.
+    harness.app.session.unclassified = stamp_core::Unclassified::Retain;
+    harness.app.session.invalidate_all();
     harness.app.set_p_value_filter(None);
     harness.app.session.profile_level = "Genus".to_string();
     harness
@@ -4909,9 +4990,9 @@ fn wizard_recommends_welchs_anova_for_unequal_spread() {
     let facts = harness.app.wizard_facts();
     assert_eq!(facts.groups.len(), 9);
     let spread = facts.spread.expect("the spread of the families is checked");
-    assert_eq!((spread.differ, spread.tested), (814, 1936));
+    assert_eq!((spread.differ, spread.tested), (673, 1392));
     assert!(spread.is_unequal());
-    assert!(facts.spread_clr.is_some_and(|s| s.tested == 1936));
+    assert!(facts.spread_clr.is_some_and(|s| s.tested == 1392));
 
     let wizard = &mut harness.app.wizard;
     for choice in [
@@ -4926,7 +5007,7 @@ fn wizard_recommends_welchs_anova_for_unequal_spread() {
     assert_eq!(recommendation.heading, "Welch's ANOVA with Games-Howell");
     assert!(
         recommendation.why.contains("twofold in size")
-            && recommendation.why.contains("814 of 1936 features (42%"),
+            && recommendation.why.contains("673 of 1392 features (48%"),
         "{}",
         recommendation.why
     );

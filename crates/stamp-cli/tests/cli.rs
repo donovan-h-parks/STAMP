@@ -135,7 +135,7 @@ fn option_value(name: &str) -> &'static str {
         "Two-sided" => "two-sided",
         "Retain unclassified reads" => "retain",
         "Remove unclassified reads" => "remove",
-        "Use only for calculating frequency profiles" => "frequency-only",
+        "Use only for calculating frequency profiles" => "proportions-only",
         other => panic!("no command-line value for {other}"),
     }
 }
@@ -494,11 +494,113 @@ fn samples_are_chosen_by_their_metadata() {
 }
 
 #[test]
+fn unclassified_categories_are_used_only_for_frequencies_by_default() {
+    let run = |extra: &[&str]| {
+        let mut args = vec!["--group1", "Enterotype 1", "--group2", "Enterotype 3"];
+        args.extend_from_slice(extra);
+        stdout(&with("two-groups", &ENTEROTYPES, &args))
+    };
+    let default = run(&[]);
+    assert_eq!(default, run(&["--unclassified", "proportions-only"]));
+    // "Unclassified" is a row only when retained; the other genera have
+    // the same proportions either way, and so the same p-values.
+    let default = Table::parse(&default);
+    let retained = Table::parse(&run(&["--unclassified", "retain"]));
+    assert_eq!(retained.rows.len(), 248);
+    assert!(default.rows.len() < retained.rows.len());
+    let genus = default.column("Genera");
+    let p_value = default.column("p-values");
+    assert!(default.rows.iter().all(|r| r[genus] != "Unclassified"));
+    assert!(retained.rows.iter().any(|r| r[genus] == "Unclassified"));
+    for row in &default.rows {
+        let same = retained
+            .rows
+            .iter()
+            .find(|r| r[genus] == row[genus])
+            .unwrap();
+        assert_eq!(row[p_value], same[p_value], "{}", row[genus]);
+    }
+}
+
+#[test]
+fn every_analysis_follows_the_treatment_of_unclassified_features() {
+    let directory =
+        std::env::temp_dir().join(format!("stamp-cli-unclassified-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let groups = ["--group1", "Enterotype 1", "--group2", "Enterotype 3"];
+    // The table of features, and the PERMANOVA line of the PCoA plot.
+    let run = |treatment: &str| {
+        let mut extra = groups.to_vec();
+        extra.extend(["--unclassified", treatment]);
+        let table = Table::parse(&stdout(&with("two-groups", &ENTEROTYPES, &extra)));
+        extra.extend(["--plot-type", "pcoa"]);
+        let svg = svg_plot("two-groups", &ENTEROTYPES, &extra, &directory, treatment);
+        let start = svg
+            .find("PERMANOVA: pseudo-F = ")
+            .expect("the PCoA has its test");
+        let permanova = svg[start..].split('<').next().unwrap().to_string();
+        (table, permanova)
+    };
+    let (retain, retain_test) = run("retain");
+    let (remove, remove_test) = run("remove");
+    let (proportions, proportions_test) = run("proportions-only");
+    let (pool, pool_test) = run("pool");
+    let _ = fs::remove_dir_all(&directory);
+
+    // Features: the unclassified genera are rows when retained, one row
+    // when pooled, and no row otherwise.
+    let genus = retain.column("Genera");
+    let unclassified = |t: &Table| {
+        t.rows
+            .iter()
+            .filter(|r| r[genus].to_lowercase().contains("unclassified"))
+            .count()
+    };
+    let per_phylum = unclassified(&retain);
+    assert!(per_phylum >= 1);
+    assert_eq!(unclassified(&pool), 1);
+    assert!(pool.rows.iter().any(|r| r[genus] == "Unclassified"));
+    assert_eq!(pool.rows.len(), retain.rows.len() - per_phylum + 1);
+    assert_eq!(unclassified(&remove), 0);
+    assert_eq!(unclassified(&proportions), 0);
+    assert_eq!(remove.rows.len(), proportions.rows.len());
+    // Removing them changes the proportions of the others; setting them
+    // aside does not.
+    let mean = retain.column_ending("Enterotype 1: mean rel. freq. (%)");
+    let bacteroides = |t: &Table| -> f64 {
+        let row = t.rows.iter().find(|r| r[genus] == "Bacteroides").unwrap();
+        row[mean].parse().unwrap()
+    };
+    assert_eq!(bacteroides(&proportions), bacteroides(&retain));
+    assert_eq!(bacteroides(&pool), bacteroides(&retain));
+    assert!(bacteroides(&remove) > bacteroides(&retain));
+
+    // The community tests are of the same profiles, so they differ with
+    // the treatment as well.
+    assert_ne!(remove_test, proportions_test);
+    assert_ne!(pool_test, proportions_test);
+    assert_ne!(pool_test, remove_test);
+    assert!(retain_test.starts_with("PERMANOVA: pseudo-F = "));
+
+    // The earlier name of proportions-only is not accepted.
+    let mut old = groups.to_vec();
+    old.extend(["--unclassified", "frequency-only"]);
+    assert!(failure(&with("two-groups", &ENTEROTYPES, &old)).contains("invalid value"));
+}
+
+#[test]
 fn filters_and_corrections_reduce_the_table() {
     let base = with(
         "two-groups",
         &ENTEROTYPES,
-        &["--group1", "Enterotype 1", "--group2", "Enterotype 3"],
+        &[
+            "--group1",
+            "Enterotype 1",
+            "--group2",
+            "Enterotype 3",
+            "--unclassified",
+            "retain",
+        ],
     );
     let all = Table::parse(&stdout(&base));
     assert_eq!(all.rows.len(), 248);
@@ -2050,6 +2152,8 @@ fn group_heatmap_summarises_each_group() {
         "multi-groups",
         &COAL,
         &[
+            "--unclassified",
+            "retain",
             "--plot-type",
             "group-heatmap",
             "--heatmap-statistic",
@@ -2181,6 +2285,8 @@ fn co_occurrence_correlates_features() {
         std::env::temp_dir().join(format!("stamp-cli-co-occurrence-{}", std::process::id()));
     fs::create_dir_all(&directory).unwrap();
     let base = [
+        "--unclassified",
+        "retain",
         "--profile",
         "examples/CoalSeamGas/coal.spf",
         "--profile-level",
@@ -2423,6 +2529,8 @@ fn prevalence_against_mean_abundance() {
         "multi-groups",
         &COAL,
         &[
+            "--unclassified",
+            "retain",
             "--plot-type",
             "prevalence-abundance",
             "--highlight",
@@ -3032,6 +3140,8 @@ fn gzip_compressed_profiles_and_metadata_are_read() {
 #[test]
 fn welch_anova_and_equal_spread() {
     let groups = [
+        "--unclassified",
+        "retain",
         "--group",
         "Enterotype 1",
         "--group",
@@ -3098,7 +3208,7 @@ fn welch_anova_and_equal_spread() {
     ];
     let output = stamp(&glacier);
     let err = String::from_utf8(output.stderr).unwrap();
-    assert!(err.contains("for 814 of 1936 features (42%"), "{err}");
+    assert!(err.contains("for 673 of 1392 features (48%"), "{err}");
     assert!(err.contains("consider --test welch-anova"), "{err}");
 
     // A group of one sample: no feature can be tested.

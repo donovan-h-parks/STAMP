@@ -23,8 +23,8 @@ pub struct Data {
 impl Data {
     /// A feature counts as present in a group if it is found (above zero)
     /// in at least `min_prevalence` (a share, from 0 to 1) of the group's
-    /// samples, and in at least one. Categories of unclassified sequences
-    /// are not features here, and groups without samples are left out.
+    /// samples, and in at least one. Groups without samples are left out.
+    /// Unclassified features are those the data was made with.
     pub fn from_composition(data: &composition::Data, min_prevalence: f64) -> Data {
         let members: Vec<Vec<usize>> = (0..data.groups.len())
             .map(|g| {
@@ -39,9 +39,6 @@ impl Data {
         let mut features = Vec::new();
         let mut presence = Vec::new();
         for (f, name) in data.features.iter().enumerate() {
-            if name.to_ascii_lowercase().contains("unclassified") {
-                continue;
-            }
             let row: Vec<bool> = used
                 .iter()
                 .map(|&g| {
@@ -414,9 +411,7 @@ mod tests {
     fn composition() -> composition::Data {
         // Features by sample; samples S1, S2 in A, S3, S4 in B, S5, S6 in C.
         composition::Data {
-            features: ["a", "b", "c", "d", "e", "Unclassified"]
-                .map(String::from)
-                .to_vec(),
+            features: ["a", "b", "c", "d", "e"].map(String::from).to_vec(),
             samples: ["S1", "S2", "S3", "S4", "S5", "S6"]
                 .map(String::from)
                 .to_vec(),
@@ -426,7 +421,6 @@ mod tests {
                 vec![0.0, 0.0, 0.0, 0.0, 2.0, 2.0], // c: C only
                 vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0], // d: half of A
                 vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // e: nowhere
-                vec![5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
             ],
             sample_groups: vec![0, 0, 1, 1, 2, 2],
             groups: ["A", "B", "C"].map(String::from).to_vec(),

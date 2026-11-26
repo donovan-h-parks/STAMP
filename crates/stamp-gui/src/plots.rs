@@ -1505,8 +1505,11 @@ fn community_plot(
         let key = OrdinationKey {
             tree: Some(tree.clone()),
             inputs: format!(
-                "{kind:?}|{}|{:?}|{}|{distance:?}|{tests:?}|{samples:?}|{sample_groups:?}",
-                session.profile_level, settings.community_normalisation, session.seed,
+                "{kind:?}|{}|{:?}|{:?}|{}|{distance:?}|{tests:?}|{samples:?}|{sample_groups:?}",
+                session.profile_level,
+                session.unclassified,
+                settings.community_normalisation,
+                session.seed,
             ),
         };
         let work = || {
@@ -1532,10 +1535,7 @@ fn community_plot(
             groups,
             group_colors: colors,
             styling,
-            table: stamp_core::stats::diversity::CommunityTable {
-                abundances: Vec::new(),
-                depth: None,
-            },
+            table: stamp_core::stats::diversity::CommunityTable::of_features(Vec::new()),
         };
         return match (kind, cached) {
             (PlotKind::Pcoa, Cached::Community(Ok(layout))) => {
@@ -1564,6 +1564,7 @@ fn community_plot(
         tree,
         samples,
         &session.profile_level,
+        session.unclassified,
         sample_groups,
         groups,
         settings.community_normalisation,
@@ -1594,6 +1595,7 @@ fn community_work(
     let tree = tree.clone();
     let samples = samples.to_vec();
     let level = session.profile_level.clone();
+    let unclassified = session.unclassified;
     let (normalisation, distance, seed) = (
         settings.community_normalisation,
         settings.community_distance,
@@ -1618,6 +1620,7 @@ fn community_work(
                 &tree,
                 &samples,
                 &level,
+                unclassified,
                 sample_groups.clone(),
                 groups.clone(),
                 normalisation,
@@ -1783,8 +1786,9 @@ fn mantel_figure(
     let key = OrdinationKey {
         tree: Some(tree.clone()),
         inputs: format!(
-            "Mantel|{}|{:?}|{}|{distance:?}|{method:?}|{permutations}|{samples:?}|{:x}",
+            "Mantel|{}|{:?}|{:?}|{}|{distance:?}|{method:?}|{permutations}|{samples:?}|{:x}",
             session.profile_level,
+            session.unclassified,
             settings.community_normalisation,
             session.seed,
             hash_of_values(std::iter::once(profile.values.as_slice())),
@@ -1820,6 +1824,7 @@ fn mantel_figure(
                 styling: Default::default(),
                 table: stamp_core::stats::diversity::CommunityTable {
                     abundances: Vec::new(),
+                    set_aside: Vec::new(),
                     depth,
                 },
             };
@@ -1852,8 +1857,14 @@ fn rarefaction_curves(
     let Some(tree) = &session.tree else {
         return Figure::message(NO_RESULTS);
     };
-    match rarefaction::Data::from_tree(tree, samples, &session.profile_level, sample_groups, groups)
-    {
+    match rarefaction::Data::from_tree(
+        tree,
+        samples,
+        &session.profile_level,
+        session.unclassified,
+        sample_groups,
+        groups,
+    ) {
         Ok(mut data) => {
             data.group_colors = colors;
             rarefaction::plot(&data, &settings.rarefaction)
@@ -2350,6 +2361,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         tree,
                         samples,
                         &session.profile_level,
+                        session.unclassified,
                         sample_groups,
                         groups,
                         settings.community_normalisation,

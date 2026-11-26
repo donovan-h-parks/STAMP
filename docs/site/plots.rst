@@ -84,8 +84,8 @@ Each row is a feature that passed the filters.
 **What to look for.**
 
 * Rows whose interval is far from zero and narrow: large, well-supported
-  differences. Here *Bacteroides* (about 26 points higher in Enterotype 1)
-  and the unclassified sequences (about 20 points higher in Enterotype 3).
+  differences. Here *Bacteroides* (about 26 points higher in Enterotype
+  1).
 * Rows whose marker sits on zero with a tiny interval, such as *Slackia*
   here: significant, but too small to matter. An effect size filter removes
   them.

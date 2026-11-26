@@ -106,42 +106,58 @@ pub const NEEDS_COUNTS: &str = "Rarefying needs counts of sequences, and this pr
 pub struct CommunityTable {
     /// `abundances[sample][feature]`
     pub abundances: Vec<Vec<f64>>,
+    /// The abundance in each sample of what is part of the sample but is
+    /// not one of its features: the unclassified sequences, when they are
+    /// used only for calculating proportions. Zero otherwise.
+    pub set_aside: Vec<f64>,
     /// The number of sequences every sample was rarefied to, if they were.
     pub depth: Option<u64>,
 }
 
 impl CommunityTable {
-    /// The community table of a profile. The profile should hold every
-    /// category at its level, unclassified ones included: those are not
-    /// features of the community, being no taxon or function of their own,
-    /// but their sequences are part of each sample, so they take part in
-    /// rarefying.
+    /// The community table of a profile: its features, as the treatment of
+    /// unclassified features it was made with left them
+    /// ([`crate::Unclassified`]). Whatever of a sample is in none of its
+    /// features (the unclassified sequences, when they are used only for
+    /// calculating proportions) is set aside: it is no feature, but it
+    /// stays part of the sample, and so takes part in rarefying.
     pub fn new(
         profile: &Profile,
         normalisation: Normalisation,
         rng: &mut StampRng,
     ) -> Result<CommunityTable, &'static str> {
         let samples = profile.sample_names.len();
-        let counted: Vec<bool> = profile
-            .features()
-            .iter()
-            .map(|f| !f.name.to_ascii_lowercase().contains("unclassified"))
-            .collect();
+        let totals = profile.sample_totals();
         match normalisation {
-            Normalisation::Proportions => Ok(CommunityTable {
-                abundances: (0..samples)
+            Normalisation::Proportions => {
+                let abundances: Vec<Vec<f64>> = (0..samples)
                     .map(|s| {
                         profile
                             .features()
                             .iter()
-                            .zip(&counted)
-                            .filter(|(_, counted)| **counted)
-                            .map(|(f, _)| f.counts[s].max(0.0))
+                            .map(|f| f.counts[s].max(0.0))
                             .collect()
                     })
-                    .collect(),
-                depth: None,
-            }),
+                    .collect();
+                let set_aside = abundances
+                    .iter()
+                    .zip(&totals)
+                    .map(|(sample, &total)| {
+                        let rest = total - sample.iter().sum::<f64>();
+                        // Rounding in the sums is not a part of the sample.
+                        if rest > 1e-9 * total.abs() {
+                            rest
+                        } else {
+                            0.0
+                        }
+                    })
+                    .collect();
+                Ok(CommunityTable {
+                    abundances,
+                    set_aside,
+                    depth: None,
+                })
+            }
             Normalisation::Rarefy => {
                 let mut columns: Vec<Vec<u64>> = vec![Vec::new(); samples];
                 for feature in profile.features() {
@@ -150,27 +166,76 @@ impl CommunityTable {
                         column.push(count);
                     }
                 }
+                // What is set aside is drawn from like a feature, last.
+                let totals = whole_counts(&totals).ok_or(NEEDS_COUNTS)?;
+                for (column, total) in columns.iter_mut().zip(totals) {
+                    let features: u64 = column.iter().sum();
+                    column.push(total.saturating_sub(features));
+                }
                 let depth = columns
                     .iter()
                     .map(|column| column.iter().sum::<u64>())
                     .min()
                     .unwrap_or(0);
+                let mut abundances = Vec::with_capacity(samples);
+                let mut set_aside = Vec::with_capacity(samples);
+                for column in &columns {
+                    let mut drawn = subsample(column, depth, rng);
+                    set_aside.push(drawn.pop().unwrap_or(0) as f64);
+                    abundances.push(drawn.into_iter().map(|count| count as f64).collect());
+                }
                 Ok(CommunityTable {
-                    abundances: columns
-                        .iter()
-                        .map(|column| {
-                            subsample(column, depth, rng)
-                                .into_iter()
-                                .zip(&counted)
-                                .filter(|(_, counted)| **counted)
-                                .map(|(count, _)| count as f64)
-                                .collect()
-                        })
-                        .collect(),
+                    abundances,
+                    set_aside,
                     depth: Some(depth),
                 })
             }
         }
+    }
+
+    /// A table of features alone, with nothing set aside.
+    pub fn of_features(abundances: Vec<Vec<f64>>) -> CommunityTable {
+        CommunityTable {
+            set_aside: vec![0.0; abundances.len()],
+            abundances,
+            depth: None,
+        }
+    }
+
+    /// What of a sample is set aside (zero for a table without any).
+    pub fn set_aside_of(&self, sample: usize) -> f64 {
+        self.set_aside.get(sample).copied().unwrap_or(0.0)
+    }
+
+    /// A sample as the alpha diversity measures are given it. They are
+    /// defined for a whole sample, so what is set aside counts as one more
+    /// category, as if the unclassified features had been pooled into one.
+    pub fn alpha_abundances(&self, sample: usize) -> Vec<f64> {
+        let mut abundances = self.abundances[sample].clone();
+        let set_aside = self.set_aside_of(sample);
+        if set_aside > 0.0 {
+            abundances.push(set_aside);
+        }
+        abundances
+    }
+
+    /// The distances between the samples. Bray-Curtis and Euclidean
+    /// distances compare the features as proportions of the whole sample,
+    /// what is set aside included in the whole, so the proportions of a
+    /// sample need not add up to one.
+    pub fn distances(&self, metric: Distance) -> DistanceMatrix {
+        match self
+            .distance_run(metric)
+            .advance(&mut |_, _| Control::Continue)
+        {
+            Step::Done(matrix) => matrix,
+            Step::Paused | Step::Cancelled => unreachable!("never paused or cancelled"),
+        }
+    }
+
+    /// [`CommunityTable::distances`], computed a row at a time.
+    pub fn distance_run(&self, metric: Distance) -> DistanceRun {
+        DistanceRun::with_set_aside(&self.abundances, &self.set_aside, metric)
     }
 }
 
@@ -245,8 +310,8 @@ impl Distance {
 }
 
 /// A sample as proportions of its total; all zeros if it has none.
-fn as_proportions(sample: &[f64]) -> Vec<f64> {
-    let total: f64 = sample.iter().filter(|a| **a > 0.0).sum();
+fn as_proportions(sample: &[f64], set_aside: f64) -> Vec<f64> {
+    let total: f64 = sample.iter().filter(|a| **a > 0.0).sum::<f64>() + set_aside.max(0.0);
     sample
         .iter()
         .map(|&a| if total > 0.0 { a.max(0.0) / total } else { 0.0 })
@@ -339,10 +404,26 @@ pub struct DistanceRun {
 
 impl DistanceRun {
     pub fn new(samples: &[Vec<f64>], metric: Distance) -> DistanceRun {
+        DistanceRun::with_set_aside(samples, &[], metric)
+    }
+
+    /// As [`DistanceRun::new`], for samples of which a part (`set_aside`,
+    /// one abundance per sample, on the scale of the features) is in none
+    /// of the features: the proportions that Bray-Curtis and Euclidean
+    /// distances compare are of the whole sample, that part included. The
+    /// other distances do not depend on it.
+    pub fn with_set_aside(
+        samples: &[Vec<f64>],
+        set_aside: &[f64],
+        metric: Distance,
+    ) -> DistanceRun {
         let prepared: Vec<Vec<f64>> = samples
             .iter()
-            .map(|sample| match metric {
-                Distance::BrayCurtis | Distance::Euclidean => as_proportions(sample),
+            .enumerate()
+            .map(|(index, sample)| match metric {
+                Distance::BrayCurtis | Distance::Euclidean => {
+                    as_proportions(sample, set_aside.get(index).copied().unwrap_or(0.0))
+                }
                 Distance::Jaccard => sample
                     .iter()
                     .map(|&a| if a > 0.0 { 1.0 } else { 0.0 })
@@ -1041,7 +1122,7 @@ pub(crate) mod tests {
     /// positions, up to the sign of each axis.
     #[test]
     fn euclidean_pcoa_is_a_pca_of_the_proportions() {
-        let proportions: Vec<Vec<f64>> = table().iter().map(|s| as_proportions(s)).collect();
+        let proportions: Vec<Vec<f64>> = table().iter().map(|s| as_proportions(s, 0.0)).collect();
         let pca = crate::stats::pca::pca(&proportions).unwrap();
         let pcoa = pcoa(&distances(&table(), Distance::Euclidean)).unwrap();
         for axis in 0..3 {
@@ -1126,31 +1207,95 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn community_tables_leave_unclassified_out_and_can_be_rarefied() {
+    fn community_tables_follow_the_treatment_of_unclassified_features() {
         use crate::stats::rng_from_seed;
         use crate::{ProfileTree, Unclassified};
         let spf = "Phylum\tGenus\tS1\tS2\n\
             P1\ta\t50\t5\n\
             P1\tb\t30\t5\n\
             P1\tunclassified\t40\t0\n\
+            P1\tunclassified P1\t60\t0\n\
             P2\tc\t20\t10\n";
         let tree = ProfileTree::read(spf).unwrap();
-        let profile = tree
-            .profile(&["S1", "S2"], None, "Genus", Unclassified::Retain)
-            .unwrap();
         let mut rng = rng_from_seed(1);
-        let table = CommunityTable::new(&profile, Normalisation::Proportions, &mut rng).unwrap();
-        assert_eq!(table.abundances, [[50.0, 30.0, 20.0], [5.0, 5.0, 10.0]]);
-        assert_eq!(table.depth, None);
+        let mut table = |unclassified, normalisation| {
+            let profile = tree
+                .profile(&["S1", "S2"], None, "Genus", unclassified)
+                .unwrap();
+            CommunityTable::new(&profile, normalisation, &mut rng).unwrap()
+        };
+        let proportions = Normalisation::Proportions;
 
-        // Rarefied to the 20 sequences of the smaller sample; the larger
-        // sample's draw includes unclassified sequences that are then left
-        // out, so its three genera hold 20 or fewer.
-        let rarefied = CommunityTable::new(&profile, Normalisation::Rarefy, &mut rng).unwrap();
+        // Retained: features like any other. Pooled: one feature.
+        let retained = table(Unclassified::Retain, proportions);
+        assert_eq!(
+            retained.abundances,
+            [[50.0, 30.0, 40.0, 60.0, 20.0], [5.0, 5.0, 0.0, 0.0, 10.0]]
+        );
+        assert_eq!(retained.set_aside, [0.0, 0.0]);
+        let pooled = table(Unclassified::Pool, proportions);
+        assert_eq!(
+            pooled.abundances,
+            [[50.0, 30.0, 100.0, 20.0], [5.0, 5.0, 0.0, 10.0]]
+        );
+        assert_eq!(pooled.set_aside, [0.0, 0.0]);
+        // Removed: gone. Used only for proportions: no feature, but still
+        // part of the sample.
+        let removed = table(Unclassified::Remove, proportions);
+        assert_eq!(removed.abundances, [[50.0, 30.0, 20.0], [5.0, 5.0, 10.0]]);
+        assert_eq!(removed.set_aside, [0.0, 0.0]);
+        let set_aside = table(Unclassified::ProportionsOnly, proportions);
+        assert_eq!(set_aside.abundances, removed.abundances);
+        assert_eq!(set_aside.set_aside, [100.0, 0.0]);
+        assert_eq!(set_aside.depth, None);
+
+        // Bray-Curtis compares proportions of the whole sample. S1 is a
+        // 0.25, b 0.15, c 0.1 with the unclassified half set aside, and
+        // S2 is a 0.25, b 0.25, c 0.5: |differences| 0.5 over a sum of 1.5.
+        let bray = |t: &CommunityTable| t.distances(Distance::BrayCurtis).get(0, 1);
+        assert!((bray(&set_aside) - 0.5 / 1.5).abs() < 1e-12);
+        // Removed, S1 is a 0.5, b 0.3, c 0.2: 0.6 over 2.
+        assert!((bray(&removed) - 0.3).abs() < 1e-12);
+        // Pooled, the unclassified half is a feature that S2 lacks: 1 over 2.
+        assert!((bray(&pooled) - 0.5).abs() < 1e-12);
+        // Retained, the two unclassified features differ as much together.
+        assert!((bray(&retained) - 0.5).abs() < 1e-12);
+        // Presence and log-ratios of the features do not depend on what is
+        // set aside.
+        for metric in [Distance::Jaccard, Distance::Aitchison] {
+            assert_eq!(
+                set_aside.distances(metric).get(0, 1),
+                removed.distances(metric).get(0, 1)
+            );
+        }
+
+        // The alpha diversity measures are of a whole sample: what is set
+        // aside counts as one more category, as when pooled.
+        assert_eq!(set_aside.alpha_abundances(0), [50.0, 30.0, 20.0, 100.0]);
+        assert_eq!(set_aside.alpha_abundances(1), [5.0, 5.0, 10.0]);
+        for metric in [
+            AlphaMetric::Observed,
+            AlphaMetric::Shannon,
+            AlphaMetric::Simpson,
+        ] {
+            let of = |t: &CommunityTable| metric.value(&t.alpha_abundances(0));
+            assert!((of(&set_aside) - of(&pooled)).abs() < 1e-12, "{metric:?}");
+            assert!(of(&set_aside) > of(&removed), "{metric:?}");
+        }
+
+        // Rarefied to the 20 sequences of the smaller sample. Sequences
+        // set aside are drawn like the others, so the three genera of the
+        // larger sample hold what is left of its 20; removed, they are not
+        // there to be drawn.
+        let rarefied = table(Unclassified::ProportionsOnly, Normalisation::Rarefy);
         assert_eq!(rarefied.depth, Some(20));
         assert_eq!(rarefied.abundances[1], [5.0, 5.0, 10.0]);
         let first: f64 = rarefied.abundances[0].iter().sum();
-        assert!((5.0..=20.0).contains(&first), "{first}");
+        assert_eq!(first + rarefied.set_aside[0], 20.0);
+        assert!(rarefied.set_aside[0] > 0.0);
+        let rarefied = table(Unclassified::Remove, Normalisation::Rarefy);
+        assert_eq!(rarefied.abundances[0].iter().sum::<f64>(), 20.0);
+        assert_eq!(rarefied.set_aside, [0.0, 0.0]);
 
         let fractional = ProfileTree::read("F\tS1\tS2\nx\t1.5\t2\ny\t3\t4\n").unwrap();
         let profile = fractional
@@ -1380,7 +1525,7 @@ pub(crate) mod tests {
         let prepared: Vec<Vec<f64>> = samples
             .iter()
             .map(|sample| match metric {
-                Distance::BrayCurtis | Distance::Euclidean => as_proportions(sample),
+                Distance::BrayCurtis | Distance::Euclidean => as_proportions(sample, 0.0),
                 Distance::Jaccard => sample
                     .iter()
                     .map(|&a| if a > 0.0 { 1.0 } else { 0.0 })

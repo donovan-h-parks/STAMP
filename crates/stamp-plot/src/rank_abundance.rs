@@ -45,12 +45,6 @@ impl Default for Options {
     }
 }
 
-/// True for a category that stands for unclassified sequences: not a
-/// feature of the community, as in the other plots of whole communities.
-fn unclassified(name: &str) -> bool {
-    name.to_ascii_lowercase().contains("unclassified")
-}
-
 /// Ticks at the powers of ten covering `low` to `high` (both above zero),
 /// as their logarithms, labelled with the value.
 fn log_ticks(low: f64, high: f64) -> (Ticks, Vec<(f64, String)>) {
@@ -76,9 +70,9 @@ pub fn plot(data: &composition::Data, options: &Options) -> Figure {
         Curves::Samples => data.clone(),
         Curves::Groups => data.by_group(),
     };
-    let kept: Vec<usize> = (0..shown.features.len())
-        .filter(|&f| !unclassified(&shown.features[f]))
-        .collect();
+    // Every feature of the data: unclassified ones are among them or not
+    // as the data was made.
+    let kept: Vec<usize> = (0..shown.features.len()).collect();
     // Each curve: its name, its group, and its proportions largest first.
     let curves: Vec<(String, usize, Vec<f64>)> = (0..shown.samples.len())
         .map(|s| {
@@ -209,13 +203,12 @@ mod tests {
 
     fn data() -> composition::Data {
         composition::Data {
-            features: ["a", "b", "c", "Unclassified"].map(String::from).to_vec(),
+            features: ["a", "b", "c"].map(String::from).to_vec(),
             samples: ["S1", "S2", "S3"].map(String::from).to_vec(),
             values: vec![
                 vec![60.0, 10.0, 30.0],
                 vec![30.0, 0.0, 30.0],
                 vec![5.0, 80.0, 30.0],
-                vec![5.0, 10.0, 10.0],
             ],
             sample_groups: vec![0, 0, 1],
             groups: vec!["A".to_string(), "B".to_string()],
@@ -239,7 +232,7 @@ mod tests {
     fn a_curve_for_every_sample_or_group() {
         let figure = plot(&data(), &Options::default());
         assert_eq!(figure.regions.len(), 3);
-        // S2 has two features once the unclassified one is left out.
+        // S2 has two of the three features.
         assert!(figure.regions[1].tooltip.contains("Features present: 2"));
         assert!(figure.regions[0].tooltip.contains("Group: A"));
         let shown = texts(&figure);

@@ -558,6 +558,7 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
                     &tree,
                     &names,
                     profile_level,
+                    args.profile.unclassified.into(),
                     vec![0, 1],
                     names.clone(),
                     plot,
@@ -839,6 +840,7 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     &tree,
                     samples,
                     profile_level,
+                    args.profile.unclassified.into(),
                     (0..samples.len())
                         .map(|i| usize::from(i >= first))
                         .collect(),
@@ -914,6 +916,7 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     &tree,
                     samples,
                     profile_level,
+                    args.profile.unclassified.into(),
                     (0..samples.len())
                         .map(|i| usize::from(i >= first))
                         .collect(),
@@ -1193,6 +1196,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                 &tree,
                 &profile.profile.sample_names,
                 levels(&tree, &args.profile).1,
+                args.profile.unclassified.into(),
                 profile
                     .samples_in_groups()
                     .iter()
@@ -1275,6 +1279,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                 &tree,
                 &profile.profile.sample_names,
                 levels(&tree, &args.profile).1,
+                args.profile.unclassified.into(),
                 profile
                     .samples_in_groups()
                     .iter()
@@ -1492,6 +1497,7 @@ fn correlation(args: CorrelationArgs) -> CliResult {
                     &tree,
                     samples,
                     profile_level,
+                    args.profile.unclassified.into(),
                     vec![0; samples.len()],
                     vec![String::new()],
                     if plot.rarefy {
@@ -1534,6 +1540,7 @@ fn correlation(args: CorrelationArgs) -> CliResult {
                     &tree,
                     samples,
                     profile_level,
+                    args.profile.unclassified.into(),
                     vec![0; samples.len()],
                     vec![String::new()],
                     if plot.rarefy {
@@ -2158,6 +2165,7 @@ fn community_figure(
     tree: &ProfileTree,
     samples: &[String],
     profile_level: &str,
+    unclassified: stamp_core::Unclassified,
     sample_groups: Vec<usize>,
     groups: Vec<String>,
     plot: &PlotArgs,
@@ -2174,6 +2182,7 @@ fn community_figure(
         tree,
         samples,
         profile_level,
+        unclassified,
         sample_groups,
         groups,
         if plot.rarefy {
@@ -2554,12 +2563,20 @@ fn rarefaction_figure(
     tree: &ProfileTree,
     samples: &[String],
     profile_level: &str,
+    unclassified: stamp_core::Unclassified,
     sample_groups: Vec<usize>,
     groups: Vec<String>,
     plot: &PlotArgs,
 ) -> CliResult<stamp_plot::Figure> {
     use stamp_plot::rarefaction;
-    let data = rarefaction::Data::from_tree(tree, samples, profile_level, sample_groups, groups)?;
+    let data = rarefaction::Data::from_tree(
+        tree,
+        samples,
+        profile_level,
+        unclassified,
+        sample_groups,
+        groups,
+    )?;
     Ok(rarefaction::plot(
         &data,
         &rarefaction::Options {

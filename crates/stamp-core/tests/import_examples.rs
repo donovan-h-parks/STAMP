@@ -322,3 +322,78 @@ fn glacier_fed_streams_example() {
     assert!(row.p_value_corrected < 1e-3, "{}", row.p_value_corrected);
     assert!(row.effect_size > 0.0);
 }
+
+/// "Use only for calculating frequency profiles": the unclassified
+/// categories (here the coverage SingleM placed no lower than a higher
+/// rank, such as "unclassified p__Pseudomonadota") are not features, but
+/// stay in the total of each sample. The proportions of the named features
+/// are therefore those they have with every category retained, and what is
+/// missing from 100% is the unclassified share of the sample.
+#[test]
+fn unclassified_categories_count_in_totals_but_are_not_features() {
+    use stamp_core::Unclassified;
+    let tree = ProfileTree::read(&read("examples/GlacierFedStreams/glacier_streams.spf")).unwrap();
+    let samples = ["GL5_DN", "GL5_UP"];
+    // The share of GL5_DN without a name at each level (from the SingleM
+    // profile of the sample), in percent.
+    for (level, named, unclassified_share) in [
+        ("Phylum", "Pseudomonadota", 1.10),
+        ("Family", "Azoamicaceae", 7.44),
+        ("Genus", "JACQAP01", 22.63),
+    ] {
+        let retained = tree
+            .profile(&samples, None, level, Unclassified::Retain)
+            .unwrap();
+        let frequency = tree
+            .profile(&samples, None, level, Unclassified::ProportionsOnly)
+            .unwrap();
+        let removed = tree
+            .profile(&samples, None, level, Unclassified::Remove)
+            .unwrap();
+        let is_unclassified = |name: &str| name.to_lowercase().contains("unclassified");
+
+        // Every unclassified category is a feature when retained, and none
+        // is otherwise.
+        let dropped = retained
+            .features()
+            .iter()
+            .filter(|f| is_unclassified(&f.name))
+            .count();
+        assert!(dropped > 0, "{level}");
+        assert_eq!(
+            frequency.num_features(),
+            retained.num_features() - dropped,
+            "{level}"
+        );
+        assert!(frequency
+            .features()
+            .iter()
+            .all(|f| !is_unclassified(&f.name)));
+
+        // The named features keep the proportions they have among all of
+        // the sample...
+        for feature in frequency.features() {
+            let same = retained.feature(&feature.name).unwrap();
+            assert_eq!(frequency.percentages(feature), retained.percentages(same));
+        }
+        assert!(frequency.feature(named).is_some(), "{level}: {named}");
+        // ...so they add up to 100% less the unclassified share, which
+        // differs between samples.
+        let total = |profile: &stamp_core::Profile, sample: usize| -> f64 {
+            profile
+                .features()
+                .iter()
+                .map(|f| profile.percentages(f)[sample])
+                .sum()
+        };
+        assert!((total(&retained, 0) - 100.0).abs() < 1e-9, "{level}");
+        assert!(
+            (100.0 - total(&frequency, 0) - unclassified_share).abs() < 0.005,
+            "{level}: {}",
+            100.0 - total(&frequency, 0)
+        );
+        assert!((total(&frequency, 0) - total(&frequency, 1)).abs() > 0.01);
+        // Removing them instead rescales the named features to 100%.
+        assert!((total(&removed, 0) - 100.0).abs() < 1e-9, "{level}");
+    }
+}

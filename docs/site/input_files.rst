@@ -44,19 +44,49 @@ level to the most specific; the remaining columns hold one sample each.
 Unclassified sequences
 ^^^^^^^^^^^^^^^^^^^^^^
 
-On the left of the window, *Unclassified* offers three choices:
+On the left of the window, *Unclassified* offers four choices
+(``--unclassified`` on the command line). An unclassified feature is any
+feature with *unclassified* in its name, in any case: a category named
+*Unclassified*, and equally each ``unclassified p__Pseudomonadota`` or
+``unclassified f__Azoamicaceae`` of a SingleM profile.
 
-* **Retain unclassified reads**: unclassified categories are features like
-  any other and are tested.
-* **Remove unclassified reads**: they are dropped altogether, and
-  proportions are taken among the classified sequences only.
-* **Use only for calculating frequency profiles**: they are not tested,
-  but they still count in the total of each sample, so proportions are
-  taken among all sequences.
+* **Use only for calculating feature proportions** (``proportions-only``),
+  which STAMP starts with: every unclassified feature counts in the total
+  of each sample, so proportions are taken among all sequences, and is then
+  set aside: it is not a feature, is not tested, and is not counted among
+  the tests a multiple test correction allows for. Samples often differ in
+  how much of them is unclassified, and this keeps that in the
+  proportions: a genus that is 2% of a sample is 2% whether a tenth or a
+  half of the sample could be named.
+* **Retain unclassified features** (``retain``): unclassified features are
+  features like any other and are tested. (This is what STAMP v2 started
+  with.)
+* **Remove unclassified features** (``remove``): they are dropped
+  altogether, and proportions are taken among the classified sequences
+  only, so the named features of every sample add up to 100% however much
+  of it was unclassified.
+* **Pool into a single feature** (``pool``): the unclassified features are
+  added together into one feature named *Unclassified*, which is tested
+  like any other. With a *Parent level*, the unclassified features of each
+  parent category are pooled separately, since each is a proportion of its
+  own parent, and named for it: *Unclassified (Firmicutes)*.
 
-The plots of whole communities (diversity, distances, ordination,
-rarefaction) never count unclassified categories as features, since they
-are not one taxon or function.
+The choice applies to **every analysis and plot**, so the same profiles
+are compared everywhere: the tests of features, the correlations, and the
+analyses of whole communities (PCoA, NMDS, PERMANOVA, ANOSIM, PERMDISP,
+the Mantel test, the distances between samples, alpha diversity,
+rarefaction, shared features and rank abundance). Two consequences of
+*Use only for calculating feature proportions* for whole communities:
+
+* **Distances between samples** (Bray-Curtis and Euclidean) compare the
+  named features as proportions of the whole sample, so the proportions of
+  a sample add up to less than 100% and two samples with the same named
+  features in the same ratios, but different unclassified shares, are some
+  distance apart. Jaccard and Aitchison distances do not depend on the
+  unclassified share.
+* **Alpha diversity and rarefaction** describe a whole sample, so here the
+  unclassified sequences count as one more category, exactly as with *Pool
+  into a single feature*.
 
 Parent level
 ^^^^^^^^^^^^

@@ -212,7 +212,8 @@ fn unclassified(value: Unclassified) -> &'static str {
     match value {
         Unclassified::Retain => "retained",
         Unclassified::Remove => "removed",
-        Unclassified::FrequencyOnly => "used only for calculating frequency profiles",
+        Unclassified::ProportionsOnly => "used only for calculating feature proportions",
+        Unclassified::Pool => "pooled into a single feature",
     }
 }
 

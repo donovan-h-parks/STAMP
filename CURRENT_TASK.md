@@ -6,6 +6,61 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-27, the colour-scheme session; CURRENT_TASK.md itself left uncommitted with the other session's notes):
+**Classic light is the default colour scheme, and the Results table is
+shown at start.** `ColorScheme`'s `#[default]` (theme.rs); `Saved`'s
+`dark_mode` default follows it; `show_table: true` in `StampApp::new`
+(not saved between runs). Anyone with a remembered scheme keeps it.
+Tests: `colour_schemes` asserts the default; `plot_is_centred_in_its_space`
+sets Light (Classic light's margin is white); `metadata_table_switches_
+samples_off` hides the Results table first. Docs: main_window.rst; NEW_FEATURES.
+
+Finished and committed (2026-11-27, the glacier/example-data session):
+**The Unclassified setting: new default, applies everywhere, reworded, and
+a Pool option** (CHANGES #74, #75).
+- `stamp_core::Unclassified` is now Retain, Remove, ProportionsOnly (was
+  FrequencyOnly) and Pool, with `Unclassified::ALL`, `name()` (the labels
+  of the window: "Retain unclassified features", "Remove unclassified
+  features", "Use only for calculating feature proportions", "Pool into a
+  single feature"), `is_unclassified_feature` and `POOLED_UNCLASSIFIED`.
+  Pool is made in `ProfileTree::profile` (profile.rs): one feature
+  "Unclassified", or "Unclassified (Parent)" per parent category when a
+  parent level is set.
+- Default is ProportionsOnly: `Session::default` and `--unclassified`
+  (values retain, remove, proportions-only, pool; frequency-only is gone).
+- Community analyses follow the setting: `Community::from_tree` and
+  `rarefaction::Data::from_tree` (stamp-plot) take it; `CommunityTable`
+  (diversity.rs) has `set_aside` (what of each sample is in no feature,
+  under ProportionsOnly), `distances`/`distance_run` (Bray-Curtis and
+  Euclidean on proportions of the whole sample), `alpha_abundances` (the
+  set-aside part as one more category, as when pooled; rarefaction maps
+  ProportionsOnly to Pool for the same reason). shared_features.rs and
+  rank_abundance.rs no longer drop unclassified features by name. The GUI's
+  ordination and Mantel cache keys include the setting (plots.rs).
+- Tests written under Retain set it explicitly (ui.rs `Harness::enterotypes`,
+  the coal tests, assistant.rs `enterotypes`, five cli.rs tests). New
+  tests: profile.rs `unclassified_features_are_pooled_into_one`;
+  diversity.rs `community_tables_follow_the_treatment_of_unclassified_
+  features`; import_examples `unclassified_categories_count_in_totals_but_
+  are_not_features`; cli.rs `unclassified_categories_are_used_only_for_
+  frequencies_by_default` and `every_analysis_follows_the_treatment_of_
+  unclassified_features`; ui.rs the same name, and the default asserted in
+  `built_in_example_and_opened_files_are_loaded`.
+- Glacier example under the new default: 1,392 named families (1,936 with
+  the unclassified ones), 37 differ between reaches (was 23), 806 between
+  ranges (was 1,038), spread differs for 673 (was 814); family PCoA
+  PERMANOVA pseudo-F 6.85 (was 6.87), PERMDISP p 0.75.
+- Docs: input_files.rst (the section on Unclassified), command_line.rst,
+  quick_start.rst, plots.rst, statistics.rst, wizard.rst,
+  example_glacier_streams.rst, the example's readme, NEW_FEATURES; figures
+  tg_extended_error_bar.png, glacier_reach_families.png and
+  glacier_pcoa.png regenerated.
+- NOT redone: other docs screenshots that still show an "Unclassified"
+  row (made with Retain); the manuscript analyses in
+  /srv/projects/donovan/stamp/glacier-fed (run_analyses.sh uses the CLI
+  default, so a rerun now gives numbers different from GLACIER_FED.md, at
+  species level especially, where 72% of the coverage is unclassified).
+
 Finished and committed (2026-11-27, the glacier/example-data session):
 **Profile table**. New frame `Frame::ProfileTable` ("Profile table", View
 menu, icon GRID_FOUR added with scripts/icons/subset.sh), a tab along the

@@ -96,8 +96,11 @@ Options common to the analyses
 ``--parent-level HEADING``
    The level that proportions are taken against (default: the entire
    sample).
-``--unclassified retain|remove|frequency-only``
-   The treatment of unclassified sequences (see :doc:`input_files`).
+``--unclassified retain|remove|proportions-only|pool``
+   The treatment of unclassified features, in every analysis and plot
+   (default: ``proportions-only``, which counts them in the total of each
+   sample and then sets them aside; ``pool`` adds them together into one
+   feature, *Unclassified*; see :doc:`input_files`).
 ``-o, --output FILE``
    Write the results table to a file instead of the screen.
 ``-f, --field FIELD``
@@ -253,7 +256,7 @@ test:
 
    stamp-cli multi-groups --profile glacier_streams.spf --metadata glacier_streams.metadata.tsv \
        --field Mountain_range --profile-level Family > ranges.tsv
-   Brown-Forsythe test: the spread differs between the groups for 814 of 1936 features (42%; p < 0.05, 5% expected by chance).
+   Brown-Forsythe test: the spread differs between the groups for 673 of 1392 features (48%; p < 0.05, 5% expected by chance).
    note: ANOVA assumes the groups are equally spread out; consider --test welch-anova (and the games-howell post-hoc test)
 
 ``friedman`` (and the ``wilcoxon`` post-hoc test) are for matched groups
