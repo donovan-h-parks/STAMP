@@ -145,7 +145,8 @@ Tables
   the *Sample filter* are greyed out here.
 * **View > Assistant** (desktop application) shows or hides the assistant
   panel on the right of the window, with a tab for each assistant open
-  (OpenCode, Claude Code, Google Antigravity); see :doc:`assistant`.
+  (OpenCode, Claude Code, Google Antigravity); see :doc:`assistant`. **View
+  > Assistant activity** lists every request an assistant has made of STAMP.
 
 The tables along the bottom share the room as tabs: click a tab to bring
 its table to the front.
@@ -178,10 +179,9 @@ when you open an assistant.
   opens it) brings it back in the same place. The room of a closed frame
   goes to the plot. Choosing a frame in the View menu while it is behind
   another tab brings it to the front.
-* **View > Reset layout** puts every frame back where STAMP first put it.
-  **Settings > Preferences > Restore window position defaults** does the
-  same, and also puts floating windows (such as Preferences and Assistant
-  activity) back where they first open.
+* **Settings > Preferences > Restore window position defaults** puts every
+  frame back where STAMP first put it, and floating windows (such as
+  Preferences and Assistant activity) back where they first open.
 
 STAMP remembers the arrangement from one run to the next.
 
@@ -211,6 +211,10 @@ Preferences
 
 **Settings > Preferences** holds settings that apply everywhere:
 
+* the **colour scheme** of the window: **Dark** (the default), **Light**, or
+  one of the four `Catppuccin <https://catppuccin.com>`_ schemes, **Latte**
+  (light), **Frappé**, **Macchiato** and **Mocha** (dark). Plots keep their
+  own colours, on a white page, whatever the scheme;
 * the **random seed** and number of **replicates** of the resampling methods
   (bootstrap, permutation, White's test, Storey's FDR, the community tests).
   The same seed gives the same results every time;

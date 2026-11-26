@@ -6,6 +6,21 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-27, the layout/assistant session):
+**colour schemes, menus, assistant dialog, wizard reasons**. Done:
+`crates/stamp-gui/src/theme.rs` (`ColorScheme`: Dark, Light and the four
+Catppuccin flavours, palettes copied from catppuccin-egui, which does not
+support egui 0.37); Preferences > Colour scheme (Restore defaults resets it),
+Settings > Dark mode removed, `Saved.color_scheme` (old `dark_mode` still
+read); View menu: Reset layout removed, Results table under Feature table,
+Assistant and Assistant activity (moved from the Assistant menu) in a group
+of their own; the "Open <assistant>" dialog and its Preferences option
+removed (opening installs if needed), "What is shared" section in
+assistant.rst; wizard reasons for unavailable choices shortened to the fact.
+Wizard At a glance: more space after the intro, after "Loaded:" and above
+each Show button; docs image gui_wizard_glance.png refreshed.
+Tests: theme.rs unit tests, ui.rs `colour_schemes`. fmt, clippy and the full test suite (666 tests) pass.
+
 Finished and committed (2026-11-26, the citation-analysis session): **Welch's ANOVA and
 the Brown-Forsythe test of equal spread**. Asked for: implement both, update
 the analysis wizard, all documentation, unit tests, and

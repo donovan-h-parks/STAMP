@@ -11,6 +11,7 @@ use stamp_gui::headless::{Image, Renderer};
 use stamp_gui::platform::Event;
 use stamp_gui::plots::PlotKind;
 use stamp_gui::session::Mode;
+use stamp_gui::theme::ColorScheme;
 use stamp_gui::StampApp;
 
 fn example(relative: &str) -> String {
@@ -413,10 +414,14 @@ fn light_and_dark_modes() {
         u32::from(pixel.r()) + u32::from(pixel.g()) + u32::from(pixel.b())
     };
 
-    stamp_gui::app::set_dark_mode(&harness.renderer.ctx, true);
+    harness
+        .app
+        .set_color_scheme(&harness.renderer.ctx, ColorScheme::Dark);
     harness.settle();
     let dark = harness.screenshot("dark_mode");
-    stamp_gui::app::set_dark_mode(&harness.renderer.ctx, false);
+    harness
+        .app
+        .set_color_scheme(&harness.renderer.ctx, ColorScheme::Light);
     harness.settle();
     let light = harness.screenshot("light_mode");
     assert!(brightness(&dark) < 200, "dark mode panel is bright");
@@ -426,6 +431,71 @@ fn light_and_dark_modes() {
     let corner = (plot.left() as usize + 3, plot.top() as usize + 3);
     assert_eq!(dark.pixel(corner.0, corner.1), egui::Color32::WHITE);
     assert_eq!(light.pixel(corner.0, corner.1), egui::Color32::WHITE);
+}
+
+/// Each Catppuccin scheme colours the panels, dark ones dark and Latte
+/// light, and leaves the plot's page white; it is remembered for the next
+/// run, and what an earlier version saved (only light or dark) still
+/// chooses the scheme.
+#[test]
+fn colour_schemes() {
+    use stamp_gui::app::Saved;
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    let panel = |image: &Image| image.pixel(140, 600);
+    let brightness =
+        |pixel: egui::Color32| u32::from(pixel.r()) + u32::from(pixel.g()) + u32::from(pixel.b());
+    let mut panels = Vec::new();
+    for scheme in [
+        ColorScheme::CatppuccinLatte,
+        ColorScheme::CatppuccinFrappe,
+        ColorScheme::CatppuccinMacchiato,
+        ColorScheme::CatppuccinMocha,
+    ] {
+        let ctx = harness.renderer.ctx.clone();
+        harness.app.set_color_scheme(&ctx, scheme);
+        harness.settle();
+        let image = harness.screenshot(&format!("scheme_{scheme:?}"));
+        let pixel = panel(&image);
+        if scheme.is_dark() {
+            assert!(brightness(pixel) < 250, "{scheme:?} panel is bright");
+        } else {
+            assert!(brightness(pixel) > 600, "{scheme:?} panel is dark");
+        }
+        assert_eq!(pixel, scheme.visuals().panel_fill, "{scheme:?}");
+        let (plot, _) = harness.app.plot_placement.unwrap();
+        let corner = (plot.left() as usize + 3, plot.top() as usize + 3);
+        assert_eq!(image.pixel(corner.0, corner.1), egui::Color32::WHITE);
+        panels.push(pixel);
+    }
+    panels.dedup();
+    assert_eq!(panels.len(), 4);
+    // Chosen in Preferences.
+    harness.app.show_preferences(true);
+    harness.settle();
+    let app = &mut harness.app;
+    harness.renderer.run(60, |ui| app.draw(ui));
+    harness.screenshot("scheme_preferences");
+    harness.app.show_preferences(false);
+
+    // Remembered between runs.
+    let saved = harness.app.saved();
+    assert_eq!(saved.color_scheme, Some(ColorScheme::CatppuccinMocha));
+    let mut again = Harness::enterotypes();
+    let ctx = again.renderer.ctx.clone();
+    again.app.restore(&ctx, saved);
+    assert_eq!(again.app.color_scheme(), ColorScheme::CatppuccinMocha);
+    assert_eq!(ctx.theme(), egui::Theme::Dark);
+
+    // Saved by a version without colour schemes: light mode.
+    let mut stored = serde_json::to_value(again.app.saved()).unwrap();
+    let object = stored.as_object_mut().unwrap();
+    object.remove("color_scheme");
+    object.insert("dark_mode".to_string(), false.into());
+    let old: Saved = serde_json::from_value(stored).unwrap();
+    again.app.restore(&ctx, old);
+    assert_eq!(again.app.color_scheme(), ColorScheme::Light);
+    assert_eq!(ctx.theme(), egui::Theme::Light);
 }
 
 #[test]
@@ -556,7 +626,9 @@ fn side_panels_can_be_hidden() {
 #[test]
 fn light_mode_text_is_black() {
     let mut harness = Harness::enterotypes();
-    stamp_gui::app::set_dark_mode(&harness.renderer.ctx, false);
+    harness
+        .app
+        .set_color_scheme(&harness.renderer.ctx, ColorScheme::Light);
     // Statistics is a tab behind Profile and groups to start with.
     harness
         .app
@@ -1489,7 +1561,7 @@ fn shortcuts_plot_windows_and_remembered_settings() {
         .renderer
         .press_shortcut(egui::Key::M, |ui| app.draw(ui));
     harness.settle();
-    let with_table = harness.app.saved(&harness.renderer.ctx);
+    let with_table = harness.app.saved();
     assert!(with_table.show_metadata_table);
     let app = &mut harness.app;
     harness
@@ -1509,7 +1581,7 @@ fn shortcuts_plot_windows_and_remembered_settings() {
     settings.axes_color = stamp_plot::Color::rgb(10, 20, 30);
     harness.app.set_plot_settings(settings.clone());
     harness.app.set_zoom(2.0);
-    let saved = harness.app.saved(&harness.renderer.ctx);
+    let saved = harness.app.saved();
     let text = serde_json::to_string(&saved).unwrap();
     let read: stamp_gui::app::Saved = serde_json::from_str(&text).unwrap();
     assert_eq!(read, saved);
@@ -1523,7 +1595,7 @@ fn shortcuts_plot_windows_and_remembered_settings() {
     fresh.settle();
     assert_eq!(fresh.app.zoom(), 2.0);
     assert_eq!(fresh.app.plot_settings(), &settings);
-    assert!(fresh.app.saved(&fresh.renderer.ctx).show_metadata_table);
+    assert!(fresh.app.saved().show_metadata_table);
 }
 
 #[test]
@@ -2167,7 +2239,7 @@ fn remembered_plot_settings_do_not_outlive_their_defaults() {
     // Settings as an earlier version stored them: no version number, and
     // the legend positions that version started with.
     let harness = Harness::enterotypes();
-    let mut old = harness.app.saved(&harness.renderer.ctx);
+    let mut old = harness.app.saved();
     old.plots.pcoa.legend = LegendPosition::UpperRight;
     old.plots.bar.legend = LegendPosition::None;
     old.zoom = 2.5;
@@ -2190,7 +2262,7 @@ fn remembered_plot_settings_do_not_outlive_their_defaults() {
     assert_eq!(current.zoom, 2.5);
 
     // Settings saved by this version are restored as they are.
-    let mut chosen = harness.app.saved(&harness.renderer.ctx);
+    let mut chosen = harness.app.saved();
     chosen.plots.pcoa.legend = LegendPosition::LowerLeft;
     assert_eq!(chosen.defaults_version, DEFAULTS_VERSION);
     assert_eq!(chosen.clone().up_to_date(), chosen);
@@ -4055,8 +4127,7 @@ fn frames_can_be_moved_and_the_layout_is_remembered() {
     harness.screenshot("metadata_moved_left");
 
     // A new window restores the arrangement.
-    let ctx = harness.renderer.ctx.clone();
-    let saved = harness.app.saved(&ctx);
+    let saved = harness.app.saved();
     let mut again = Harness::enterotypes();
     let ctx = again.renderer.ctx.clone();
     again.app.restore(&ctx, saved.clone());
@@ -4302,7 +4373,9 @@ fn arrow_keys_move_through_the_feature_table() {
 #[test]
 fn documentation_screenshots_of_the_window() {
     let mut harness = Harness::enterotypes();
-    stamp_gui::app::set_dark_mode(&harness.renderer.ctx, false);
+    harness
+        .app
+        .set_color_scheme(&harness.renderer.ctx, ColorScheme::Light);
     harness.app.set_mode(Mode::TwoGroups);
     harness.settle();
     harness.screenshot("gui_main_window");
@@ -4318,7 +4391,9 @@ fn documentation_screenshots_of_the_window() {
 fn documentation_screenshots_of_the_wizard() {
     use stamp_gui::wizard::{Choice, Comparison, Data, Design, Question};
     let mut harness = Harness::enterotypes();
-    stamp_gui::app::set_dark_mode(&harness.renderer.ctx, false);
+    harness
+        .app
+        .set_color_scheme(&harness.renderer.ctx, ColorScheme::Light);
     harness.app.set_mode(Mode::MultipleGroups);
     harness.app.show_wizard(true);
     harness.settle();

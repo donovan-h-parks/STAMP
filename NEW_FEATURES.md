@@ -17,9 +17,8 @@ Add an entry here whenever a feature is added that v2 did not have.
   plot and the Results table, windows in v2, are frames. A closed frame's
   room goes to the plot; the View menu brings it back where it was, or to
   the front when it is behind another tab. The arrangement is remembered
-  between runs; View > Reset layout restores the default, and Settings >
-  Preferences > Restore window position defaults also puts floating windows
-  back.
+  between runs; Settings > Preferences > Restore window position defaults
+  restores the default and puts floating windows back.
 - **Asking an AI assistant** (Assistant menu, `crates/stamp-gui/src/assistant/`,
   `docs/site/assistant.rst`). "Copy description for AI" copies the data,
   the analysis settings, a description of the plot on screen (its text and
@@ -30,9 +29,11 @@ Add an entry here whenever a feature is added that v2 did not have.
   server on 127.0.0.1 with a per-session token: it can read the session,
   results, samples and plot, show any plot, change plot options and the
   analysis, and undo; STAMP answers changes once the analysis and plot have
-  caught up. Every change can be undone from the status bar; Assistant
-  activity lists every request. STAMP installs Claude Code with
-  Anthropic's installer if asked. **Claude
+  caught up. Every change can be undone from the status bar; View >
+  Assistant activity lists every request. Opening an assistant that is not
+  installed installs it with its maker's installer. What is shared, and
+  with whom, is in the documentation (`assistant.rst`, "What is shared")
+  rather than in a dialog before opening. **Claude
   Code runs inside STAMP**, in the assistant panel on the right of the
   window (View > Assistant): a terminal built on
   `alacritty_terminal` (ConPTY on Windows) drawn with egui
@@ -381,7 +382,9 @@ Add an entry here whenever a feature is added that v2 did not have.
   all match), numeric `--where "FIELD>=X"` (`<`, `<=`, `>`, `>=`), and
   `--where-not FIELD=VALUE`. Both use `SampleSelection` in
   `stamp-core/src/selection.rs`.
-- **Light and dark themes** [27].
+- **Colour schemes** [27]: Settings > Preferences > Colour scheme chooses dark, light, or
+  one of the four Catppuccin schemes (Latte, Frappé, Macchiato, Mocha;
+  `crates/stamp-gui/src/theme.rs`).
 - **A colour for each group**, kept across every plot and chosen with a
   colour picker in the group list [27, 28].
 - **Sortable tables.** The feature, results and metadata tables sort by any

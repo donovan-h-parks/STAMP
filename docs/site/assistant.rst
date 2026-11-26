@@ -22,6 +22,55 @@ large enough to matter?* There are four ways to do it, all in the
 OpenCode, Claude Code and Google Antigravity can be open at once, each in a
 tab of the panel.
 
+.. _what-is-shared:
+
+What is shared
+--------------
+
+Opening OpenCode, Claude Code or Google Antigravity from the Assistant menu
+starts sharing your STAMP session with it straight away. While STAMP shares,
+the assistant can:
+
+- **read** the loaded profile and metadata: the file names, the samples, the
+  levels of the hierarchy, the metadata fields and groups, and each sample's
+  metadata values and total count;
+- **read** the settings of the analysis and its results table (means or
+  proportions, p-values, effect sizes and confidence intervals of each
+  feature);
+- **read** the plot shown: its text, the values in its tooltips and its
+  options, and an image of it when it asks for one;
+- **change** the analysis and the plots in STAMP's window, as you can with
+  the controls (each change can be undone; see :ref:`undoing-a-change`);
+- **open** another profile or metadata file from your computer in STAMP, in
+  place of the data loaded, when you ask it to.
+
+What the assistant reads is sent to the service that runs its model, to
+answer your questions:
+
+- **Claude Code**: Anthropic, under your Claude account and its terms;
+- **OpenCode**: OpenCode's own servers while you use its free models, or
+  the provider you signed in to in OpenCode (OpenAI, GitHub and so on),
+  under your account with it;
+- **Google Antigravity**: Google, under your Google account and its terms.
+
+Do not use an assistant with data you are not allowed to share with a third
+party. Only a model on your own computer, set up in OpenCode (see
+:ref:`local-model`), keeps everything on your computer.
+
+The assistant is a program of its own, with your permissions on your
+computer. Besides STAMP's tools, it can read the files in the folder it runs
+in (STAMP's assistant folder, described below), and it asks before it runs
+commands, changes files or fetches web pages. Anything it reads that way is
+sent to the same service.
+
+Sharing stops when you choose **Assistant > Stop sharing** (see
+:ref:`stop-sharing`) or close STAMP. STAMP listens for the assistant only on
+your own computer (address 127.0.0.1), and only answers requests that carry a
+password made afresh each time sharing starts; requests from web pages are
+refused. The password is written to the assistant's settings in STAMP's
+assistant folder, readable only by you. **View > Assistant activity** lists
+every request the assistant has made.
+
 Claude Code
 -----------
 
@@ -32,18 +81,13 @@ window (a frame you can move elsewhere; see :ref:`arranging-the-window`),
 and you type your questions there. Claude
 Code needs a Claude **Pro, Max, Team or Enterprise** plan; you sign in with
 your own Claude account the first time it starts, and STAMP never sees your
-sign-in. If Claude Code is not installed, STAMP offers to install it with
+sign-in. If Claude Code is not installed, STAMP installs it when you open it, with
 Anthropic's installer (``claude.ai/install.sh``, or ``claude.ai/install.ps1``
 on Windows), in the same panel, and then starts it.
 
 The first time, Claude Code also asks whether you trust the folder it runs in
 (STAMP's assistant folder, below): choose **Yes, I trust this folder** with
 the arrow keys and Enter.
-
-Before opening Claude Code, STAMP says what will be shared. Tick **Don't show
-this again** to open it straight away in future; **Settings > Preferences >
-Explain what is shared before opening an assistant** brings the message back.
-STAMP always asks before installing Claude Code.
 
 .. _assistant-panel:
 
@@ -119,7 +163,7 @@ When OpenCode wants to do something other than use STAMP's tools, such as run
 a command, it shows *Permission required* with **Allow once**, **Always
 allow** and **Reject**.
 
-If OpenCode is not installed, STAMP offers to install it, in the panel, and
+If OpenCode is not installed, STAMP installs it when you open it, in the panel, and
 then starts it: with OpenCode's installer (``opencode.ai/v2/install``) on
 Linux and macOS, and from OpenCode's release on GitHub on Windows. Both put it
 in ``.opencode/bin`` in your home folder. STAMP works with OpenCode 1 too.
@@ -135,6 +179,8 @@ OpenCode runs in the same assistant folder as Claude Code, where STAMP writes:
 
 OpenCode reads ``opencode.json`` as the settings of that folder, on top of your
 own OpenCode settings.
+
+.. _local-model:
 
 Using a model on your own computer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -177,7 +223,7 @@ files or writing a program instead), type ``/mcp`` in the panel: ``stamp``
 should be listed with a tick and its tools. If it is not, choose **Restart**
 above the panel.
 
-If Antigravity is not installed, STAMP offers to install it with Google's
+If Antigravity is not installed, STAMP installs it when you open it, with Google's
 installer (``antigravity.google/cli/install.sh``, or ``install.ps1`` on
 Windows), in the panel, and then starts it. The installer puts ``agy`` in
 ``.local/bin`` in your home folder (in ``%LOCALAPPDATA%\agy\bin`` on
@@ -298,6 +344,8 @@ again. **Configure plot** has nothing to change for a custom plot: ask the
 assistant instead (*make the bars red*, *use a logarithmic axis*). Undoing
 the change brings back the plot shown before.
 
+.. _undoing-a-change:
+
 Undoing a change
 ~~~~~~~~~~~~~~~~
 
@@ -311,28 +359,10 @@ Seeing what was shared
 ~~~~~~~~~~~~~~~~~~~~~~
 
 The status bar says *Sharing with assistant* while STAMP is sharing, and
-*Assistant connected* once the assistant has connected. **Assistant >
+*Assistant connected* once the assistant has connected. **View >
 Assistant activity** lists every request the assistant has made and the
-first line of each answer, latest first.
-
-Privacy
-~~~~~~~
-
-What the assistant reads (descriptions of your data, results and plots, and
-images of plots when it asks for them) is sent to answer your questions:
-with Claude, to Anthropic, under your Claude account and its terms; with
-OpenCode, to OpenCode's own servers while you use its free models, or to the
-provider you signed in to (OpenAI, GitHub and so on), under your account with
-it; with Google Antigravity, to Google, under your Google account and its
-terms. Do not use it with data you are not allowed to share with a third party.
-Only a model on your own computer, set up in OpenCode as described above,
-keeps everything on your computer.
-
-Sharing is off until you open an assistant from the Assistant menu, and stops
-when you choose **Assistant > Stop sharing** or close STAMP. STAMP listens for
-the assistant only on your own computer (address 127.0.0.1), and only answers
-requests that carry a password made afresh each time sharing starts; requests
-from web pages are refused.
+first line of each answer, latest first. What the assistant can read, and
+where it is sent, is described in :ref:`what-is-shared`.
 
 .. _stop-sharing:
 

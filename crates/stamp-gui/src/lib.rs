@@ -14,6 +14,7 @@ pub mod plot_config;
 pub mod plots;
 pub mod select_features;
 pub mod session;
+pub mod theme;
 pub mod wizard;
 pub mod wizard_ui;
 

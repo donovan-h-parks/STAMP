@@ -42,11 +42,12 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
         if ui
             .button(icons::label(
                 icons::TERMINAL,
-                &format!("Open {}...", agent.name()),
+                &format!("Open {}", agent.name()),
             ))
             .on_hover_text(format!(
-                "Ask {}, in a panel at the bottom of the window, about your data and plots, \
-                 and have it change them. Needs {}.",
+                "Ask {}, in the assistant panel, about your data and plots, and have it \
+                 change them. Needs {}. It reads your data and results; see What is shared \
+                 in the documentation.",
                 agent.name(),
                 agent.accounts()
             ))
@@ -67,15 +68,6 @@ pub(crate) fn menu(app: &mut StampApp, ui: &mut egui::Ui) {
         .clicked()
     {
         app.assistant.server = None;
-    }
-    if ui
-        .add(
-            egui::Button::new(icons::label(icons::PULSE, "Assistant activity"))
-                .selected(app.assistant.show_window),
-        )
-        .clicked()
-    {
-        app.assistant.show_window = !app.assistant.show_window;
     }
     ui.separator();
     if ui
@@ -127,135 +119,11 @@ pub(crate) fn status(app: &mut StampApp, ui: &mut egui::Ui) {
 
 /// The assistant's windows.
 pub(crate) fn windows(app: &mut StampApp, ctx: &egui::Context) {
-    asking_window(app, ctx);
     activity_window(app, ctx);
 }
 
-/// What sharing means, said before it starts, with `agent`.
-fn sharing(agent: Agent) -> String {
-    let who = agent.name();
-    let sent_to = match agent {
-        Agent::ClaudeCode => "Anthropic to answer your questions, under your Claude account",
-        Agent::OpenCode => {
-            "OpenCode's own service while you use its free models, or the AI provider you sign \
-             in to in OpenCode (such as OpenAI or GitHub Copilot), to answer your questions"
-        }
-        Agent::Antigravity => "Google to answer your questions, under your Google account",
-    };
-    format!(
-        "{who} will be able to read the loaded profile and metadata, the results and the plots, \
-         and to change the analysis and the plots in this window. What it reads is sent to \
-         {sent_to}. Sharing stops when you choose Assistant > Stop sharing, or close STAMP."
-    )
-}
-
-fn asking_window(app: &mut StampApp, ctx: &egui::Context) {
-    let Some(ask) = app.assistant.asking.clone() else {
-        return;
-    };
-    let super::Ask::Agent(agent) = ask;
-    let title = format!("Open {}", agent.name());
-    let found = agent.find();
-    let mut open = true;
-    let mut close = false;
-    // What the user chose: to open the program, after installing it if
-    // `Some(true)`.
-    let mut chosen: Option<bool> = None;
-    egui::Window::new(title)
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .open(&mut open)
-        .show(ctx, |ui| {
-            ui.set_max_width(460.0);
-            let name = agent.name();
-            ui.label(sharing(agent));
-            ui.add_space(6.0);
-            match &found {
-                Some(path) => {
-                    let first_time = match agent {
-                        Agent::ClaudeCode => {
-                            "The first time, sign in with your Claude account, and when \
-                             Claude Code asks whether you trust STAMP's folder, choose \
-                             \"Yes, I trust this folder\" (with the arrow keys and \
-                             Enter)."
-                        }
-                        Agent::OpenCode => {
-                            "It starts with one of OpenCode's free models. To use your \
-                             own account, type /connect and choose how to sign in (for \
-                             example OpenAI, then \"Sign in with ChatGPT\", or GitHub \
-                             Copilot), then /models to choose a model."
-                        }
-                        Agent::Antigravity => {
-                            "The first time, sign in with your Google account, then choose a \
-                             colour scheme, accept Google's terms and confirm that you trust \
-                             STAMP's folder (\"Yes, I trust this folder\"), with the arrow \
-                             keys and Enter."
-                        }
-                    };
-                    ui.label(format!(
-                        "{name} opens in a panel at the bottom of this window. \
-                         {first_time} Then ask your questions there.\n\n{name}: {}",
-                        path.display()
-                    ));
-                    ui.add_space(6.0);
-                    ui.checkbox(
-                        &mut app.assistant.skip_claude_code_dialog,
-                        "Don't show this again",
-                    )
-                    .on_hover_text(
-                        "Open the assistant straight away next time. \
-                         Settings > Preferences turns this message back on.",
-                    );
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        if ui.button(format!("Open {name}")).clicked() {
-                            chosen = Some(false);
-                        }
-                        if ui.button("Cancel").clicked() {
-                            // Cancelling does not stop the dialog
-                            // from being shown next time.
-                            app.assistant.skip_claude_code_dialog = false;
-                            close = true;
-                        }
-                    });
-                }
-                None => {
-                    ui.label(format!(
-                        "{name} is not installed. STAMP can install it with {}, in a \
-                         panel at the bottom of this window, and then start it. {name} \
-                         needs {}; sign in when it starts.",
-                        agent.installer(),
-                        agent.accounts()
-                    ));
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        if ui.button("Install and open").clicked() {
-                            chosen = Some(true);
-                        }
-                        close = ui.button("Cancel").clicked();
-                    });
-                }
-            }
-        });
-    if !open || close {
-        app.assistant.asking = None;
-    }
-    let Some(install) = chosen else {
-        return;
-    };
-    app.assistant.asking = None;
-    let outcome = open_agent(app, ctx, agent, install);
-    if outcome.is_ok() {
-        app.assistant.show_window = true;
-    }
-    if let Err(message) = outcome {
-        app.show_notice(message);
-    }
-}
-
 /// Assistant > Open Claude Code (or another assistant): its tab if it is
-/// already running in the panel, otherwise [`open_agent_or_ask`].
+/// already running in the panel, otherwise [`start_agent`].
 pub fn show_agent(app: &mut StampApp, ctx: &egui::Context, agent: Agent) {
     if let Some(index) = app.assistant.tab_of(agent) {
         if !app.assistant.tabs[index].terminal.has_exited() {
@@ -265,20 +133,16 @@ pub fn show_agent(app: &mut StampApp, ctx: &egui::Context, agent: Agent) {
             return;
         }
     }
-    open_agent_or_ask(app, ctx, agent);
+    start_agent(app, ctx, agent);
 }
 
-/// The dialog that says what will be shared with `agent`, or, if the user
-/// chose not to see it again and the program is installed, the program at
-/// once, in its tab (a new one, or replacing what ran in its tab before).
-/// Installing it always asks first.
-pub fn open_agent_or_ask(app: &mut StampApp, ctx: &egui::Context, agent: Agent) {
-    if app.assistant.skip_claude_code_dialog && agent.find().is_some() {
-        if let Err(message) = open_agent(app, ctx, agent, false) {
-            app.show_notice(message);
-        }
-    } else {
-        app.assistant.asking = Some(super::Ask::Agent(agent));
+/// Run `agent` in its tab of the assistant panel (a new one, or replacing
+/// what ran in its tab before), after its installer if it is not installed.
+/// What is shared is described in the documentation (the assistant page).
+pub fn start_agent(app: &mut StampApp, ctx: &egui::Context, agent: Agent) {
+    let install = agent.find().is_none();
+    if let Err(message) = open_agent(app, ctx, agent, install) {
+        app.show_notice(message);
     }
 }
 
@@ -480,12 +344,11 @@ pub(crate) fn terminal_frame(app: &mut StampApp, ui: &mut egui::Ui) {
     }
     if start {
         let agent = app.assistant.agent;
-        open_agent_or_ask(app, &ctx, agent);
+        start_agent(app, &ctx, agent);
     }
-    // Its tab is replaced once it starts again (after the dialog, if that
-    // is shown).
+    // Its tab is replaced once it starts again.
     if let Some(agent) = restart {
-        open_agent_or_ask(app, &ctx, agent);
+        start_agent(app, &ctx, agent);
     }
     if let Some(agent) = outside {
         if let Some(index) = app.assistant.tab_of(agent) {

@@ -549,9 +549,17 @@ impl Facts {
         }
     }
 
+    /// The number of groups with samples, as words ("1 group", "2 groups").
+    fn group_count(&self) -> String {
+        match self.groups.len() {
+            1 => "1 group".to_string(),
+            n => format!("{n} groups"),
+        }
+    }
+
     pub fn comparison(&self, comparison: Comparison) -> Availability {
         if self.samples == 0 {
-            return Availability::no("Load a profile first (File > Load profile file).");
+            return Availability::no("No profile is loaded.");
         }
         let field = self.group_field.as_deref().unwrap_or("");
         match comparison {
@@ -560,31 +568,23 @@ impl Facts {
             }
             Comparison::TwoSamples => Availability::Yes,
             Comparison::TwoGroups | Comparison::MultipleGroups if !self.has_metadata => {
-                Availability::no(
-                    "Needs a metadata file that puts the samples in groups (File > Load \
-                     metadata).",
-                )
+                Availability::no("No metadata file is loaded.")
             }
             Comparison::TwoGroups if self.groups.len() < 2 => Availability::no(format!(
-                "The group field \"{field}\" has fewer than two groups with samples. Choose \
-                 another group field."
+                "The group field \"{field}\" has {} with samples; two or more are needed.",
+                self.group_count()
             )),
             Comparison::MultipleGroups if self.groups.len() < 3 => Availability::no(format!(
-                "The group field \"{field}\" has {} with samples; three or more are needed. \
-                 Choose another group field, or compare two groups.",
-                match self.groups.len() {
-                    1 => "1 group".to_string(),
-                    n => format!("{n} groups"),
-                }
+                "The group field \"{field}\" has {} with samples; three or more are needed.",
+                self.group_count()
             )),
             Comparison::TwoGroups | Comparison::MultipleGroups => Availability::Yes,
-            Comparison::Variable if !self.has_metadata => Availability::no(
-                "Needs a metadata file with a column of numbers (File > Load metadata).",
-            ),
-            Comparison::Variable if self.numeric_fields.is_empty() => Availability::no(
-                "No metadata field holds a number for at least three samples (pH, age, \
-                 depth).",
-            ),
+            Comparison::Variable if !self.has_metadata => {
+                Availability::no("No metadata file is loaded.")
+            }
+            Comparison::Variable if self.numeric_fields.is_empty() => {
+                Availability::no("No metadata field holds a number for three or more samples.")
+            }
             Comparison::Variable => Availability::Yes,
         }
     }
@@ -592,28 +592,24 @@ impl Facts {
     pub fn question(&self, comparison: Comparison, question: Question) -> Availability {
         use Comparison::*;
         match (question, comparison) {
-            (Question::Differ, Variable) => Availability::no(
-                "Samples along a variable form no groups to compare. Choose \"rise or fall \
-                 with the variable\".",
-            ),
+            (Question::Differ, Variable) => {
+                Availability::no("Samples along a variable form no groups to compare.")
+            }
             (Question::Follow, Variable) => Availability::Yes,
-            (Question::Follow, _) => Availability::no(
-                "For samples along a measured variable. Go back and choose that comparison.",
-            ),
-            (Question::Together, TwoSamples) => Availability::no(
-                "Needs many samples: two samples cannot show which features occur together.",
-            ),
+            (Question::Follow, _) => {
+                Availability::no("Only for samples along a measured variable.")
+            }
+            (Question::Together, TwoSamples) => {
+                Availability::no("Two samples cannot show which features occur together.")
+            }
             (Question::MadeOf, Variable) if !self.has_coordinates => {
-                Availability::no("Choose two groups or multiple groups to describe the samples.")
+                Availability::no("Samples along a variable form no groups to describe.")
             }
             (Question::Depth, Variable) => {
-                Availability::no("Choose two samples or groups to check the sequencing depth.")
+                Availability::no("Samples along a variable form no groups to compare.")
             }
             (Question::Depth, TwoGroups | MultipleGroups) if !self.whole_counts => {
-                Availability::no(
-                    "Needs counts of sequences; this profile holds proportions or other \
-                     fractional values.",
-                )
+                Availability::no("The profile holds fractional values, not counts of sequences.")
             }
             _ => Availability::Yes,
         }
@@ -625,13 +621,9 @@ impl Facts {
             Design::Matched if self.matching_fields(comparison).is_empty() => {
                 Availability::no(match comparison {
                     Comparison::TwoGroups => {
-                        "No metadata field pairs the samples of the two groups. Add a column \
-                         that names the subject (or site) of each sample."
+                        "No metadata field pairs the samples of the two groups."
                     }
-                    _ => {
-                        "No metadata field names subjects with one sample in every group. \
-                         Add a column that names the subject (or site) of each sample."
-                    }
+                    _ => "No metadata field names subjects with one sample in every group.",
                 })
             }
             Design::Matched => Availability::Yes,
@@ -641,18 +633,15 @@ impl Facts {
     pub fn data(&self, comparison: Comparison, design: Design, data: Data) -> Availability {
         match (data, comparison, design) {
             (Data::MostlyAbsent, Comparison::TwoGroups, Design::Independent) => Availability::Yes,
-            (Data::MostlyAbsent, _, Design::Matched) => Availability::no(
-                "The test for sparse features compares independent groups. Choose \"small \
-                 groups or extreme samples\".",
-            ),
-            (Data::MostlyAbsent, _, _) => Availability::no(
-                "The test for sparse features compares two groups. Choose \"small groups or \
-                 extreme samples\", or \"found in more samples\".",
-            ),
-            (Data::Presence, Comparison::MultipleGroups, Design::Matched) => Availability::no(
-                "STAMP has no test of presence for three or more matched groups. Compare \
-                 two of the groups at a time.",
-            ),
+            (Data::MostlyAbsent, _, Design::Matched) => {
+                Availability::no("The test for sparse features compares independent groups.")
+            }
+            (Data::MostlyAbsent, _, _) => {
+                Availability::no("The test for sparse features compares two groups.")
+            }
+            (Data::Presence, Comparison::MultipleGroups, Design::Matched) => {
+                Availability::no("STAMP has no test of presence for three or more matched groups.")
+            }
             _ => Availability::Yes,
         }
     }
@@ -2442,7 +2431,7 @@ mod tests {
             let Availability::No(reason) = empty.comparison(comparison) else {
                 panic!("{comparison:?} is offered without a profile");
             };
-            assert!(reason.contains("Load a profile"));
+            assert!(reason.contains("No profile is loaded"));
         }
         let mut wizard = Wizard::default();
         assert!(!wizard.choose(Choice::Comparison(Comparison::TwoSamples), &empty));
@@ -2592,7 +2581,7 @@ mod tests {
         let nothing = Facts::default();
         for row in &GLANCE {
             let reason = row.comparison(&nothing).unwrap_err();
-            assert!(reason.contains("Load a profile"), "{reason}");
+            assert!(reason.contains("No profile is loaded"), "{reason}");
             let mut wizard = Wizard::default();
             assert!(!wizard.follow(row, &nothing));
             assert_eq!(wizard, Wizard::default());

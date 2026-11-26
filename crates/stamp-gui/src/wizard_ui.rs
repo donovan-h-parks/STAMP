@@ -137,8 +137,11 @@ fn glance(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts) {
         )
         .weak(),
     );
-    ui.add_space(4.0);
-    data_summary(app, ui, facts);
+    ui.add_space(12.0);
+    if facts.samples > 0 {
+        data_summary(app, ui, facts);
+        ui.add_space(12.0);
+    }
 
     let gap = 10.0;
     let column =
@@ -210,6 +213,7 @@ fn glance(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts) {
                     ui.add(egui::Label::new(dim(row.test).strong()).wrap());
                     match &availability {
                         Ok(_) => {
+                            ui.add_space(6.0);
                             if ui
                                 .small_button("Show")
                                 .on_hover_text(

@@ -37,8 +37,6 @@ pub struct State {
     pub(crate) server: Option<server::Server>,
     /// The Assistant window is open.
     pub(crate) show_window: bool,
-    /// The dialog being shown, if any.
-    pub(crate) asking: Option<Ask>,
     /// The assistant programs (or their installers) in the assistant
     /// panel, a tab each, in the order they were opened: at most one per
     /// program.
@@ -50,8 +48,6 @@ pub struct State {
     pub(crate) agent: launch::Agent,
     /// The assistant panel is shown.
     pub(crate) show_terminal: bool,
-    /// Open an assistant without its dialog (remembered between runs).
-    pub(crate) skip_claude_code_dialog: bool,
 }
 
 /// An assistant program in a tab of the assistant panel.
@@ -80,13 +76,6 @@ impl State {
             }
         }
     }
-}
-
-/// The assistant's dialogs.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Ask {
-    /// Asking before opening an assistant program (and sharing with it).
-    Agent(launch::Agent),
 }
 
 /// Answer the requests waiting, in order, as far as the window is up to

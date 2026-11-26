@@ -6,6 +6,7 @@
 //! features beside it for plots of a single feature and the choice of plot
 //! beneath it.
 
+use crate::theme::ColorScheme;
 use eframe::egui::{self, Color32, RichText};
 use stamp_core::import::profiler::ProfilerFormat;
 use stamp_core::stats::ci::SampleCi;
@@ -844,7 +845,12 @@ struct PlotWindow {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Saved {
+    /// Whether the window was dark, as saved before there were colour
+    /// schemes; used only when `color_scheme` is missing.
     pub dark_mode: bool,
+    /// The colour scheme of the window; `None` in what was saved before
+    /// there were colour schemes.
+    pub color_scheme: Option<ColorScheme>,
     pub show_profile_panel: bool,
     pub show_properties_panel: bool,
     pub show_feature_table: bool,
@@ -858,9 +864,6 @@ pub struct Saved {
     /// The [`DEFAULTS_VERSION`] the plot settings were saved under; zero
     /// for settings saved before there was one.
     pub defaults_version: u32,
-    /// Open an assistant (Claude Code, OpenCode, Antigravity) without first
-    /// showing what it will share ("Don't show this again").
-    pub skip_claude_code_dialog: bool,
     /// The program the assistant panel runs (the name of a
     /// [`assistant::launch::Agent`]), the last one opened; empty for Claude
     /// Code.
@@ -900,6 +903,7 @@ impl Default for Saved {
         let session = Session::default();
         Saved {
             dark_mode: true,
+            color_scheme: None,
             show_profile_panel: true,
             show_properties_panel: true,
             show_feature_table: true,
@@ -913,7 +917,6 @@ impl Default for Saved {
             // What settings read from an older store, lacking the field,
             // are taken to be.
             defaults_version: 0,
-            skip_claude_code_dialog: false,
             assistant_program: String::new(),
             layout: None,
             layout_version: 0,
@@ -1059,8 +1062,8 @@ pub struct StampApp {
     plot_windows: Vec<PlotWindow>,
     next_plot_window: u64,
     pending_profile: Option<PendingProfile>,
-    /// The theme of the last frame, for storing between runs.
-    saved_theme_is_dark: bool,
+    /// The colour scheme of the window, chosen in Preferences.
+    color_scheme: ColorScheme,
     metadata_filter: MetadataFilterUi,
     /// The hierarchical level and the name at that level whose features are
     /// drawn in red.
@@ -1212,38 +1215,12 @@ fn empty_table() -> (Table, Vec<String>) {
     )
 }
 
-/// Switch the whole interface between its dark and light appearance.
-pub fn set_dark_mode(ctx: &egui::Context, dark: bool) {
-    ctx.set_theme(if dark {
-        egui::Theme::Dark
-    } else {
-        egui::Theme::Light
-    });
-}
-
-/// In the light theme, the text of controls that can be used is black;
-/// egui's own light theme draws it in grey. Controls that are switched off
-/// are still faded.
-fn use_black_text_in_light_mode(ctx: &egui::Context) {
-    ctx.style_mut_of(egui::Theme::Light, |style| {
-        let widgets = &mut style.visuals.widgets;
-        for state in [
-            &mut widgets.noninteractive,
-            &mut widgets.inactive,
-            &mut widgets.hovered,
-            &mut widgets.active,
-            &mut widgets.open,
-        ] {
-            state.fg_stroke.color = Color32::BLACK;
-        }
-    });
-}
-
 impl StampApp {
     /// Create the application. Registers the plot font with `ctx`.
     pub fn new(ctx: &egui::Context) -> StampApp {
         figure_painter::install_plot_font(ctx);
-        use_black_text_in_light_mode(ctx);
+        let color_scheme = ColorScheme::default();
+        color_scheme.apply(ctx);
         StampApp {
             session: Session::default(),
             mode: Mode::TwoSamples,
@@ -1298,7 +1275,7 @@ impl StampApp {
             plot_windows: Vec::new(),
             next_plot_window: 1,
             pending_profile: None,
-            saved_theme_is_dark: true,
+            color_scheme,
             metadata_filter: MetadataFilterUi::default(),
             highlight_level: None,
             highlight_value: String::new(),
@@ -1899,9 +1876,10 @@ impl StampApp {
     }
 
     /// What would be remembered for the next run.
-    pub fn saved(&self, ctx: &egui::Context) -> Saved {
+    pub fn saved(&self) -> Saved {
         Saved {
-            dark_mode: ctx.theme() == egui::Theme::Dark,
+            dark_mode: self.color_scheme.is_dark(),
+            color_scheme: Some(self.color_scheme),
             show_profile_panel: self.show_profile_panel,
             show_properties_panel: self.show_properties_panel,
             show_feature_table: self.show_feature_table,
@@ -1913,7 +1891,6 @@ impl StampApp {
             other_samples_color: self.session.other_samples_color,
             plots: self.plot_settings.clone(),
             defaults_version: DEFAULTS_VERSION,
-            skip_claude_code_dialog: self.skip_claude_code_dialog(),
             assistant_program: self.assistant_program().to_string(),
             layout: Some(self.layout.clone()),
             layout_version: layout::LAYOUT_VERSION,
@@ -1926,20 +1903,25 @@ impl StampApp {
         self.assistant.agent.name()
     }
 
-    /// Whether Assistant > Open Claude Code (or OpenCode) skips its dialog.
-    pub fn skip_claude_code_dialog(&self) -> bool {
-        self.assistant.skip_claude_code_dialog
+    /// The colour scheme of the window.
+    pub fn color_scheme(&self) -> ColorScheme {
+        self.color_scheme
     }
 
-    /// Skip (or show again) the dialog of Assistant > Open Claude Code, as
-    /// its "Don't show this again" box and Preferences do.
-    pub fn set_skip_claude_code_dialog(&mut self, skip: bool) {
-        self.assistant.skip_claude_code_dialog = skip;
+    /// Show the window in `scheme`, as Preferences > Colour scheme does.
+    pub fn set_color_scheme(&mut self, ctx: &egui::Context, scheme: ColorScheme) {
+        self.color_scheme = scheme;
+        scheme.apply(ctx);
     }
 
     /// Return to what was remembered from an earlier run.
     pub fn restore(&mut self, ctx: &egui::Context, saved: Saved) {
-        set_dark_mode(ctx, saved.dark_mode);
+        let scheme = saved.color_scheme.unwrap_or(if saved.dark_mode {
+            ColorScheme::Dark
+        } else {
+            ColorScheme::Light
+        });
+        self.set_color_scheme(ctx, scheme);
         self.show_profile_panel = saved.show_profile_panel;
         self.show_properties_panel = saved.show_properties_panel;
         self.show_feature_table = saved.show_feature_table;
@@ -1950,7 +1932,6 @@ impl StampApp {
         self.session.stats.pseudocount = saved.pseudocount.clamp(0.0, 10.0);
         self.session.other_samples_color = saved.other_samples_color;
         self.plot_settings = saved.plots;
-        self.set_skip_claude_code_dialog(saved.skip_claude_code_dialog);
         if let Some(agent) = assistant::launch::Agent::ALL
             .into_iter()
             .find(|agent| agent.name() == saved.assistant_program)
@@ -3484,16 +3465,18 @@ impl StampApp {
                     Some(&shortcut::STATISTICS),
                 );
                 toggle(ui, Frame::Features, icons::LIST, None);
-                toggle(ui, Frame::Metadata, icons::ROWS, Some(&shortcut::METADATA));
-                toggle(ui, Frame::ClaudeCode, icons::TERMINAL, None);
-                ui.separator();
                 toggle(ui, Frame::Results, icons::TABLE, Some(&shortcut::RESULTS));
+                toggle(ui, Frame::Metadata, icons::ROWS, Some(&shortcut::METADATA));
+                ui.separator();
+                toggle(ui, Frame::ClaudeCode, icons::TERMINAL, None);
+                let activity = item(icons::PULSE, "Assistant activity", None)
+                    .selected(self.assistant.show_window);
                 if ui
-                    .add(item(icons::SIDEBAR, "Reset layout", None))
-                    .on_hover_text("Put the frames back where STAMP starts with them")
+                    .add(activity)
+                    .on_hover_text("Every request the assistant has made of STAMP")
                     .clicked()
                 {
-                    self.reset_layout();
+                    self.assistant.show_window = !self.assistant.show_window;
                 }
                 ui.separator();
                 let window = item(
@@ -3509,14 +3492,6 @@ impl StampApp {
                 }
             });
             ui.menu_button("Settings", |ui| {
-                let dark = ctx.theme() == egui::Theme::Dark;
-                if ui
-                    .add(item(icons::MOON, "Dark mode", None).selected(dark))
-                    .clicked()
-                {
-                    set_dark_mode(&ctx, !dark);
-                }
-                ui.separator();
                 if ui.add(item(icons::GEAR, "Preferences...", None)).clicked() {
                     self.show_preferences = true;
                 }
@@ -5201,6 +5176,19 @@ impl StampApp {
             .open(&mut self.show_preferences)
             .resizable(false)
             .show(ctx, |ui| {
+                egui::Grid::new("preferences-appearance")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        let mut scheme = self.color_scheme;
+                        let schemes = named(&ColorScheme::ALL, ColorScheme::name);
+                        if row(ui, "Colour scheme:", |ui| {
+                            choose(ui, "color-scheme", &mut scheme, &schemes)
+                        }) {
+                            self.color_scheme = scheme;
+                            scheme.apply(ui.ctx());
+                        }
+                    });
+                ui.separator();
                 egui::Grid::new("preferences")
                     .num_columns(2)
                     .show(ui, |ui| {
@@ -5274,16 +5262,6 @@ impl StampApp {
                     });
                 ui.label("Font sizes particular to a plot are set in its Configure plot window.");
                 ui.separator();
-                let mut ask = !self.assistant.skip_claude_code_dialog;
-                if ui
-                    .checkbox(
-                        &mut ask,
-                        "Explain what is shared before opening an assistant",
-                    )
-                    .changed()
-                {
-                    self.assistant.skip_claude_code_dialog = !ask;
-                }
                 ui.horizontal(|ui| {
                     if ui.button("Restore defaults").clicked() {
                         restore_defaults = true;
@@ -5302,6 +5280,7 @@ impl StampApp {
         }
         if restore_defaults {
             let defaults = Saved::default();
+            self.set_color_scheme(ctx, ColorScheme::default());
             self.session.seed = defaults.seed;
             self.session.stats.replicates = defaults.replicates;
             self.session.stats.pseudocount = defaults.pseudocount;
@@ -5412,14 +5391,11 @@ impl eframe::App for StampApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // The frame just drawn decides what `save` stores.
-        self.saved_theme_is_dark = ui.ctx().theme() == egui::Theme::Dark;
         self.draw(ui);
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        let mut saved = self.saved(&egui::Context::default());
-        saved.dark_mode = self.saved_theme_is_dark;
+        let saved = self.saved();
         eframe::set_value(storage, STORAGE_KEY, &saved);
     }
 }
