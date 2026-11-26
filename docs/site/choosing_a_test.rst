@@ -30,7 +30,8 @@ Which analysis?
      - Paired t-test or Wilcoxon signed-rank
    * - Three or more conditions
      - Multiple groups
-     - ANOVA, Tukey-Kramer post-hoc
+     - ANOVA, Tukey-Kramer post-hoc (Welch's ANOVA, Games-Howell, if the
+       groups differ in size or spread)
    * - The same subjects or sites in three or more conditions
      - Multiple groups, matched
      - Friedman test, Wilcoxon signed-rank (Holm) post-hoc
@@ -84,8 +85,10 @@ more reliable when they do not.
 Multiple groups
 ---------------
 
-* **ANOVA** with **Tukey-Kramer** (or **Games-Howell** if the groups differ
-  in size or spread) for most data.
+* **ANOVA** with **Tukey-Kramer** for most data; **Welch's ANOVA** with
+  **Games-Howell** if the groups differ in size or in spread. The
+  Brown-Forsythe line under the statistics says how many features differ
+  in spread (see :ref:`equal-spread`).
 * **Kruskal-Wallis** with **Dunn's test** for small groups or skewed data.
 * **Scheffè** if you want to be especially cautious about calling pairs
   different; **Welch's (uncorrected)** only for exploration.

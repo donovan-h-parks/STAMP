@@ -1063,6 +1063,17 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
             .expect("analysis is never cancelled");
     drop(task);
     report_correction(&results.correction);
+    // Equal spread matters to the tests of abundance in independent groups.
+    let spread = results.spread();
+    if !test.is_presence() && !test.is_matched() {
+        eprintln!("{}", spread.describe());
+    }
+    if spread.is_unequal() && test == stamp_core::stats::multi_group::MultiGroupTest::Anova {
+        eprintln!(
+            "note: ANOVA assumes the groups are equally spread out; consider --test welch-anova \
+             (and the games-howell post-hoc test)"
+        );
+    }
 
     let filter = MultiGroupFilter {
         selected_features: None,

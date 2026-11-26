@@ -80,11 +80,20 @@ Multiple groups
 ---------------
 
 Tick the groups to compare in the groups list. Each feature is tested for
-any difference between the groups (ANOVA or the Kruskal-Wallis test). A
-significant result says that *some* groups differ, not which ones; the
-**post-hoc test** chosen in the statistics panel then compares every pair
-of groups for the selected feature, shown in the post-hoc plot. The window
-starts with ANOVA and the Tukey-Kramer post-hoc test.
+any difference between the groups (ANOVA, Welch's ANOVA or the
+Kruskal-Wallis test). A significant result says that *some* groups differ,
+not which ones; the **post-hoc test** chosen in the statistics panel then
+compares every pair of groups for the selected feature, shown in the
+post-hoc plot. The window starts with ANOVA and the Tukey-Kramer post-hoc
+test; choosing Welch's ANOVA, for groups that are not equally spread out,
+switches the post-hoc test to Games-Howell.
+
+Under the statistics, a line from the **Brown-Forsythe test** says for how
+many features the spread differs between the groups, a check of ANOVA's
+assumption of equal spread; when clearly more differ than chance would
+give, a caution suggests Welch's ANOVA. Each feature's Brown-Forsythe
+p-value is the last column of the results table (see
+:ref:`equal-spread`).
 
 When the same subjects were sampled in every group (several time points,
 say), choose the **Friedman test** and then the **Subject field**, the

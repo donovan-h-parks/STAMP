@@ -232,10 +232,24 @@ Multiple groups and post-hoc tests
        --feature Prevotella --test games-howell --plot prevotella.png
 
 ``--group`` chooses the groups (default: every group). ``multi-groups``
-takes ``--test anova`` (default), ``kruskal-wallis``, ``friedman`` or
-``chi-square-presence``; ``post-hoc`` takes ``--test tukey-kramer``
+takes ``--test anova`` (default), ``welch-anova``, ``kruskal-wallis``,
+``friedman`` or ``chi-square-presence``; ``post-hoc`` takes ``--test tukey-kramer``
 (default), ``games-howell``, ``scheffe``, ``welch``, ``dunn`` or
 ``wilcoxon``, and ``--feature`` (repeat for several features).
+
+``multi-groups`` ends its table with the column *Equal spread p-value
+(Brown-Forsythe)*, after STAMP 2's columns, and reports on standard error
+how many features differ in spread between the groups (see
+:ref:`equal-spread`). If that is clearly more than chance gives and the
+test is ANOVA, it suggests Welch's ANOVA with the Games-Howell post-hoc
+test:
+
+::
+
+   stamp-cli multi-groups --profile glacier_streams.spf --metadata glacier_streams.metadata.tsv \
+       --field Mountain_range --profile-level Family > ranges.tsv
+   Brown-Forsythe test: the spread differs between the groups for 814 of 1936 features (42%; p < 0.05, 5% expected by chance).
+   note: ANOVA assumes the groups are equally spread out; consider --test welch-anova (and the games-howell post-hoc test)
 
 ``friedman`` (and the ``wilcoxon`` post-hoc test) are for matched groups
 and need ``--pair-field FIELD``, the metadata field that names the subject

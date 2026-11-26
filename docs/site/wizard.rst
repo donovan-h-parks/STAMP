@@ -107,6 +107,17 @@ features the wizard always chooses the Benjamini-Hochberg FDR correction;
 everything it sets can be changed afterwards in the Statistics panel. The
 two samples, or the two groups, compared are those chosen there.
 
+For multiple groups with "most data", the wizard chooses between ANOVA
+with Tukey-Kramer and Welch's ANOVA with Games-Howell from the data. Before
+recommending, it runs the Brown-Forsythe test of equal spread on every
+feature of the ticked groups (on the centred log-ratios when it will apply
+that transform). It recommends Welch's ANOVA if the groups differ twofold
+or more in size, or if the spread of more than 10% of the features differs
+(p < 0.05; about 5% would by chance), and the *Why* paragraph gives the
+count and the reason either way, for example "Brown-Forsythe test: the
+spread differs between the groups for 814 of 1936 features (42%; p < 0.05,
+5% expected by chance)." (see :ref:`equal-spread`).
+
 The tests at a glance
 ---------------------
 
@@ -166,8 +177,9 @@ Where each path leads
      - McNemar's test (presence/absence)
    * - Multiple groups
      - Different subjects; most data
-     - ANOVA with Tukey-Kramer (Games-Howell if the groups differ twofold
-       in size)
+     - ANOVA with Tukey-Kramer; Welch's ANOVA with Games-Howell if the
+       groups differ twofold in size, or the spread of over 10% of the
+       features differs (Brown-Forsythe test)
    * -
      - Different subjects; small groups or extreme samples
      - Kruskal-Wallis H-test with Dunn's test

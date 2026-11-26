@@ -2099,6 +2099,28 @@ impl StampApp {
         }
     }
 
+    /// The Brown-Forsythe summary of the multiple-group results, shown under
+    /// the statistics as a check of equal spread, with a caution when the
+    /// spread differs clearly and ANOVA was used. `None` outside the
+    /// multiple-group analysis, before results, and for tests to which the
+    /// spread does not matter (presence, matched groups).
+    pub fn spread_note(&self) -> Option<(String, Option<&'static str>)> {
+        if self.mode != Mode::MultipleGroups {
+            return None;
+        }
+        let (_, results) = self.session.multi.output.as_ref()?;
+        let test = results.analysis.test;
+        if test.is_presence() || test.is_matched() {
+            return None;
+        }
+        let spread = results.spread();
+        let caution = (spread.is_unequal() && test == MultiGroupTest::Anova).then_some(
+            "ANOVA assumes the groups are equally spread out: consider Welch's ANOVA with the \
+             Games-Howell post-hoc test.",
+        );
+        Some((spread.describe(), caution))
+    }
+
     /// The summary of the profile shown in the status bar, as in STAMP v2:
     /// parent categories, features and the sequences being compared.
     pub fn status_summary(&self) -> String {
@@ -3942,6 +3964,15 @@ impl StampApp {
                     };
                     changed = true;
                 }
+                // Welch's ANOVA is chosen for groups that are not equally
+                // spread out, which Tukey-Kramer assumes they are: its
+                // post-hoc test is Games-Howell.
+                if state.analysis.test == MultiGroupTest::WelchAnova
+                    && state.post_hoc_test == PostHocTest::TukeyKramer
+                {
+                    state.post_hoc_test = PostHocTest::GamesHowell;
+                    changed = true;
+                }
             }
         }
         changed
@@ -4268,6 +4299,21 @@ impl StampApp {
                 egui::Label::new(egui::RichText::new(warning).color(ui.visuals().warn_fg_color))
                     .wrap(),
             );
+        }
+        if let Some((summary, caution)) = self.spread_note() {
+            ui.add(egui::Label::new(egui::RichText::new(summary).weak()).wrap())
+                .on_hover_text(
+                    "Equal spread: the Brown-Forsythe test of each feature, a check of \
+                     ANOVA's assumption. Each feature's p-value is in the results table.",
+                );
+            if let Some(caution) = caution {
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(caution).color(ui.visuals().warn_fg_color),
+                    )
+                    .wrap(),
+                );
+            }
         }
         if rerun {
             self.session.invalidate(mode);

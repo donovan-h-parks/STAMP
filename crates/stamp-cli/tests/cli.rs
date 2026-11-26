@@ -234,10 +234,20 @@ fn analyses_reproduce_the_python_reference_tables() {
             );
             continue;
         }
-        let actual = Table::parse(&stdout(&args));
+        let mut actual = Table::parse(&stdout(&args));
         let expected = Table::parse(
             &fs::read_to_string(repo().join("tests/golden").join(&case.file)).unwrap(),
         );
+        // The multiple-group table ends with the Brown-Forsythe p-values,
+        // which STAMP v2 did not have.
+        if case.mode == "multiple_groups" {
+            assert_eq!(
+                actual.headings.pop().as_deref(),
+                Some(stamp_core::stats::table::SPREAD_HEADING),
+                "{}",
+                case.id
+            );
+        }
 
         // The command line writes STAMP's own columns; the reference tables
         // have extra correction and effect-size columns after them.
@@ -3015,4 +3025,96 @@ fn gzip_compressed_profiles_and_metadata_are_read() {
     let error = failure(&["info", "--profile", &cut.to_string_lossy()]);
     assert!(error.contains("could not be decompressed"), "{error}");
     fs::remove_dir_all(&directory).ok();
+}
+
+/// Welch's ANOVA, and the Brown-Forsythe test of equal spread reported for
+/// every multiple-group analysis: a summary on stderr and a last column.
+#[test]
+fn welch_anova_and_equal_spread() {
+    let groups = [
+        "--group",
+        "Enterotype 1",
+        "--group",
+        "Enterotype 2",
+        "--group",
+        "Enterotype 3",
+    ];
+    let run = |test: &str| {
+        let mut extra = groups.to_vec();
+        extra.extend(["--test", test]);
+        let output = stamp(&with("multi-groups", &ENTEROTYPES, &extra));
+        assert!(output.status.success(), "{test}");
+        (
+            Table::parse(&String::from_utf8(output.stdout).unwrap()),
+            String::from_utf8(output.stderr).unwrap(),
+        )
+    };
+    let (anova, anova_err) = run("anova");
+    let (welch, welch_err) = run("welch-anova");
+    // The spread does not depend on the test; here it differs about as
+    // often as chance gives, so there is no caution.
+    let summary = "Brown-Forsythe test: the spread differs between the groups for 14 of 248 \
+                   features (6%; p < 0.05, 5% expected by chance).";
+    for err in [&anova_err, &welch_err] {
+        assert!(err.contains(summary), "{err}");
+        assert!(!err.contains("consider --test welch-anova"), "{err}");
+    }
+    let spread = |t: &Table| -> Vec<(String, String)> {
+        let genus = t.column("Genera");
+        let p = t.headings.len() - 1;
+        assert_eq!(t.headings[p], stamp_core::stats::table::SPREAD_HEADING);
+        let mut v: Vec<(String, String)> = t
+            .rows
+            .iter()
+            .map(|r| (r[genus].clone(), r[p].clone()))
+            .collect();
+        v.sort();
+        v
+    };
+    assert_eq!(spread(&anova), spread(&welch));
+    // Welch's ANOVA allows Prevotella's very spread-out group its own
+    // variance, and so is more cautious about it than ANOVA.
+    let p_of = |t: &Table, genus: &str| -> f64 {
+        let (g, p) = (t.column("Genera"), t.column("p-values"));
+        t.rows.iter().find(|r| r[g] == genus).unwrap()[p]
+            .parse()
+            .unwrap()
+    };
+    assert!(p_of(&anova, "Prevotella") < 1e-7);
+    assert!(p_of(&welch, "Prevotella") > 1e-4);
+
+    // Glacier-fed streams by mountain range: the spread of many families
+    // differs, and the ANOVA run is cautioned.
+    let glacier = [
+        "multi-groups",
+        "--profile",
+        "examples/GlacierFedStreams/glacier_streams.spf",
+        "--metadata",
+        "examples/GlacierFedStreams/glacier_streams.metadata.tsv",
+        "--field",
+        "Mountain_range",
+        "--profile-level",
+        "Family",
+    ];
+    let output = stamp(&glacier);
+    let err = String::from_utf8(output.stderr).unwrap();
+    assert!(err.contains("for 814 of 1936 features (42%"), "{err}");
+    assert!(err.contains("consider --test welch-anova"), "{err}");
+
+    // A group of one sample: no feature can be tested.
+    let output = stamp(&with("multi-groups", &ENTEROTYPES, &[]));
+    let err = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        err.contains("not possible, as every group needs at least 2 samples"),
+        "{err}"
+    );
+    // The test of presence has nothing to do with spread.
+    let output = stamp(&with(
+        "multi-groups",
+        &ENTEROTYPES,
+        &["--test", "chi-square-presence"],
+    ));
+    assert!(!String::from_utf8(output.stderr)
+        .unwrap()
+        .contains("Brown-Forsythe"));
 }

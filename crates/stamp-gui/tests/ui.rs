@@ -3243,6 +3243,40 @@ fn plots_and_tests_the_wizard_leads_to() {
         PostHocTest::TukeyKramer
     );
 
+    // The Brown-Forsythe summary is shown under the statistics; Welch's
+    // ANOVA brings the Games-Howell post-hoc test with it.
+    let (summary, _) = harness.app.spread_note().unwrap();
+    assert!(
+        summary.starts_with("Brown-Forsythe test: the spread differs between the groups for "),
+        "{summary}"
+    );
+    let (_, results) = harness.app.session.multi.output.as_ref().unwrap();
+    let anova_spread = results.spread();
+    assert!(results
+        .rows
+        .iter()
+        .all(|r| r.spread_p_value.is_nan() || (0.0..=1.0).contains(&r.spread_p_value)));
+    harness.app.session.multi.analysis.test = MultiGroupTest::WelchAnova;
+    harness.app.session.invalidate(Mode::MultipleGroups);
+    harness.settle();
+    assert_eq!(
+        harness.app.session.multi.post_hoc_test,
+        PostHocTest::GamesHowell
+    );
+    let (_, results) = harness.app.session.multi.output.as_ref().unwrap();
+    assert_eq!(results.analysis.test, MultiGroupTest::WelchAnova);
+    assert_eq!(results.spread(), anova_spread);
+    assert!(harness.app.spread_note().unwrap().1.is_none());
+    let table = harness.app.results_table();
+    assert_eq!(
+        table.headings.last().map(String::as_str),
+        Some(stamp_core::stats::table::SPREAD_HEADING)
+    );
+    harness.app.session.multi.analysis.test = MultiGroupTest::Anova;
+    harness.app.session.multi.post_hoc_test = PostHocTest::TukeyKramer;
+    harness.app.session.invalidate(Mode::MultipleGroups);
+    harness.settle();
+
     // Two groups: Fisher's exact test of presence, and its histogram.
     harness.app.set_mode(Mode::TwoGroups);
     harness.app.session.groups.analysis.test = GroupTest::FisherPresence;
@@ -4429,4 +4463,60 @@ fn the_wizard_leads_to_an_analysis() {
     // No recommendation yet: nothing to set up.
     harness.app.wizard.restart();
     assert!(!harness.app.apply_wizard(None));
+}
+
+/// The wizard checks the spread of every feature with the Brown-Forsythe
+/// test: the glacier-fed streams by mountain range differ in spread (and
+/// in group size), so it recommends Welch's ANOVA with Games-Howell, says
+/// why, and sets the analysis up.
+#[test]
+fn wizard_recommends_welchs_anova_for_unequal_spread() {
+    use stamp_core::stats::multi_group::MultiGroupTest;
+    use stamp_core::stats::post_hoc::PostHocTest;
+    use stamp_gui::app::Example;
+    use stamp_gui::wizard::{Choice, Comparison, Data, Design, Question};
+    let mut harness = Harness::new();
+    harness.app.load_example_data(Example::GlacierFedStreams);
+    harness.settle();
+    harness.app.session.set_group_field("Mountain_range");
+    harness.app.session.invalidate_all();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.settle();
+    let facts = harness.app.wizard_facts();
+    assert_eq!(facts.groups.len(), 9);
+    let spread = facts.spread.expect("the spread of the families is checked");
+    assert_eq!((spread.differ, spread.tested), (814, 1936));
+    assert!(spread.is_unequal());
+    assert!(facts.spread_clr.is_some_and(|s| s.tested == 1936));
+
+    let wizard = &mut harness.app.wizard;
+    for choice in [
+        Choice::Comparison(Comparison::MultipleGroups),
+        Choice::Question(Question::Differ),
+        Choice::Design(Design::Independent),
+        Choice::Data(Data::Typical),
+    ] {
+        assert!(wizard.choose(choice, &facts), "{choice:?}");
+    }
+    let recommendation = harness.app.wizard.recommendation(&facts).unwrap();
+    assert_eq!(recommendation.heading, "Welch's ANOVA with Games-Howell");
+    assert!(
+        recommendation.why.contains("twofold in size")
+            && recommendation.why.contains("814 of 1936 features (42%"),
+        "{}",
+        recommendation.why
+    );
+    harness.app.show_wizard(true);
+    harness.settle();
+    harness.screenshot("gui_wizard_welch_anova");
+    assert!(harness.app.apply_wizard(None));
+    harness.settle();
+    let multi = &harness.app.session.multi;
+    assert_eq!(multi.analysis.test, MultiGroupTest::WelchAnova);
+    assert_eq!(multi.post_hoc_test, PostHocTest::GamesHowell);
+    let (_, results) = multi.output.as_ref().expect("the analysis ran");
+    assert_eq!(results.analysis.test, MultiGroupTest::WelchAnova);
+    assert_eq!(results.spread(), spread);
+    // Welch's ANOVA was used, so no caution goes with the summary.
+    assert_eq!(harness.app.spread_note().unwrap().1, None);
 }

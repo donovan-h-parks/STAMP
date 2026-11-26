@@ -6,6 +6,26 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-26, the citation-analysis session): **Welch's ANOVA and
+the Brown-Forsythe test of equal spread**. Asked for: implement both, update
+the analysis wizard, all documentation, unit tests, and
+/srv/projects/donovan/stamp/manuscript/manuscript.md (outside the repository). Done:
+stamp-core `MultiGroupTest::WelchAnova` and `multi_group::brown_forsythe`
+(R reference values in tests/reference/reference_values.R, unit tests in
+multi_group.rs), `MultiGroupRow.spread_p_value`, `results::SpreadSummary`
+(10% rule), table column `SPREAD_HEADING` last (after sample columns);
+CLI `--test welch-anova`, stderr summary and caution, cli.rs test; GUI
+summary/caution under the statistics (`StampApp::spread_note`), Welch's
+ANOVA switches Tukey-Kramer to Games-Howell; wizard `Facts.spread`/
+`spread_clr`, recommendation and texts, wizard.rs and ui.rs tests. Docs:
+statistics.rst (Welch's ANOVA, "Equal spread" section), analyses,
+choosing_a_test, wizard, changes, command_line; NEW_FEATURES;
+CHANGES_FROM_PYTHON #71; WIZARD_PLAN gaps marked done. Manuscript: Table 1
+rows, wizard paragraph; methods_outline and results_outline notes (citation
+candidates Welch 1951, Brown & Forsythe 1974 listed, not cited). fmt,
+clippy, Sphinx -W and the full release test suite pass. Separate from the PICRUSt2
+task below (another session); this one does not touch import code.
+
 Finished and committed (2026-11-26): **removed the browser (WebAssembly)
 build**. Asked for: STAMP is now only a desktop (Linux, Windows, macOS) and
 CLI tool. Done: wasm32 code paths removed (platform.rs is now synchronous

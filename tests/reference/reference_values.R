@@ -38,6 +38,13 @@ P("anova3", anv(list(c(5,4,5,4,5), c(6,5,6,5,6,5), c(700,800,700))))
 P("eta1", anv(list(1:4, 2:4, 1:4))[2])
 kw <- function(gs) { y <- unlist(gs); g <- factor(rep(seq_along(gs), lengths(gs))); kruskal.test(y, g)$p.value }
 P("kw1", kw(list(c(5,4,6,4,3), c(5,2,2,5,6,7), 1:7)), "kw2", kw(list(1:7, 8:15, 16:22)))
+# Welch's ANOVA (oneway.test, var.equal=FALSE) and the Brown-Forsythe test of equal spread
+# (Levene's test about the group medians, DescTools::LeveneTest center=median), multi_group.rs.
+spread_sets <- list(s1 = list(c(5,4,6,4,3), c(5,2,2,5,6,7), 1:7), s2 = list(1:5, (1:6)*10, 1:7),
+  s3 = list(c(1.2,3.4,2.2,5.1,0.8), c(2.3,3.9,2.2,6.0,1.9,3.3,4.1), c(0.9,2.8,3.1), c(10.5,1.5,3.0,2.6,5.5,1.1)),
+  s4 = list(c(5,4,6,4,3), c(5,2,2,5,6,7)), s5 = list(c(0,0,0,0.5,1.2,0), c(0.1,0.3,0.2,0.4), c(2.5,0,4.1,0.7,0,3.3,1.9)))
+for (n in names(spread_sets)) { gs <- spread_sets[[n]]; y <- unlist(gs); g <- factor(rep(seq_along(gs), lengths(gs)))
+  P(n, "welch_anova", oneway.test(y ~ g, var.equal=FALSE)$p.value, "brown_forsythe", LeveneTest(y, g, center=median)[1,3]) }
 # Post-hoc tests on A, B, C.
 A <- 1:5; B <- (1:6)*10; C <- 1:7; y <- c(A,B,C); g <- factor(rep(1:3, c(5,6,7)))
 f <- aov(y ~ g); tk <- TukeyHSD(f); P("tukey (j-i order: 2-1,3-1,3-2)"); print(tk$g, digits=17)

@@ -12,7 +12,9 @@ New in STAMP 3
 
 Analyses
    Mann-Whitney U, paired t and Wilcoxon signed-rank tests for two groups;
-   Kruskal-Wallis for any group size; Dunn's post-hoc test; correlation with
+   Kruskal-Wallis for any group size; Welch's ANOVA, with the
+   Brown-Forsythe test of equal spread reported for every feature; Dunn's
+   post-hoc test; correlation with
    a numeric metadata field (Pearson or Spearman); the centred log-ratio
    transform; ANCOM.
 

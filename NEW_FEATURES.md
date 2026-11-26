@@ -188,6 +188,30 @@ Add an entry here whenever a feature is added that v2 did not have.
 
 ## Statistics
 
+- **Welch's ANOVA** (`MultiGroupTest::WelchAnova`, "Welch's ANOVA",
+  `stats/multi_group.rs`): the multiple-group test of means that does not
+  assume equal spread, each group weighted by its size over its variance
+  (Welch 1951). p-values agree with R's `oneway.test(var.equal = FALSE)`;
+  with two groups it equals Welch's t-test. A group with no variance (a
+  feature with one value, usually zero, in all its samples) is taken at
+  the limit of infinite weight, which R cannot compute; constant groups
+  that differ give p = 0. Choosing it in the Statistics panel switches the
+  post-hoc test from Tukey-Kramer to Games-Howell. It is also offered for
+  ANCOM's log-ratio tests. Command line: `multi-groups --test welch-anova`
+  (and `ancom --test welch-anova`).
+- **Brown-Forsythe test of equal spread** (`multi_group::brown_forsythe`,
+  `results::SpreadSummary`): Levene's test on distances from the group
+  medians, run on every feature of every multiple-group analysis, on the
+  values the test sees (centred log-ratios with that transform). p-values
+  agree with R's `DescTools::LeveneTest(center = median)` (as
+  `car::leveneTest`); NaN when a group has fewer than two samples. Each
+  feature's p-value is a new last column of the multiple-group results
+  table, *Equal spread p-value (Brown-Forsythe)*, after STAMP v2's
+  columns. The Statistics panel and `stamp-cli multi-groups` (on stderr)
+  report how many features differ in spread (p < 0.05), and caution when
+  more than 10% do (twice chance) and the test is ANOVA. Not shown for the
+  test of presence or the Friedman test. The analysis wizard uses the same
+  count to choose Welch's ANOVA (see the wizard entry).
 - **Friedman test** for matched groups in the multiple-group analysis: the
   same subjects (patients, sites) sampled once in every group. A "Subject
   field" of the metadata names the subject of each sample
@@ -325,8 +349,12 @@ Add an entry here whenever a feature is added that v2 did not have.
   last page names the test, lists what will be set, explains why, lists the
   plots with what each is for, alternatives and what to report; "Set up
   this analysis" chooses the settings (with the Benjamini-Hochberg FDR),
-  runs the analysis and shows the first plot. The flow chart it follows is
-  in `docs/WIZARD_PLAN.md`. "At a glance" in the same window shows the
+  runs the analysis and shows the first plot. For multiple groups with
+  "most data" it chooses Welch's ANOVA with Games-Howell over ANOVA with
+  Tukey-Kramer when the groups differ twofold in size or when the
+  Brown-Forsythe test finds the spread of over 10% of the features
+  different (`Facts::spread`, `Facts::spread_clr`), and says which and why.
+  The flow chart it follows is in `docs/WIZARD_PLAN.md`. "At a glance" in the same window shows the
   tests as one table (`wizard::GLANCE`): a row for each of 18 tests under
   what it is for, with its drawing, when to use it, what it does and what
   it assumes; rows the data cannot support are greyed with the reason, and

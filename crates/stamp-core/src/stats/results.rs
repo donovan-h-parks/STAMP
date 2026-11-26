@@ -8,7 +8,7 @@ use super::correction::{Corrected, Correction};
 use super::correlation::{correlation_p_value, CorrelationMethod};
 use super::diversity::centred_log_ratio;
 use super::effect_size::{GroupEffectSize, SampleEffectSize};
-use super::multi_group::{MultiGroupEffectSize, MultiGroupTest};
+use super::multi_group::{brown_forsythe, MultiGroupEffectSize, MultiGroupTest};
 use super::post_hoc::{PostHocResult, PostHocTest};
 use super::two_group::{FeatureCounts, GroupOutcome, GroupTest};
 use super::two_sample::SampleTest;
@@ -754,6 +754,11 @@ pub struct MultiGroupRow {
     pub p_value_corrected: f64,
     pub effect_size: f64,
     pub note: String,
+    /// p-value of the Brown-Forsythe test that the groups are equally
+    /// spread out, on the values the test is computed from (transformed,
+    /// if a transform is applied). Not corrected for multiple tests; NaN if
+    /// a group has fewer than two samples.
+    pub spread_p_value: f64,
     /// Mean relative frequency (%) of each group.
     pub group_means: Vec<f64>,
     /// Standard deviation of the relative frequency (%) of each group.
@@ -831,11 +836,12 @@ impl MultiGroupRun {
             let feature = &features[self.rows.len()];
             let percentages = profile.percentages(feature);
             let groups: Vec<&[f64]> = percentages.iter().map(Vec::as_slice).collect();
-            let (p_value, note) = match &self.transformed {
-                Some(transformed) => analysis
-                    .test
-                    .run(&profile.split(&transformed[self.rows.len()])),
-                None => analysis.test.run(&groups),
+            let ((p_value, note), spread_p_value) = match &self.transformed {
+                Some(transformed) => {
+                    let values = profile.split(&transformed[self.rows.len()]);
+                    (analysis.test.run(&values), brown_forsythe(&values).0)
+                }
+                None => (analysis.test.run(&groups), brown_forsythe(&groups).0),
             };
             self.rows.push(MultiGroupRow {
                 feature: feature.name.clone(),
@@ -843,6 +849,7 @@ impl MultiGroupRun {
                 p_value_corrected: p_value,
                 effect_size: analysis.effect_size.run(&groups),
                 note: note.to_string(),
+                spread_p_value,
                 group_means: groups.iter().map(|g| mean(g)).collect(),
                 group_std_devs: groups.iter().map(|g| population_std(g)).collect(),
             });
@@ -874,7 +881,99 @@ pub fn run_multi_group_analysis(
     }
 }
 
+/// Significance level of the Brown-Forsythe test below which the spread of
+/// a feature is said to differ between the groups.
+pub const SPREAD_ALPHA: f64 = 0.05;
+
+/// Share of the features whose spread must differ for the groups to be
+/// called unequally spread: twice the [`SPREAD_ALPHA`] expected by chance.
+pub const UNEQUAL_SPREAD_SHARE: f64 = 0.10;
+
+/// How many features differ in spread between the groups by the
+/// Brown-Forsythe test, as a check of ANOVA's assumption of equal spread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SpreadSummary {
+    /// Features with a Brown-Forsythe p-value below [`SPREAD_ALPHA`].
+    pub differ: usize,
+    /// Features tested: those whose p-value is not NaN.
+    pub tested: usize,
+}
+
+impl SpreadSummary {
+    /// From the Brown-Forsythe p-values of the features; NaN, for a test
+    /// that could not be made, is left out.
+    pub fn of(p_values: impl IntoIterator<Item = f64>) -> SpreadSummary {
+        let mut summary = SpreadSummary::default();
+        for p in p_values.into_iter().filter(|p| !p.is_nan()) {
+            summary.tested += 1;
+            summary.differ += usize::from(p < SPREAD_ALPHA);
+        }
+        summary
+    }
+
+    /// Brown-Forsythe tests of every feature of `profile`, on the values a
+    /// multiple-group test with `transform` would see.
+    pub fn of_profile(profile: &MultiGroupProfile, transform: Transform) -> SpreadSummary {
+        let features = profile.profile.features();
+        if transform == Transform::CentredLogRatio {
+            let transformed = clr_values(&profile.profile);
+            SpreadSummary::of(
+                transformed
+                    .iter()
+                    .map(|values| brown_forsythe(&profile.split(values)).0),
+            )
+        } else {
+            SpreadSummary::of(features.iter().map(|feature| {
+                let percentages = profile.percentages(feature);
+                let groups: Vec<&[f64]> = percentages.iter().map(Vec::as_slice).collect();
+                brown_forsythe(&groups).0
+            }))
+        }
+    }
+
+    /// The share of the features whose spread differs, from 0 to 1.
+    pub fn share(&self) -> f64 {
+        if self.tested == 0 {
+            0.0
+        } else {
+            self.differ as f64 / self.tested as f64
+        }
+    }
+
+    /// True if clearly more features differ in spread than chance would
+    /// give ([`UNEQUAL_SPREAD_SHARE`]): the groups are then better compared
+    /// by Welch's ANOVA and the Games-Howell post-hoc test.
+    pub fn is_unequal(&self) -> bool {
+        self.tested > 0 && self.share() > UNEQUAL_SPREAD_SHARE
+    }
+
+    /// One sentence for the user, such as "Brown-Forsythe test: the spread
+    /// differs between the groups for 37 of 120 features (31%; p < 0.05,
+    /// 5% expected by chance)."
+    pub fn describe(&self) -> String {
+        if self.tested == 0 {
+            return "Brown-Forsythe test of equal spread: not possible, as every group needs \
+                    at least 2 samples."
+                .to_string();
+        }
+        format!(
+            "Brown-Forsythe test: the spread differs between the groups for {} of {} \
+             feature{} ({:.0}%; p < {SPREAD_ALPHA}, 5% expected by chance).",
+            self.differ,
+            self.tested,
+            if self.tested == 1 { "" } else { "s" },
+            100.0 * self.share()
+        )
+    }
+}
+
 impl MultiGroupResults {
+    /// How many features differ in spread between the groups, by the
+    /// Brown-Forsythe p-values of the rows.
+    pub fn spread(&self) -> SpreadSummary {
+        SpreadSummary::of(self.rows.iter().map(|r| r.spread_p_value))
+    }
+
     /// Recompute the corrected p-values with another method.
     pub fn apply_correction(&mut self, method: Correction, rng: &mut StampRng) {
         let p_values: Vec<f64> = self.rows.iter().map(|r| r.p_value).collect();

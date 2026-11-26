@@ -1497,6 +1497,9 @@ pub enum MultiGroupTestArg {
     /// For matched groups: the same subjects sampled once in every group
     /// (needs --pair-field)
     Friedman,
+    /// Welch's ANOVA: compares the group means without assuming the groups
+    /// are equally spread out
+    WelchAnova,
 }
 
 impl From<MultiGroupTestArg> for MultiGroupTest {
@@ -1506,6 +1509,7 @@ impl From<MultiGroupTestArg> for MultiGroupTest {
             MultiGroupTestArg::KruskalWallis => MultiGroupTest::KruskalWallis,
             MultiGroupTestArg::Friedman => MultiGroupTest::Friedman,
             MultiGroupTestArg::ChiSquarePresence => MultiGroupTest::ChiSquarePresence,
+            MultiGroupTestArg::WelchAnova => MultiGroupTest::WelchAnova,
         }
     }
 }

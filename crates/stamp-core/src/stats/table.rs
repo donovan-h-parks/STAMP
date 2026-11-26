@@ -380,8 +380,14 @@ fn multi_group_headings(profile: &MultiGroupProfile) -> Vec<String> {
         headings.push(format!("{group}: std. dev. (%)"));
     }
     headings.extend(sample_headings(&profile.profile));
+    // Not in STAMP v2: last, so that v2's columns keep their places.
+    headings.push(SPREAD_HEADING.to_string());
     headings
 }
+
+/// Heading of the column of Brown-Forsythe p-values in multiple-group
+/// tables.
+pub const SPREAD_HEADING: &str = "Equal spread p-value (Brown-Forsythe)";
 
 fn multi_group_cells(profile: &MultiGroupProfile, row: &MultiGroupRow, out: &mut impl Cells) {
     hierarchy_cells(&profile.profile, &row.feature, out);
@@ -396,6 +402,7 @@ fn multi_group_cells(profile: &MultiGroupProfile, row: &MultiGroupRow, out: &mut
     if let Some(feature) = profile.profile.feature(&row.feature) {
         sample_cells(&profile.profile, feature, out);
     }
+    out.num(row.spread_p_value);
 }
 
 /// Table of correlation results. `rows` selects and orders the rows.

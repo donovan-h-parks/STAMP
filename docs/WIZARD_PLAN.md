@@ -115,7 +115,7 @@ flowchart LR
 flowchart LR
   M["Multiple groups"] --> MQ{{"2. What is your research question?"}}
   MQ -->|Which features differ?| M4{{"3. What do the groups look like?"}}
-  M4 -->|Most data| M1["ANOVA + Tukey-Kramer<br/>(Games-Howell if sizes or spread differ)<br/>Plots: Post-hoc plot, Box plot, Bar plot,<br/>Heatmap plot, Group heatmap"]
+  M4 -->|Most data| M1["ANOVA + Tukey-Kramer<br/>(Welch's ANOVA + Games-Howell if sizes or spread differ)<br/>Plots: Post-hoc plot, Box plot, Bar plot,<br/>Heatmap plot, Group heatmap"]
   M4 -->|Small groups or extreme samples| M2["Kruskal-Wallis H-test + Dunn's test<br/>same plots"]
   M4 -->|A few features dominate| M3["Centred log-ratio transform,<br/>or ANCOM plot"]
   MQ -->|Which features occur together?| M5["Co-occurrence heatmap"]
@@ -235,8 +235,8 @@ measured variable leads to the Alpha diversity scatter plot.
 | Missing | Use | Size |
 | --- | --- | --- |
 | **Q-Q plot and histogram of a feature's residuals**, by group | Lets the user see "extreme samples" instead of taking it on trust | small |
-| **Levene's (Brown-Forsythe) test** of equal spread | Decides Tukey-Kramer or Games-Howell; reported, not used to switch tests silently | small |
-| **Welch's ANOVA** | The overall test that belongs with Games-Howell when spread differs; STAMP has the post-hoc test without it | small |
+| **Levene's (Brown-Forsythe) test** of equal spread | **Done (2026-11-26):** run on every feature, reported in the results and under the statistics; the wizard recommends Welch's ANOVA with Games-Howell when over 10% of features differ in spread, and says so | small |
+| **Welch's ANOVA** | **Done (2026-11-26):** the overall test that belongs with Games-Howell when spread differs | small |
 | **Shapiro-Wilk test** | Named by the guides; of little use over thousands of features and GraphPad advises against choosing by it. A summary ("31% of features depart from normal") at most | small, low value |
 
 ### "Prediction" and adjusting for a second variable

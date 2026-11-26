@@ -9,7 +9,7 @@ use stamp_core::stats::correction::Correction;
 use stamp_core::stats::correlation::CorrelationMethod;
 use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::post_hoc::PostHocTest;
-use stamp_core::stats::results::Transform;
+use stamp_core::stats::results::{SpreadSummary, Transform};
 use stamp_core::stats::two_group::GroupTest;
 use stamp_core::stats::two_sample::SampleTest;
 
@@ -404,6 +404,11 @@ pub struct Facts {
     pub whole_counts: bool,
     /// True if the metadata has a latitude and a longitude.
     pub has_coordinates: bool,
+    /// How many features differ in spread between the ticked groups by the
+    /// Brown-Forsythe test, on proportions and on centred log-ratios; with
+    /// three or more groups.
+    pub spread: Option<SpreadSummary>,
+    pub spread_clr: Option<SpreadSummary>,
 }
 
 impl Facts {
@@ -411,7 +416,7 @@ impl Facts {
     /// when this changes.
     pub fn key(session: &Session) -> String {
         format!(
-            "{}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
+            "{}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
             session.generation,
             session.group_field,
             session.multi.active_groups,
@@ -419,6 +424,11 @@ impl Facts {
             session.groups.group2,
             (&session.samples.sample1, &session.samples.sample2),
             session.correlation.field,
+            (
+                &session.profile_level,
+                &session.parent_level,
+                session.unclassified
+            ),
         )
     }
 
@@ -476,6 +486,22 @@ impl Facts {
             }
         }
         let names: Vec<String> = facts.groups.iter().map(|(name, _)| name.clone()).collect();
+        if names.len() >= 3 {
+            let active: Vec<&str> = names.iter().map(String::as_str).collect();
+            if let Ok(profile) = tree.multi_group_profile(
+                &grouping,
+                Some(&active),
+                session.parent_level.as_deref(),
+                &session.profile_level,
+                session.unclassified,
+            ) {
+                facts.spread = Some(SpreadSummary::of_profile(&profile, Transform::None));
+                facts.spread_clr = Some(SpreadSummary::of_profile(
+                    &profile,
+                    Transform::CentredLogRatio,
+                ));
+            }
+        }
         for field in metadata.fields() {
             if Some(field) == session.group_field.as_ref() {
                 continue;
@@ -1150,14 +1176,18 @@ impl Wizard {
             (Some(&least), Some(&most)) => most >= 2 * least,
             _ => false,
         };
+        // The Brown-Forsythe test of every feature, on the values the test
+        // will see.
+        let spread = if clr { facts.spread_clr } else { facts.spread }.filter(|s| s.tested > 0);
+        let unequal_spread = spread.is_some_and(|s| s.is_unequal());
         let (test, post_hoc) = match (design, data) {
             (Design::Matched, Data::Presence | Data::MostlyAbsent) => return None,
             (Design::Matched, _) => (MultiGroupTest::Friedman, PostHocTest::WilcoxonHolm),
             (_, Data::MostlyAbsent) => return None,
             (_, Data::SmallOrExtreme) => (MultiGroupTest::KruskalWallis, PostHocTest::Dunn),
             (_, Data::Presence) => (MultiGroupTest::ChiSquarePresence, PostHocTest::Dunn),
-            (_, Data::Typical | Data::Dominated) if uneven => {
-                (MultiGroupTest::Anova, PostHocTest::GamesHowell)
+            (_, Data::Typical | Data::Dominated) if uneven || unequal_spread => {
+                (MultiGroupTest::WelchAnova, PostHocTest::GamesHowell)
             }
             _ => (MultiGroupTest::Anova, PostHocTest::TukeyKramer),
         };
@@ -1167,6 +1197,14 @@ impl Wizard {
                  means differ by more than the variation within the groups would explain. A \
                  significant result says that some groups differ, not which: the post-hoc \
                  test then compares every pair of groups for the feature you select."
+            }
+            MultiGroupTest::WelchAnova => {
+                "Welch's analysis of variance asks, for each feature, whether the group \
+                 means differ, weighing each group by how closely its samples agree, so that \
+                 the groups need not be equally spread out. A significant result says that \
+                 some groups differ, not which: the Games-Howell post-hoc test, which also \
+                 allows each group its own spread, then compares every pair of groups for \
+                 the feature you select."
             }
             MultiGroupTest::KruskalWallis => {
                 "The Kruskal-Wallis test ranks all the samples and asks whether some groups \
@@ -1192,11 +1230,39 @@ impl Wizard {
             }
         }
         .to_string();
-        if post_hoc == PostHocTest::GamesHowell {
-            why.push_str(
-                " Your groups differ at least twofold in size, so the Games-Howell post-hoc \
-                 test is chosen: unlike Tukey-Kramer, it allows each group its own spread.",
-            );
+        // Why Welch's ANOVA, or why plain ANOVA is enough: said, not
+        // decided silently.
+        let spread_text = spread.map(|s| s.describe()).unwrap_or_default();
+        match test {
+            MultiGroupTest::WelchAnova => {
+                why.push(' ');
+                why.push_str(&match (uneven, unequal_spread) {
+                    (true, true) => format!(
+                        "Your groups differ at least twofold in size, and the spread of many \
+                         features differs between them. {spread_text} So Welch's ANOVA and \
+                         Games-Howell are chosen over ANOVA and Tukey-Kramer, which assume \
+                         equal spread."
+                    ),
+                    (true, false) => "Your groups differ at least twofold in size, so Welch's \
+                         ANOVA and Games-Howell are chosen over ANOVA and Tukey-Kramer: with \
+                         groups of different sizes, unequal spread misleads those most."
+                        .to_string(),
+                    _ => format!(
+                        "{spread_text} That is clearly more than chance, so Welch's ANOVA and \
+                         Games-Howell are chosen over ANOVA and Tukey-Kramer, which assume \
+                         equal spread."
+                    ),
+                });
+            }
+            MultiGroupTest::Anova if !spread_text.is_empty() => {
+                why.push(' ');
+                why.push_str(&spread_text);
+                why.push_str(
+                    " That is close to chance, so ANOVA's assumption of equal spread holds \
+                     well enough.",
+                );
+            }
+            _ => {}
         }
         if clr {
             why.push_str(clr_note);
@@ -1264,7 +1330,13 @@ impl Wizard {
                 MultiGroupTest::Anova => vec![
                     "Kruskal-Wallis H-test with Dunn's test, if a result seems to rest on one \
                      or two samples.",
-                    "Games-Howell as the post-hoc test, if the groups differ in size or spread.",
+                    "Welch's ANOVA with Games-Howell, if the groups differ in size or spread.",
+                ],
+                MultiGroupTest::WelchAnova => vec![
+                    "Kruskal-Wallis H-test with Dunn's test, if a result seems to rest on one \
+                     or two samples.",
+                    "ANOVA with Tukey-Kramer, if the groups are of similar size and spread: \
+                     it is then slightly more powerful.",
                 ],
                 MultiGroupTest::KruskalWallis => {
                     vec!["ANOVA with Tukey-Kramer, with about ten or more samples in each group."]
@@ -1534,9 +1606,12 @@ pub const GLANCE: [Row; 18] = {
             [
                 "Different subjects in each group, about ten or more samples in each.",
                 "Asks whether the group means differ by more than the variation within \
-                 the groups explains. A post-hoc test (Tukey-Kramer or Games-Howell) then \
-                 says which pairs of groups differ.",
-                "Roughly bell-shaped data, or ten or more samples in each group.",
+                 the groups explains. Welch's ANOVA, with the Games-Howell post-hoc test, \
+                 is chosen when the groups differ twofold in size or in spread \
+                 (Brown-Forsythe test); otherwise ANOVA with Tukey-Kramer. The post-hoc \
+                 test says which pairs of groups differ.",
+                "Roughly bell-shaped data, or ten or more samples in each group. ANOVA \
+                 assumes equal spread; Welch's ANOVA allows each group its own.",
             ],
         ),
         differ(
@@ -2059,6 +2134,8 @@ mod tests {
             subject_fields: vec![("Subject".into(), 4)],
             whole_counts: true,
             has_coordinates: false,
+            spread: None,
+            spread_clr: None,
         }
     }
 
@@ -2194,22 +2271,19 @@ mod tests {
             multi(Design::Matched, Data::SmallOrExtreme),
             Some((MultiGroupTest::Friedman, PostHocTest::WilcoxonHolm))
         );
-        // Groups of very different sizes get the post-hoc test that allows
-        // each its own spread.
+        // Groups of very different sizes get the tests that allow each its
+        // own spread.
         let mut uneven = facts.clone();
         uneven.groups[2].1 = 9;
-        let change = test_of(
-            &[
-                C::Comparison(Comparison::MultipleGroups),
-                C::Question(Question::Differ),
-                C::Design(Design::Independent),
-                C::Data(Data::Typical),
-            ],
-            &uneven,
-        );
+        let typical = [
+            C::Comparison(Comparison::MultipleGroups),
+            C::Question(Question::Differ),
+            C::Design(Design::Independent),
+            C::Data(Data::Typical),
+        ];
         assert_eq!(
-            change.multi_test,
-            Some((MultiGroupTest::Anova, PostHocTest::GamesHowell))
+            test_of(&typical, &uneven).multi_test,
+            Some((MultiGroupTest::WelchAnova, PostHocTest::GamesHowell))
         );
 
         let samples = test_of(
@@ -2228,6 +2302,99 @@ mod tests {
             &facts,
         );
         assert_eq!(follow.method, Some(CorrelationMethod::Spearman));
+    }
+
+    /// The Brown-Forsythe test of the features chooses between ANOVA and
+    /// Welch's ANOVA, and the recommendation says which way it went.
+    #[test]
+    fn unequal_spread_leads_to_welchs_anova() {
+        use Choice as C;
+        let typical = [
+            C::Comparison(Comparison::MultipleGroups),
+            C::Question(Question::Differ),
+            C::Design(Design::Independent),
+            C::Data(Data::Typical),
+        ];
+        let dominated = [
+            C::Comparison(Comparison::MultipleGroups),
+            C::Question(Question::Differ),
+            C::Design(Design::Independent),
+            C::Data(Data::Dominated),
+        ];
+        let close = SpreadSummary {
+            differ: 6,
+            tested: 100,
+        };
+        let far = SpreadSummary {
+            differ: 31,
+            tested: 100,
+        };
+        let recommend =
+            |choices: &[Choice], facts: &Facts| walk(choices, facts).recommendation(facts).unwrap();
+
+        // Close to chance: ANOVA, saying the assumption holds.
+        let even = Facts {
+            spread: Some(close),
+            spread_clr: Some(far),
+            ..facts()
+        };
+        let r = recommend(&typical, &even);
+        assert_eq!(
+            r.change.multi_test,
+            Some((MultiGroupTest::Anova, PostHocTest::TukeyKramer))
+        );
+        assert!(r.why.contains("6 of 100 features (6%"), "{}", r.why);
+        assert!(r.why.contains("holds well enough"), "{}", r.why);
+        // With the centred log-ratio transform, the spread of the
+        // transformed values counts.
+        let r = recommend(&dominated, &even);
+        assert_eq!(
+            r.change.multi_test,
+            Some((MultiGroupTest::WelchAnova, PostHocTest::GamesHowell))
+        );
+        assert!(r.heading.starts_with("Welch's ANOVA with Games-Howell"));
+        assert!(r.why.contains("31 of 100 features (31%"), "{}", r.why);
+        assert!(r.why.contains("more than chance"), "{}", r.why);
+        assert!(r
+            .settings
+            .iter()
+            .any(|(name, value)| *name == "Statistical test" && value == "Welch's ANOVA"));
+        assert!(r
+            .alternatives
+            .iter()
+            .any(|a| a.starts_with("ANOVA with Tukey-Kramer")));
+
+        // Uneven groups alone, and both reasons together.
+        let mut uneven = Facts {
+            spread: Some(close),
+            ..facts()
+        };
+        uneven.groups[2].1 = 9;
+        let r = recommend(&typical, &uneven);
+        assert_eq!(r.change.multi_test.unwrap().0, MultiGroupTest::WelchAnova);
+        assert!(r.why.contains("twofold in size"), "{}", r.why);
+        uneven.spread = Some(far);
+        let r = recommend(&typical, &uneven);
+        assert!(
+            r.why.contains("twofold in size") && r.why.contains("31 of 100"),
+            "{}",
+            r.why
+        );
+        // Small groups still lead to Kruskal-Wallis, whatever the spread.
+        let small = [
+            C::Comparison(Comparison::MultipleGroups),
+            C::Question(Question::Differ),
+            C::Design(Design::Independent),
+            C::Data(Data::SmallOrExtreme),
+        ];
+        let spread = Facts {
+            spread: Some(far),
+            ..facts()
+        };
+        assert_eq!(
+            recommend(&small, &spread).change.multi_test.unwrap().0,
+            MultiGroupTest::KruskalWallis
+        );
     }
 
     #[test]

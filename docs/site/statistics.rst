@@ -399,7 +399,23 @@ Statistical tests
 ANOVA
    One-way analysis of variance: do the group means differ by more than the
    variation within groups would explain? The multiple-group equivalent of
-   the t-test, and STAMP's default.
+   the t-test, and STAMP's default. It assumes the groups are about equally
+   spread out (see `Equal spread`_).
+
+Welch's ANOVA
+   Welch's (1951) analysis of variance: like ANOVA, but each group is
+   weighted by how closely its samples agree (its size over its variance),
+   so the groups need not be equally spread out. The multiple-group
+   equivalent of Welch's t-test (with two groups it gives exactly the same
+   p-value), and the overall test that belongs with the Games-Howell
+   post-hoc test. Prefer it to ANOVA when the groups differ in size or in
+   spread; with equal groups it loses little. The p-values are those of R's
+   ``oneway.test(var.equal = FALSE)``. A group in which the feature has the
+   same value in every sample (often: absent from all of them) has no
+   variance and so infinite weight, which ``oneway.test`` cannot use; STAMP
+   takes the test at its limit, comparing the other groups with that
+   value, as Welch's t-test does. Constant groups with different values
+   give p = 0, as for ANOVA.
 
 Kruskal-Wallis H-test
    The rank-based equivalent of ANOVA, and the multiple-group equivalent of
@@ -429,6 +445,45 @@ post-hoc test.
 
 The effect size is **eta-squared** (see `Effect sizes`_).
 
+.. _equal-spread:
+
+Equal spread
+^^^^^^^^^^^^
+
+ANOVA and the Tukey-Kramer test assume that the groups are about equally
+spread out; when they are not, and especially when the groups also differ
+in size, their p-values can be far too small or too large. Every
+multiple-group analysis therefore also runs the **Brown-Forsythe test**
+(Brown and Forsythe 1974) on each feature: Levene's test of equal variances
+on the distances of the values from their group's *median*, which, unlike
+Levene's original test about the means, is robust to skewed data. It is an
+ANOVA of those distances; the p-values are those of R's
+``car::leveneTest`` or ``DescTools::LeveneTest`` with their default
+``center = median``. It is computed on the values the main test sees (the
+centred log-ratios, if that transform is chosen), and needs two samples in
+every group.
+
+Each feature's p-value is in the last column of the results table,
+**Equal spread p-value (Brown-Forsythe)**, uncorrected. Under the
+statistics a summary counts the features whose spread differs (p < 0.05):
+
+   Brown-Forsythe test: the spread differs between the groups for 814 of
+   1936 features (42%; p < 0.05, 5% expected by chance).
+
+By chance alone about 5% of the features would differ. When clearly more
+do (over 10%) and the test is ANOVA, a caution suggests **Welch's ANOVA**
+with the **Games-Howell** post-hoc test; the analysis wizard uses the same
+rule to choose between them (see :doc:`wizard`). The check informs the
+choice of test: STAMP never switches the test because of it. The test of
+presence and the Friedman test do not compare spreads, and show no
+summary.
+
+**Example.** The glacier-fed stream sediments, at family level and grouped
+by mountain range, differ in spread for 42% of the families, and the
+groups range from 2 to 37 samples: Welch's ANOVA and Games-Howell are the
+better choice. The three enterotypes differ in spread for 14 of 248
+genera (6%), as chance would give, and ANOVA serves.
+
 .. _post-hoc-tests:
 
 Post-hoc tests
@@ -447,7 +502,9 @@ Tukey-Kramer
 
 Games-Howell
    Like Tukey-Kramer but allows each group its own variance; the post-hoc
-   counterpart of Welch's t-test. A good choice when groups differ in size
+   counterpart of Welch's t-test, and the post-hoc test that goes with
+   Welch's ANOVA (choosing Welch's ANOVA switches the post-hoc test from
+   Tukey-Kramer to Games-Howell). A good choice when groups differ in size
    or spread.
 
 Scheffè
