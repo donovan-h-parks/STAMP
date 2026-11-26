@@ -7,6 +7,13 @@ meaningful step, and when it finishes.
 ## Status
 
 Finished and committed (2026-11-27, the layout/assistant session):
+**Classic light colour scheme** (STAMP v2's colours, sampled from a v2
+screenshot): `ColorScheme::ClassicLight`, `classic_light()` in theme.rs;
+the scheme shown is kept in egui's memory (`ColorScheme::of`) so the plot's
+central panel is white in it (`ColorScheme::plot_area`, app.rs plot_panel).
+ui.rs `colour_schemes` covers it; main_window.rst, NEW_FEATURES, CHANGES #27.
+
+Finished and committed (2026-11-27, the layout/assistant session):
 **wizard Feature choice**. "Feature" in the wizard's Data used when a
 recommended plot shows one feature (`PlotKind::uses_selected_feature`),
 from `Facts.features` (every feature at the profile level, alphabetical);

@@ -397,7 +397,8 @@ Add an entry here whenever a feature is added that v2 did not have.
   `--where-not FIELD=VALUE`. Both use `SampleSelection` in
   `stamp-core/src/selection.rs`.
 - **Colour schemes** [27]: Settings > Preferences > Colour scheme chooses dark, light,
-  one of the four Catppuccin schemes (Latte, Frappé, Macchiato, Mocha), or
+  "Classic light" (STAMP v2's colours: grey panels, white boxes and plot
+  area), one of the four Catppuccin schemes (Latte, Frappé, Macchiato, Mocha), or
   Solarized Light or Dark (`crates/stamp-gui/src/theme.rs`).
 - **A colour for each group**, kept across every plot and chosen with a
   colour picker in the group list [27, 28].

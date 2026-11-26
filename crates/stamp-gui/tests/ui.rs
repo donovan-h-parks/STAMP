@@ -473,6 +473,7 @@ fn colour_schemes() {
         |pixel: egui::Color32| u32::from(pixel.r()) + u32::from(pixel.g()) + u32::from(pixel.b());
     let mut panels = Vec::new();
     for scheme in [
+        ColorScheme::ClassicLight,
         ColorScheme::CatppuccinLatte,
         ColorScheme::CatppuccinFrappe,
         ColorScheme::CatppuccinMacchiato,
@@ -494,10 +495,18 @@ fn colour_schemes() {
         let (plot, _) = harness.app.plot_placement.unwrap();
         let corner = (plot.left() as usize + 3, plot.top() as usize + 3);
         assert_eq!(image.pixel(corner.0, corner.1), egui::Color32::WHITE);
+        // Around the plot's page: white in Classic light, as in STAMP v2.
+        let area = frame_rect(&harness, stamp_gui::layout::Frame::Plot);
+        let around = image.pixel(area.min.x as usize + 4, area.min.y as usize + 4);
+        if scheme == ColorScheme::ClassicLight {
+            assert_eq!(around, egui::Color32::WHITE);
+        } else {
+            assert_eq!(around, scheme.visuals().panel_fill, "{scheme:?}");
+        }
         panels.push(pixel);
     }
     panels.dedup();
-    assert_eq!(panels.len(), 6);
+    assert_eq!(panels.len(), 7);
     // Chosen in Preferences.
     harness.app.show_preferences(true);
     harness.settle();

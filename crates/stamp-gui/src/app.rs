@@ -4566,7 +4566,10 @@ impl StampApp {
     fn plot_panel(&mut self, ui: &mut egui::Ui) {
         egui::Panel::bottom("plot-bar").show(ui, |ui| self.plot_bar(ui));
 
-        egui::CentralPanel::default().show(ui, |ui| {
+        // White around the plot in the Classic light scheme, as in STAMP v2.
+        let fill = crate::theme::ColorScheme::plot_area(ui.ctx(), ui.visuals());
+        let frame = egui::Frame::central_panel(ui.style()).fill(fill);
+        egui::CentralPanel::default().frame(frame).show(ui, |ui| {
             // The plot is centred in the room left for it.
             let space = ui.available_size();
             let rect = ui.max_rect();

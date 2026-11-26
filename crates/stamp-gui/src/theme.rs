@@ -1,6 +1,7 @@
 //! The colour schemes of the window, chosen in Preferences: egui's dark and
-//! light appearance, the four Catppuccin flavours, and Solarized light and
-//! dark.
+//! light appearance, "Classic light" in the colours of STAMP v2 (a Qt
+//! application on Windows: grey panels, white boxes and plot area, blue
+//! highlights), the four Catppuccin flavours, and Solarized light and dark.
 //!
 //! The Catppuccin colours and the way they are given to egui follow the
 //! `catppuccin-egui` crate (MIT licence, © 2023 Catppuccin), which does not
@@ -20,6 +21,7 @@ pub enum ColorScheme {
     #[default]
     Dark,
     Light,
+    ClassicLight,
     CatppuccinLatte,
     CatppuccinFrappe,
     CatppuccinMacchiato,
@@ -29,9 +31,10 @@ pub enum ColorScheme {
 }
 
 impl ColorScheme {
-    pub const ALL: [ColorScheme; 8] = [
+    pub const ALL: [ColorScheme; 9] = [
         ColorScheme::Dark,
         ColorScheme::Light,
+        ColorScheme::ClassicLight,
         ColorScheme::CatppuccinLatte,
         ColorScheme::CatppuccinFrappe,
         ColorScheme::CatppuccinMacchiato,
@@ -45,6 +48,7 @@ impl ColorScheme {
         match self {
             ColorScheme::Dark => "Dark",
             ColorScheme::Light => "Light",
+            ColorScheme::ClassicLight => "Classic light",
             ColorScheme::CatppuccinLatte => "Catppuccin Latte (light)",
             ColorScheme::CatppuccinFrappe => "Catppuccin Frappé",
             ColorScheme::CatppuccinMacchiato => "Catppuccin Macchiato",
@@ -58,7 +62,10 @@ impl ColorScheme {
     pub fn is_dark(self) -> bool {
         !matches!(
             self,
-            ColorScheme::Light | ColorScheme::CatppuccinLatte | ColorScheme::SolarizedLight
+            ColorScheme::Light
+                | ColorScheme::ClassicLight
+                | ColorScheme::CatppuccinLatte
+                | ColorScheme::SolarizedLight
         )
     }
 
@@ -73,6 +80,21 @@ impl ColorScheme {
         };
         ctx.set_visuals_of(theme, self.visuals());
         ctx.set_theme(theme);
+        ctx.data_mut(|d| d.insert_temp(scheme_id(), self));
+    }
+
+    /// The scheme the window is shown in.
+    pub fn of(ctx: &egui::Context) -> ColorScheme {
+        ctx.data(|d| d.get_temp(scheme_id())).unwrap_or_default()
+    }
+
+    /// The background of the plot's frame: white in Classic light, as in
+    /// STAMP v2, and the colour of the panels otherwise.
+    pub fn plot_area(ctx: &egui::Context, visuals: &egui::Visuals) -> Color32 {
+        match ColorScheme::of(ctx) {
+            ColorScheme::ClassicLight => Color32::WHITE,
+            _ => visuals.panel_fill,
+        }
     }
 
     /// The appearance of this scheme.
@@ -80,6 +102,7 @@ impl ColorScheme {
         match self {
             ColorScheme::Dark => egui::Visuals::dark(),
             ColorScheme::Light => black_text(egui::Visuals::light()),
+            ColorScheme::ClassicLight => classic_light(),
             ColorScheme::CatppuccinLatte => LATTE.visuals(egui::Visuals::light(), false),
             ColorScheme::CatppuccinFrappe => FRAPPE.visuals(egui::Visuals::dark(), true),
             ColorScheme::CatppuccinMacchiato => MACCHIATO.visuals(egui::Visuals::dark(), true),
@@ -88,6 +111,51 @@ impl ColorScheme {
             ColorScheme::SolarizedDark => SOLARIZED_DARK.visuals(egui::Visuals::dark(), true),
         }
     }
+}
+
+/// Where the scheme shown is kept, for [`ColorScheme::of`].
+fn scheme_id() -> egui::Id {
+    egui::Id::NULL.with("stamp-color-scheme")
+}
+
+/// STAMP v2's colours, as Qt drew them on Windows: panels and windows in
+/// grey (#f0f0f0, the frames' tab bars a shade darker, as egui_tiles draws
+/// them), boxes and tables white with grey borders, black text, and the
+/// light blue of Windows for hovering, pressing and selecting. Sampled from
+/// a screenshot of v2.
+fn classic_light() -> egui::Visuals {
+    const PANEL: Color32 = rgb(0xf0, 0xf0, 0xf0);
+    const BORDER: Color32 = rgb(0xad, 0xad, 0xad);
+    const BLUE: Color32 = rgb(0x00, 0x78, 0xd7);
+    let mut visuals = egui::Visuals::light();
+    visuals.panel_fill = PANEL;
+    visuals.window_fill = PANEL;
+    visuals.extreme_bg_color = Color32::WHITE;
+    visuals.code_bg_color = Color32::WHITE;
+    visuals.faint_bg_color = rgb(0xf5, 0xf5, 0xf5);
+    visuals.window_stroke = egui::Stroke::new(1.0, rgb(0xa0, 0xa0, 0xa0));
+    visuals.hyperlink_color = rgb(0x00, 0x66, 0xcc);
+    visuals.warn_fg_color = rgb(0xc0, 0x60, 0x00);
+    visuals.error_fg_color = rgb(0xc0, 0x00, 0x00);
+    visuals.selection.bg_fill = rgb(0xcc, 0xe8, 0xff);
+    visuals.selection.stroke = egui::Stroke::new(1.0, BLUE);
+    let widgets = &mut visuals.widgets;
+    let set = |state: &mut style::WidgetVisuals, fill: Color32, border: Color32| {
+        state.bg_fill = fill;
+        state.weak_bg_fill = fill;
+        state.bg_stroke = egui::Stroke::new(1.0, border);
+        state.fg_stroke.color = Color32::BLACK;
+    };
+    set(&mut widgets.noninteractive, PANEL, rgb(0xd0, 0xd0, 0xd0));
+    set(&mut widgets.inactive, Color32::WHITE, BORDER);
+    set(&mut widgets.hovered, rgb(0xe5, 0xf1, 0xfb), BLUE);
+    set(
+        &mut widgets.active,
+        rgb(0xcc, 0xe4, 0xf7),
+        rgb(0x00, 0x54, 0x99),
+    );
+    set(&mut widgets.open, Color32::WHITE, BLUE);
+    visuals
 }
 
 /// In the light scheme, the text of controls that can be used is black;

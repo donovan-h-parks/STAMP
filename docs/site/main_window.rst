@@ -221,7 +221,8 @@ Preferences
 **Settings > Preferences** holds settings that apply everywhere:
 
 * the **colour scheme** of the window: **Dark** (the default), **Light**,
-  one of the four `Catppuccin <https://catppuccin.com>`_ schemes, **Latte**
+  **Classic light** (the colours of STAMP v2: grey panels, white boxes and
+  a white plot area), one of the four `Catppuccin <https://catppuccin.com>`_ schemes, **Latte**
   (light), **Frappé**, **Macchiato** and **Mocha** (dark), or `Solarized
   <https://ethanschoonover.com/solarized/>`_ **Light** or **Dark**. Plots
   keep their own colours, on a white page, whatever the scheme;
