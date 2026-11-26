@@ -89,3 +89,69 @@ P("specpool Q2=0", unlist(specpool(inc3)[c("Species","chao")]), "Q1", sum(colSum
 kw2 <- function(gs) { y <- unlist(gs); g <- factor(rep(seq_along(gs), lengths(gs))); kruskal.test(y, g)$p.value }
 cat("kw small", kw2(list(c(1,2,3,4), c(1,2,3,4,5))), kw2(list(c(1.5, 2.5), c(3, 4, 5), c(0.5))),
     kw2(list(c(1,1,2), c(2,3,3), c(3,4,4,4))), kw2(list(c(1), c(2))), "\n")
+
+# --- White's non-parametric t-test (Metastats; White, Nagarajan and Pop 2009)
+# The method is that of detect_DA_features.r (Metastats, last modified
+# 4/14/2009; archived from metastats.cbcb.umd.edu): proportions of each
+# sample's total, Welch's t statistic, B random relabellings of the samples,
+# the null statistics of all frequently observed features pooled when either
+# group has fewer than 8 samples, and fisher.test on the counts summed over
+# each group for features seen fewer times than the group has samples.
+# Instead of B random relabellings, every split of the samples into the two
+# groups is enumerated (each is equally likely under a random permutation),
+# giving the exact p-values the Monte Carlo ones estimate. "More extreme"
+# means strictly greater; a split that reproduces the observed values gives
+# the observed statistic up to rounding and is not counted (relative
+# tolerance 1e-9, as in STAMP); no other split comes within 1e-6 of it.
+white_t <- function(x, y) { d <- mean(x) - mean(y); s <- sqrt(var(x)/length(x) + var(y)/length(y)); if (s == 0) d/1e-6 else d/s }
+white_case <- function(name, counts, n1) {
+  n <- ncol(counts); n2 <- n - n1; totals <- colSums(counts); P <- sweep(counts, 2, totals, "/")
+  s1 <- rowSums(counts[, 1:n1, drop=FALSE]); s2 <- rowSums(counts[, (n1+1):n, drop=FALSE])
+  frequent <- which(s1 >= n1 | s2 >= n2); sparse <- which(s1 < n1 & s2 < n2)
+  t_obs <- sapply(1:nrow(P), function(i) white_t(P[i, 1:n1], P[i, (n1+1):n]))
+  splits <- combn(n, n1)
+  null <- sapply(1:ncol(splits), function(k) { g <- splits[, k]; sapply(1:nrow(P), function(i) white_t(P[i, g], P[i, -g])) })
+  if (!is.matrix(null)) null <- matrix(null, nrow=1)
+  stopifnot(all(sapply(frequent, function(i) sapply(1:ncol(splits), function(k) { g <- splits[, k]; var(P[i, g]) + var(P[i, -g]) > 0 }))))
+  P0 <- function(...) cat(name, ..., "\n")
+  P0("samples", n1, n2, "splits", ncol(splits), "pooled", n1 < 8 || n2 < 8, "frequent", frequent, "sparse", sparse)
+  for (i in 1:nrow(P)) {
+    w <- t.test(P[i, 1:n1], P[i, (n1+1):n], var.equal=FALSE)
+    P0("feature", i, "t", t_obs[i], "t.test", if (is.finite(w$statistic)) w$statistic else NA, "effect", 100*(mean(P[i, 1:n1]) - mean(P[i, (n1+1):n])))
+  }
+  near <- function(a, b) abs(a - b) > 1e-9 * abs(b) & abs(a - b) <= 1e-6 * abs(b)
+  for (i in frequent) {
+    t <- t_obs[i]
+    pool <- if (n1 < 8 || n2 < 8) null[frequent, , drop=FALSE] else null[i, , drop=FALSE]
+    stopifnot(!any(near(abs(pool), abs(t))), !any(near(pool, t)))
+    two <- mean(abs(pool) > abs(t) * (1 + 1e-9)); one <- mean(pool > t + 1e-9 * abs(t))
+    ties <- sum(abs(abs(pool) - abs(t)) <= 1e-9 * abs(t))
+    if (n1 < 8 || n2 < 8) {
+      H <- length(frequent)
+      P0("exact", i, "one", one, "two", two, "ties", ties, "metastats_as_written", two * H / (H + 1))
+    } else P0("exact", i, "one", one, "two", two, "ties", ties)
+  }
+  for (i in sparse) {
+    N1 <- sum(totals[1:n1]); N2 <- sum(totals[(n1+1):n]); m <- matrix(c(s1[i], N1 - s1[i], s2[i], N2 - s2[i]), 2)
+    ci <- BinomDiffCI(s1[i], N1, s2[i], N2, method="waldcc")
+    P0("fisher", i, "two", fisher.test(m)$p.value, "one", min(fisher.test(m, alternative="less")$p.value, fisher.test(m, alternative="greater")$p.value),
+       "waldcc", 100 * ci[1], 100 * ci[2], 100 * ci[3])
+  }
+}
+# Four against five samples: the null statistics are pooled.
+other <- function(m, totals) rbind(m, totals - colSums(m))
+wa <- other(rbind(c(120, 135, 110, 128,  80, 95, 70, 88, 92),
+                  c( 50,  62,  45,  58,  52, 60, 47, 49, 57),
+                  c( 10,  14,   3,   9,  18, 25, 12, 20, 16),
+                  c(  0,   1,   0,   0,   0,  0,  1,  0,  1),
+                  c(  3,   0,   7,   1,   0,  2,  0,  0,  1)),
+            c(1000, 1200, 900, 1100, 1000, 1300, 950, 1050, 1150))
+white_case("white 4v5", wa, 4)
+# Eight against nine samples: each feature has its own null distribution.
+wb <- other(rbind(c(130, 142, 118, 125, 150, 137, 121, 133,  101,  95, 112,  88, 104,  99, 107,  92, 110),
+                  c( 40,  52,  35,  47,  60,  38,  44,  51,   36,  42,  30,  39,  45,  33,  41,  37,  48),
+                  c( 20,  25,  18,  30,  22,  27,  19,  24,   23,  21,  28,  19,  26,  24,  20,  29,  22),
+                  c(  0,   1,   0,   0,   2,   0,   0,   1,    1,   0,   0,   0,   0,   1,   0,   0,   0),
+                  c(  5,   0,   3,   9,   0,   2,   7,   1,    0,   4,   0,   0,   6,   1,   0,   0,   2)),
+            c(1000, 1100, 950, 1050, 1200, 1020, 980, 1080,  1000, 990, 1010, 970, 1060, 1030, 1040, 960, 1100))
+white_case("white 8v9", wb, 8)

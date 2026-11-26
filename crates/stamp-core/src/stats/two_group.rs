@@ -732,6 +732,12 @@ fn white(
         return Some(Vec::new());
     };
     let (n1, n2) = (first.seq1.len(), first.seq2.len());
+    // A group of one sample has no variance, so there is no t statistic;
+    // the comparisons with it used to come out as p = 1 for every feature
+    // (p = 0 in STAMP v2).
+    if n1 < 2 || n2 < 2 {
+        return Some(vec![too_few_samples(); features.len()]);
+    }
     let replicates = settings.replicates.max(1);
     let total_work = replicates + features.len();
 
@@ -1046,13 +1052,323 @@ mod tests {
         assert_eq!(r[0].note, ZERO_PARENT);
     }
 
-    // White's non-parametric t-test (White, Nagarajan and Pop 2009) has no
-    // independent implementation to compare with: the original is an R
-    // script inside Metastats, and its permutation p-values are random.
-    // The tests below check its parts instead: the statistic is Welch's t
-    // (so its p-values come close to Welch's), it is repeatable for a seed,
-    // and sparse features fall back to Fisher's exact test, whose values
-    // are checked against R in stats/two_sample.rs.
+    // White's non-parametric t-test (White, Nagarajan and Pop 2009) is the
+    // test of Metastats (detect_DA_features.r, 4/14/2009). Its permutation
+    // p-values are random, so the reference values are the exact p-values
+    // they estimate: R 4.4.3 enumerates every split of the samples into
+    // the two groups (tests/reference/reference_values.R, "White's
+    // non-parametric t-test"), each as likely as any other under a random
+    // permutation. The statistic is checked against `t.test(var.equal =
+    // FALSE)`, and sparse features against `fisher.test` and DescTools
+    // 0.99.59 `BinomDiffCI(method = "waldcc")`.
+
+    /// Counts of the two reference cases, one row per feature, the samples
+    /// of group 1 first; a last row ("other") makes each sample's count up
+    /// to its total, the parent of every feature, as in Metastats.
+    struct WhiteCase {
+        rows: Vec<Vec<f64>>,
+        totals: Vec<f64>,
+        n1: usize,
+    }
+
+    impl WhiteCase {
+        fn new(features: &[&[f64]], totals: &[f64], n1: usize) -> WhiteCase {
+            let mut rows: Vec<Vec<f64>> = features.iter().map(|f| f.to_vec()).collect();
+            let other = (0..totals.len())
+                .map(|j| totals[j] - features.iter().map(|f| f[j]).sum::<f64>())
+                .collect();
+            rows.push(other);
+            WhiteCase {
+                rows,
+                totals: totals.to_vec(),
+                n1,
+            }
+        }
+
+        /// Four against five samples: null statistics are pooled.
+        fn four_against_five() -> WhiteCase {
+            WhiteCase::new(
+                &[
+                    &[120.0, 135.0, 110.0, 128.0, 80.0, 95.0, 70.0, 88.0, 92.0],
+                    &[50.0, 62.0, 45.0, 58.0, 52.0, 60.0, 47.0, 49.0, 57.0],
+                    &[10.0, 14.0, 3.0, 9.0, 18.0, 25.0, 12.0, 20.0, 16.0],
+                    &[0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0],
+                    &[3.0, 0.0, 7.0, 1.0, 0.0, 2.0, 0.0, 0.0, 1.0],
+                ],
+                &[
+                    1000.0, 1200.0, 900.0, 1100.0, 1000.0, 1300.0, 950.0, 1050.0, 1150.0,
+                ],
+                4,
+            )
+        }
+
+        /// Eight against nine samples: each feature has its own null
+        /// distribution.
+        fn eight_against_nine() -> WhiteCase {
+            WhiteCase::new(
+                &[
+                    &[
+                        130.0, 142.0, 118.0, 125.0, 150.0, 137.0, 121.0, 133.0, 101.0, 95.0, 112.0,
+                        88.0, 104.0, 99.0, 107.0, 92.0, 110.0,
+                    ],
+                    &[
+                        40.0, 52.0, 35.0, 47.0, 60.0, 38.0, 44.0, 51.0, 36.0, 42.0, 30.0, 39.0,
+                        45.0, 33.0, 41.0, 37.0, 48.0,
+                    ],
+                    &[
+                        20.0, 25.0, 18.0, 30.0, 22.0, 27.0, 19.0, 24.0, 23.0, 21.0, 28.0, 19.0,
+                        26.0, 24.0, 20.0, 29.0, 22.0,
+                    ],
+                    &[
+                        0.0, 1.0, 0.0, 0.0, 2.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+                        0.0, 0.0,
+                    ],
+                    &[
+                        5.0, 0.0, 3.0, 9.0, 0.0, 2.0, 7.0, 1.0, 0.0, 4.0, 0.0, 0.0, 6.0, 1.0, 0.0,
+                        0.0, 2.0,
+                    ],
+                ],
+                &[
+                    1000.0, 1100.0, 950.0, 1050.0, 1200.0, 1020.0, 980.0, 1080.0, 1000.0, 990.0,
+                    1010.0, 970.0, 1060.0, 1030.0, 1040.0, 960.0, 1100.0,
+                ],
+                8,
+            )
+        }
+
+        fn run(&self, replicates: usize, seed: u64) -> Vec<GroupOutcome> {
+            let n1 = self.n1;
+            let features: Vec<FeatureCounts<'_>> = self
+                .rows
+                .iter()
+                .map(|row| FeatureCounts {
+                    seq1: &row[..n1],
+                    seq2: &row[n1..],
+                    parent1: &self.totals[..n1],
+                    parent2: &self.totals[n1..],
+                })
+                .collect();
+            let settings = StatsSettings {
+                replicates,
+                ..StatsSettings::default()
+            };
+            GroupTest::White
+                .run_all(
+                    &features,
+                    0.95,
+                    &settings,
+                    &mut rng_from_seed(seed),
+                    &mut |_, _| true,
+                )
+                .unwrap()
+        }
+
+        fn proportions(&self, r: usize) -> (Vec<f64>, Vec<f64>) {
+            let p: Vec<f64> = self.rows[r]
+                .iter()
+                .zip(&self.totals)
+                .map(|(s, t)| s / t)
+                .collect();
+            (p[..self.n1].to_vec(), p[self.n1..].to_vec())
+        }
+    }
+
+    /// The statistic is Welch's t: R's `t.test(x, y, var.equal =
+    /// FALSE)$statistic` on each feature's proportions, and the effect size
+    /// is `100 * (mean(x) - mean(y))`.
+    #[test]
+    fn white_statistic_is_welchs_t() {
+        let cases = [
+            (
+                WhiteCase::four_against_five(),
+                [
+                    (13.38911446329368, 3.9657333163912121),
+                    (1.8448090771546033, 0.23266019640161562),
+                    (-3.6495462825599936, -0.82691475953489668),
+                    (-0.55783629009109081, -0.017610602593440123),
+                    (1.3830579811639778, 0.2440111820546603),
+                    (-11.621390648615005, -3.5978793327191561),
+                ],
+            ),
+            (
+                WhiteCase::eight_against_nine(),
+                [
+                    (10.600516986833425, 2.6977262184022646),
+                    (2.2214942807093911, 0.52619030658892718),
+                    (-0.61222059287891306, -0.11164925545316395),
+                    (0.80794972885006455, 0.021872446144290805),
+                    (1.4494244438214479, 0.19571016692936055),
+                    (-11.226596973079925, -3.3298498826116796),
+                ],
+            ),
+        ];
+        for (case, expected) in cases {
+            for (r, (t, effect)) in expected.into_iter().enumerate() {
+                let (prop1, prop2) = case.proportions(r);
+                let (statistic, difference, note) = white_statistic(&prop1, &prop2);
+                close(statistic, t);
+                close(difference * 100.0, effect);
+                assert_eq!(note, "");
+            }
+        }
+    }
+
+    /// The Monte Carlo p-values estimate the exact permutation p-values
+    /// from R (see above), and lie within four standard errors of them.
+    /// With groups of fewer than eight samples, the null statistics of all
+    /// frequently observed features are pooled, as in Metastats, and the
+    /// p-value is the fraction of the pool beyond the observed statistic,
+    /// so it estimates the average of the features' exact p-values.
+    /// Otherwise each feature has its own null distribution and the
+    /// p-value is (more extreme + 1) / (B + 1). The one-sided p-value is
+    /// the upper tail (statistic greater than observed); Metastats gives
+    /// only the two-sided one.
+    #[test]
+    fn white_test_estimates_the_exact_permutation_p_values() {
+        const B: usize = 20_000;
+        // Feature (0-based), exact one-sided and two-sided p-values, and
+        // the effect size in percent.
+        let pooled: [(usize, f64, f64, f64); 5] = [
+            (0, 0.0, 0.0, 3.9657333163912121),
+            (
+                1,
+                0.03650793650793651,
+                0.080952380952380956,
+                0.23266019640161562,
+            ),
+            (
+                2,
+                0.99206349206349209,
+                0.014285714285714285,
+                -0.82691475953489668,
+            ),
+            (
+                4,
+                0.09841269841269841,
+                0.19047619047619047,
+                0.2440111820546603,
+            ),
+            (
+                5,
+                0.99841269841269842,
+                0.0015873015873015873,
+                -3.5978793327191561,
+            ),
+        ];
+        let separate: [(usize, f64, f64, f64); 5] = [
+            (0, 0.0, 0.0, 2.6977262184022646),
+            (
+                1,
+                0.022130810366104484,
+                0.042945290004113533,
+                0.52619030658892718,
+            ),
+            (
+                2,
+                0.72455779514603047,
+                0.54574249280131637,
+                -0.11164925545316395,
+            ),
+            (
+                4,
+                0.078280542986425339,
+                0.16334841628959276,
+                0.19571016692936055,
+            ),
+            (5, 0.99995886466474704, 0.0, -3.3298498826116796),
+        ];
+        let se = |p: f64| (p * (1.0 - p) / B as f64).sqrt();
+        for (case, expected, is_pooled) in [
+            (WhiteCase::four_against_five(), pooled, true),
+            (WhiteCase::eight_against_nine(), separate, false),
+        ] {
+            let outcomes = case.run(B, 1);
+            for (r, one_sided, two_sided, effect) in expected {
+                let outcome = &outcomes[r];
+                assert_eq!(outcome.note, "");
+                close(outcome.effect_size, effect);
+                for (estimate, exact) in [
+                    (outcome.one_sided, one_sided),
+                    (outcome.two_sided, two_sided),
+                ] {
+                    // (X + 1) / (B + 1) with X ~ Binomial(B, p) has mean
+                    // (B p + 1) / (B + 1).
+                    let mean = if is_pooled {
+                        exact
+                    } else {
+                        (B as f64 * exact + 1.0) / (B + 1) as f64
+                    };
+                    assert!(
+                        (estimate - mean).abs() <= 4.0 * se(exact) + 1e-12,
+                        "feature {r}: {estimate} against the exact {exact}"
+                    );
+                }
+            }
+        }
+
+        // Metastats divides the pooled count by B (H + 1) instead of B H,
+        // H being the number of frequently observed features: its counter
+        // ends one past their number. STAMP does not copy this; for the
+        // second feature (exact 0.0810, H = 5) Metastats would estimate
+        // 0.0675, which the estimate is well clear of.
+        let estimate = WhiteCase::four_against_five().run(B, 1)[1].two_sided;
+        let metastats = 0.067460317460317457;
+        assert!(
+            (estimate - metastats).abs() > 4.0 * se(metastats),
+            "{estimate}"
+        );
+    }
+
+    /// Features seen fewer times in each group than the group has samples
+    /// are tested with Fisher's exact test on the counts summed over each
+    /// group (R: `fisher.test(matrix(c(s1, N1 - s1, s2, N2 - s2), 2))`,
+    /// the one-sided value the smaller of `alternative = "less"` and
+    /// `"greater"`), with the asymptotic interval with continuity
+    /// correction (DescTools `BinomDiffCI(s1, N1, s2, N2, method =
+    /// "waldcc")`, in percent) and its estimate as the effect size.
+    #[test]
+    fn white_test_sparse_features_match_fisher_test() {
+        let cases = [
+            (
+                WhiteCase::four_against_five(),
+                [
+                    1.0,
+                    0.59661679937048107,
+                    -0.012887723896898209,
+                    -0.10298022578853687,
+                    0.077204777994740445,
+                ],
+            ),
+            (
+                WhiteCase::eight_against_nine(),
+                [
+                    0.43460354826431119,
+                    0.3030085613446073,
+                    0.025898635762003526,
+                    -0.041226759287089104,
+                    0.093024030811096156,
+                ],
+            ),
+        ];
+        for (case, [two_sided, one_sided, effect, lower, upper]) in cases {
+            let outcome = &case.run(200, 1)[3];
+            assert_eq!(outcome.note, WHITE_FISHER);
+            close(outcome.two_sided, two_sided);
+            close(outcome.one_sided, one_sided);
+            close(outcome.effect_size, effect);
+            close(outcome.lower_ci, lower);
+            close(outcome.upper_ci, upper);
+        }
+    }
+
+    #[test]
+    fn white_test_needs_two_samples_in_each_group() {
+        for (seq1, seq2) in [(&[3.0][..], &[5.0, 9.0, 7.0][..]), (&[5.0, 9.0], &[3.0])] {
+            let r = run(GroupTest::White, seq1, seq2, 100.0);
+            assert_eq!((r.two_sided, r.note), (1.0, TOO_FEW_SAMPLES));
+        }
+    }
+
     #[test]
     fn white_test_constant_groups() {
         let r = run(GroupTest::White, &[5.0; 5], &[6.0; 8], 10.0);

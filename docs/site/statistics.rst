@@ -304,6 +304,19 @@ White's non-parametric t-test
    the counts of each group and uses Fisher's exact test. Its interval comes
    from the bootstrap.
 
+   The method is that of the authors' R code (Metastats). The t statistic
+   is Welch's; when either group has fewer than 8 samples, the shuffled
+   statistics of all features that are not sparse are pooled into one null
+   distribution, otherwise each feature has its own and its p-value is
+   (more extreme + 1) / (permutations + 1). Each group needs at least two
+   samples. The results are tested against R: the statistic against
+   ``t.test``, the p-values against the exact permutation p-values found
+   by trying every division of the samples into the two groups, and sparse
+   features against ``fisher.test``. Two details differ from Metastats: a
+   pooled p-value is divided by the number of pooled statistics (Metastats
+   divides by one feature's worth more, which makes its pooled p-values too
+   small), and STAMP also gives a one-sided p-value.
+
 Mann-Whitney U test
    Also called the Wilcoxon rank-sum test. Ranks all the samples together
    and asks whether one group's samples tend to rank higher. It uses ranks

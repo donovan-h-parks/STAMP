@@ -6,6 +6,23 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-26, separate session): **White's
+non-parametric t-test verified against Metastats**. The original
+detect_DA_features.r (Metastats 4/14/2009, archived copy in that session's
+scratchpad only) was the method reference. R reference values
+(tests/reference/reference_values.R, "White's non-parametric t-test"
+section): t.test statistic, exact permutation p-values by enumerating every
+split (4 v 5 pooled, 8 v 9 per feature), fisher.test and waldcc for sparse
+features. Tests in stats/two_group.rs: `white_statistic_is_welchs_t`,
+`white_test_estimates_the_exact_permutation_p_values`,
+`white_test_sparse_features_match_fisher_test`,
+`white_test_needs_two_samples_in_each_group`. Fix: a group of one sample
+gives the "at least 2 samples" degenerate case (was p = 1; v2 p = 0),
+CHANGES_FROM_PYTHON bug #31. Docs: statistics.rst (validation, the two
+differences from Metastats). Checks: workspace tests pass; clippy native
+and wasm32 clean except a type_complexity error in import/kraken.rs (the
+profiler session's file); Sphinx not built (no sphinx-build here).
+
 Finished and committed (2026-11-24): **analysis wizard** and the six
 plots and tests it needed. Asked for: a wizard from research question to
 test and plots, for non-statisticians, with pictures and "i" buttons on
