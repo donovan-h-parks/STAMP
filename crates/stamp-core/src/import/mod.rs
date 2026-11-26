@@ -13,6 +13,7 @@ pub mod lineage;
 pub mod metaphlan;
 pub mod mothur;
 pub mod motus;
+pub mod picrust2;
 pub mod profiler;
 pub mod sandpiper;
 pub mod singlem;

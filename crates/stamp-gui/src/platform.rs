@@ -235,7 +235,7 @@ impl Default for Platform {
 }
 
 /// STAMP profiles, BIOM tables, mothur taxonomy files, and the outputs of
-/// SingleM, Sandpiper (JSON), mOTUs, MetaPhlAn, Kraken, Bracken and HUMAnN.
+/// SingleM, Sandpiper (JSON), mOTUs, MetaPhlAn, Kraken, Bracken, HUMAnN and PICRUSt2.
 const PROFILE_EXTENSIONS: [&str; 15] = [
     "spf", "tsv", "txt", "biom", "gz", "taxonomy", "json", "motus", "relab", "report", "kreport",
     "k2report", "kreport2", "bracken", "mpa",

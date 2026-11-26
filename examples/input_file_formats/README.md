@@ -2,7 +2,8 @@
 
 The files directly in each directory are made up (below); the
 `stool_SRR17283923/` folders hold real outputs of one sample (see "Real
-outputs"). Every file is gzip-compressed (`.gz`). STAMP reads compressed
+outputs"), and `PICRUSt2/` holds real PICRUSt2 output for a 16S data set
+(see "PICRUSt2"). Every file is gzip-compressed (`.gz`). STAMP reads compressed
 files as they are, so they need not be decompressed first; `gunzip -k` gives
 the plain text to look at.
 
@@ -68,6 +69,39 @@ Two things to know about these files:
 - mOTUs 3 lists every mOTU of its database, zeros included, so its
   mOTU-level tables are large (2.3 and 6.8 MB) though mostly zeros; STAMP
   leaves out the rows at zero. Compressed, they take 235 and 435 kB.
+
+## PICRUSt2: a 16S data set
+
+PICRUSt2 predicts functions from 16S sequences, so it is not run on the
+stool metagenome. `PICRUSt2/` holds **real** output of PICRUSt2 2.6.4 for
+the 16S data of PICRUSt2's own tutorial (`chemerin_16S.zip`): 37 ASVs in
+24 mouse stool samples, from mice lacking the protein chemerin (`KO`) and
+wild-type mice (`WT`), kept in two facilities (Dalhousie and Palo Alto).
+`make_picrust2_outputs.sh` records every command.
+
+| Folder | What it holds |
+|---|---|
+| `chemerin/EC_metagenome_out/`, `KO_metagenome_out/` | `pred_metagenome_unstrat` (functions), `pred_metagenome_strat` (contributions of each ASV, `--stratified --wide_table`), and `seqtab_norm` and `weighted_nsti`, which are not profiles of functions |
+| `chemerin/pathways_out/` | `path_abun_unstrat`, `path_cov_unstrat` (`--coverage`), and with `--per_sequence_contrib` `path_abun_strat`, `path_abun_unstrat_per_seq` and `path_abun_predictions` (not a profile) |
+| `chemerin/descriptions/` | the EC, KO and pathway tables with `add_descriptions.py`'s descriptions |
+| `chemerin/metadata.tsv.gz` | the tutorial's metadata: fields `Genotype` and `Facility` |
+| `chemerin_4_samples/` | the long contribution tables PICRUSt2 writes by default with `--stratified` (`pred_metagenome_contrib`, `path_abun_contrib`), from a run on four of the samples (`100CHE6KO`, `101CHE6WT`, `20CMK6KO`, `21CMK6WT`): for all 24 they take 4 to 7 MB each, compressed |
+
+The folders are laid out as PICRUSt2 writes them, so loading
+`EC_metagenome_out` as a directory finds two kinds of table and asks which
+to load. Unlike the other real outputs these can be analysed, for example
+the pathways of knockout against wild-type mice:
+
+```bash
+stamp-cli two-groups \
+    --profile examples/input_file_formats/PICRUSt2/chemerin/pathways_out/path_abun_unstrat.tsv.gz \
+    --metadata examples/input_file_formats/PICRUSt2/chemerin/metadata.tsv.gz \
+    --field Genotype --group1 KO --group2 WT
+```
+
+`crates/stamp-core/tests/picrust2_chemerin.rs` reads every table and checks
+its values against PICRUSt2's, and that the contributions add up to the
+unstratified tables.
 
 ## Loading them
 

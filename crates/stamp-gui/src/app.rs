@@ -3397,7 +3397,7 @@ impl StampApp {
                 let directory = item(icons::FOLDER_OPEN, "Load profile directory...", None);
                 let directory = ui.add(directory).on_hover_text(
                     "Load a directory of profiles written by SingleM, Sandpiper, mOTUs, \
-                     MetaPhlAn, Kraken, Bracken or HUMAnN, such as one per sample. Other \
+                     MetaPhlAn, Kraken, Bracken, HUMAnN or PICRUSt2, such as one per sample. Other \
                      files in it are skipped.",
                 );
                 if directory.clicked() {
@@ -5528,7 +5528,7 @@ fn profile_text(files: &[OpenedFile]) -> Option<ProfileText> {
         Some(file) => Some(Ok((file.name.clone(), texts[0].clone(), None))),
         None => Some(Err(
             "Several files can be loaded together only if they are profiles written by \
-             SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken or HUMAnN. Choose a single \
+             SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken, HUMAnN or PICRUSt2. Choose a single \
              file for other formats."
                 .to_string(),
         )),

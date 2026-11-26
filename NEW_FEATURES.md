@@ -178,6 +178,19 @@ Add an entry here whenever a feature is added that v2 did not have.
   stool metagenome subsampled to 1,000,000 read pairs, read by the tests in
   `crates/stamp-core/tests/stool_sample.rs`. All of them are kept
   gzip-compressed.
+- **PICRUSt2 tables**, read directly and recognised by their contents
+  (`import/picrust2.rs`): predicted functions (EC, KO, COG, Pfam, TIGRFAM;
+  one level named after the kind), MetaCyc pathway abundance and coverage,
+  the contributions of each sequence (`--stratified`, long or
+  `--wide_table`; levels function and Sequence), and the tables
+  `add_descriptions.py` writes (`<id>: <description>`). From a file or a
+  directory as PICRUSt2 writes it (the window asks whether to load the
+  functions or their contributions), with
+  `--profile-format picrust2-...` on the command line. Real PICRUSt2 2.6.4
+  output for the tutorial's 24 mouse stool samples, with metadata, is in
+  `examples/input_file_formats/PICRUSt2`, read by
+  `crates/stamp-core/tests/picrust2_chemerin.rs`. (STAMP v2 read PICRUSt 1
+  output only as BIOM tables.)
 - **Gzip-compressed files** (`stamp_core::text::decompress`): every file
   STAMP reads, profiles, metadata, profilers' outputs and the other formats,
   can be gzip-compressed, in the window and on the command line,

@@ -3118,3 +3118,65 @@ fn welch_anova_and_equal_spread() {
         .unwrap()
         .contains("Brown-Forsythe"));
 }
+
+#[test]
+fn picrust2_outputs_are_read() {
+    let chemerin = "examples/input_file_formats/PICRUSt2/chemerin";
+    // A directory as PICRUSt2 writes it holds two kinds of table.
+    let ec = format!("{chemerin}/EC_metagenome_out");
+    let error = failure(&["info", "--profile", &ec]);
+    assert!(
+        error.contains("choose the kind to load with --profile-format"),
+        "{error}"
+    );
+    let info = stdout(&[
+        "info",
+        "--profile",
+        &ec,
+        "--profile-format",
+        "picrust2-contributions",
+    ]);
+    assert!(
+        info.contains("Hierarchical levels: EC, Sequence\n"),
+        "{info}"
+    );
+    assert!(info.contains("Samples (24):"), "{info}");
+
+    // The pathways of chemerin knockout against wild-type mice.
+    let table = Table::parse(&stdout(&[
+        "two-groups",
+        "--profile",
+        &format!("{chemerin}/pathways_out/path_abun_unstrat.tsv.gz"),
+        "--metadata",
+        &format!("{chemerin}/metadata.tsv.gz"),
+        "--field",
+        "Genotype",
+        "--group1",
+        "KO",
+        "--group2",
+        "WT",
+    ]));
+    assert!(table.headings.iter().any(|h| h == "Pathway"));
+    assert_eq!(table.rows.len(), 280);
+
+    let converted = stdout(&[
+        "convert",
+        "profiles",
+        &format!("{chemerin}/pathways_out/path_cov_unstrat.tsv.gz"),
+    ]);
+    assert!(converted.starts_with("Pathway\t100CHE6KO\t"), "{converted}");
+    // The normalised sequence table is no profile of functions; it is a
+    // valid STAMP profile of the sequences, though.
+    let error = failure(&[
+        "convert",
+        "profiles",
+        &format!("{chemerin}/EC_metagenome_out/seqtab_norm.tsv.gz"),
+    ]);
+    assert!(error.contains("is not a profile written by"), "{error}");
+    let info = stdout(&[
+        "info",
+        "--profile",
+        &format!("{chemerin}/EC_metagenome_out/seqtab_norm.tsv.gz"),
+    ]);
+    assert!(info.contains("Hierarchical levels: normalized\n"), "{info}");
+}

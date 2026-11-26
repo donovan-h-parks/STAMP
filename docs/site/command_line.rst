@@ -73,16 +73,20 @@ Options common to the analyses
 
 ``-p, --profile FILE``
    The profile: a STAMP profile, a file written by SingleM, Sandpiper,
-   mOTUs, MetaPhlAn, Kraken, Bracken or HUMAnN, or a directory of such files
-   (see :ref:`profile-directory`), read without first being converted.
+   mOTUs, MetaPhlAn, Kraken, Bracken, HUMAnN or PICRUSt2, or a directory of
+   such files (see :ref:`profile-directory`), read without first being
+   converted.
    Files may be gzip-compressed (``.gz``).
 ``--profile-format FORMAT``
    The kind of profile to read from a directory that holds several kinds
    (HUMAnN's three tables per sample, Kraken and Bracken reports side by
-   side); a file given as ``--profile`` must be of this kind. One of
-   ``singlem``, ``sandpiper``, ``motus``, ``metaphlan``, ``kraken``,
-   ``kraken-mpa``, ``bracken-report``, ``bracken``, ``humann-genefamilies``,
-   ``humann-pathabundance`` and ``humann-pathcoverage``.
+   side, PICRUSt2's functions and their contributions); a file given as
+   ``--profile`` must be of this kind. One of ``singlem``, ``sandpiper``,
+   ``motus``, ``metaphlan``, ``kraken``, ``kraken-mpa``, ``bracken-report``,
+   ``bracken``, ``humann-genefamilies``, ``humann-pathabundance``,
+   ``humann-pathcoverage``, ``picrust2-functions``,
+   ``picrust2-pathabundance``, ``picrust2-pathcoverage`` and
+   ``picrust2-contributions``.
 ``-m, --metadata FILE``
    The metadata (all commands but ``two-samples``), plain or
    gzip-compressed.
@@ -639,7 +643,7 @@ written to the screen or to ``-o FILE``:
    stamp-cli convert sandpiper runs/*.json -o profile.spf
 
 * **profiles**: the outputs of SingleM, Sandpiper, mOTUs, MetaPhlAn,
-  Kraken, Bracken or HUMAnN, recognised by their contents (see
+  Kraken, Bracken, HUMAnN or PICRUSt2, recognised by their contents (see
   :ref:`supported-versions`), given as files or directories; files of one
   tool are combined, one sample per file or per column. ``--format`` (the
   names of ``--profile-format``) chooses the kind read from directories that

@@ -107,7 +107,7 @@ fn core<T>(result: stamp_core::Result<T>) -> CliResult<T> {
 }
 
 /// Read a profile: a STAMP profile, a profiler's output (SingleM,
-/// Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken, HUMAnN), or a directory of
+/// Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken, HUMAnN, PICRUSt2), or a directory of
 /// such outputs. `format` chooses the kind read from a directory holding
 /// several, and must be the kind of a file.
 fn load_profile(path: &Path, format: Option<ProfilerFormat>) -> CliResult<ProfileTree> {
@@ -2700,7 +2700,7 @@ fn convert(format: ConvertFormat) -> CliResult {
                             .map_or("a file", |f| f.name);
                         return Err(format!(
                             "{other} is not a profile written by SingleM, Sandpiper, mOTUs, \
-                             MetaPhlAn, Kraken, Bracken or HUMAnN"
+                             MetaPhlAn, Kraken, Bracken, HUMAnN or PICRUSt2"
                         ));
                     }
                 },

@@ -1,10 +1,10 @@
 //! Profiles written by taxonomic and functional profilers (SingleM,
-//! Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken and HUMAnN), recognised by
+//! Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken, HUMAnN and PICRUSt2), recognised by
 //! their contents and loaded without first being converted: one file,
 //! several files chosen together, or the files of a directory. See
 //! `docs/PROFILER_FORMATS.md`.
 
-use super::{humann, kraken, metaphlan, motus, sandpiper, singlem, NamedText};
+use super::{humann, kraken, metaphlan, motus, picrust2, sandpiper, singlem, NamedText};
 use crate::error::{Result, StampError};
 
 /// How much of the start of a file is looked at to tell its format.
@@ -36,10 +36,18 @@ pub enum ProfilerFormat {
     HumannPathAbundance,
     /// HUMAnN pathway coverage (`_pathcoverage.tsv`).
     HumannPathCoverage,
+    /// PICRUSt2 predicted functions (`pred_metagenome_unstrat.tsv`).
+    Picrust2Functions,
+    /// PICRUSt2 pathway abundance (`path_abun_unstrat.tsv`).
+    Picrust2PathAbundance,
+    /// PICRUSt2 pathway coverage (`path_cov_unstrat.tsv`).
+    Picrust2PathCoverage,
+    /// PICRUSt2 contributions of each sequence (`--stratified`).
+    Picrust2Contributions,
 }
 
 impl ProfilerFormat {
-    pub const ALL: [ProfilerFormat; 11] = [
+    pub const ALL: [ProfilerFormat; 15] = [
         ProfilerFormat::SingleM,
         ProfilerFormat::Sandpiper,
         ProfilerFormat::Motus,
@@ -51,6 +59,10 @@ impl ProfilerFormat {
         ProfilerFormat::HumannGeneFamilies,
         ProfilerFormat::HumannPathAbundance,
         ProfilerFormat::HumannPathCoverage,
+        ProfilerFormat::Picrust2Functions,
+        ProfilerFormat::Picrust2PathAbundance,
+        ProfilerFormat::Picrust2PathCoverage,
+        ProfilerFormat::Picrust2Contributions,
     ];
 
     /// The format of a file, judged from its start (the first 64 KiB are
@@ -71,6 +83,13 @@ impl ProfilerFormat {
                 humann::TableKind::GeneFamilies => ProfilerFormat::HumannGeneFamilies,
                 humann::TableKind::PathAbundance => ProfilerFormat::HumannPathAbundance,
                 humann::TableKind::PathCoverage => ProfilerFormat::HumannPathCoverage,
+            })
+        } else if let Some(kind) = picrust2::table_kind(start) {
+            Some(match kind {
+                picrust2::TableKind::Functions => ProfilerFormat::Picrust2Functions,
+                picrust2::TableKind::PathAbundance => ProfilerFormat::Picrust2PathAbundance,
+                picrust2::TableKind::PathCoverage => ProfilerFormat::Picrust2PathCoverage,
+                picrust2::TableKind::Contributions => ProfilerFormat::Picrust2Contributions,
             })
         } else if motus::looks_like_motus(start) {
             Some(ProfilerFormat::Motus)
@@ -104,6 +123,10 @@ impl ProfilerFormat {
             ProfilerFormat::HumannGeneFamilies => "HUMAnN gene families",
             ProfilerFormat::HumannPathAbundance => "HUMAnN pathway abundance",
             ProfilerFormat::HumannPathCoverage => "HUMAnN pathway coverage",
+            ProfilerFormat::Picrust2Functions => "PICRUSt2 function",
+            ProfilerFormat::Picrust2PathAbundance => "PICRUSt2 pathway abundance",
+            ProfilerFormat::Picrust2PathCoverage => "PICRUSt2 pathway coverage",
+            ProfilerFormat::Picrust2Contributions => "PICRUSt2 contribution",
         }
     }
 
@@ -121,6 +144,10 @@ impl ProfilerFormat {
             ProfilerFormat::HumannGeneFamilies => "humann-genefamilies",
             ProfilerFormat::HumannPathAbundance => "humann-pathabundance",
             ProfilerFormat::HumannPathCoverage => "humann-pathcoverage",
+            ProfilerFormat::Picrust2Functions => "picrust2-functions",
+            ProfilerFormat::Picrust2PathAbundance => "picrust2-pathabundance",
+            ProfilerFormat::Picrust2PathCoverage => "picrust2-pathcoverage",
+            ProfilerFormat::Picrust2Contributions => "picrust2-contributions",
         }
     }
 
@@ -147,6 +174,18 @@ impl ProfilerFormat {
             }
             ProfilerFormat::HumannPathCoverage => {
                 humann::to_spf(files, humann::TableKind::PathCoverage)
+            }
+            ProfilerFormat::Picrust2Functions => {
+                picrust2::to_spf(files, picrust2::TableKind::Functions)
+            }
+            ProfilerFormat::Picrust2PathAbundance => {
+                picrust2::to_spf(files, picrust2::TableKind::PathAbundance)
+            }
+            ProfilerFormat::Picrust2PathCoverage => {
+                picrust2::to_spf(files, picrust2::TableKind::PathCoverage)
+            }
+            ProfilerFormat::Picrust2Contributions => {
+                picrust2::to_spf(files, picrust2::TableKind::Contributions)
             }
         }
     }
@@ -226,7 +265,7 @@ pub fn directory_to_spf(
             return Err(StampError::new(format!(
                 "No profiles were found in {directory}. A directory can be loaded if it \
                  holds profiles written by SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken, \
-                 Bracken or HUMAnN; other files in it are skipped."
+                 Bracken, HUMAnN or PICRUSt2; other files in it are skipped."
             )))
         }
         (None, several) => {
@@ -313,6 +352,22 @@ mod tests {
             (
                 "# Pathway\tS_Coverage\n",
                 ProfilerFormat::HumannPathCoverage,
+            ),
+            (
+                "function\tS\n1.1.1.1\t127.0\n",
+                ProfilerFormat::Picrust2Functions,
+            ),
+            (
+                "pathway\tS\n1CMET2-PWY\t3493.3\n",
+                ProfilerFormat::Picrust2PathAbundance,
+            ),
+            (
+                "pathway\tS\n1CMET2-PWY\t0.376\n",
+                ProfilerFormat::Picrust2PathCoverage,
+            ),
+            (
+                "function\tsequence\tS\n1.1.1.1\tasv1\t52.0\n",
+                ProfilerFormat::Picrust2Contributions,
             ),
         ];
         for (text, format) in cases {

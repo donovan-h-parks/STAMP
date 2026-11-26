@@ -142,6 +142,14 @@ by the file extension:
        ``<sample>_pathcoverage.tsv``, and the tables HUMAnN's tools make
        from them (joined, renormalised, regrouped, renamed, split). See
        :ref:`humann-tables`.
+   * - PICRUSt2 tables
+     - The functions predicted from 16S sequences
+       (``EC_metagenome_out/pred_metagenome_unstrat.tsv.gz`` and the KO, COG,
+       Pfam and TIGRFAM ones), MetaCyc pathway abundance and coverage
+       (``pathways_out/path_abun_unstrat.tsv.gz``, ``path_cov_unstrat.tsv.gz``),
+       the contributions of each sequence (``--stratified``, long or
+       ``--wide_table``), and the same with ``add_descriptions.py``'s
+       descriptions. See :ref:`picrust2-tables`.
 
 Profilers usually write one file per sample. Choose the files of all
 samples together in the file dialog (they must come from one tool), or load
@@ -153,7 +161,8 @@ Supported versions
 ^^^^^^^^^^^^^^^^^^
 
 The readers follow each tool's own source and documentation, as of
-November 2026. The example files (below) are illustrative, not real output.
+November 2026, and have been checked against real output of the versions
+given in the example files' README (below).
 
 .. list-table::
    :header-rows: 1
@@ -190,8 +199,17 @@ November 2026. The example files (below) are illustrative, not real output.
        ``humann_join_tables``, ``humann_renorm_table``,
        ``humann_regroup_table``, ``humann_rename_table``,
        ``humann_split_stratified_table``
+   * - PICRUSt2
+     - 2.x (checked with 2.6.4)
+     - ``pred_metagenome_unstrat``, ``pred_metagenome_contrib``
+       (``--stratified``), ``pred_metagenome_strat`` (``--wide_table``);
+       ``path_abun_unstrat``, ``path_cov_unstrat`` (``--coverage``),
+       ``path_abun_contrib``, ``path_abun_strat`` and
+       ``path_abun_unstrat_per_seq`` (``--per_sequence_contrib``);
+       ``add_descriptions.py`` output
 
-Not read: KrakenUniq reports, KrakenTools ``combine_kreports.py`` tables,
+Not read: PICRUSt (version 1), whose tables are BIOM files (load them as
+BIOM tables), KrakenUniq reports, KrakenTools ``combine_kreports.py`` tables,
 CAMI-format output (mOTUs ``-C``, MetaPhlAn ``--CAMI_format_output``), the
 Krona pages SingleM can write, and HUMAnN 4, which is still in alpha
 (tables in its layout load as far as they follow HUMAnN 3's, but have not
@@ -210,8 +228,8 @@ named in a message; only their first 64 KB are read to tell what they are.
 A sample may be in only one file.
 
 A directory may hold profiles of several kinds: HUMAnN writes three tables
-for each sample, and a Bracken run leaves Kraken's reports beside
-Bracken's. STAMP then asks which kind to load, offering the kind with the
+for each sample, a Bracken run leaves Kraken's reports beside Bracken's,
+and PICRUSt2 writes the functions and their contributions side by side. STAMP then asks which kind to load, offering the kind with the
 most files first; the files of the other kinds are skipped. Files of two
 kinds are never combined.
 
@@ -372,6 +390,46 @@ HUMAnN tables
 * Sample names are the column headings without ``_Abundance-RPKs``,
   ``_Abundance``, ``_Coverage`` and the like.
 
+.. _picrust2-tables:
+
+PICRUSt2 tables
+^^^^^^^^^^^^^^^
+
+PICRUSt2 predicts the functions of a community from its 16S sequences
+(ASVs): each sequence's genome content is predicted from its place in a
+tree of reference genomes, and weighted by the sequence's abundance.
+
+* **Functions** (``pred_metagenome_unstrat.tsv.gz``): one level, named
+  after the kind of function: *EC* (``1.1.1.1``), *KO* (``ko:K00001``),
+  *COG*, *Pfam*, *TIGRFAM*, or *Function* for anything else. Tables of
+  different kinds (EC numbers and KOs) cannot be loaded together.
+* **Pathways**: one level, *Pathway* (``1CMET2-PWY``). Abundance and
+  coverage (``path_cov_unstrat.tsv.gz``, made with ``--coverage``) have the
+  same header; STAMP tells coverage by its values, which are fractions. As
+  for HUMAnN, coverage is not something to add up.
+* **Contributions** (``--stratified``): the long table PICRUSt2 writes by
+  default (``pred_metagenome_contrib.tsv.gz``, ``path_abun_contrib.tsv.gz``,
+  using its ``taxon_function_abun`` column) or the wide one of
+  ``--wide_table`` (``pred_metagenome_strat.tsv.gz``,
+  ``path_abun_strat.tsv.gz``). Two levels, the function and the
+  *Sequence*. A sequence contributes to many functions, and a STAMP name has
+  one parent, so each sequence is named within its function:
+  ``20e568023c10eaac834f1c110aacea18 (2.1.1.190)``. In PICRUSt2 2.6 the
+  contributions add up to the unstratified values, so the function level of
+  a contribution table equals the unstratified table (for
+  ``path_abun_strat.tsv.gz``, the table ``path_abun_unstrat_per_seq.tsv.gz``).
+* **Descriptions** (``add_descriptions.py``): the feature is named
+  ``<id>: <description>``, for example ``1.1.1.1: Alcohol dehydrogenase``.
+* Values are predicted counts (abundances weighted by predicted copy
+  numbers), not whole numbers, so they are kept to six significant digits.
+* PICRUSt2's other tables are not profiles of functions and are skipped in
+  a directory: ``seqtab_norm.tsv.gz`` (the sequence abundances divided by
+  their 16S copy numbers, which can be loaded as a STAMP profile of the
+  sequences), ``weighted_nsti.tsv.gz`` and ``path_abun_predictions.tsv.gz``.
+* ``pathways_out`` made with ``--per_sequence_contrib`` holds two pathway
+  abundance tables of the same samples; load the one you want as a file
+  rather than the directory.
+
 Example data
 ------------
 
@@ -409,3 +467,8 @@ subsampled to 1,000,000 read pairs), profiled with SingleM
 0.21.4, mOTUs 3.1 and 4.1, MetaPhlAn 4.1.1, HUMAnN 3.9, Kraken 2.17.2 and
 Bracken 3.1 (and Sandpiper's profile of the whole run). A single sample
 cannot be analysed on its own; these files show what each tool writes.
+``PICRUSt2/chemerin`` holds PICRUSt2 2.6.4's output for the 16S data of
+PICRUSt2's tutorial: 24 mouse stool samples, chemerin knockout (``KO``) and
+wild type (``WT``) mice from two facilities, with their metadata (fields
+*Genotype* and *Facility*), so these can be analysed: for example the
+pathways of the knockout against the wild-type mice.

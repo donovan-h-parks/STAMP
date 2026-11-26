@@ -64,7 +64,7 @@ pub enum Command {
 #[derive(Args)]
 pub struct InfoArgs {
     /// Profile: a STAMP profile file, a profile written by SingleM,
-    /// Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken or HUMAnN, or a directory
+    /// Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken, HUMAnN or PICRUSt2, or a directory
     /// of such profiles (one sample per file or per column); files may be
     /// gzip-compressed
     #[arg(long, short)]
@@ -99,7 +99,7 @@ pub struct SampleFilterArgs {
 #[derive(Args)]
 pub struct ProfileArgs {
     /// Profile: a STAMP profile file, a profile written by SingleM,
-    /// Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken or HUMAnN, or a directory
+    /// Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken, HUMAnN or PICRUSt2, or a directory
     /// of such profiles (one sample per file or per column); files may be
     /// gzip-compressed
     #[arg(long, short)]
@@ -653,7 +653,7 @@ pub enum ConvertFormat {
         output: OutputArg,
     },
     /// Profiles written by SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken,
-    /// Bracken or HUMAnN, recognised by their contents: files of one kind,
+    /// Bracken, HUMAnN or PICRUSt2, recognised by their contents: files of one kind,
     /// combined one sample per file or per column, or directories of them
     Profiles {
         /// Profile files, or directories of them (other files in a directory

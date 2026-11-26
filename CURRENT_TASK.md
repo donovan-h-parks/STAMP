@@ -26,6 +26,29 @@ candidates Welch 1951, Brown & Forsythe 1974 listed, not cited). fmt,
 clippy, Sphinx -W and the full release test suite pass. Separate from the PICRUSt2
 task below (another session); this one does not touch import code.
 
+Finished and committed (2026-11-26): **PICRUSt2 functional profiles**.
+Asked for: read PICRUSt2's functional profiles; find a 16S data set, run it
+through PICRUSt2, add tests. Done: `import/picrust2.rs` and four
+`ProfilerFormat`s (`picrust2-functions`, `-pathabundance`,
+`-pathcoverage`, `-contributions`): unstratified functions (heading EC, KO,
+COG, Pfam, TIGRFAM or Function, from the ids), pathways (coverage told by
+values in 0..1, same header as abundance), contributions long (taxon_function_abun)
+or wide (`function|pathway, sequence`), descriptions as `<id>: <desc>`.
+Sequence names become `<ASV> (<function>)` (one parent per name). Data:
+PICRUSt2 2.6.4 (pixi env in the session scratchpad `picrust2/`, reference
+files installed by hand from the package's post-link script) on the
+tutorial's chemerin_16S (24 mouse stool samples, 37 ASVs);
+`examples/input_file_formats/PICRUSt2/chemerin` (wide stratified run,
+--coverage, descriptions, metadata) and `chemerin_4_samples` (long
+contrib tables, EC and pathways, from a 4-sample run; full-size ones are
+4-7 MB); `make_picrust2_outputs.sh`. Tests: unit tests in picrust2.rs (6),
+`tests/picrust2_chemerin.rs` (7, values against PICRUSt2's and
+contributions adding up), cli.rs `picrust2_outputs_are_read`, ui.rs
+`a_picrust2_output_directory_loads_the_chosen_table`. Docs:
+input_files.rst (format, versions, PICRUSt2 section, examples),
+command_line.rst, PROFILER_FORMATS.md, examples README, NEW_FEATURES;
+tool lists in CLI help and GUI messages.
+
 Finished and committed (2026-11-26): **removed the browser (WebAssembly)
 build**. Asked for: STAMP is now only a desktop (Linux, Windows, macOS) and
 CLI tool. Done: wasm32 code paths removed (platform.rs is now synchronous

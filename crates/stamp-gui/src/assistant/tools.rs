@@ -379,7 +379,7 @@ pub fn list() -> Vec<ToolInfo> {
                           metadata do. Use it only when the user asks for other data. Give \
                           full paths (\"~/\" stands for the home folder). 'profile': a \
                           STAMP profile, a BIOM table, a mothur taxonomy file, or the output \
-                          of SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken or HUMAnN; \
+                          of SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken, HUMAnN or PICRUSt2; \
                           or several files of one of these profilers (one per sample), which \
                           are combined into one profile. 'metadata': a \
                           tab-separated file with a row per sample, for the profile given \

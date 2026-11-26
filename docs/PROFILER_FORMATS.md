@@ -1,11 +1,12 @@
 # Profiles written by taxonomic and functional profilers
 
 Design note for the readers in `crates/stamp-core/src/import/` that load the
-output of SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken 2, Bracken and HUMAnN
-without conversion. It records what each tool writes, as found in the tools'
+output of SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken 2, Bracken, HUMAnN
+and PICRUSt2 without conversion. It records what each tool writes, as found in the tools'
 own source and documentation (November 2026; the research read mOTUs 2.6,
 3.1 and 4.1, MetaPhlAn 3.0.14 to 4.2.6, Kraken 1 and 2, Bracken, KrakenTools,
-SingleM at commit 08a4d1b, and HUMAnN 2.8.2, 3.0, 3.9 and 4.0.0a2), and how
+SingleM at commit 08a4d1b, HUMAnN 2.8.2, 3.0, 3.9 and 4.0.0a2, and PICRUSt2
+2.6.4), and how
 STAMP turns it into a profile. All readers are reached through `import::profiler::ProfilerFormat`,
 which recognises a file from its first 64 KiB, and they all build the profile
 with `import::lineage::Lineages`.
@@ -278,6 +279,42 @@ Profiles:
 * Sample names are the column headings without `_Abundance...` or
   `_Coverage...`.
 
+## PICRUSt2 (`picrust2.rs`)
+
+PICRUSt2 2.6.4 (checked by running it; the layout is that of 2.2 and later)
+writes, in `<out>/EC_metagenome_out` and `KO_metagenome_out` (and COG,
+PFAM, TIGRFAM with `--in_traits`), and `pathways_out`:
+
+| File | Header | Rows |
+|---|---|---|
+| `pred_metagenome_unstrat.tsv.gz` | `function`, samples | `1.1.1.1` (EC), `ko:K00001` (KO in 2.6; `K00001` before) |
+| `pred_metagenome_contrib.tsv.gz` (`--stratified`) | `sample function taxon taxon_abun taxon_rel_abun genome_function_count taxon_function_abun taxon_rel_function_abun norm_taxon_function_contrib` | one per sample, function and sequence |
+| `pred_metagenome_strat.tsv.gz` (`--stratified --wide_table`) | `function sequence`, samples | one per function and sequence |
+| `path_abun_unstrat.tsv.gz` | `pathway`, samples | `1CMET2-PWY` |
+| `path_cov_unstrat.tsv.gz` (`--coverage`) | `pathway`, samples | fractions 0 to 1 |
+| `path_abun_contrib.tsv.gz` (`--stratified`) | as the gene contributions, without `norm_taxon_function_contrib` | |
+| `path_abun_strat.tsv.gz`, `path_abun_unstrat_per_seq.tsv.gz` (`--per_sequence_contrib`) | `pathway sequence`, samples; `pathway`, samples | pathways inferred in each sequence's genome |
+| `*_descrip.tsv.gz` (`add_descriptions.py`) | `function` or `pathway`, `description`, samples | |
+| `seqtab_norm.tsv.gz`, `weighted_nsti.tsv.gz`, `path_abun_predictions.tsv.gz` | `normalized`/`sample`/`sequence`, ... | not profiles of functions |
+
+Profiles:
+
+* **Functions**: one level, named from the identifiers: EC, KO, COG, Pfam,
+  TIGRFAM, else Function. Tables of different kinds are refused together.
+* **Pathway abundance** and **coverage**: one level, Pathway. The two have
+  the same header; coverage is told by all its values in the first 64 KiB
+  lying between 0 and 1.
+* **Contributions**: function (or Pathway) and Sequence. The long table's
+  `taxon_function_abun` is used; long gene and pathway tables are told apart
+  by `norm_taxon_function_contrib`. Checked on the real output: in 2.6 the
+  contributions of a function add up exactly to its unstratified value,
+  pathways included (`path_abun_strat` adds up to
+  `path_abun_unstrat_per_seq`). Sequences are named within their function,
+  `<ASV> (<function>)`, as names must have one parent.
+* **Descriptions** become part of the name: `<id>: <description>`.
+* Values are predicted counts with fractions, kept to six significant
+  digits.
+
 ## Supported versions
 
 | Tool | Versions | Outputs read |
@@ -289,8 +326,9 @@ Profiles:
 | Kraken | 1.x, 2.x (KrakenUniq not) | `--report` (6 columns, 8 with `--report-minimizer-data`), `--use-mpa-style`, KrakenTools `kreport2mpa.py`/`combine_mpa.py` |
 | Bracken | 2.x | `.bracken` tables, `combine_bracken_outputs.py`, `-w` reports |
 | HUMAnN | 3.x (2.x writes the same tables) | gene families, pathway abundance, pathway coverage; `humann_join_tables`, `humann_renorm_table`, `humann_regroup_table`, `humann_rename_table`, `humann_split_stratified_table` output |
+| PICRUSt2 | 2.x (checked with 2.6.4) | `pred_metagenome_unstrat`, `_contrib`, `_strat`; `path_abun_unstrat`, `path_cov_unstrat`, `path_abun_contrib`, `path_abun_strat`, `path_abun_unstrat_per_seq`; `add_descriptions.py` output |
 
-Not read: KrakenUniq reports, KrakenTools `combine_kreports.py` tables, CAMI
+Not read: PICRUSt 1 (its BIOM tables load as BIOM), KrakenUniq reports, KrakenTools `combine_kreports.py` tables, CAMI
 formats (mOTUs `-C`, MetaPhlAn `--CAMI_format_output`), SingleM's Krona
 pages, and HUMAnN 4 except as noted above.
 
@@ -311,6 +349,10 @@ values against the tool's own numbers. The versions run were:
 - Bracken 3.1
 
 The Sandpiper file is the run's own profile (the whole run).
+
+PICRUSt2 2.6.4 works from 16S data, so it was run on its own tutorial's
+data instead (24 mouse stool samples): `examples/input_file_formats/PICRUSt2`,
+read by `crates/stamp-core/tests/picrust2_chemerin.rs`.
 
 What real output turned up (some of it first seen with a glacier-fed
 stream sediment sample, used before the stool sample, in which MetaPhlAn

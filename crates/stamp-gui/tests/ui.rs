@@ -1376,6 +1376,38 @@ fn a_directory_of_several_kinds_asks_which_to_load() {
 }
 
 #[test]
+fn a_picrust2_output_directory_loads_the_chosen_table() {
+    // EC_metagenome_out as PICRUSt2 writes it: the functions, their
+    // contributions by sequence, and two tables that are not profiles.
+    let mut harness = Harness::new();
+    harness
+        .app
+        .deliver(Event::ProfileDirectory(example_directory(
+            "PICRUSt2/chemerin/EC_metagenome_out",
+        )));
+    harness.settle();
+    assert_eq!(harness.app.pending_profile(), Some("directory"));
+    harness
+        .app
+        .choose_directory_format(ProfilerFormat::Picrust2Contributions);
+    harness.app.accept_pending_profile();
+    harness.settle();
+    let tree = harness
+        .app
+        .session
+        .tree
+        .as_ref()
+        .expect("contributions loaded");
+    assert_eq!(tree.hierarchy_headings(), ["EC", "Sequence"]);
+    assert_eq!(tree.num_samples(), 24);
+    let notice = harness.app.notice().unwrap();
+    assert!(
+        notice.starts_with("Skipped 3 files that are not PICRUSt2 contribution profiles:"),
+        "{notice}"
+    );
+}
+
+#[test]
 fn the_sample_filter_restricts_analyses_and_plots() {
     let mut harness = Harness::enterotypes();
     harness.app.set_mode(Mode::MultipleGroups);
