@@ -657,7 +657,12 @@ fn result(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts) {
     }
     ui.add_space(6.0);
 
-    data_used(app, ui, facts, recommendation.mode);
+    // The single-feature plots show the feature chosen here.
+    let one_feature = recommendation
+        .plots
+        .iter()
+        .any(|(plot, _)| plot.uses_selected_feature(recommendation.mode));
+    data_used(app, ui, facts, recommendation.mode, one_feature);
     // The data compared are chosen above; the rest is shown as it will be
     // set.
     let settings: Vec<&(&str, String)> = recommendation
@@ -729,83 +734,102 @@ const DATA_ROWS: [&str; 5] = [
 /// The data an analysis of `mode` uses, each a choice among those the
 /// loaded data allow: the two samples, the two groups (and the field that
 /// pairs them), the groups compared (and the field that names their
-/// subjects), or the numeric field. Choosing changes the Statistics panel
-/// at once, as the group field and profile level of the first page do, and
-/// the recommendation follows.
-fn data_used(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts, mode: Mode) {
+/// subjects), or the numeric field; and, when a recommended plot shows one
+/// feature, that feature. Choosing changes the Statistics panel (or the
+/// feature selected in the Feature table) at once, as the group field and
+/// profile level of the first page do, and the recommendation follows.
+fn data_used(app: &mut StampApp, ui: &mut egui::Ui, facts: &Facts, mode: Mode, one_feature: bool) {
     let comparison = app.wizard.comparison;
     let matched = app.wizard.design == Some(Design::Matched);
     section(ui, "Data used");
     egui::Grid::new("wizard-data")
         .num_columns(2)
         .spacing([12.0, 3.0])
-        .show(ui, |ui| match mode {
-            Mode::TwoSamples => {
-                let names = active_samples(app);
-                let (first, second) = (
-                    app.session.samples.sample1.clone(),
-                    app.session.samples.sample2.clone(),
-                );
-                ui.weak("Sample 1:");
-                let others: Vec<String> = names.iter().filter(|n| **n != second).cloned().collect();
-                if let Some(chosen) = pick(ui, "wizard-sample1", &first, &others) {
-                    app.wizard_will_change();
-                    app.session.samples.sample1 = chosen;
-                    app.session.invalidate(Mode::TwoSamples);
+        .show(ui, |ui| {
+            match mode {
+                Mode::TwoSamples => {
+                    let names = active_samples(app);
+                    let (first, second) = (
+                        app.session.samples.sample1.clone(),
+                        app.session.samples.sample2.clone(),
+                    );
+                    ui.weak("Sample 1:");
+                    let others: Vec<String> =
+                        names.iter().filter(|n| **n != second).cloned().collect();
+                    if let Some(chosen) = pick(ui, "wizard-sample1", &first, &others) {
+                        app.wizard_will_change();
+                        app.session.samples.sample1 = chosen;
+                        app.session.invalidate(Mode::TwoSamples);
+                    }
+                    ui.end_row();
+                    ui.weak("Sample 2:");
+                    let others: Vec<String> =
+                        names.iter().filter(|n| **n != first).cloned().collect();
+                    if let Some(chosen) = pick(ui, "wizard-sample2", &second, &others) {
+                        app.wizard_will_change();
+                        app.session.samples.sample2 = chosen;
+                        app.session.invalidate(Mode::TwoSamples);
+                    }
+                    ui.end_row();
                 }
-                ui.end_row();
-                ui.weak("Sample 2:");
-                let others: Vec<String> = names.iter().filter(|n| **n != first).cloned().collect();
-                if let Some(chosen) = pick(ui, "wizard-sample2", &second, &others) {
-                    app.wizard_will_change();
-                    app.session.samples.sample2 = chosen;
-                    app.session.invalidate(Mode::TwoSamples);
+                Mode::TwoGroups => {
+                    let Some((first, second)) = facts.two_groups.clone() else {
+                        return;
+                    };
+                    let names: Vec<String> = facts.groups.iter().map(|(n, _)| n.clone()).collect();
+                    ui.weak("Group 1:");
+                    let others: Vec<String> =
+                        names.iter().filter(|n| **n != second).cloned().collect();
+                    if let Some(chosen) = pick(ui, "wizard-group1", &first, &others) {
+                        app.wizard_will_change();
+                        app.session.groups.group1 = chosen;
+                        app.session.groups.group2 = Some(second.clone());
+                        app.session.invalidate(Mode::TwoGroups);
+                    }
+                    ui.end_row();
+                    ui.weak("Group 2:");
+                    let others: Vec<String> =
+                        names.iter().filter(|n| **n != first).cloned().collect();
+                    if let Some(chosen) = pick(ui, "wizard-group2", &second, &others) {
+                        app.wizard_will_change();
+                        app.session.groups.group2 = Some(chosen);
+                        app.session.invalidate(Mode::TwoGroups);
+                    }
+                    ui.end_row();
+                    if matched {
+                        subject_row(app, ui, facts, Comparison::TwoGroups, "Pair field:");
+                    }
                 }
-                ui.end_row();
+                Mode::MultipleGroups => {
+                    ui.weak("Groups:");
+                    group_ticks(app, ui, comparison);
+                    ui.end_row();
+                    if matched {
+                        subject_row(app, ui, facts, Comparison::MultipleGroups, "Subject field:");
+                    }
+                }
+                Mode::Correlation => {
+                    ui.weak("Numeric field:");
+                    let field = app.session.correlation.field.clone().unwrap_or_default();
+                    if let Some(chosen) =
+                        pick(ui, "wizard-numeric-field", &field, &facts.numeric_fields)
+                    {
+                        app.wizard_will_change();
+                        app.session.correlation.field = Some(chosen);
+                        app.session.invalidate(Mode::Correlation);
+                    }
+                    ui.end_row();
+                }
             }
-            Mode::TwoGroups => {
-                let Some((first, second)) = facts.two_groups.clone() else {
-                    return;
-                };
-                let names: Vec<String> = facts.groups.iter().map(|(n, _)| n.clone()).collect();
-                ui.weak("Group 1:");
-                let others: Vec<String> = names.iter().filter(|n| **n != second).cloned().collect();
-                if let Some(chosen) = pick(ui, "wizard-group1", &first, &others) {
-                    app.wizard_will_change();
-                    app.session.groups.group1 = chosen;
-                    app.session.groups.group2 = Some(second.clone());
-                    app.session.invalidate(Mode::TwoGroups);
-                }
-                ui.end_row();
-                ui.weak("Group 2:");
-                let others: Vec<String> = names.iter().filter(|n| **n != first).cloned().collect();
-                if let Some(chosen) = pick(ui, "wizard-group2", &second, &others) {
-                    app.wizard_will_change();
-                    app.session.groups.group2 = Some(chosen);
-                    app.session.invalidate(Mode::TwoGroups);
-                }
-                ui.end_row();
-                if matched {
-                    subject_row(app, ui, facts, Comparison::TwoGroups, "Pair field:");
-                }
-            }
-            Mode::MultipleGroups => {
-                ui.weak("Groups:");
-                group_ticks(app, ui, comparison);
-                ui.end_row();
-                if matched {
-                    subject_row(app, ui, facts, Comparison::MultipleGroups, "Subject field:");
-                }
-            }
-            Mode::Correlation => {
-                ui.weak("Numeric field:");
-                let field = app.session.correlation.field.clone().unwrap_or_default();
+            if one_feature && !facts.features.is_empty() {
+                ui.weak("Feature:")
+                    .on_hover_text("The feature the single-feature plots show");
+                let feature = app.session.selected_feature.clone().unwrap_or_default();
                 if let Some(chosen) =
-                    pick(ui, "wizard-numeric-field", &field, &facts.numeric_fields)
+                    pick_searching(ui, "wizard-feature", &feature, &facts.features)
                 {
                     app.wizard_will_change();
-                    app.session.correlation.field = Some(chosen);
-                    app.session.invalidate(Mode::Correlation);
+                    app.select_feature(&chosen);
                 }
                 ui.end_row();
             }
@@ -908,6 +932,68 @@ fn pick(ui: &mut egui::Ui, id: &str, current: &str, options: &[String]) -> Optio
             }
         });
     chosen
+}
+
+/// As [`pick`], for long lists: a search box at the top of the list keeps
+/// the options that contain what is typed (in any case), and Enter chooses
+/// the first of them.
+fn pick_searching(
+    ui: &mut egui::Ui,
+    id: &str,
+    current: &str,
+    options: &[String],
+) -> Option<String> {
+    let search_id = ui.scope_id().with((id, "search"));
+    let mut search: String = ui.data_mut(|d| d.get_temp(search_id).unwrap_or_default());
+    let mut chosen = None;
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(current)
+        .height(f32::INFINITY)
+        .show_ui(ui, |ui| {
+            ui.set_min_width(260.0);
+            let edit = ui.add(
+                egui::TextEdit::singleline(&mut search)
+                    .hint_text("Search")
+                    .desired_width(f32::INFINITY),
+            );
+            // Typing goes to the search box as soon as the list opens.
+            if !edit.has_focus() {
+                edit.request_focus();
+            }
+            let needle = search.to_lowercase();
+            let matching: Vec<&String> = options
+                .iter()
+                .filter(|option| needle.is_empty() || option.to_lowercase().contains(&needle))
+                .collect();
+            if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                if let Some(first) = matching.first() {
+                    chosen = Some((*first).clone());
+                    ui.close();
+                }
+            }
+            ui.separator();
+            if matching.is_empty() {
+                ui.weak("Nothing matches.");
+            }
+            egui::ScrollArea::vertical()
+                .max_height(320.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for option in matching {
+                        if ui
+                            .selectable_label(option == current, option.as_str())
+                            .clicked()
+                        {
+                            chosen = Some(option.clone());
+                        }
+                    }
+                });
+        });
+    if chosen.is_some() {
+        search.clear();
+    }
+    ui.data_mut(|d| d.insert_temp(search_id, search));
+    chosen.filter(|option| option != current)
 }
 
 fn section(ui: &mut egui::Ui, title: &str) {

@@ -1109,6 +1109,9 @@ pub struct StampApp {
     /// it uses (profile level, samples, groups, numeric field), so that
     /// undoing the analysis it sets up undoes those choices too.
     wizard_before: Option<AssistantSnapshot>,
+    /// Scroll the Feature table to the selected feature, chosen elsewhere
+    /// (the analysis wizard, the assistant).
+    scroll_to_selected: std::cell::Cell<bool>,
     /// Where the frames of the window are.
     layout: egui_tiles::Tree<Frame>,
     /// The layout is the default, not yet drawn: its left frame is then
@@ -1310,6 +1313,7 @@ impl StampApp {
             assistant: assistant::State::default(),
             assistant_undo: Vec::new(),
             wizard_before: None,
+            scroll_to_selected: std::cell::Cell::new(false),
             layout: layout::default_tree(),
             fit_layout: true,
         }
@@ -2629,9 +2633,11 @@ impl StampApp {
         self.view_dirty = true;
     }
 
-    /// Select the feature shown by the single-feature plots.
+    /// Select the feature shown by the single-feature plots, and bring its
+    /// row of the Feature table into view.
     pub fn select_feature(&mut self, feature: &str) {
         self.session.selected_feature = Some(feature.to_string());
+        self.scroll_to_selected.set(true);
         self.view_dirty = true;
     }
 
@@ -4859,11 +4865,18 @@ impl StampApp {
         if let Some(row) = moved {
             select = Some(rows[row].feature.clone());
         }
+        // A feature selected elsewhere is brought into view once.
+        let shown = if self.scroll_to_selected.get() && current.is_some() {
+            self.scroll_to_selected.set(false);
+            current.map(|row| (row, Some(egui::Align::Center)))
+        } else {
+            moved.map(|row| (row, None))
+        };
         let mut clicked = false;
         let table = egui::ScrollArea::horizontal().show(ui, |ui| {
             let mut builder = TableBuilder::new(ui).id_salt("feature-table").striped(true);
-            if let Some(row) = moved {
-                builder = builder.scroll_to_row(row, None);
+            if let Some((row, align)) = shown {
+                builder = builder.scroll_to_row(row, align);
             }
             builder
                 .sense(egui::Sense::click())

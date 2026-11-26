@@ -95,8 +95,13 @@ test, the plot), and gives:
   groups and, for a paired test, the field that pairs them; the groups
   compared (at least three) and, for matched groups, the field that names
   the subjects; or the numeric field the features are correlated with.
-  Changing one changes the Statistics panel at once, and the
-  recommendation follows it.
+  When a recommended plot shows a single feature (the bar, box, post-hoc
+  and correlation scatter plots), **Feature** chooses it from every feature
+  at the profile level; type in the search box at the top of its list to
+  keep the features whose names contain what is typed, and press Enter to
+  choose the first. The feature is selected in the Feature table too. Changing
+  one changes the Statistics panel (or the selected feature) at once, and
+  the recommendation follows it.
 * **What will be set**: the test, the post-hoc test, any transform, and
   the multiple test correction.
 * **Why** this test suits the answers given, in a paragraph, and anything

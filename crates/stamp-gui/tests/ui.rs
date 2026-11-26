@@ -4673,10 +4673,57 @@ fn the_wizard_lets_the_data_used_be_chosen() {
     harness.app.wizard_will_change();
     harness.app.session.correlation.field = Some(chosen.clone());
     harness.settle();
-    assert_eq!(harness.app.wizard_facts().variable, Some(chosen.clone()));
-    assert!(harness.app.apply_wizard(None));
+    let facts = harness.app.wizard_facts();
+    assert_eq!(facts.variable, Some(chosen.clone()));
+    // The correlation scatter plot shows one feature, chosen here too: every
+    // feature at the profile level is offered.
+    assert!(facts.features.len() >= 2);
+    let feature = facts.features[facts.features.len() / 2].clone();
+    harness.app.wizard_will_change();
+    harness.app.select_feature(&feature);
+    harness.settle();
+    harness.screenshot("wizard_feature");
+    // The Feature list opens with a search box that takes what is typed.
+    let app = &mut harness.app;
+    harness
+        .renderer
+        .click(egui::pos2(150.0, 299.0), |ui| app.draw(ui));
+    let app = &mut harness.app;
+    harness.renderer.run(5, |ui| app.draw(ui));
+    let app = &mut harness.app;
+    harness
+        .renderer
+        .send_events(vec![egui::Event::Text("act".to_string())], |ui| {
+            app.draw(ui)
+        });
+    let app = &mut harness.app;
+    harness.renderer.run(5, |ui| app.draw(ui));
+    harness.screenshot("wizard_feature_search");
+    let app = &mut harness.app;
+    harness.renderer.send_events(
+        vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+        |ui| app.draw(ui),
+    );
+    harness.settle();
+    assert!(harness.app.apply_wizard(Some(PlotKind::CorrelationScatter)));
     harness.settle();
     assert_eq!(harness.app.mode, Mode::Correlation);
+    assert_eq!(
+        harness.app.session.selected_feature.as_deref(),
+        Some(feature.as_str())
+    );
+    assert!(harness
+        .app
+        .feature_table()
+        .iter()
+        .any(|row| row.feature == feature));
+    harness.screenshot("wizard_feature_set_up");
     assert_eq!(harness.app.session.correlation.field, Some(chosen));
     assert_eq!(harness.app.session.profile_level, other);
 

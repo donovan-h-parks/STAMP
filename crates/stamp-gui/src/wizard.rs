@@ -393,6 +393,9 @@ pub struct Facts {
     /// The two samples of the two-sample analysis.
     pub two_samples: Option<(String, String)>,
     pub numeric_fields: Vec<String>,
+    /// The features at the profile level, in alphabetical order: those a
+    /// single-feature plot can show.
+    pub features: Vec<String>,
     /// The numeric field of the correlation analysis.
     pub variable: Option<String>,
     /// Metadata fields that match the samples of the two groups in pairs,
@@ -448,6 +451,17 @@ impl Facts {
                 .all(|(_, counts)| counts.iter().all(|v| *v >= 0.0 && v.fract() == 0.0)),
             ..Facts::default()
         };
+        if let Some(first) = tree.sample_names().first() {
+            if let Ok(profile) = tree.profile(
+                &[first.as_str()],
+                session.parent_level.as_deref(),
+                &session.profile_level,
+                session.unclassified,
+            ) {
+                facts.features = profile.features().iter().map(|f| f.name.clone()).collect();
+                facts.features.sort_by_key(|name| name.to_lowercase());
+            }
+        }
         if facts.samples >= 2 {
             facts.two_samples = Some((
                 session.samples.sample1.clone(),
@@ -2179,6 +2193,7 @@ mod tests {
             two_groups: Some(("A".into(), "B".into())),
             two_samples: Some(("A1".into(), "A2".into())),
             numeric_fields: vec!["pH".to_string()],
+            features: vec!["x".to_string(), "y".to_string()],
             variable: Some("pH".to_string()),
             pair_fields: vec![("Subject".into(), 4)],
             subject_fields: vec![("Subject".into(), 4)],

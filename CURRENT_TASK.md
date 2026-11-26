@@ -7,6 +7,16 @@ meaningful step, and when it finishes.
 ## Status
 
 Finished and committed (2026-11-27, the layout/assistant session):
+**wizard Feature choice**. "Feature" in the wizard's Data used when a
+recommended plot shows one feature (`PlotKind::uses_selected_feature`),
+from `Facts.features` (every feature at the profile level, alphabetical);
+choosing calls `select_feature`, which now also scrolls the Feature table to
+it (`scroll_to_selected`). Test in `the_wizard_lets_the_data_used_be_chosen`;
+wizard.rst, NEW_FEATURES; wizard screenshots refreshed. Then: search box in
+the Feature list (`pick_searching` in wizard_ui.rs; Enter picks the first
+match).
+
+Finished and committed (2026-11-27, the layout/assistant session):
 **Assistant menu**. Analysis wizard moved from Help to the top of the
 Assistant menu (own group); the Copy items moved to their own group just
 above Undo; `apply_wizard` calls `remember_for_undo`, so Undo assistant's

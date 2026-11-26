@@ -383,7 +383,9 @@ Add an entry here whenever a feature is added that v2 did not have.
   parent level, profile level and group field, each with an "i" that
   explains it (as each choice's "i" does, in its tooltip and when clicked), and the recommendation's "Data used"
   chooses the samples, groups, pairing or subject field, or numeric field
-  among those the data allow; undoing the analysis the wizard set up
+  among those the data allow, and the feature shown by the single-feature
+  plots (from a list with a search box; selected in the Feature table too,
+  which scrolls to it); undoing the analysis the wizard set up
   (Assistant > Undo assistant's last change) puts these back too.
 - **Sample filter.** Below the group field, a metadata field and the values
   whose samples every analysis and plot uses (tick or untick each value);
