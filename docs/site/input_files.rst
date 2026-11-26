@@ -384,17 +384,17 @@ Example data
   cuttings and produced water (An et al. 2013, *Environ. Sci. Technol.*
   47:10708), as counts of sequences with a full taxonomy. Good for the
   diversity, rarefaction and community plots, which need counts.
-* **Eggerthellaceae (genera)**: SingleM profiles (from Sandpiper, GTDB R232)
-  of 1,289 gut metagenomes of mammals containing the Eggerthellaceae genera
-  *Equivita*, *Gorillivita* or *Tapirivita* (Parks et al. 2026, *Microbial
-  Genomics* 12(8)), Domain to Genus, with curated host, captivity and
-  location metadata. Values are coverage, not counts. Good for comparing
-  many groups of unequal size, the sample filter, the group heatmap, the
-  map and co-occurrence; see :doc:`example_eggerthellaceae`. It opens with
-  the samples grouped by ``Host_group`` in the *Multiple groups* analysis.
-* **Eggerthellaceae (focus species)**: the same samples, with the species of
-  the three genera and the rest of the community in one row that is used
-  only for calculating proportions.
+* **Glacier-fed streams**: SingleM profiles (GTDB R232, most from
+  Sandpiper) of 158 metagenomes of the sediment of glacier-fed streams in
+  nine mountain ranges (Michoud et al. 2025, *Nature Microbiology* 10:217),
+  Domain to Species, an upstream and a downstream reach of each stream,
+  with the measurements made at each reach. Values are coverage, not
+  counts. Good for the paired tests of two groups, comparing many groups
+  of unequal size, correlations with measurements, the sample filter, the
+  group heatmap, the map and co-occurrence; see
+  :doc:`example_glacier_streams`. It opens in the *Two groups* analysis
+  with the downstream reaches compared with the upstream reaches, paired
+  by ``Glacier``.
 
 More examples are in the ``examples`` directory of the source repository.
 ``examples/input_file_formats`` holds small example inputs in every format

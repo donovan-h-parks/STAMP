@@ -44,7 +44,7 @@ the same for every plot.
 
    installing
    quick_start
-   example_eggerthellaceae
+   example_glacier_streams
    faq
 
 .. toctree::

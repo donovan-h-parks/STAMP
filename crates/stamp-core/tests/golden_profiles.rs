@@ -283,12 +283,7 @@ fn rejected_example_profiles_give_the_same_messages() {
 fn every_other_example_profile_loads() {
     for (path, levels, samples) in [
         ("examples/CoalSeamGas/coal.spf", 7, 44),
-        ("examples/Eggerthellaceae/eggerthellaceae.spf", 6, 1289),
-        (
-            "examples/Eggerthellaceae/eggerthellaceae_mgr_species.spf",
-            2,
-            1289,
-        ),
+        ("examples/GlacierFedStreams/glacier_streams.spf", 7, 158),
         ("examples/CowRumen-MG-RAST/CowRumen.spf", 4, 4),
         (
             "examples/EnterotypesArumugam/Enterotypes.profile.spf",

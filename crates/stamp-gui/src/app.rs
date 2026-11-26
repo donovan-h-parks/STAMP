@@ -63,19 +63,15 @@ const ENTEROTYPES_METADATA: &str =
 /// sequence counts down to species. Compressed when the program is built.
 const COAL_PROFILE_GZ: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/coal.spf.gz"));
 const COAL_METADATA: &str = include_str!("../../../examples/CoalSeamGas/coal.metadata.tsv");
-/// Gut metagenomes containing the Eggerthellaceae genera Equivita,
-/// Gorillivita and Tapirivita (Parks et al., 2026), profiled by SingleM and
-/// taken from Sandpiper: a genus profile of 1,289 samples, a profile of the
-/// species of these three genera, and their metadata. Compressed when the
-/// program is built.
-const EGGERTHELLACEAE_PROFILE_GZ: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/eggerthellaceae.spf.gz"));
-const EGGERTHELLACEAE_SPECIES_GZ: &[u8] = include_bytes!(concat!(
-    env!("OUT_DIR"),
-    "/eggerthellaceae_mgr_species.spf.gz"
-));
-const EGGERTHELLACEAE_METADATA_GZ: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/eggerthellaceae.metadata.tsv.gz"));
+/// Sediment metagenomes of glacier-fed streams in nine mountain ranges
+/// (Michoud et al., 2025), an upstream and a downstream reach of each
+/// stream, profiled by SingleM (most taken from Sandpiper): 158 samples,
+/// domain to species, with the measurements made at each reach. Compressed
+/// when the program is built.
+const GLACIER_PROFILE_GZ: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/glacier_streams.spf.gz"));
+const GLACIER_METADATA_GZ: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/glacier_streams.metadata.tsv.gz"));
 
 /// The text of an example compressed by the build script.
 fn unpack(data: &[u8]) -> Result<String, String> {
@@ -94,26 +90,22 @@ pub enum Example {
     Enterotypes,
     /// Counts of sequences in coal-seam samples, with a full taxonomy.
     CoalSeamGas,
-    /// SingleM coverage of genera in 1,289 gut metagenomes of mammals.
-    EggerthellaceaeGenera,
-    /// The same samples, with the species of the three focus genera.
-    EggerthellaceaeSpecies,
+    /// SingleM coverage in 158 sediment metagenomes of glacier-fed streams.
+    GlacierFedStreams,
 }
 
 impl Example {
-    pub const ALL: [Example; 4] = [
+    pub const ALL: [Example; 3] = [
         Example::Enterotypes,
         Example::CoalSeamGas,
-        Example::EggerthellaceaeGenera,
-        Example::EggerthellaceaeSpecies,
+        Example::GlacierFedStreams,
     ];
 
     pub fn name(self) -> &'static str {
         match self {
             Example::Enterotypes => "Enterotypes",
             Example::CoalSeamGas => "Coal seam gas",
-            Example::EggerthellaceaeGenera => "Eggerthellaceae (genera)",
-            Example::EggerthellaceaeSpecies => "Eggerthellaceae (focus species)",
+            Example::GlacierFedStreams => "Glacier-fed streams",
         }
     }
 
@@ -127,15 +119,10 @@ impl Example {
                 "Coal seam microbial communities (An et al., 2013): sequence counts in 44 samples, \
                  domain to species"
             }
-            Example::EggerthellaceaeGenera => {
-                "Gut metagenomes of mammals with the Eggerthellaceae genera Equivita, Gorillivita \
-                 or Tapirivita (Parks et al., 2026): SingleM coverage of 544 genera in 1,289 \
-                 samples from Sandpiper, grouped by host"
-            }
-            Example::EggerthellaceaeSpecies => {
-                "The same 1,289 metagenomes: SingleM coverage of the species of Equivita, \
-                 Gorillivita and Tapirivita, with the rest of the community used only for \
-                 proportions"
+            Example::GlacierFedStreams => {
+                "Sediment of glacier-fed streams in nine mountain ranges (Michoud et al., 2025): \
+                 SingleM coverage, domain to species, in 158 metagenomes, an upstream and a \
+                 downstream reach of each stream, with the measurements made at each"
             }
         }
     }
@@ -2734,25 +2721,15 @@ impl StampApp {
                 }
                 Err(message) => self.notice = Some(message),
             },
-            Example::EggerthellaceaeGenera | Example::EggerthellaceaeSpecies => {
-                let genera = example == Example::EggerthellaceaeGenera;
-                let (name, profile) = if genera {
-                    ("eggerthellaceae.spf", EGGERTHELLACEAE_PROFILE_GZ)
-                } else {
-                    (
-                        "eggerthellaceae_mgr_species.spf",
-                        EGGERTHELLACEAE_SPECIES_GZ,
-                    )
-                };
-                let texts = unpack(profile).and_then(|spf| {
-                    unpack(EGGERTHELLACEAE_METADATA_GZ).map(|metadata| (spf, metadata))
-                });
+            Example::GlacierFedStreams => {
+                let texts = unpack(GLACIER_PROFILE_GZ)
+                    .and_then(|spf| unpack(GLACIER_METADATA_GZ).map(|metadata| (spf, metadata)));
                 match texts {
                     Ok((spf, metadata)) => {
-                        self.load_profile(name, &spf);
-                        self.load_metadata("eggerthellaceae.metadata.tsv", &metadata);
+                        self.load_profile("glacier_streams.spf", &spf);
+                        self.load_metadata("glacier_streams.metadata.tsv", &metadata);
                         if self.notice.is_none() {
-                            self.eggerthellaceae_settings(genera);
+                            self.glacier_settings();
                         }
                     }
                     Err(message) => self.notice = Some(message),
@@ -2761,25 +2738,27 @@ impl StampApp {
         }
     }
 
-    /// Settings the Eggerthellaceae examples start with: the lowest level,
-    /// the samples grouped by host and compared across all hosts, and
-    /// Equivita's relative abundance for correlations. The species profile
-    /// keeps the rest of the community only for calculating proportions.
-    fn eggerthellaceae_settings(&mut self, genera: bool) {
+    /// Settings the glacier-fed stream example starts with: the comparison
+    /// the two reaches of each stream were sampled for. Families, the
+    /// samples grouped by reach, downstream against upstream with a
+    /// Wilcoxon signed-rank test that pairs the two samples of a glacier,
+    /// and the Benjamini-Hochberg correction for the 1,936 families.
+    /// Correlations are with pH.
+    fn glacier_settings(&mut self) {
+        use stamp_core::stats::correction::Correction;
+        use stamp_core::stats::two_group::GroupTest;
         let session = &mut self.session;
-        session.profile_level = if genera { "Genus" } else { "Species" }.to_string();
-        if !genera {
-            session.unclassified = Unclassified::FrequencyOnly;
-        }
-        session.set_group_field("Host_group");
-        // Two groups: domestic horses against the feral horses of Sable
-        // Island, the two largest groups.
-        session.groups.group1 = "Domestic horse".to_string();
-        session.groups.group2 = Some("Feral horse (Sable Island)".to_string());
-        session.correlation.field = Some("Equivita_relab".to_string());
+        session.profile_level = "Family".to_string();
+        session.set_group_field("Reach");
+        session.groups.group1 = "Downstream".to_string();
+        session.groups.group2 = Some("Upstream".to_string());
+        session.groups.analysis.test = GroupTest::WilcoxonSignedRank;
+        session.groups.analysis.correction = Correction::BenjaminiHochberg;
+        session.groups.pair_field = Some("Glacier".to_string());
+        session.correlation.field = Some("pH".to_string());
         session.invalidate_all();
         self.apply_filters();
-        self.mode = Mode::MultipleGroups;
+        self.mode = Mode::TwoGroups;
         self.view_dirty = true;
     }
 

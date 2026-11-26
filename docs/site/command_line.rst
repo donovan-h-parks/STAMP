@@ -63,10 +63,10 @@ the other commands::
 The examples on this page use the data sets in the ``examples`` directory of
 the source repository: ``coal.spf`` (``examples/CoalSeamGas``),
 ``Enterotypes.profile.spf`` (``examples/EnterotypesArumugam``), and
-``eggerthellaceae.spf``, ``eggerthellaceae_mgr_species.spf`` and
-``eggerthellaceae.metadata.tsv`` (``examples/Eggerthellaceae``, SingleM
-profiles of gut metagenomes of mammals with curated host metadata; see
-:doc:`example_eggerthellaceae`).
+``glacier_streams.spf`` and ``glacier_streams.metadata.tsv``
+(``examples/GlacierFedStreams``, SingleM profiles of the sediment of
+glacier-fed streams, an upstream and a downstream reach of each, with the
+measurements made at each; see :doc:`example_glacier_streams`).
 
 Options common to the analyses
 ------------------------------
@@ -122,7 +122,7 @@ Choosing samples by their metadata
 no part in anything: groups, group statistics, distances, ordinations and
 plots. Groups none of whose samples are kept disappear. The number of
 samples kept is reported, for example
-``Sample filter (Host_order = Perissodactyla): kept 1202 of 1307 samples.``
+``Sample filter (Reach = Upstream; Mountain_range is not Rwenzori): kept 76 of 158 samples.``
 
 ``--where FIELD=VALUE``
    Keep samples whose value of FIELD is VALUE. Repeat it with the same field
@@ -144,10 +144,10 @@ error that lists the fields or values, which catches misspellings.
 
 ::
 
-   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
-       --field Host_group --profile-level Genus \
-       --where "Host_order=Perissodactyla" \
-       --where-not "Host_group=Feral horse (Sable Island)"
+   stamp-cli multi-groups --profile glacier_streams.spf --metadata glacier_streams.metadata.tsv \
+       --field Mountain_range --profile-level Family \
+       --where "Reach=Upstream" \
+       --where-not "Mountain_range=Rwenzori"
 
 ``--exclude-sample`` can be combined with the filter. The ``two-samples``
 command names its two samples and reads no metadata, so it has no filter.
@@ -269,10 +269,10 @@ Co-occurrence
 
 ::
 
-   stamp-cli co-occurrence --profile eggerthellaceae.spf --profile-level Genus \
-       --metadata eggerthellaceae.metadata.tsv --where Host_order=Perissodactyla \
-       --top 40 --feature Equivita --feature Tapirivita --clr \
-       --mark-min-coefficient 0.3 --plot genera.png --output genera.tsv
+   stamp-cli co-occurrence --profile glacier_streams.spf --profile-level Family \
+       --metadata glacier_streams.metadata.tsv --where Reach=Downstream \
+       --top 40 --feature JACQAP01 --feature RBC074 --clr \
+       --mark-min-coefficient 0.3 --plot families.png --output families.tsv
 
 Correlates the features with each other across the samples: every sample
 of the profile, or with ``--metadata`` those that ``--where``,
@@ -376,20 +376,20 @@ Colouring and shaping PCoA and NMDS plots
 
 ``--plot-type pcoa`` and ``nmds`` (``two-groups`` and
 ``multi-groups``) colour the samples by group unless asked otherwise; see
-:ref:`ordination-colours`. For example, the host groups (but the feral
-horses of Sable Island) by Bray-Curtis distance, coloured by the abundance
-of *Equivita* on a log scale and shaped by captivity::
+:ref:`ordination-colours`. For example, the mountain ranges (but the
+single stream of the Rwenzori) by Bray-Curtis distance, coloured by the
+abundance of Acidobacteriaceae on a log scale and shaped by reach::
 
-   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
-       --field Host_group --where-not "Host_group=Feral horse (Sable Island)" \
-       --profile-level Genus --unclassified remove \
+   stamp-cli multi-groups --profile glacier_streams.spf --metadata glacier_streams.metadata.tsv \
+       --field Mountain_range --where-not Mountain_range=Rwenzori \
+       --profile-level Family --unclassified remove \
        --plot pcoa.png --plot-type pcoa \
-       --color-by feature:Equivita --color-scale log10 --shape-by Captivity
+       --color-by feature:Acidobacteriaceae --color-scale log10 --shape-by Reach
 
 ``--color-by SOURCE``
    ``group`` (default); ``field:NAME``, a metadata field: a colour scale if
    its values are numbers (``field:Latitude``), otherwise a colour per
-   value (``field:Host_order``); ``category:NAME``, a colour per value even
+   value (``field:Country``); ``category:NAME``, a colour per value even
    for numbers; ``feature:NAME``, the abundance (% of the sample) of a
    feature at the profile level. The PCoA plot's community tests still
    compare the groups of ``--field``.
@@ -418,14 +418,14 @@ Box plots of several features
 ``--plot-type box`` (``two-groups`` and ``multi-groups``) draws the
 :ref:`box plot <plot-box-features>` of one feature or, with
 ``--plot-feature`` repeated or ``--box-top N``, of several. For example,
-three genera in the host groups of the perissodactyls on a log axis, with
-every sample as a point, the groups ordered by their median::
+three families in the upstream reaches of each mountain range on a log
+axis, with every sample as a point, the groups ordered by their median::
 
-   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
-       --field Host_group --where Host_order=Perissodactyla \
-       --profile-level Genus --unclassified remove \
-       --plot box.png --plot-type box --plot-feature Equivita \
-       --plot-feature Tapirivita --plot-feature Gorillivita \
+   stamp-cli multi-groups --profile glacier_streams.spf --metadata glacier_streams.metadata.tsv \
+       --field Mountain_range --where Reach=Upstream \
+       --profile-level Family --unclassified remove \
+       --plot box.png --plot-type box --plot-feature Acidobacteriaceae \
+       --plot-feature Nitrospiraceae --plot-feature Leptolyngbyaceae \
        --box-log --box-points --box-counts --box-group-order median
 
 ``--box-top N``
@@ -451,7 +451,7 @@ every sample as a point, the groups ordered by their median::
    ``median`` (highest median of the first feature first) or ``field``, by
    the value of a metadata field most common among each group's samples
    (the default when ``--box-order-field`` is given), for example
-   ``--box-order-field Host_order``.
+   ``--box-order-field Hemisphere``.
 ``--bar-log``
    A log10 axis for the bar plot of one feature in every sample.
 
@@ -463,15 +463,14 @@ Prevalence-abundance plot
 ``--plot-type prevalence-abundance`` (``two-groups`` and ``multi-groups``)
 draws the :ref:`prevalence-abundance plot <plot-prevalence-abundance>` of
 every feature of the profile level, whatever the filters (unless
-``--prevalence-only-filtered``). For example, the genera of every host group
-but the unknown and environmental samples, three of them named::
+``--prevalence-only-filtered``). For example, the families of every
+mountain range but the Rwenzori, three of them named::
 
-   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
-       --field Host_group --where-not Host_group=Unknown \
-       --where-not Host_group=Environmental \
-       --profile-level Genus --unclassified remove \
+   stamp-cli multi-groups --profile glacier_streams.spf --metadata glacier_streams.metadata.tsv \
+       --field Mountain_range --where-not Mountain_range=Rwenzori \
+       --profile-level Family --unclassified remove \
        --plot prevalence.png --plot-type prevalence-abundance \
-       --highlight Equivita --highlight Tapirivita --highlight Gorillivita \
+       --highlight Acidobacteriaceae --highlight Nitrospiraceae --highlight Leptolyngbyaceae \
        --prevalence-table prevalence.tsv
 
 ``--prevalence-view``
@@ -504,17 +503,18 @@ longitude fields of the metadata. Markers are coloured and shaped with
 ``--draw-order``, ``--marker-size`` (the smallest markers) and ``--opacity``,
 as for the :ref:`ordination plots <cli-ordination-colours>`; in the
 correlation command the groups are those of ``--group-field``. For
-example, a world map of the host groups, one marker per site sized by its
-number of samples, and the great apes alone coloured by the abundance of
-*Gorillivita* (the area is then found around them, at 1:50m)::
+example, a world map of the mountain ranges, one marker per site sized by
+its number of samples, and the European Alps alone coloured by the
+abundance of Acidobacteriaceae (the area is then found around them, at
+1:50m)::
 
-   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
-       --field Host_group --profile-level Genus \
+   stamp-cli multi-groups --profile glacier_streams.spf --metadata glacier_streams.metadata.tsv \
+       --field Mountain_range --profile-level Family \
        --plot map.png --plot-type map --map-extent world
 
-   stamp-cli multi-groups --profile eggerthellaceae.spf --metadata eggerthellaceae.metadata.tsv \
-       --field Country --where "Host_group=Great apes" --profile-level Genus \
-       --plot apes.png --plot-type map --color-by feature:Gorillivita
+   stamp-cli multi-groups --profile glacier_streams.spf --metadata glacier_streams.metadata.tsv \
+       --field Reach --where "Mountain_range=European Alps" --profile-level Family \
+       --plot alps.png --plot-type map --color-by feature:Acidobacteriaceae
 
 ``--map-lat-field FIELD``, ``--map-lon-field FIELD``
    The fields holding latitude and longitude in decimal degrees (an ``N``,
@@ -561,13 +561,13 @@ Group heatmap
 the :ref:`group heatmap <plot-group-heatmap>`: features against groups, each
 cell a summary of the feature in the group's samples. It summarises the
 features that pass the filters, so filter with care. For example, the
-prevalence of species in each host species, the hosts ordered by their
-order::
+prevalence of phyla in each country, the countries ordered by their
+mountain range::
 
-   stamp-cli multi-groups --profile eggerthellaceae_mgr_species.spf \
-       --metadata eggerthellaceae.metadata.tsv --unclassified frequency-only \
-       --field Host_species --plot prevalence.png --plot-type group-heatmap \
-       --heatmap-statistic prevalence --heatmap-order-field Host_order \
+   stamp-cli multi-groups --profile glacier_streams.spf \
+       --metadata glacier_streams.metadata.tsv --profile-level Phylum \
+       --field Country --plot prevalence.png --plot-type group-heatmap \
+       --heatmap-statistic prevalence --heatmap-order-field Mountain_range \
        --heatmap-table prevalence.tsv
 
 ``--heatmap-statistic``

@@ -1873,12 +1873,7 @@ fn both_built_in_examples_load() {
     use stamp_gui::app::Example;
     assert_eq!(
         Example::ALL.map(Example::name),
-        [
-            "Enterotypes",
-            "Coal seam gas",
-            "Eggerthellaceae (genera)",
-            "Eggerthellaceae (focus species)"
-        ]
+        ["Enterotypes", "Coal seam gas", "Glacier-fed streams"]
     );
     let mut harness = Harness::new();
     harness.app.load_example_data(Example::CoalSeamGas);
@@ -1964,81 +1959,97 @@ fn an_uncertain_storey_estimate_is_not_used_and_says_so() {
 }
 
 #[test]
-fn eggerthellaceae_examples_load_with_their_own_settings() {
+fn glacier_example_loads_with_its_own_settings() {
+    use stamp_core::stats::correction::Correction;
+    use stamp_core::stats::two_group::GroupTest;
     use stamp_gui::app::Example;
     let mut harness = Harness::new();
-    harness
-        .app
-        .load_example_data(Example::EggerthellaceaeGenera);
+    harness.app.load_example_data(Example::GlacierFedStreams);
     harness.settle();
     assert_eq!(harness.app.notice(), None);
     let session = &harness.app.session;
-    let tree = session.tree.as_ref().expect("the genus profile loaded");
-    assert_eq!(tree.num_samples(), 1289);
-    assert_eq!(tree.hierarchy_headings().len(), 6);
+    let tree = session.tree.as_ref().expect("the profile loaded");
+    assert_eq!(tree.num_samples(), 158);
+    assert_eq!(tree.hierarchy_headings().len(), 7);
     // The same data as the file in the repository.
     let from_file =
-        stamp_core::ProfileTree::read(&example("Eggerthellaceae/eggerthellaceae.spf")).unwrap();
+        stamp_core::ProfileTree::read(&example("GlacierFedStreams/glacier_streams.spf")).unwrap();
     assert_eq!(tree.num_leaves(), from_file.num_leaves());
     assert_eq!(
-        tree.sample_total("SAMD01733366"),
-        from_file.sample_total("SAMD01733366")
+        tree.sample_total("GL100_DN"),
+        from_file.sample_total("GL100_DN")
     );
-    // Its own starting settings: genera, compared across hosts.
-    assert_eq!(session.profile_level, "Genus");
-    assert_eq!(session.group_field.as_deref(), Some("Host_group"));
-    assert_eq!(harness.app.mode, Mode::MultipleGroups);
-    assert_eq!(session.multi.active_groups.len(), 13);
-    assert_eq!(session.groups.group1, "Domestic horse");
+    // Its own starting settings: families, downstream against upstream
+    // reach of each glacier's stream, as pairs.
+    assert_eq!(session.profile_level, "Family");
+    assert_eq!(session.group_field.as_deref(), Some("Reach"));
+    assert_eq!(harness.app.mode, Mode::TwoGroups);
+    assert_eq!(session.groups.group1, "Downstream");
+    assert_eq!(session.groups.group2.as_deref(), Some("Upstream"));
+    assert_eq!(session.groups.analysis.test, GroupTest::WilcoxonSignedRank);
     assert_eq!(
-        session.groups.group2.as_deref(),
-        Some("Feral horse (Sable Island)")
+        session.groups.analysis.correction,
+        Correction::BenjaminiHochberg
     );
-    assert_eq!(session.correlation.field.as_deref(), Some("Equivita_relab"));
-    assert!(session.error(Mode::MultipleGroups).is_none());
-    // The multiple-group test ran over the genera (unclassified rows are
-    // features too, as unclassified reads are retained by default).
-    let (total, passing) = session.feature_counts(Mode::MultipleGroups);
-    assert_eq!(total, 544, "{total} features");
-    assert!(passing > 0 && passing < total);
-    assert!(!harness.app.results_table().rows.is_empty());
+    assert_eq!(session.groups.pair_field.as_deref(), Some("Glacier"));
+    assert_eq!(session.correlation.field.as_deref(), Some("pH"));
+    assert!(session.error(Mode::TwoGroups).is_none());
+    // 73 glaciers have a sample of both reaches.
+    assert_eq!(
+        session.groups.pairing.as_deref(),
+        Some("73 pairs; 12 samples without a partner left out")
+    );
+    let (profile, results) = session.groups.output.as_ref().unwrap();
+    assert_eq!(profile.samples_in_group1().len(), 73);
+    assert_eq!(results.rows.len(), 1936);
+    // Twenty-three families differ between the reaches at q <= 0.05, the
+    // family JACQAP01 most of all.
+    let significant: Vec<&str> = results
+        .rows
+        .iter()
+        .filter(|r| r.p_value_corrected <= 0.05)
+        .map(|r| r.feature.as_str())
+        .collect();
+    assert_eq!(significant.len(), 23, "{significant:?}");
+    assert!(significant.contains(&"JACQAP01") && significant.contains(&"RBC074"));
+    harness.screenshot("glacier_two_groups");
 
-    // The sample heatmap refuses this many samples and points to the
-    // group heatmap, which draws them.
-    harness.app.set_plot_kind(PlotKind::Heatmap);
+    // The box plot joins the two reaches of each stream.
+    harness.app.select_feature("JACQAP01");
+    harness.app.set_plot_kind(PlotKind::Box);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.box_plot.show_pairs = true;
+    harness.app.set_plot_settings(settings);
     harness.settle();
-    let texts = figure_texts(&harness.app);
-    assert!(
-        texts[0].contains("limited to 1000 samples, and there are 1289"),
-        "{texts:?}"
-    );
-    assert!(texts.iter().any(|t| t.contains("group heatmap")));
-    harness.app.set_plot_kind(PlotKind::GroupHeatmap);
-    harness.settle();
-    assert!(harness.app.figure().shapes.len() > 100);
-    harness.screenshot("eggerthellaceae_group_heatmap");
+    assert!(harness
+        .app
+        .figure()
+        .regions
+        .iter()
+        .any(|r| r.tooltip.contains("73 pairs\nHigher in Downstream: 56")));
+    harness.screenshot("glacier_box_pairs");
     // Coverage is not counts, so there is nothing to rarefy.
     harness.app.set_plot_kind(PlotKind::Rarefaction);
     harness.settle();
     assert_eq!(figure_texts(&harness.app).len(), 1);
 
-    harness
-        .app
-        .load_example_data(Example::EggerthellaceaeSpecies);
+    // The mountain ranges, and the correlation with pH.
+    harness.app.session.set_group_field("Mountain_range");
+    harness.app.set_mode(Mode::MultipleGroups);
     harness.settle();
-    assert_eq!(harness.app.notice(), None);
     let session = &harness.app.session;
-    assert_eq!(session.profile_name, "eggerthellaceae_mgr_species.spf");
-    assert_eq!(session.tree.as_ref().unwrap().num_samples(), 1289);
-    assert_eq!(session.profile_level, "Species");
-    assert_eq!(
-        session.unclassified,
-        stamp_core::Unclassified::FrequencyOnly
-    );
-    assert_eq!(harness.app.mode, Mode::MultipleGroups);
-    // The named species only: the rest of the community and the coverage
-    // placed only in a genus are not features.
-    assert_eq!(session.feature_counts(Mode::MultipleGroups).0, 15);
+    assert!(session.error(Mode::MultipleGroups).is_none());
+    assert_eq!(session.multi.active_groups.len(), 9);
+    assert_eq!(session.feature_counts(Mode::MultipleGroups).0, 1936);
+    harness.app.set_plot_kind(PlotKind::Map);
+    harness.settle();
+    assert!(figure_texts(&harness.app)
+        .iter()
+        .any(|t| t.starts_with("158 samples at")));
+    harness.screenshot("glacier_map");
+    harness.app.set_mode(Mode::Correlation);
+    harness.settle();
+    assert!(harness.app.session.error(Mode::Correlation).is_none());
 }
 
 #[test]

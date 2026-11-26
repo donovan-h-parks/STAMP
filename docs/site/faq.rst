@@ -83,8 +83,8 @@ Can STAMP analyse profiles of coverage, such as SingleM's?
    Yes, for analyses that compare proportions: the group tests, the
    correlation, and most plots. Rarefaction, Chao1 and the count-based tests
    of two samples need counts of sequences, and STAMP refuses those that
-   need whole numbers. The Eggerthellaceae example data are SingleM
-   coverage; :doc:`example_eggerthellaceae` works through them.
+   need whole numbers. The glacier-fed stream example data are SingleM
+   coverage; :doc:`example_glacier_streams` works through them.
 
 The heatmap says it is limited to 1,000 samples. What can I do?
    A heatmap of more samples than that cannot show them legibly. Use the

@@ -49,7 +49,7 @@ trunk build --release            # writes the site to crates/stamp-gui/dist
 trunk serve --release            # or: build and open it at http://127.0.0.1:8080
 ```
 
-In the browser, files are opened with the browser's file picker and results are saved as downloads. File > Open example data loads one of the built-in datasets: Enterotypes, Coal seam gas, and Eggerthellaceae (1,289 gut metagenomes of mammals profiled by SingleM, as genera or as the species of three focus genera; see `examples/Eggerthellaceae/readme.txt`). Analyses run on the page's single thread, a few features at a time, so the page keeps responding and shows progress during a long resampling test; White's test is the exception and holds the page until it finishes.
+In the browser, files are opened with the browser's file picker and results are saved as downloads. File > Open example data loads one of the built-in datasets: Enterotypes, Coal seam gas, and Glacier-fed streams (158 sediment metagenomes of glacier-fed streams profiled by SingleM, an upstream and a downstream reach of each stream; see `examples/GlacierFedStreams/readme.txt`). Analyses run on the page's single thread, a few features at a time, so the page keeps responding and shows progress during a long resampling test; White's test is the exception and holds the page until it finishes.
 
 ### Command line
 
@@ -112,11 +112,19 @@ stamp-cli multi-groups --profile examples/EnterotypesArumugam/Enterotypes.profil
     --metadata examples/EnterotypesArumugam/Enterotypes.metadata.tsv --field Enterotype \
     --where Nationality=japanese --where Nationality=french --where-not Enterotype=Infant
 
-# Group heatmap: mean percentage of three genera in each host group (1,289 SingleM profiles)
-stamp-cli multi-groups --profile examples/Eggerthellaceae/eggerthellaceae_mgr_species.spf \
-    --metadata examples/Eggerthellaceae/eggerthellaceae.metadata.tsv --field Host_group \
-    --profile-level Genus --unclassified frequency-only \
-    --plot genera_by_host.png --plot-type group-heatmap --heatmap-scale log10 --heatmap-values
+# Paired test: families that differ between the downstream and upstream reach of each
+# glacier-fed stream (158 SingleM profiles), with a line per stream in the box plot
+stamp-cli two-groups --profile examples/GlacierFedStreams/glacier_streams.spf \
+    --metadata examples/GlacierFedStreams/glacier_streams.metadata.tsv --field Reach \
+    --group1 Downstream --group2 Upstream --pair-field Glacier --test wilcoxon \
+    --profile-level Family --correction benjamini-hochberg --significance 0.05 \
+    --output reach.tsv --plot reach.png --plot-type box --box-pairs --box-log
+
+# Group heatmap: mean percentage of the most abundant phyla in each mountain range
+stamp-cli multi-groups --profile examples/GlacierFedStreams/glacier_streams.spf \
+    --metadata examples/GlacierFedStreams/glacier_streams.metadata.tsv --field Mountain_range \
+    --profile-level Phylum --plot phyla_by_range.png --plot-type group-heatmap \
+    --heatmap-top 20 --heatmap-scale log10 --heatmap-values
 
 # Convert another tool's output to a STAMP profile
 stamp-cli convert profiles examples/input_file_formats/Kraken2 --output kraken.spf

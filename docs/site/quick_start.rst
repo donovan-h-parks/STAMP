@@ -114,9 +114,9 @@ Next steps
 ----------
 
 * Load your own data: see :doc:`input_files`.
-* Work through a larger data set, 1,289 gut metagenomes of mammals with
-  many host groups (**File > Open example data > Eggerthellaceae**): see
-  :doc:`example_eggerthellaceae`.
+* Work through a larger data set, 158 metagenomes of glacier-fed streams
+  sampled as pairs in nine mountain ranges (**File > Open example data >
+  Glacier-fed streams**): see :doc:`example_glacier_streams`.
 * Learn what each test does and how to read it: :doc:`statistics` and
   :doc:`choosing_a_test`.
 * Learn what each plot shows: :doc:`plots`.

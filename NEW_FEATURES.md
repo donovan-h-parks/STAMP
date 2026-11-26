@@ -101,15 +101,16 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Built-in example data.** File > Open example data offers datasets
   without any files: "Enterotypes" (proportions of phyla and genera in gut
   samples), "Coal seam gas" (sequence counts with a full taxonomy, which
-  suits the rarefaction curves) [26], and "Eggerthellaceae (genera)" and
-  "Eggerthellaceae (focus species)": SingleM coverage from Sandpiper of
-  1,289 gut metagenomes of mammals containing Equivita, Gorillivita or
-  Tapirivita (Parks et al. 2026), with curated host, captivity and location
-  metadata (`examples/Eggerthellaceae`). These open in the multiple-group
-  analysis grouped by host, at genus or species level (the species profile
-  with unclassified coverage used only for proportions). The documentation
-  has a worked example on them (`docs/site/example_eggerthellaceae.rst`):
-  group heatmap, log box plot with a sample filter, map, co-occurrence.
+  suits the rarefaction curves) [26], and "Glacier-fed streams": SingleM
+  coverage, domain to species, of 158 sediment metagenomes of glacier-fed
+  streams in nine mountain ranges (Michoud et al. 2025), an upstream and a
+  downstream reach of each stream, with the measurements made at each
+  (`examples/GlacierFedStreams`). It opens in the two-group analysis with
+  the downstream reaches compared with the upstream ones by the Wilcoxon
+  signed-rank test, paired by glacier. The documentation has a worked
+  example on it (`docs/site/example_glacier_streams.rst`): map, PCoA and
+  group heatmap of the mountain ranges, the paired test with the paired
+  box plot, correlation with pH, co-occurrence.
 - **Online documentation** (`docs/site`, published beside the browser
   version), replacing v2's PDF user's guide: installation, a quick start on
   the example data, every control of the window and command, and pages

@@ -227,109 +227,98 @@ fn singlem_and_sandpiper_give_the_same_profile() {
     }
 }
 
-/// The Eggerthellaceae example (SingleM coverage from Sandpiper, built into
-/// the application): the profiles and metadata agree with each other, and a
-/// test across the thirteen host groups runs on them.
+/// The glacier-fed stream example (SingleM coverage, built into the
+/// application): the profile and metadata agree with each other, and the
+/// paired test between the two reaches of each stream runs on them.
 #[test]
-fn eggerthellaceae_example() {
+fn glacier_fed_streams_example() {
     use stamp_core::stats::correction::Correction;
-    use stamp_core::stats::multi_group::{MultiGroupEffectSize, MultiGroupTest};
-    use stamp_core::stats::results::{run_multi_group_analysis, MultiGroupAnalysis, Transform};
+    use stamp_core::stats::results::{run_group_analysis, GroupAnalysis, Transform};
     use stamp_core::stats::rng_from_seed;
-    use stamp_core::{Metadata, Unclassified};
+    use stamp_core::stats::two_group::GroupTest;
+    use stamp_core::stats::TestType;
+    use stamp_core::{Metadata, SecondGroup, Unclassified};
 
-    let tree = ProfileTree::read(&read("examples/Eggerthellaceae/eggerthellaceae.spf")).unwrap();
-    assert_eq!(tree.num_samples(), 1289);
+    let tree = ProfileTree::read(&read("examples/GlacierFedStreams/glacier_streams.spf")).unwrap();
+    assert_eq!(tree.num_samples(), 158);
     assert_eq!(
         tree.hierarchy_headings(),
-        ["Domain", "Phylum", "Class", "Order", "Family", "Genus"]
+        ["Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species"]
     );
     let (metadata, warnings) = Metadata::read(
-        &read("examples/Eggerthellaceae/eggerthellaceae.metadata.tsv"),
+        &read("examples/GlacierFedStreams/glacier_streams.metadata.tsv"),
         &tree,
     )
     .unwrap();
     assert!(warnings.is_empty(), "{warnings:?}");
-    assert_eq!(metadata.samples().len(), 1289);
-    let hosts = metadata.groups("Host_group").unwrap();
-    assert_eq!(hosts.names().count(), 13);
+    assert_eq!(metadata.samples().len(), 158);
     assert_eq!(
-        hosts.samples("Feral horse (Sable Island)").unwrap().len(),
-        682
+        metadata.groups("Mountain_range").unwrap().names().count(),
+        9
     );
-
-    let profile = tree
-        .multi_group_profile(&hosts, None, None, "Genus", Unclassified::Retain)
-        .unwrap();
-    assert_eq!(profile.profile.num_features(), 544);
-    // The relative abundance of each focus genus in the metadata was taken
-    // from the full profile; the "unclassified other" rows keep each
-    // sample's total, so the reduced profile gives the same percentages to
-    // within the rounding of its values to three significant digits. (For
-    // a BioSample of several runs the metadata holds the mean of the runs'
-    // percentages, and the profile the mean of their coverage, which differ.)
-    let samples = &profile.profile.sample_names;
-    let mut compared = 0;
-    for genus in ["Equivita", "Gorillivita", "Tapirivita"] {
-        let feature = profile.profile.feature(genus).unwrap();
-        let percentages = profile.profile.percentages(feature);
-        let field = format!("{genus}_relab");
-        for (sample, &percent) in samples.iter().zip(&percentages) {
-            if metadata.value(sample, "Runs").unwrap().contains(',') {
-                continue;
-            }
-            let expected: f64 = metadata.value(sample, &field).unwrap().parse().unwrap();
-            assert!(
-                (percent - expected).abs() <= 0.01 * expected.max(0.01),
-                "{genus} in {sample}: {percent} against {expected}"
-            );
-            compared += 1;
-        }
+    let reaches = metadata.groups("Reach").unwrap();
+    assert_eq!(reaches.samples("Downstream").unwrap().len(), 81);
+    assert_eq!(reaches.samples("Upstream").unwrap().len(), 77);
+    // The total coverage in the metadata is that of the profile.
+    for sample in ["GL100_DN", "GL140_UP_1", "GL7_UP"] {
+        let expected: f64 = metadata
+            .value(sample, "Total_coverage")
+            .unwrap()
+            .parse()
+            .unwrap();
+        let total = tree.sample_total(sample).unwrap();
+        assert!((total - expected).abs() < 0.06, "{sample}: {total}");
     }
-    assert!(compared > 3 * 1250, "{compared}");
 
-    let analysis = MultiGroupAnalysis {
-        test: MultiGroupTest::KruskalWallis,
-        effect_size: MultiGroupEffectSize::EtaSquared,
+    // Downstream against upstream reach, the two samples of a glacier as a
+    // pair: 73 glaciers have both.
+    let pairing = metadata
+        .paired_groups(&reaches, "Downstream", "Upstream", "Glacier")
+        .unwrap();
+    assert_eq!(
+        pairing.summary(),
+        "73 pairs; 12 samples without a partner left out"
+    );
+    let profile = tree
+        .group_profile(
+            &pairing.groups,
+            "Downstream",
+            SecondGroup::Named("Upstream"),
+            None,
+            "Family",
+            Unclassified::Retain,
+        )
+        .unwrap();
+    assert_eq!(profile.profile.num_features(), 1936);
+    let analysis = GroupAnalysis {
+        test: GroupTest::WilcoxonSignedRank,
+        test_type: TestType::TwoSided,
+        coverage: 0.95,
         correction: Correction::BenjaminiHochberg,
         transform: Transform::None,
     };
-    let results =
-        run_multi_group_analysis(&profile, analysis, &mut rng_from_seed(1), &mut |_, _| true)
-            .unwrap();
-    assert_eq!(results.rows.len(), 544);
-    // Gorillivita lives in great apes: its mean is highest there, and the
-    // hosts differ.
+    let settings = stamp_core::stats::StatsSettings::default();
+    let results = run_group_analysis(
+        &profile,
+        analysis,
+        &settings,
+        &mut rng_from_seed(1),
+        &mut |_, _| true,
+    )
+    .unwrap();
+    assert_eq!(results.rows.len(), 1936);
+    let significant = results
+        .rows
+        .iter()
+        .filter(|r| r.p_value_corrected <= 0.05)
+        .count();
+    assert_eq!(significant, 23);
+    // JACQAP01 is more abundant downstream.
     let row = results
         .rows
         .iter()
-        .find(|r| r.feature == "Gorillivita")
+        .find(|r| r.feature == "JACQAP01")
         .unwrap();
-    let apes = profile
-        .group_names
-        .iter()
-        .position(|g| g == "Great apes")
-        .unwrap();
-    let highest = (0..row.group_means.len())
-        .max_by(|&a, &b| row.group_means[a].total_cmp(&row.group_means[b]))
-        .unwrap();
-    assert_eq!(highest, apes);
-    assert!(row.p_value_corrected < 1e-10, "{}", row.p_value_corrected);
-
-    // The focus-species profile: proportions of the whole community, with
-    // the rest of it and the coverage given only to a genus left out as
-    // features.
-    let species = ProfileTree::read(&read(
-        "examples/Eggerthellaceae/eggerthellaceae_mgr_species.spf",
-    ))
-    .unwrap();
-    assert_eq!(species.num_samples(), 1289);
-    let profile = species
-        .multi_group_profile(&hosts, None, None, "Species", Unclassified::FrequencyOnly)
-        .unwrap();
-    assert_eq!(profile.profile.num_features(), 15);
-    let results =
-        run_multi_group_analysis(&profile, analysis, &mut rng_from_seed(1), &mut |_, _| true)
-            .unwrap();
-    assert_eq!(results.rows.len(), 15);
+    assert!(row.p_value_corrected < 1e-3, "{}", row.p_value_corrected);
+    assert!(row.effect_size > 0.0);
 }

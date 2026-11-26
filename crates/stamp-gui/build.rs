@@ -4,8 +4,8 @@
 
 /// Write a gzip-compressed copy of an example file to the build directory,
 /// for the program to carry inside it. The coal-seam profile is 4 MB of
-/// text and about 80 kB compressed, the Eggerthellaceae profile 2.3 MB and
-/// 540 kB, which matters for the web page.
+/// text and about 80 kB compressed, the glacier-fed stream profile 6 MB and
+/// 890 kB, which matters for the web page.
 fn compress_example(source: &str, name: &str) {
     use std::io::Write;
     println!("cargo:rerun-if-changed={source}");
@@ -21,13 +21,9 @@ fn compress_example(source: &str, name: &str) {
 
 fn main() {
     compress_example("../../examples/CoalSeamGas/coal.spf", "coal.spf.gz");
-    let eggerthellaceae = "../../examples/Eggerthellaceae";
-    for name in [
-        "eggerthellaceae.spf",
-        "eggerthellaceae.metadata.tsv",
-        "eggerthellaceae_mgr_species.spf",
-    ] {
-        compress_example(&format!("{eggerthellaceae}/{name}"), &format!("{name}.gz"));
+    let glacier = "../../examples/GlacierFedStreams";
+    for name in ["glacier_streams.spf", "glacier_streams.metadata.tsv"] {
+        compress_example(&format!("{glacier}/{name}"), &format!("{name}.gz"));
     }
     println!("cargo:rerun-if-changed=assets/stamp.ico");
     // Whenever the program is built for Windows, on Windows or cross-compiled

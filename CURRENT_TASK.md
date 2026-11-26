@@ -6,6 +6,34 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-26, the glacier-fed stream session):
+**glacier-fed streams replace the Eggerthellaceae examples**. Asked for:
+add the 158 analysed glacier-fed stream samples and metadata as an example
+data set; remove the Eggerthellaceae data sets as examples. Done:
+`examples/GlacierFedStreams/` (glacier_streams.spf, 158 samples x 12,446
+species rows, Domain to Species, SingleM coverage; metadata 38 columns;
+readme.txt), written by
+`/srv/projects/donovan/stamp/glacier-fed/scripts/make_example.py` from the
+data set documented in that directory's GLACIER_FED.md.
+`examples/Eggerthellaceae/` and docs/site/images/egg_*.png deleted (git
+rm). GUI: `Example::GlacierFedStreams` ("Glacier-fed streams") replaces the
+two Eggerthellaceae entries (build.rs compresses the two files, 890 kB in
+the binary against 550 kB before); it opens in Two groups at Family level,
+Downstream vs Upstream, Wilcoxon signed-rank paired by Glacier,
+Benjamini-Hochberg (`glacier_settings` in app.rs), correlation field pH.
+Tests: ui.rs `glacier_example_loads_with_its_own_settings` (23 families at
+q <= 0.05, paired box plot, map), import_examples.rs
+`glacier_fed_streams_example`, golden_profiles.rs list. Docs:
+`example_glacier_streams.rst` replaces `example_eggerthellaceae.rst`
+(figures images/glacier_*.png, made with the commands on the page at
+--plot-dpi 100); every Eggerthellaceae command in command_line.rst
+rewritten for the new data and run once; input_files, faq, quick_start,
+plots, index, README, NEW_FEATURES updated. Checks: fmt, clippy native and
+wasm32, whole test suite pass; Sphinx built with -W at commit time
+(the profiler session), so the new page's cross-references are checked. The sample
+heatmap's 1,000-sample refusal is no longer shown by an example (still
+tested in stamp-plot/src/heatmap.rs).
+
 Finished and committed (2026-11-26): **gzip-compressed input files**.
 Asked for: gzip all the example input files; make STAMP read compressed or
 plain profile and metadata files. Done: `stamp_core::text::{is_gzip,
