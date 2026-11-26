@@ -18,9 +18,9 @@ use eframe::egui::{self, style, Color32};
 /// A colour scheme of the window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum ColorScheme {
-    #[default]
     Dark,
     Light,
+    #[default]
     ClassicLight,
     CatppuccinLatte,
     CatppuccinFrappe,

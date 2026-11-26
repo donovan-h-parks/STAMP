@@ -927,7 +927,7 @@ impl Default for Saved {
     fn default() -> Self {
         let session = Session::default();
         Saved {
-            dark_mode: true,
+            dark_mode: ColorScheme::default().is_dark(),
             color_scheme: None,
             show_profile_panel: true,
             show_properties_panel: true,
@@ -1330,7 +1330,7 @@ impl StampApp {
             metadata_filter: MetadataFilterUi::default(),
             highlight_level: None,
             highlight_value: String::new(),
-            show_table: false,
+            show_table: true,
             show_about: false,
             show_wizard: false,
             wizard: crate::wizard::Wizard::default(),

@@ -399,7 +399,8 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Colour schemes** [27]: Settings > Preferences > Colour scheme chooses dark, light,
   "Classic light" (STAMP v2's colours: grey panels, white boxes and plot
   area), one of the four Catppuccin schemes (Latte, Frappé, Macchiato, Mocha), or
-  Solarized Light or Dark (`crates/stamp-gui/src/theme.rs`).
+  Solarized Light or Dark (`crates/stamp-gui/src/theme.rs`). Classic light
+  is the default.
 - **A colour for each group**, kept across every plot and chosen with a
   colour picker in the group list [27, 28].
 - **Sortable tables.** The feature, results and metadata tables sort by any

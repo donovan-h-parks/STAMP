@@ -424,6 +424,11 @@ fn built_in_example_and_opened_files_are_loaded() {
 #[test]
 fn plot_is_centred_in_its_space() {
     let mut harness = Harness::enterotypes();
+    // A scheme whose margin around the page is not white, as Classic
+    // light's is.
+    harness
+        .app
+        .set_color_scheme(&harness.renderer.ctx, ColorScheme::Light);
     // The plot has the room beside the panels to itself.
     harness.app.show_feature_table(false);
     harness.settle();
@@ -510,6 +515,9 @@ fn colour_schemes() {
     use stamp_gui::app::Saved;
     let mut harness = Harness::enterotypes();
     harness.settle();
+    // Classic light, in STAMP v2's colours, is the scheme of a first run.
+    assert_eq!(harness.app.color_scheme(), ColorScheme::ClassicLight);
+    assert_eq!(ColorScheme::default(), ColorScheme::ClassicLight);
     let panel = |image: &Image| image.pixel(140, 600);
     let brightness =
         |pixel: egui::Color32| u32::from(pixel.r()) + u32::from(pixel.g()) + u32::from(pixel.b());
@@ -730,6 +738,8 @@ fn light_mode_text_is_black() {
 #[test]
 fn metadata_table_switches_samples_off() {
     let mut harness = Harness::enterotypes();
+    // Nothing along the bottom yet (the Results table is shown at start).
+    harness.app.show_results_table(false);
     harness.settle();
     let (_, tall) = harness.app.plot_placement.unwrap();
     harness.app.show_metadata_table(true);

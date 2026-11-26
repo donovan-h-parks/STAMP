@@ -138,9 +138,10 @@ bar at the bottom of the window, with a **Cancel** button:
 Tables
 ------
 
-* **View > Results table** shows the full results along the bottom of the
-  window: every feature with its hierarchy, statistics and the counts of
-  every sample, as saved by **File > Save results table**. *Show only active
+* **View > Results table** (shown when STAMP starts) shows the full results
+  along the bottom of the window: every feature with its hierarchy,
+  statistics and the counts of every sample, as saved by **File > Save
+  results table**. *Show only active
   features* hides those removed by the filters; **Download** saves the
   table.
 * **View > Metadata table** shows the metadata along the bottom of the
@@ -246,9 +247,9 @@ Preferences
 
 **Settings > Preferences** holds settings that apply everywhere:
 
-* the **colour scheme** of the window: **Dark** (the default), **Light**,
-  **Classic light** (the colours of STAMP v2: grey panels, white boxes and
-  a white plot area), one of the four `Catppuccin <https://catppuccin.com>`_ schemes, **Latte**
+* the **colour scheme** of the window: **Classic light** (the default;
+  the colours of STAMP v2: grey panels, white boxes and a white plot
+  area), **Dark**, **Light**, one of the four `Catppuccin <https://catppuccin.com>`_ schemes, **Latte**
   (light), **Frappé**, **Macchiato** and **Mocha** (dark), or `Solarized
   <https://ethanschoonover.com/solarized/>`_ **Light** or **Dark**. Plots
   keep their own colours, on a white page, whatever the scheme;
