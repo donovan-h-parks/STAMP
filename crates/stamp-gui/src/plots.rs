@@ -1662,6 +1662,26 @@ fn community_work(
 
 /// The plots drawn from the proportions of every feature in some samples
 /// and their groups: shared features and rank-abundance curves.
+/// Each sample's value of the metadata field the composition plot sorts
+/// its samples by, if it sorts them by one.
+fn composition_sort_keys(
+    session: &Session,
+    settings: &PlotSettings,
+    samples: &[String],
+) -> Vec<String> {
+    let options = &settings.composition;
+    let (Some(field), Some(metadata)) = (&options.sort_field, &session.metadata) else {
+        return Vec::new();
+    };
+    if options.sample_order != composition::SampleOrder::MetadataField {
+        return Vec::new();
+    }
+    samples
+        .iter()
+        .map(|s| metadata.value(s, field).unwrap_or("").to_string())
+        .collect()
+}
+
 fn proportion_plot(kind: PlotKind, data: &composition::Data, settings: &PlotSettings) -> Figure {
     match kind {
         PlotKind::SharedFeatures => {
@@ -2209,6 +2229,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         vec![profile.group_name1.clone(), profile.group_name2.clone()],
                     );
                     data.group_colors = vec![color1, color2];
+                    data.sort_keys = composition_sort_keys(session, settings, &data.samples);
                     if kind == PlotKind::Composition {
                         composition::plot(&data, &settings.composition)
                     } else {
@@ -2550,6 +2571,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         profile.group_names.clone(),
                     );
                     data.group_colors = colors.clone();
+                    data.sort_keys = composition_sort_keys(session, settings, &data.samples);
                     if kind == PlotKind::Composition {
                         composition::plot(&data, &settings.composition)
                     } else {

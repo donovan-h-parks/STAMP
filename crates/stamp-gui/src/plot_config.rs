@@ -1360,7 +1360,41 @@ pub fn show(
                     );
                 }
                 rows.count("Features to show:", &mut o.features_to_show, 1..=50);
-                rows.check("Label bars", &mut o.label_bars);
+                // How the bars of each sample are arranged within their
+                // groups (two samples are each their own group).
+                let each_sample = o.bars == composition::Bars::Samples;
+                let orders: Vec<(composition::SampleOrder, &str)> = composition::SampleOrder::ALL
+                    .iter()
+                    .map(|&order| (order, order.name()))
+                    .collect();
+                rows.choice_if(
+                    each_sample && mode != Mode::TwoSamples,
+                    "Sort samples by:",
+                    &mut o.sample_order,
+                    &orders,
+                );
+                if o.sample_order == composition::SampleOrder::MetadataField {
+                    let mut fields: Vec<(Option<String>, &str)> = vec![(None, "(choose a field)")];
+                    fields.extend(context.fields.iter().map(|f| (Some(f.clone()), f.as_str())));
+                    rows.choice_if(
+                        each_sample && mode != Mode::TwoSamples,
+                        "Metadata field:",
+                        &mut o.sort_field,
+                        &fields,
+                    );
+                }
+                rows.number_if(
+                    each_sample,
+                    "Space between groups (pt):",
+                    &mut o.group_space,
+                    0.5,
+                    0.0..=72.0,
+                );
+                let labels: Vec<(composition::Labels, &str)> = composition::Labels::ALL
+                    .iter()
+                    .map(|&labels| (labels, labels.name()))
+                    .collect();
+                rows.choice("Labels for:", &mut o.labels, &labels);
             });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.check("Show legend", &mut o.show_legend);

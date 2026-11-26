@@ -1,6 +1,7 @@
 //! Stacked bar plot of composition: what each sample, or each group, is
 //! made of.
 
+use stamp_core::stats::cluster::{cluster, Linkage};
 use stamp_core::Profile;
 
 use crate::axes::{
@@ -22,6 +23,9 @@ pub struct Data {
     pub groups: Vec<String>,
     /// Colour of each group; groups beyond the list use the default palette.
     pub group_colors: Vec<Color>,
+    /// Each sample's value of the metadata field the samples are sorted by
+    /// ([`SampleOrder::MetadataField`]); empty if there is none.
+    pub sort_keys: Vec<String>,
 }
 
 impl Data {
@@ -48,6 +52,7 @@ impl Data {
             sample_groups,
             groups,
             group_colors: Vec::new(),
+            sort_keys: Vec::new(),
         }
     }
 
@@ -88,6 +93,7 @@ impl Data {
             sample_groups: kept.clone(),
             groups: self.groups.clone(),
             group_colors: self.group_colors.clone(),
+            sort_keys: Vec::new(),
         }
     }
 }
@@ -100,6 +106,69 @@ pub enum Bars {
     Groups,
 }
 
+/// The order of the samples within each group, when there is a bar for
+/// each sample. Groups stay in their own order, one after another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum SampleOrder {
+    /// Alphabetically by name.
+    Name,
+    /// Samples with similar profiles side by side: the leaf order of an
+    /// average-linkage (UPGMA) clustering of their proportions.
+    Composition,
+    /// By the proportion of the most abundant feature (the lowest in the
+    /// stacks), highest first.
+    DominantFeature,
+    /// By the value of a metadata field ([`Options::sort_field`]): as
+    /// numbers, smallest first, when every value is one, and otherwise
+    /// alphabetically; samples without a value last.
+    MetadataField,
+    /// As in the profile file.
+    File,
+}
+
+impl SampleOrder {
+    pub const ALL: [SampleOrder; 5] = [
+        SampleOrder::Composition,
+        SampleOrder::Name,
+        SampleOrder::DominantFeature,
+        SampleOrder::MetadataField,
+        SampleOrder::File,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            SampleOrder::Name => "Sample name",
+            SampleOrder::Composition => "Composition",
+            SampleOrder::DominantFeature => "Dominant feature",
+            SampleOrder::MetadataField => "Metadata field",
+            SampleOrder::File => "Order in the profile file",
+        }
+    }
+}
+
+/// What the names beneath the bars name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Labels {
+    /// One name for each group, beneath its bars, tilted at 30 degrees.
+    /// With a bar for each group, the name of each bar.
+    Groups,
+    /// The name of each bar.
+    Samples,
+    None,
+}
+
+impl Labels {
+    pub const ALL: [Labels; 3] = [Labels::Groups, Labels::Samples, Labels::None];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Labels::Groups => "Each group",
+            Labels::Samples => "Each sample",
+            Labels::None => "None",
+        }
+    }
+}
+
 /// Appearance of the plot. Lengths are in inches.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
@@ -110,8 +179,15 @@ pub struct Options {
     /// Number of features drawn in their own colour, most abundant first.
     /// The rest are added up as "Other".
     pub features_to_show: usize,
-    /// Write the name of each sample or group beneath its bar.
-    pub label_bars: bool,
+    /// The order of the samples within each group.
+    pub sample_order: SampleOrder,
+    /// The metadata field of [`SampleOrder::MetadataField`].
+    pub sort_field: Option<String>,
+    /// What the names beneath the bars name.
+    pub labels: Labels,
+    /// Space between the bars of one group and those of the next, in
+    /// points, when there is a bar for each sample.
+    pub group_space: f64,
     /// Name the features beside the plot.
     pub show_legend: bool,
     /// Shorten feature names to this many characters.
@@ -125,7 +201,10 @@ impl Default for Options {
             height: 5.0,
             bars: Bars::Samples,
             features_to_show: 10,
-            label_bars: true,
+            sample_order: SampleOrder::Composition,
+            sort_field: None,
+            labels: Labels::Groups,
+            group_space: 6.0,
             show_legend: true,
             truncate_labels: Some(40),
         }
@@ -160,13 +239,128 @@ const OTHER_COLOR: Color = Color::rgb(199, 199, 199);
 /// Name of the features that are not drawn on their own.
 pub const OTHER: &str = "Other";
 
+/// The bars of each sample, group by group (in the order of the groups)
+/// and within a group in `order`.
+fn sample_order(data: &Data, order: SampleOrder) -> Vec<usize> {
+    // The feature most abundant on average, which lies lowest in the stacks.
+    let bars = data.samples.len().max(1) as f64;
+    let dominant = (0..data.values.len()).max_by(|&a, &b| {
+        let mean = |f: usize| data.values[f].iter().sum::<f64>() / bars;
+        mean(a)
+            .total_cmp(&mean(b))
+            .then_with(|| data.features[b].cmp(&data.features[a]))
+    });
+    let mut groups: Vec<usize> = data.sample_groups.clone();
+    groups.sort_unstable();
+    groups.dedup();
+    let mut bars = Vec::with_capacity(data.samples.len());
+    for group in groups {
+        let mut members: Vec<usize> = (0..data.samples.len())
+            .filter(|&s| data.sample_groups.get(s) == Some(&group))
+            .collect();
+        match order {
+            SampleOrder::File => {}
+            SampleOrder::Name => members.sort_by(|&a, &b| {
+                data.samples[a]
+                    .to_lowercase()
+                    .cmp(&data.samples[b].to_lowercase())
+                    .then_with(|| data.samples[a].cmp(&data.samples[b]))
+            }),
+            SampleOrder::DominantFeature => {
+                if let Some(f) = dominant {
+                    members.sort_by(|&a, &b| {
+                        data.values[f][b]
+                            .total_cmp(&data.values[f][a])
+                            .then_with(|| data.samples[a].cmp(&data.samples[b]))
+                    });
+                }
+            }
+            SampleOrder::MetadataField => {
+                if data.sort_keys.len() == data.samples.len() {
+                    let keys = &data.sort_keys;
+                    let number = |s: usize| keys[s].trim().parse::<f64>().ok();
+                    let numeric = members
+                        .iter()
+                        .filter(|&&s| !keys[s].trim().is_empty())
+                        .all(|&s| number(s).is_some());
+                    members.sort_by(|&a, &b| {
+                        let (ka, kb) = (keys[a].trim(), keys[b].trim());
+                        // Samples without a value come last.
+                        ka.is_empty()
+                            .cmp(&kb.is_empty())
+                            .then_with(|| {
+                                if numeric {
+                                    number(a)
+                                        .unwrap_or(f64::INFINITY)
+                                        .total_cmp(&number(b).unwrap_or(f64::INFINITY))
+                                } else {
+                                    ka.to_lowercase().cmp(&kb.to_lowercase())
+                                }
+                            })
+                            .then_with(|| data.samples[a].cmp(&data.samples[b]))
+                    });
+                }
+            }
+            SampleOrder::Composition => {
+                let profiles: Vec<Vec<f64>> = members
+                    .iter()
+                    .map(|&s| {
+                        data.values
+                            .iter()
+                            .map(|row| if row[s].is_finite() { row[s] } else { 0.0 })
+                            .collect()
+                    })
+                    .collect();
+                if let Some(tree) = cluster(&profiles, Linkage::Average) {
+                    members = tree.order.iter().map(|&i| members[i]).collect();
+                }
+            }
+        }
+        bars.extend(members);
+    }
+    bars
+}
+
+/// The data with the samples in the order of `bars`.
+fn reordered(data: &Data, bars: &[usize]) -> Data {
+    Data {
+        features: data.features.clone(),
+        samples: bars.iter().map(|&s| data.samples[s].clone()).collect(),
+        values: data
+            .values
+            .iter()
+            .map(|row| bars.iter().map(|&s| row[s]).collect())
+            .collect(),
+        sample_groups: bars
+            .iter()
+            .map(|&s| data.sample_groups.get(s).copied().unwrap_or(0))
+            .collect(),
+        groups: data.groups.clone(),
+        group_colors: data.group_colors.clone(),
+        sort_keys: Vec::new(),
+    }
+}
+
+/// The angle of the group names beneath bars of each sample, in degrees.
+const GROUP_LABEL_ANGLE: f64 = 30.0;
+
 pub fn plot(data: &Data, options: &Options) -> Figure {
-    let grouped;
+    let arranged;
     let data = match options.bars {
-        Bars::Samples => data,
+        Bars::Samples => {
+            if data
+                .values
+                .iter()
+                .any(|row| row.len() != data.samples.len())
+            {
+                return Figure::message("No active features or degenerate plot");
+            }
+            arranged = reordered(data, &sample_order(data, options.sample_order));
+            &arranged
+        }
         Bars::Groups => {
-            grouped = data.by_group();
-            &grouped
+            arranged = data.by_group();
+            &arranged
         }
     };
     let bars = data.samples.len();
@@ -245,9 +439,49 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     } else {
         0.0
     };
-    let left = padding + y_axis_width(&y_ticks, true);
+    // With a bar for each sample, the groups are runs of bars, named once
+    // each, tilted, beneath the middle of their run.
+    let runs: Vec<(usize, usize, usize)> = {
+        let mut runs: Vec<(usize, usize, usize)> = Vec::new();
+        for (bar, &group) in data.sample_groups.iter().enumerate() {
+            match runs.last_mut() {
+                Some((g, _, end)) if *g == group => *end = bar + 1,
+                _ => runs.push((group, bar, bar + 1)),
+            }
+        }
+        runs
+    };
+    let group_labels = options.bars == Bars::Samples && options.labels == Labels::Groups;
+    // The run (group) of each bar, and the space left between runs.
+    let run_of: Vec<usize> = (0..bars)
+        .map(|bar| {
+            runs.iter()
+                .position(|&(_, s, e)| (s..e).contains(&bar))
+                .unwrap_or(0)
+        })
+        .collect();
+    let space = if options.bars == Bars::Samples {
+        options.group_space.clamp(0.0, 72.0)
+    } else {
+        0.0
+    };
+    let spaces = space * runs.len().saturating_sub(1) as f64;
+    // Where a bar starts, or a run's middle lies, from the left of the bars.
+    let at = |cell: f64, position: f64, run: usize| cell * position + space * run as f64;
+    let (sin, cos) = GROUP_LABEL_ANGLE.to_radians().sin_cos();
+    let group_name = |group: usize| data.groups.get(group).cloned().unwrap_or_default();
+    let mut left = padding + y_axis_width(&y_ticks, true);
     let right = figure.width - padding - legend_width;
-    let cell = (right - left) / bars as f64;
+    // A long name of the first group would reach past the left edge.
+    if group_labels {
+        if let Some(&(group, start, end)) = runs.first() {
+            let cell = (right - left - spaces) / bars as f64;
+            let centre = left + at(cell, (start + end) as f64 / 2.0, 0);
+            let reach = text::width(&group_name(group), sizes.tick) * cos;
+            left += (padding - (centre - reach)).max(0.0);
+        }
+    }
+    let cell = (right - left - spaces) / bars as f64;
     // Names are written upright beneath the bars where the bars are wide
     // enough to tell them apart, and across when there is room for that.
     let widest_name = data
@@ -256,11 +490,19 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         .map(|name| text::width(name, sizes.tick))
         .fold(0.0, f64::max);
     let across = widest_name + 4.0 <= cell;
-    let labelled = options.label_bars && (across || cell >= sizes.tick * 0.9);
-    let label_height = match (labelled, across) {
-        (false, _) => 0.0,
-        (true, true) => line,
-        (true, false) => widest_name + 4.0,
+    let labelled =
+        !group_labels && options.labels != Labels::None && (across || cell >= sizes.tick * 0.9);
+    let label_height = if group_labels {
+        runs.iter()
+            .map(|&(group, _, _)| text::width(&group_name(group), sizes.tick) * sin + line * cos)
+            .fold(0.0, f64::max)
+            + 2.0
+    } else {
+        match (labelled, across) {
+            (false, _) => 0.0,
+            (true, true) => line,
+            (true, false) => widest_name + 4.0,
+        }
     };
     let frame = Frame {
         left,
@@ -277,7 +519,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
 
     let gap = (cell * 0.1).min(3.0);
     for (bar, &other_value) in other.iter().enumerate() {
-        let x0 = frame.left + cell * bar as f64 + gap / 2.0;
+        let x0 = frame.left + at(cell, bar as f64, run_of[bar]) + gap / 2.0;
         let width = cell - gap;
         let mut base = 0.0;
         let segments = top
@@ -338,6 +580,21 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                         .rotated(90.0),
                 );
             }
+        }
+    }
+
+    if group_labels {
+        let below = frame.bottom + 3.0 + strip + 3.0;
+        for (run, &(group, start, end)) in runs.iter().enumerate() {
+            let centre = frame.left + at(cell, (start + end) as f64 / 2.0, run);
+            figure.text(
+                centre,
+                below,
+                group_name(group),
+                tick_style()
+                    .align(HAlign::Right, VAlign::Top)
+                    .rotated(GROUP_LABEL_ANGLE),
+            );
         }
     }
 
@@ -404,6 +661,7 @@ mod tests {
             sample_groups: vec![0, 0, 1],
             groups: vec!["A".into(), "B".into()],
             group_colors: Vec::new(),
+            sort_keys: Vec::new(),
         }
     }
 
@@ -465,6 +723,7 @@ mod tests {
     fn the_most_abundant_features_are_stacked_and_the_rest_pooled() {
         let options = Options {
             features_to_show: 2,
+            labels: Labels::Samples,
             ..Options::default()
         };
         let figure = plot(&data(), &options);
@@ -541,7 +800,7 @@ mod tests {
         let bare = plot(
             &data(),
             &Options {
-                label_bars: false,
+                labels: Labels::None,
                 show_legend: false,
                 ..Options::default()
             },
@@ -564,5 +823,141 @@ mod tests {
         let figure = plot(&partial, &Options::default());
         assert!(self::texts(&figure).contains(&"50".to_string()));
         assert!(!self::texts(&figure).contains(&"100".to_string()));
+    }
+
+    /// The bars of each sample, in order, by the tooltips of the regions.
+    fn bar_order(figure: &Figure) -> Vec<String> {
+        let mut bars: Vec<(f64, String)> = figure
+            .regions
+            .iter()
+            .map(|r| (r.x, r.tooltip.lines().nth(1).unwrap_or("").to_string()))
+            .collect();
+        bars.sort_by(|a, b| a.0.total_cmp(&b.0));
+        bars.dedup_by(|a, b| a.1 == b.1);
+        bars.into_iter().map(|(_, name)| name).collect()
+    }
+
+    fn unsorted() -> Data {
+        // Group A: z is mostly "common", m mostly "middling", a in between
+        // but closest to z; group B after it.
+        Data {
+            features: vec!["common".into(), "middling".into()],
+            samples: vec!["z".into(), "b1".into(), "m".into(), "a".into()],
+            values: vec![vec![90.0, 50.0, 10.0, 80.0], vec![10.0, 50.0, 90.0, 20.0]],
+            sample_groups: vec![0, 1, 0, 0],
+            groups: vec!["A".into(), "B".into()],
+            group_colors: Vec::new(),
+            sort_keys: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn samples_are_ordered_within_their_groups() {
+        let order = |sample_order| {
+            bar_order(&plot(
+                &unsorted(),
+                &Options {
+                    sample_order,
+                    ..Options::default()
+                },
+            ))
+        };
+        assert_eq!(order(SampleOrder::Name), ["a", "m", "z", "b1"]);
+        assert_eq!(order(SampleOrder::File), ["z", "m", "a", "b1"]);
+        // "common" is the most abundant feature on average.
+        assert_eq!(order(SampleOrder::DominantFeature), ["z", "a", "m", "b1"]);
+        // z and a are alike, m apart from them.
+        let clustered = order(SampleOrder::Composition);
+        let at = |name: &str| clustered.iter().position(|s| s == name).unwrap();
+        assert_eq!(at("z").abs_diff(at("a")), 1, "{clustered:?}");
+        assert_eq!(at("b1"), 3);
+        // By a metadata field: as numbers (2 before 10), a sample without
+        // a value last; as text when a value is not a number.
+        let by_field = |keys: [&str; 4]| {
+            let mut data = unsorted();
+            data.sort_keys = keys.iter().map(|k| k.to_string()).collect();
+            bar_order(&plot(
+                &data,
+                &Options {
+                    sample_order: SampleOrder::MetadataField,
+                    ..Options::default()
+                },
+            ))
+        };
+        // Samples in file order: z, b1, m, a.
+        assert_eq!(by_field(["10", "1", "2", ""]), ["m", "z", "a", "b1"]);
+        assert_eq!(by_field(["b", "1", "C", "a"]), ["a", "z", "m", "b1"]);
+        // Without values for the samples, the file's order.
+        assert_eq!(by_field_none(), ["z", "m", "a", "b1"]);
+    }
+
+    fn by_field_none() -> Vec<String> {
+        bar_order(&plot(
+            &unsorted(),
+            &Options {
+                sample_order: SampleOrder::MetadataField,
+                ..Options::default()
+            },
+        ))
+    }
+
+    #[test]
+    fn groups_are_named_once_beneath_their_bars_at_an_angle() {
+        let figure = plot(&unsorted(), &Options::default());
+        let labels: Vec<(String, f64)> = figure
+            .shapes
+            .iter()
+            .filter_map(|s| match s {
+                Shape::Text { text, style, .. } => Some((text.clone(), style.rotation)),
+                _ => None,
+            })
+            .filter(|(text, _)| ["A", "B", "a", "m", "z", "b1"].contains(&text.as_str()))
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                ("A".to_string(), GROUP_LABEL_ANGLE),
+                ("B".to_string(), GROUP_LABEL_ANGLE)
+            ]
+        );
+        // Each sample named instead, when asked.
+        let samples = plot(
+            &unsorted(),
+            &Options {
+                labels: Labels::Samples,
+                ..Options::default()
+            },
+        );
+        let texts = texts(&samples);
+        assert!(["a", "m", "z", "b1"]
+            .iter()
+            .all(|n| texts.contains(&n.to_string())));
+        assert!(!texts.contains(&"A".to_string()));
+    }
+
+    #[test]
+    fn groups_are_set_apart_by_a_space() {
+        let left_edges = |group_space| {
+            let figure = plot(
+                &unsorted(),
+                &Options {
+                    group_space,
+                    sample_order: SampleOrder::File,
+                    ..Options::default()
+                },
+            );
+            let mut xs: Vec<f64> = figure.regions.iter().map(|r| r.x).collect();
+            xs.sort_by(f64::total_cmp);
+            xs.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+            xs
+        };
+        // Three bars of A, then B: the step from A's last bar to B's first
+        // is wider than between A's bars by the space.
+        let plain = left_edges(0.0);
+        let spaced = left_edges(20.0);
+        let steps = |xs: &[f64]| xs.windows(2).map(|w| w[1] - w[0]).collect::<Vec<_>>();
+        let (p, s) = (steps(&plain), steps(&spaced));
+        assert!((p[0] - p[2]).abs() < 1e-9);
+        assert!((s[2] - s[0] - 20.0).abs() < 1e-9, "{s:?}");
     }
 }

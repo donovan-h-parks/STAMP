@@ -220,6 +220,7 @@ mod tests {
             sample_groups: vec![0, 0, 1],
             groups: vec!["A".to_string(), "B".to_string()],
             group_colors: Vec::new(),
+            sort_keys: Vec::new(),
         }
     }
 

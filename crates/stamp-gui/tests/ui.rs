@@ -108,6 +108,48 @@ fn empty_window_explains_how_to_start() {
     assert_eq!(harness.app.figure().shapes.len(), 1);
 }
 
+/// The composition plot sorts the samples of each group by a metadata
+/// field when asked: the enterotypes by nationality.
+#[test]
+fn composition_samples_are_sorted_by_a_metadata_field() {
+    use stamp_plot::composition::SampleOrder;
+    let mut harness = Harness::enterotypes();
+    harness.app.set_mode(Mode::MultipleGroups);
+    harness.app.set_plot_kind(PlotKind::Composition);
+    let mut settings = harness.app.plot_settings().clone();
+    assert_eq!(settings.composition.sample_order, SampleOrder::Composition);
+    settings.composition.sample_order = SampleOrder::MetadataField;
+    settings.composition.sort_field = Some("Nationality".to_string());
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    harness.screenshot("composition_by_nationality");
+    // The bars from left to right, by the sample in their tooltips.
+    let mut bars: Vec<(f64, String)> = harness
+        .app
+        .figure()
+        .regions
+        .iter()
+        .map(|r| (r.x, r.tooltip.lines().nth(1).unwrap_or("").to_string()))
+        .collect();
+    bars.sort_by(|a, b| a.0.total_cmp(&b.0));
+    bars.dedup_by(|a, b| a.1 == b.1);
+    let metadata = harness.app.session.metadata.as_ref().unwrap();
+    let value = |field: &str, sample: &str| metadata.value(sample, field).unwrap().to_string();
+    let first: Vec<String> = bars
+        .iter()
+        .map(|(_, sample)| sample.clone())
+        .filter(|sample| value("Enterotype", sample) == "Enterotype 1")
+        .collect();
+    assert_eq!(first.len(), 8);
+    let nationalities: Vec<String> = first
+        .iter()
+        .map(|s| value("Nationality", s).to_lowercase())
+        .collect();
+    let mut sorted = nationalities.clone();
+    sorted.sort();
+    assert_eq!(nationalities, sorted);
+}
+
 /// Unticking a group in the group list unticks its samples in the
 /// metadata table, and the group stays in the list to be ticked again.
 #[test]

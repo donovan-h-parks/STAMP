@@ -343,14 +343,32 @@ so that each adds up to 100%.
 .. figure:: images/mg_composition.png
    :width: 100%
 
-   Genus composition of the enterotype samples. The coloured strip beneath
-   the bars shows each sample's group.
+   Genus composition of the enterotype samples, grouped by enterotype. The
+   coloured strip beneath the bars shows each sample's group, and each group
+   is named beneath its bars.
 
 **What to look for.** Features that dominate some groups: here *Prevotella*
-(red) is abundant in most samples of Enterotype 2 (orange strip) and rare
+(purple) is abundant in most samples of Enterotype 2 (orange strip) and rare
 elsewhere, and *Bacteroides* (the orange segments) makes up more of the
-Enterotype 1 samples. The number
-of features shown is set in *Configure plot*.
+Enterotype 1 samples.
+
+*Configure plot* sets:
+
+* **Features to show**: how many of the most abundant features have a
+  colour of their own; the rest are added up as *Other*.
+* **Sort samples by**, within each group (the groups stay in their order):
+  **Composition** (the default), so that samples with similar profiles
+  stand side by side (the leaf order of an average-linkage clustering of
+  their proportions); **Sample name**, alphabetically; **Dominant feature**,
+  by the proportion of the most abundant feature, the lowest in the stacks,
+  from highest to lowest; **Metadata field**, by the value of the field
+  chosen beneath it (as numbers, smallest first, when every value is a
+  number, and otherwise alphabetically; samples without a value last); or
+  the **Order in the profile file**.
+* **Space between groups**, in points, to set the groups' bars apart.
+* **Labels for**: **Each group** (the default) names each group once,
+  beneath the middle of its bars, tilted at 30 degrees; **Each sample**
+  names every bar; **None**.
 
 Profile bar plot
 ^^^^^^^^^^^^^^^^

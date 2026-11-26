@@ -898,7 +898,10 @@ pub struct Saved {
 /// 1: legends placed by "Best" (were at fixed corners, or absent).
 /// 2: feature names and p-values of the extended error bar and post-hoc
 ///    plots at 9 points (were 8).
-pub const DEFAULTS_VERSION: u32 = 2;
+/// 3: composition plot: samples sorted by composition (clustered) within
+///    their groups, the groups named beneath their bars and set apart by 6
+///    points.
+pub const DEFAULTS_VERSION: u32 = 3;
 
 impl Saved {
     /// The same, with plot settings saved under other defaults replaced by

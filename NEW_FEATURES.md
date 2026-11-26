@@ -624,7 +624,12 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Composition bar plot**, in all three analysis types: a stacked bar for
   each sample, or the mean of each group, showing the most abundant
   features in their own colours and the rest as "Other". A strip beneath
-  each bar shows its group. The number of features shown is an option. On
+  each bar shows its group. The number of features shown is an option; the
+  samples can be sorted within their groups by composition (clustered, the
+  default), by name, by their dominant feature, by a metadata field or as
+  in the file; the groups are
+  set apart by a space (an option, in points) and named once each beneath
+  their bars at 30 degrees, or every bar is named. On
   the command line: `--plot-type composition`.
 
 - **Rarefaction curves.** A new plot in all three analysis types: for each

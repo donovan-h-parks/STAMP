@@ -431,6 +431,7 @@ mod tests {
             sample_groups: vec![0, 0, 1, 1, 2, 2],
             groups: ["A", "B", "C"].map(String::from).to_vec(),
             group_colors: Vec::new(),
+            sort_keys: Vec::new(),
         }
     }
 

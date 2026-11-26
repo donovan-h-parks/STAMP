@@ -7,6 +7,16 @@ meaningful step, and when it finishes.
 ## Status
 
 Finished and committed (2026-11-27, the layout/assistant session):
+**composition bar plot options**. stamp-plot `composition.rs`:
+`SampleOrder` (Composition = UPGMA leaf order, the default; Name,
+DominantFeature, MetadataField with `Options::sort_field` and
+`Data::sort_keys` filled by plots.rs `composition_sort_keys`; File),
+`Labels` (Groups = one per group at 30 degrees, Samples, None; replaces
+`label_bars`), `group_space` (points, default 6). Configure plot rows;
+DEFAULTS_VERSION 3. Tests in composition.rs; plots.rst, NEW_FEATURES;
+docs image mg_composition.png regenerated (stamp-cli, dpi 110).
+
+Finished and committed (2026-11-27, the layout/assistant session):
 **Classic light colour scheme** (STAMP v2's colours, sampled from a v2
 screenshot): `ColorScheme::ClassicLight`, `classic_light()` in theme.rs;
 the scheme shown is kept in egui's memory (`ColorScheme::of`) so the plot's
