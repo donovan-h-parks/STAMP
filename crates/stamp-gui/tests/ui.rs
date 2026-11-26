@@ -597,6 +597,115 @@ fn colour_schemes() {
     assert_eq!(ctx.theme(), egui::Theme::Light);
 }
 
+/// Dark, the default of earlier versions, saved by one of them becomes
+/// Classic light once; any other scheme, and Dark chosen since, is kept.
+#[test]
+fn an_earlier_default_scheme_becomes_classic_light() {
+    use stamp_gui::app::{Saved, SCHEME_VERSION};
+    let harness = Harness::enterotypes();
+    let earlier = |scheme: Option<ColorScheme>, dark_mode: bool| {
+        let mut stored = serde_json::to_value(harness.app.saved()).unwrap();
+        let object = stored.as_object_mut().unwrap();
+        object.remove("scheme_version");
+        object.insert("dark_mode".to_string(), dark_mode.into());
+        object.insert(
+            "color_scheme".to_string(),
+            serde_json::to_value(scheme).unwrap(),
+        );
+        serde_json::from_value::<Saved>(stored)
+            .unwrap()
+            .up_to_date()
+    };
+    let dark = earlier(Some(ColorScheme::Dark), true);
+    assert_eq!(dark.color_scheme, Some(ColorScheme::ClassicLight));
+    assert_eq!(dark.scheme_version, SCHEME_VERSION);
+    // Saved before there were colour schemes, in dark mode.
+    let dark = earlier(None, true);
+    assert_eq!(dark.color_scheme, Some(ColorScheme::ClassicLight));
+    let light = earlier(None, false);
+    assert_eq!(light.color_scheme, None);
+    assert!(!light.dark_mode);
+    let mocha = earlier(Some(ColorScheme::CatppuccinMocha), true);
+    assert_eq!(mocha.color_scheme, Some(ColorScheme::CatppuccinMocha));
+
+    // Dark chosen since is kept.
+    let mut chosen = harness.app.saved();
+    chosen.color_scheme = Some(ColorScheme::Dark);
+    assert_eq!(chosen.up_to_date().color_scheme, Some(ColorScheme::Dark));
+}
+
+/// The tables along the bottom start with the Metadata table in front, even
+/// when the last run had only some of them shown.
+#[test]
+fn the_metadata_table_is_in_front_at_start() {
+    use stamp_gui::layout::{self, Frame};
+    let mut harness = Harness::enterotypes();
+    harness.app.show_metadata_table(true);
+    harness.app.show_profile_table(true);
+    harness.settle();
+    assert!(layout::is_in_front(harness.app.layout(), Frame::Metadata));
+
+    // The last run had the Metadata and Profile tables shown, the Profile
+    // table in front, and the Results table hidden.
+    harness.app.show_results_table(false);
+    harness.settle();
+    layout::bring_to_front(harness.app.layout_mut(), Frame::ProfileTable);
+    harness.settle();
+    let saved = harness.app.saved();
+    let mut next = Harness::enterotypes();
+    let ctx = next.renderer.ctx.clone();
+    next.app.restore(&ctx, saved.up_to_date());
+    next.settle();
+    assert!(layout::is_in_front(next.app.layout(), Frame::Metadata));
+    assert!(next.app.frame_shown(Frame::Results));
+
+    // Opened later, a table comes to the front as before.
+    next.app.show_results_table(false);
+    next.settle();
+    next.app.show_results_table(true);
+    next.settle();
+    assert!(layout::is_in_front(next.app.layout(), Frame::Results));
+}
+
+/// The composition bar plot draws the unclassified sequences in the colour
+/// chosen in the preferences.
+#[test]
+fn unclassified_is_drawn_in_the_colour_of_the_preferences() {
+    let mut harness = Harness::enterotypes();
+    harness.app.set_plot_kind(PlotKind::Composition);
+    harness.settle();
+    let filled_with = |app: &StampApp, color: stamp_plot::Color| {
+        app.figure()
+            .shapes
+            .iter()
+            .any(|s| matches!(s, stamp_plot::Shape::Rect { fill: Some(c), .. } if *c == color))
+    };
+    assert!(harness
+        .app
+        .figure()
+        .regions
+        .iter()
+        .any(|r| r.item == stamp_plot::composition::UNCLASSIFIED));
+    assert_eq!(
+        harness.app.plot_settings().unclassified_color,
+        stamp_plot::composition::UNCLASSIFIED_COLOR
+    );
+    assert!(filled_with(
+        &harness.app,
+        stamp_plot::composition::UNCLASSIFIED_COLOR
+    ));
+    let pink = stamp_plot::Color::rgb(255, 0, 200);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.unclassified_color = pink;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert!(filled_with(&harness.app, pink));
+    assert!(!filled_with(
+        &harness.app,
+        stamp_plot::composition::UNCLASSIFIED_COLOR
+    ));
+}
+
 #[test]
 fn group_colours_can_be_changed() {
     let mut harness = Harness::enterotypes();

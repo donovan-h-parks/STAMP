@@ -872,6 +872,9 @@ pub struct Saved {
     /// The colour scheme of the window; `None` in what was saved before
     /// there were colour schemes.
     pub color_scheme: Option<ColorScheme>,
+    /// The [`SCHEME_VERSION`] the colour scheme was saved under; zero for
+    /// one saved before there was one.
+    pub scheme_version: u32,
     pub show_profile_panel: bool,
     pub show_properties_panel: bool,
     pub show_feature_table: bool,
@@ -911,6 +914,13 @@ pub struct Saved {
 ///    points.
 pub const DEFAULTS_VERSION: u32 = 3;
 
+/// Identifies the default colour scheme. A remembered scheme that was the
+/// default of an earlier version, saved under a smaller number, is replaced
+/// by the current default; one chosen by hand is kept.
+///
+/// 1: Classic light (was Dark).
+pub const SCHEME_VERSION: u32 = 1;
+
 impl Saved {
     /// The same, with plot settings saved under other defaults replaced by
     /// the current ones. Everything else that is remembered is kept.
@@ -919,6 +929,19 @@ impl Saved {
             self.plots = PlotSettings::default();
             self.defaults_version = DEFAULTS_VERSION;
         }
+        if self.scheme_version < 1 {
+            // Dark was the default before; it cannot be told from Dark
+            // chosen by hand, so it goes over to the new default.
+            let dark = match self.color_scheme {
+                Some(scheme) => scheme == ColorScheme::Dark,
+                None => self.dark_mode,
+            };
+            if dark {
+                self.color_scheme = Some(ColorScheme::default());
+                self.dark_mode = ColorScheme::default().is_dark();
+            }
+        }
+        self.scheme_version = SCHEME_VERSION;
         self
     }
 }
@@ -929,6 +952,7 @@ impl Default for Saved {
         Saved {
             dark_mode: ColorScheme::default().is_dark(),
             color_scheme: None,
+            scheme_version: 0,
             show_profile_panel: true,
             show_properties_panel: true,
             show_feature_table: true,
@@ -1107,6 +1131,9 @@ pub struct StampApp {
     highlight_level: Option<String>,
     highlight_value: String,
     show_table: bool,
+    /// Whether the frames have been laid out since STAMP started (or since
+    /// remembered settings were restored).
+    layout_started: bool,
     show_about: bool,
     /// The analysis wizard: whether its window is open, the answers given,
     /// and what it last found out about the loaded data (with what that
@@ -1331,6 +1358,7 @@ impl StampApp {
             highlight_level: None,
             highlight_value: String::new(),
             show_table: true,
+            layout_started: false,
             show_about: false,
             show_wizard: false,
             wizard: crate::wizard::Wizard::default(),
@@ -2039,6 +2067,7 @@ impl StampApp {
         Saved {
             dark_mode: self.color_scheme.is_dark(),
             color_scheme: Some(self.color_scheme),
+            scheme_version: SCHEME_VERSION,
             show_profile_panel: self.show_profile_panel,
             show_properties_panel: self.show_properties_panel,
             show_feature_table: self.show_feature_table,
@@ -2110,6 +2139,7 @@ impl StampApp {
             }
             None => self.reset_layout(),
         }
+        self.layout_started = false;
         self.session.invalidate_all();
         self.view_dirty = true;
     }
@@ -3477,7 +3507,13 @@ impl StampApp {
             tree = layout::default_tree();
             self.fit_layout = true;
         }
-        layout::sync_visibility(&mut tree, |frame| self.frame_shown(frame));
+        // At start, frames shown by default are not brought to the front as
+        // if just opened; the Metadata table is in front of its tabs.
+        let started = std::mem::replace(&mut self.layout_started, true);
+        layout::sync_visibility(&mut tree, started, |frame| self.frame_shown(frame));
+        if !started && self.frame_shown(Frame::Metadata) {
+            layout::bring_to_front(&mut tree, Frame::Metadata);
+        }
         if std::mem::take(&mut self.fit_layout) {
             let width = analysis_buttons_width(ui.ctx());
             layout::set_frame_width(&mut tree, Frame::Statistics, width, ui.available_width());
@@ -5535,6 +5571,9 @@ impl StampApp {
                         redraw |= row(ui, "Colour of axes:", |ui| {
                             color(ui, &mut self.plot_settings.axes_color)
                         });
+                        redraw |= row(ui, "Colour of Unclassified:", |ui| {
+                            color(ui, &mut self.plot_settings.unclassified_color)
+                        });
                         let font = |ui: &mut egui::Ui, size: &mut f64| {
                             let drag = egui::DragValue::new(size)
                                 .speed(0.25)
@@ -5584,6 +5623,7 @@ impl StampApp {
             self.plot_settings.min_p_exponent = defaults.plots.min_p_exponent;
             self.plot_settings.sample_colors = defaults.plots.sample_colors;
             self.plot_settings.axes_color = defaults.plots.axes_color;
+            self.plot_settings.unclassified_color = defaults.plots.unclassified_color;
             self.plot_settings.fonts = defaults.plots.fonts;
             changed = true;
         }

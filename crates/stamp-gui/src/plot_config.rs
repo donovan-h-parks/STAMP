@@ -1360,6 +1360,8 @@ pub fn show(
                     );
                 }
                 rows.count("Features to show:", &mut o.features_to_show, 1..=50);
+                rows.check("Show Other", &mut o.show_other);
+                rows.check("Show Unclassified", &mut o.show_unclassified);
                 // How the bars of each sample are arranged within their
                 // groups (two samples are each their own group).
                 let each_sample = o.bars == composition::Bars::Samples;
@@ -1395,6 +1397,15 @@ pub fn show(
                     .map(|&labels| (labels, labels.name()))
                     .collect();
                 rows.choice("Labels for:", &mut o.labels, &labels);
+                rows.when(o.labels != composition::Labels::None, |rows| {
+                    rows.optional(
+                        "Label angle (°):",
+                        &mut o.label_angle,
+                        30.0,
+                        1.0,
+                        0.0..=90.0,
+                    );
+                });
             });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.check("Show legend", &mut o.show_legend);

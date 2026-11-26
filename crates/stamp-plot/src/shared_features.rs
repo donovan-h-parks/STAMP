@@ -426,6 +426,7 @@ mod tests {
             groups: ["A", "B", "C"].map(String::from).to_vec(),
             group_colors: Vec::new(),
             sort_keys: Vec::new(),
+            unclassified: Vec::new(),
         }
     }
 

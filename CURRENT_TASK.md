@@ -6,14 +6,48 @@ meaningful step, and when it finishes.
 
 ## Status
 
-Finished and committed (2026-11-27, the colour-scheme session; CURRENT_TASK.md itself left uncommitted with the other session's notes):
+Finished and committed (2026-11-27, the colour-scheme session):
 **Classic light is the default colour scheme, and the Results table is
-shown at start.** `ColorScheme`'s `#[default]` (theme.rs); `Saved`'s
-`dark_mode` default follows it; `show_table: true` in `StampApp::new`
-(not saved between runs). Anyone with a remembered scheme keeps it.
-Tests: `colour_schemes` asserts the default; `plot_is_centred_in_its_space`
-sets Light (Classic light's margin is white); `metadata_table_switches_
-samples_off` hides the Results table first. Docs: main_window.rst; NEW_FEATURES.
+shown at start** (cb3825a). Follow-up: a stored
+Dark from before (the old default) becomes Classic light once
+(`Saved.scheme_version`, `SCHEME_VERSION` = 1, in `Saved::up_to_date`);
+the first layout pass at start does not bring newly shown frames to the
+front and puts the Metadata table in front (`layout_started`,
+`sync_visibility(.., bring_forward, ..)`). Tests:
+`an_earlier_default_scheme_becomes_classic_light`,
+`the_metadata_table_is_in_front_at_start`.
+
+Also: **the group legend of the PCoA/NMDS and correlation
+scatter plots shows each group's marker** (shape and colour) when groups
+have their own shapes (`axes::marker_legend`/`marker_legend_at`; swatches
+otherwise). Tests `the_legend_shows_the_shape_of_each_group` in
+ordination_plot.rs and correlation_plot.rs. plots.rst; figures
+regenerated with stamp-cli --plot-dpi 100 (110 for enterotypes):
+mg_pcoa.png and mg_nmds.png (coal, --field Environment --profile-level
+Genus --unclassified remove; nmds --plot-legend upper-right),
+mg_pcoa_enterotypes.png (--where Enterotype=Enterotype 1/2/3,
+--profile-level Genera --unclassified remove), glacier_pcoa.png (the
+command in example_glacier_streams.rst). The PCoA figures now also list
+pairwise PERMANOVA, as the plot does today.
+
+Also: **composition bar plot: Unclassified segment, Show
+Other / Show Unclassified, Label angle.** `composition::Data.unclassified`
+(the set-aside share, 100 minus the features, from `from_profile`;
+averaged by `by_group`, carried by `reordered`); features named
+unclassified join it in `plot` (dark grey `UNCLASSIFIED_COLOR`, top of the
+stack). `Options.show_other`, `show_unclassified` (true), `label_angle:
+Option<f64>` (None = 30 degrees for groups, auto for samples; `slanted`).
+The axis reaches the tallest drawn stack. Configure plot rows in
+plot_config.rs. Tests in composition.rs. plots.rst, NEW_FEATURES;
+mg_composition.png regenerated (enterotypes, Genera, default unclassified,
+dpi 110). No CLI flags (the CLI has no composition options).
+Other is (164,164,164) and Unclassified (216,216,216) by default; the
+colour of Unclassified is a preference (`PlotSettings.unclassified_color`,
+Preferences "Colour of Unclassified:", restored by Restore defaults; passed
+to the plot through `composition::Options.unclassified_color`, which is
+`#[serde(skip)]`, by `plots::composition_options`; in the assistant's
+shared option fields). Tests: composition.rs, ui.rs
+`unclassified_is_drawn_in_the_colour_of_the_preferences`. main_window.rst.
 
 Finished and committed (2026-11-27, the glacier/example-data session):
 **The Unclassified setting: new default, applies everywhere, reworded, and

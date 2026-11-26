@@ -642,13 +642,17 @@ Add an entry here whenever a feature is added that v2 did not have.
   `--plot-type distance-box`.
 - **Composition bar plot**, in all three analysis types: a stacked bar for
   each sample, or the mean of each group, showing the most abundant
-  features in their own colours and the rest as "Other". A strip beneath
+  features in their own colours, the rest as "Other" and the unclassified
+  sequences as "Unclassified" at the top; Other and Unclassified can each be
+  left off, and the axis then reaches only as high as the bars (the colour
+  of Unclassified is a preference). A strip beneath
   each bar shows its group. The number of features shown is an option; the
   samples can be sorted within their groups by composition (clustered, the
   default), by name, by their dominant feature, by a metadata field or as
   in the file; the groups are
   set apart by a space (an option, in points) and named once each beneath
-  their bars at 30 degrees, or every bar is named. On
+  their bars at 30 degrees, or every bar is named, at an angle that can
+  be chosen. On
   the command line: `--plot-type composition`.
 
 - **Rarefaction curves.** A new plot in all three analysis types: for each

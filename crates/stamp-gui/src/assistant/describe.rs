@@ -547,11 +547,12 @@ pub fn option_fields(mode: Mode, kind: PlotKind) -> &'static [&'static str] {
 }
 
 /// Fields of the plot settings shared by every plot.
-pub const SHARED_OPTION_FIELDS: [&str; 5] = [
+pub const SHARED_OPTION_FIELDS: [&str; 6] = [
     "highlighted",
     "min_p_exponent",
     "axes_color",
     "sample_colors",
+    "unclassified_color",
     "fonts",
 ];
 

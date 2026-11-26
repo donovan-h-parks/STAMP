@@ -5,8 +5,8 @@ use stamp_core::stats::correlation::least_squares;
 use stamp_core::CorrelationProfile;
 
 use crate::axes::{
-    group_color, legend, marker, scaled_ticks, x_axis, y_axis, y_axis_width, Frame, LabelRotation,
-    LegendPosition, Marker, AXES_COLOR, INCH,
+    group_color, legend, marker, marker_legend, scaled_ticks, x_axis, y_axis, y_axis_width, Frame,
+    LabelRotation, LegendPosition, Marker, AXES_COLOR, INCH,
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
@@ -271,7 +271,19 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         .iter()
         .filter_map(|&g| Some((data.groups.get(g)?.clone(), data.color_of(g))))
         .collect();
-    legend(&mut figure, &frame, &entries, options.legend);
+    if options.unique_shapes {
+        let markers: Vec<Marker> = used.iter().map(|&g| Marker::for_group(g)).collect();
+        marker_legend(
+            &mut figure,
+            &frame,
+            &entries,
+            &markers,
+            options.marker_size,
+            options.legend,
+        );
+    } else {
+        legend(&mut figure, &frame, &entries, options.legend);
+    }
     figure
 }
 
@@ -321,6 +333,39 @@ mod tests {
             .iter()
             .filter(|s| matches!(s, Shape::Line { stroke, .. } if stroke.color == color))
             .count()
+    }
+
+    #[test]
+    fn the_legend_shows_the_shape_of_each_group() {
+        let key_of = |figure: &Figure, name: &str| {
+            let at = figure
+                .shapes
+                .iter()
+                .rposition(|s| matches!(s, Shape::Text { text, .. } if text == name))
+                .unwrap();
+            figure.shapes[at - 1].clone()
+        };
+        let with = |unique_shapes: bool| {
+            plot(
+                &data(),
+                &Options {
+                    unique_shapes,
+                    legend: LegendPosition::UpperLeft,
+                    ..Options::default()
+                },
+            )
+        };
+        let shaped = with(true);
+        assert!(matches!(key_of(&shaped, "Shallow"), Shape::Circle { .. }));
+        assert!(matches!(
+            key_of(&shaped, "Deep"),
+            Shape::Rect { width, height, .. } if width == height
+        ));
+        let swatches = with(false);
+        assert!(matches!(
+            key_of(&swatches, "Deep"),
+            Shape::Rect { width, height, .. } if width > height
+        ));
     }
 
     #[test]

@@ -26,6 +26,11 @@ pub struct Data {
     /// Each sample's value of the metadata field the samples are sorted by
     /// ([`SampleOrder::MetadataField`]); empty if there is none.
     pub sort_keys: Vec<String>,
+    /// Each sample's percentage of unclassified sequences that are not a
+    /// feature (those counted in the totals but set aside, by "Use only for
+    /// calculating feature proportions"); empty if there are none. The
+    /// plot adds features named unclassified to it.
+    pub unclassified: Vec<f64>,
 }
 
 impl Data {
@@ -35,25 +40,46 @@ impl Data {
     /// level, so that a sample's features add up to 100%.
     pub fn from_profile(profile: &Profile, sample_groups: Vec<usize>, groups: Vec<String>) -> Data {
         let totals = profile.sample_totals();
+        let values: Vec<Vec<f64>> = profile
+            .features()
+            .iter()
+            .map(|f| {
+                f.counts
+                    .iter()
+                    .zip(&totals)
+                    .map(|(&count, &total)| stamp_core::profile::percent(count, total))
+                    .collect()
+            })
+            .collect();
+        // What the features leave of each sample: the unclassified
+        // sequences set aside (nothing, to rounding, otherwise).
+        let unclassified = (0..profile.sample_names.len())
+            .map(|sample| {
+                let features: f64 = values.iter().map(|row| row[sample]).sum();
+                let rest = 100.0 - features;
+                if totals[sample] > 0.0 && rest.is_finite() && rest > 1e-9 {
+                    rest
+                } else {
+                    0.0
+                }
+            })
+            .collect();
         Data {
             features: profile.features().iter().map(|f| f.name.clone()).collect(),
             samples: profile.sample_names.clone(),
-            values: profile
-                .features()
-                .iter()
-                .map(|f| {
-                    f.counts
-                        .iter()
-                        .zip(&totals)
-                        .map(|(&count, &total)| stamp_core::profile::percent(count, total))
-                        .collect()
-                })
-                .collect(),
+            values,
             sample_groups,
             groups,
             group_colors: Vec::new(),
             sort_keys: Vec::new(),
+            unclassified,
         }
+    }
+
+    /// Sample `sample`'s percentage of unclassified sequences that are not
+    /// a feature.
+    fn set_aside(&self, sample: usize) -> f64 {
+        self.unclassified.get(sample).copied().unwrap_or(0.0)
     }
 
     pub fn group_color(&self, index: usize) -> Color {
@@ -88,6 +114,13 @@ impl Data {
                                 / members[g].len() as f64
                         })
                         .collect()
+                })
+                .collect(),
+            unclassified: kept
+                .iter()
+                .map(|&g| {
+                    members[g].iter().map(|&s| self.set_aside(s)).sum::<f64>()
+                        / members[g].len() as f64
                 })
                 .collect(),
             sample_groups: kept.clone(),
@@ -179,12 +212,25 @@ pub struct Options {
     /// Number of features drawn in their own colour, most abundant first.
     /// The rest are added up as "Other".
     pub features_to_show: usize,
+    /// Draw "Other" on top of the features shown.
+    pub show_other: bool,
+    /// Draw the unclassified sequences, as "Unclassified", at the top of
+    /// each bar.
+    pub show_unclassified: bool,
+    /// The colour of "Unclassified": a preference of the window, so not
+    /// saved with the plot's options.
+    #[serde(skip)]
+    pub unclassified_color: Color,
     /// The order of the samples within each group.
     pub sample_order: SampleOrder,
     /// The metadata field of [`SampleOrder::MetadataField`].
     pub sort_field: Option<String>,
     /// What the names beneath the bars name.
     pub labels: Labels,
+    /// The angle of the names beneath the bars, in degrees from
+    /// horizontal (0 to 90). `None`: group names at 30 degrees, and sample
+    /// names across where they fit and upright where they do not.
+    pub label_angle: Option<f64>,
     /// Space between the bars of one group and those of the next, in
     /// points, when there is a bar for each sample.
     pub group_space: f64,
@@ -201,9 +247,13 @@ impl Default for Options {
             height: 5.0,
             bars: Bars::Samples,
             features_to_show: 10,
+            show_other: true,
+            show_unclassified: true,
+            unclassified_color: UNCLASSIFIED_COLOR,
             sample_order: SampleOrder::Composition,
             sort_field: None,
             labels: Labels::Groups,
+            label_angle: None,
             group_space: 6.0,
             show_legend: true,
             truncate_labels: Some(40),
@@ -235,9 +285,13 @@ const FEATURE_COLORS: [Color; 18] = [
     Color::rgb(219, 219, 141),
     Color::rgb(158, 218, 229),
 ];
-const OTHER_COLOR: Color = Color::rgb(199, 199, 199);
+const OTHER_COLOR: Color = Color::rgb(164, 164, 164);
 /// Name of the features that are not drawn on their own.
 pub const OTHER: &str = "Other";
+/// The colour of "Unclassified" unless another is chosen.
+pub const UNCLASSIFIED_COLOR: Color = Color::rgb(216, 216, 216);
+/// Name of the unclassified sequences, at the top of each bar.
+pub const UNCLASSIFIED: &str = "Unclassified";
 
 /// The bars of each sample, group by group (in the order of the groups)
 /// and within a group in `order`.
@@ -338,11 +392,29 @@ fn reordered(data: &Data, bars: &[usize]) -> Data {
         groups: data.groups.clone(),
         group_colors: data.group_colors.clone(),
         sort_keys: Vec::new(),
+        unclassified: bars.iter().map(|&s| data.set_aside(s)).collect(),
     }
 }
 
-/// The angle of the group names beneath bars of each sample, in degrees.
+/// The angle of the group names beneath bars of each sample, in degrees,
+/// unless another is chosen.
 const GROUP_LABEL_ANGLE: f64 = 30.0;
+
+/// The style of a name beneath a bar written at `angle` degrees: across
+/// and centred under the bar, or turned to end beneath its middle.
+fn slanted(angle: f64) -> crate::figure::TextStyle {
+    if angle <= 0.0 {
+        tick_style().align(HAlign::Center, VAlign::Top)
+    } else if angle >= 90.0 {
+        tick_style()
+            .align(HAlign::Right, VAlign::Middle)
+            .rotated(90.0)
+    } else {
+        tick_style()
+            .align(HAlign::Right, VAlign::Top)
+            .rotated(angle)
+    }
+}
 
 pub fn plot(data: &Data, options: &Options) -> Figure {
     let arranged;
@@ -372,10 +444,26 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         return Figure::message("No active features or degenerate plot");
     }
 
+    // Features named unclassified go with the unclassified sequences set
+    // aside, at the top of the bars, rather than among the features.
+    let (unnamed, classified): (Vec<usize>, Vec<usize>) = (0..data.features.len())
+        .partition(|&f| stamp_core::profile::is_unclassified_feature(&data.features[f]));
+    let unclassified: Vec<f64> = (0..bars)
+        .map(|bar| {
+            data.set_aside(bar)
+                + unnamed
+                    .iter()
+                    .map(|&f| data.values[f][bar])
+                    .filter(|v| v.is_finite())
+                    .sum::<f64>()
+        })
+        .collect();
+    let has_unclassified = options.show_unclassified && unclassified.iter().any(|&v| v > 0.0);
+
     // The most abundant features on average, largest first; ties by name
     // so that the order does not depend on the order of the profile.
     let mean = |feature: usize| data.values[feature].iter().sum::<f64>() / bars as f64;
-    let mut order: Vec<usize> = (0..data.features.len()).collect();
+    let mut order = classified;
     order.sort_by(|&a, &b| {
         mean(b)
             .total_cmp(&mean(a))
@@ -386,7 +474,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     let other: Vec<f64> = (0..bars)
         .map(|bar| rest.iter().map(|&f| data.values[f][bar]).sum())
         .collect();
-    let has_other = !rest.is_empty();
+    let has_other = options.show_other && !rest.is_empty();
 
     let shorten = |name: &str| match options.truncate_labels {
         Some(length) => text::truncate(name, length),
@@ -406,12 +494,27 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     if has_other {
         entries.push((OTHER.to_string(), OTHER_COLOR));
     }
+    if has_unclassified {
+        entries.push((UNCLASSIFIED.to_string(), options.unclassified_color));
+    }
 
-    // Bars reach the tallest stack: 100 unless the features do not account
-    // for every sequence (as when unclassified ones are set aside).
-    let tallest = (0..bars)
-        .map(|bar| top.iter().map(|&f| data.values[f][bar]).sum::<f64>() + other[bar])
-        .fold(0.0, f64::max);
+    // The axis reaches the tallest stack: 100 when every part is drawn,
+    // less when Other or Unclassified is not.
+    let stacked = |bar: usize| {
+        let features: f64 = top
+            .iter()
+            .map(|&f| data.values[f][bar])
+            .filter(|v| v.is_finite())
+            .sum();
+        features
+            + if has_other { other[bar] } else { 0.0 }
+            + if has_unclassified {
+                unclassified[bar]
+            } else {
+                0.0
+            }
+    };
+    let tallest = (0..bars).map(stacked).fold(0.0, f64::max);
     let y_ticks = Ticks::covering(
         0.0,
         if tallest > 0.0 {
@@ -468,20 +571,40 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     let spaces = space * runs.len().saturating_sub(1) as f64;
     // Where a bar starts, or a run's middle lies, from the left of the bars.
     let at = |cell: f64, position: f64, run: usize| cell * position + space * run as f64;
-    let (sin, cos) = GROUP_LABEL_ANGLE.to_radians().sin_cos();
+    // The angle of the names, if not chosen from the room there is.
+    let angle = options
+        .label_angle
+        .filter(|a| a.is_finite())
+        .map(|a| a.clamp(0.0, 90.0));
+    let group_angle = angle.unwrap_or(GROUP_LABEL_ANGLE);
     let group_name = |group: usize| data.groups.get(group).cloned().unwrap_or_default();
     let mut left = padding + y_axis_width(&y_ticks, true);
     let right = figure.width - padding - legend_width;
-    // A long name of the first group would reach past the left edge.
-    if group_labels {
-        if let Some(&(group, start, end)) = runs.first() {
-            let cell = (right - left - spaces) / bars as f64;
-            let centre = left + at(cell, (start + end) as f64 / 2.0, 0);
-            let reach = text::width(&group_name(group), sizes.tick) * cos;
-            left += (padding - (centre - reach)).max(0.0);
-        }
+    // A long first name, written at an angle, would reach past the left
+    // edge.
+    let first = if group_labels {
+        runs.first().map(|&(group, start, end)| {
+            (group_name(group), group_angle, (start + end) as f64 / 2.0)
+        })
+    } else if options.labels != Labels::None {
+        angle
+            .filter(|&a| a > 0.0)
+            .and_then(|a| Some((data.samples.first()?.clone(), a, 0.5)))
+    } else {
+        None
+    };
+    if let Some((name, angle, position)) = first {
+        let cell = (right - left - spaces) / bars as f64;
+        let centre = left + at(cell, position, 0);
+        let reach = text::width(&name, sizes.tick) * angle.to_radians().cos();
+        left += (padding - (centre - reach)).max(0.0);
     }
     let cell = (right - left - spaces) / bars as f64;
+    // The height a name takes, written at `angle`.
+    let slanted_height = |name: &str, angle: f64| {
+        let (sin, cos) = angle.to_radians().sin_cos();
+        text::width(name, sizes.tick) * sin + line * cos + 2.0
+    };
     // Names are written upright beneath the bars where the bars are wide
     // enough to tell them apart, and across when there is room for that.
     let widest_name = data
@@ -494,14 +617,18 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         !group_labels && options.labels != Labels::None && (across || cell >= sizes.tick * 0.9);
     let label_height = if group_labels {
         runs.iter()
-            .map(|&(group, _, _)| text::width(&group_name(group), sizes.tick) * sin + line * cos)
+            .map(|&(group, _, _)| slanted_height(&group_name(group), group_angle))
             .fold(0.0, f64::max)
-            + 2.0
     } else {
-        match (labelled, across) {
-            (false, _) => 0.0,
-            (true, true) => line,
-            (true, false) => widest_name + 4.0,
+        match (labelled, angle, across) {
+            (false, _, _) => 0.0,
+            (true, Some(angle), _) => data
+                .samples
+                .iter()
+                .map(|name| slanted_height(name, angle))
+                .fold(0.0, f64::max),
+            (true, None, true) => line,
+            (true, None, false) => widest_name + 4.0,
         }
     };
     let frame = Frame {
@@ -518,7 +645,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
     let y = frame.y_scale(y_ticks.min, y_ticks.max);
 
     let gap = (cell * 0.1).min(3.0);
-    for (bar, &other_value) in other.iter().enumerate() {
+    for (bar, (&other_value, &unclassified_value)) in other.iter().zip(&unclassified).enumerate() {
         let x0 = frame.left + at(cell, bar as f64, run_of[bar]) + gap / 2.0;
         let width = cell - gap;
         let mut base = 0.0;
@@ -532,7 +659,12 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
                     FEATURE_COLORS[rank % FEATURE_COLORS.len()],
                 )
             })
-            .chain(has_other.then_some((OTHER, other_value, OTHER_COLOR)));
+            .chain(has_other.then_some((OTHER, other_value, OTHER_COLOR)))
+            .chain(has_unclassified.then_some((
+                UNCLASSIFIED,
+                unclassified_value,
+                options.unclassified_color,
+            )));
         for (name, value, color) in segments {
             // Nothing to draw for a feature that is absent (or not a number).
             if value.is_nan() || value <= 0.0 {
@@ -563,23 +695,8 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         if labelled {
             let centre = x0 + width / 2.0;
             let below = frame.bottom + 3.0 + strip + 3.0;
-            if across {
-                figure.text(
-                    centre,
-                    below,
-                    data.samples[bar].clone(),
-                    tick_style().align(HAlign::Center, VAlign::Top),
-                );
-            } else {
-                figure.text(
-                    centre,
-                    below,
-                    data.samples[bar].clone(),
-                    tick_style()
-                        .align(HAlign::Right, VAlign::Middle)
-                        .rotated(90.0),
-                );
-            }
+            let angle = angle.unwrap_or(if across { 0.0 } else { 90.0 });
+            figure.text(centre, below, data.samples[bar].clone(), slanted(angle));
         }
     }
 
@@ -587,14 +704,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         let below = frame.bottom + 3.0 + strip + 3.0;
         for (run, &(group, start, end)) in runs.iter().enumerate() {
             let centre = frame.left + at(cell, (start + end) as f64 / 2.0, run);
-            figure.text(
-                centre,
-                below,
-                group_name(group),
-                tick_style()
-                    .align(HAlign::Right, VAlign::Top)
-                    .rotated(GROUP_LABEL_ANGLE),
-            );
+            figure.text(centre, below, group_name(group), slanted(group_angle));
         }
     }
 
@@ -662,6 +772,7 @@ mod tests {
             groups: vec!["A".into(), "B".into()],
             group_colors: Vec::new(),
             sort_keys: Vec::new(),
+            unclassified: Vec::new(),
         }
     }
 
@@ -697,6 +808,157 @@ mod tests {
             let sum: f64 = b.values.iter().map(|v| v[sample]).sum();
             assert!((sum - 100.0).abs() < 1e-9);
         }
+    }
+
+    /// Two samples of 100 and 95 sequences, 55 of each unclassified.
+    fn with_unclassified(unclassified: stamp_core::Unclassified) -> Data {
+        let tree = stamp_core::ProfileTree::read(
+            "Phylum\tGenus\ts1\ts2\n\
+             P1\tg1\t30\t10\n\
+             P1\tg2\t10\t25\n\
+             P1\tg3\t5\t5\n\
+             P2\tunclassified\t55\t55\n",
+        )
+        .unwrap();
+        let profile = tree
+            .profile(&["s1", "s2"], None, "Genus", unclassified)
+            .unwrap();
+        Data::from_profile(&profile, vec![0, 0], vec!["G".to_string()])
+    }
+
+    /// The value in the tooltip of a segment.
+    fn value_of(figure: &Figure, feature: &str, bar: &str) -> Option<f64> {
+        let region = figure
+            .regions
+            .iter()
+            .find(|r| r.item == feature && r.tooltip.contains(&format!("\n{bar}\n")))?;
+        region
+            .tooltip
+            .rsplit('\n')
+            .next()?
+            .trim_end_matches('%')
+            .parse()
+            .ok()
+    }
+
+    /// The largest number on the y axis.
+    fn axis_top(figure: &Figure) -> f64 {
+        texts(figure)
+            .iter()
+            .filter_map(|t| t.parse::<f64>().ok())
+            .fold(0.0, f64::max)
+    }
+
+    #[test]
+    fn unclassified_sequences_are_drawn_at_the_top_of_the_bars() {
+        let options = Options {
+            features_to_show: 1,
+            labels: Labels::Samples,
+            ..Options::default()
+        };
+        // Set aside: in the totals, but not a feature.
+        let data = with_unclassified(stamp_core::Unclassified::ProportionsOnly);
+        assert_eq!(data.features, ["g1", "g2", "g3"]);
+        assert!((data.unclassified[0] - 55.0).abs() < 1e-9);
+        assert!((data.unclassified[1] - 55.0 * 100.0 / 95.0).abs() < 1e-9);
+        let figure = plot(&data, &options);
+        assert_eq!(value_of(&figure, UNCLASSIFIED, "s1"), Some(55.0));
+        assert_eq!(value_of(&figure, OTHER, "s1"), Some(15.0));
+        assert!(texts(&figure).contains(&UNCLASSIFIED.to_string()));
+        assert_eq!(axis_top(&figure), 100.0);
+        // Unclassified lies on top: highest on the page.
+        let top = figure
+            .regions
+            .iter()
+            .filter(|r| r.tooltip.contains("\ns1\n"))
+            .min_by(|a, b| a.y.total_cmp(&b.y))
+            .unwrap();
+        assert_eq!(top.item, UNCLASSIFIED);
+
+        // Drawn in the colour given.
+        let pink = Color::rgb(255, 0, 200);
+        let coloured = plot(
+            &data,
+            &Options {
+                unclassified_color: pink,
+                ..options.clone()
+            },
+        );
+        let fills = |figure: &Figure, color: Color| {
+            figure
+                .shapes
+                .iter()
+                .filter(|s| matches!(s, Shape::Rect { fill: Some(c), .. } if *c == color))
+                .count()
+        };
+        // A segment in each of the two bars, and the legend's swatch.
+        assert_eq!(fills(&coloured, pink), 3);
+        assert_eq!(fills(&figure, UNCLASSIFIED_COLOR), 3);
+
+        // A group's bar has the mean of its samples.
+        let groups = plot(
+            &data,
+            &Options {
+                bars: Bars::Groups,
+                ..options.clone()
+            },
+        );
+        let mean = (55.0 + 55.0 * 100.0 / 95.0) / 2.0;
+        let drawn = value_of(&groups, UNCLASSIFIED, "G").unwrap();
+        assert!((drawn - mean).abs() < 0.005, "{drawn}");
+
+        // Kept as a feature, it is drawn the same way, not as a feature.
+        let retained = plot(
+            &with_unclassified(stamp_core::Unclassified::Retain),
+            &options,
+        );
+        assert_eq!(value_of(&retained, UNCLASSIFIED, "s1"), Some(55.0));
+        assert_eq!(value_of(&retained, "g1", "s1"), Some(30.0));
+        assert!(!retained.regions.iter().any(|r| r.item.contains("P2")));
+        // Removed, there is nothing unclassified to draw.
+        let removed = plot(
+            &with_unclassified(stamp_core::Unclassified::Remove),
+            &options,
+        );
+        assert!(!removed.regions.iter().any(|r| r.item == UNCLASSIFIED));
+        assert!(!texts(&removed).contains(&UNCLASSIFIED.to_string()));
+    }
+
+    #[test]
+    fn other_and_unclassified_can_be_hidden_and_the_axis_shrinks() {
+        let data = with_unclassified(stamp_core::Unclassified::ProportionsOnly);
+        let with = |show_other: bool, show_unclassified: bool| {
+            plot(
+                &data,
+                &Options {
+                    features_to_show: 1,
+                    show_other,
+                    show_unclassified,
+                    ..Options::default()
+                },
+            )
+        };
+        let no_other = with(false, true);
+        assert!(!no_other.regions.iter().any(|r| r.item == OTHER));
+        assert!(!texts(&no_other).contains(&OTHER.to_string()));
+        assert_eq!(value_of(&no_other, UNCLASSIFIED, "s1"), Some(55.0));
+        // g1 and Unclassified: 85% of s1 at most.
+        let top = axis_top(&no_other);
+        assert!((85.0..100.0).contains(&top), "{top}");
+
+        let no_unclassified = with(true, false);
+        assert!(!no_unclassified
+            .regions
+            .iter()
+            .any(|r| r.item == UNCLASSIFIED));
+        assert!(!texts(&no_unclassified).contains(&UNCLASSIFIED.to_string()));
+        assert_eq!(value_of(&no_unclassified, OTHER, "s1"), Some(15.0));
+
+        // g1 alone: 30% of s1 at most.
+        let features_only = with(false, false);
+        assert_eq!(features_only.regions.len(), 2);
+        let top = axis_top(&features_only);
+        assert!((30.0..40.0).contains(&top), "{top}");
     }
 
     fn texts(figure: &Figure) -> Vec<String> {
@@ -848,6 +1110,7 @@ mod tests {
             groups: vec!["A".into(), "B".into()],
             group_colors: Vec::new(),
             sort_keys: Vec::new(),
+            unclassified: Vec::new(),
         }
     }
 
@@ -899,6 +1162,76 @@ mod tests {
                 ..Options::default()
             },
         ))
+    }
+
+    #[test]
+    fn the_angle_of_the_names_can_be_chosen() {
+        let rotations = |figure: &Figure, names: &[&str]| -> Vec<f64> {
+            figure
+                .shapes
+                .iter()
+                .filter_map(|s| match s {
+                    Shape::Text { text, style, .. } if names.contains(&text.as_str()) => {
+                        Some(style.rotation)
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        // The bottom of the bars: the lowest horizontal line drawn.
+        let axis = |figure: &Figure| {
+            figure
+                .shapes
+                .iter()
+                .filter_map(|s| match s {
+                    Shape::Line { points, .. }
+                        if points.len() == 2 && points[0].1 == points[1].1 =>
+                    {
+                        Some(points[0].1)
+                    }
+                    _ => None,
+                })
+                .fold(0.0, f64::max)
+        };
+        let with = |labels: Labels, label_angle: Option<f64>| {
+            plot(
+                &unsorted(),
+                &Options {
+                    labels,
+                    label_angle,
+                    ..Options::default()
+                },
+            )
+        };
+        assert_eq!(
+            rotations(&with(Labels::Groups, Some(60.0)), &["A", "B"]),
+            [60.0, 60.0]
+        );
+        let flat = with(Labels::Groups, Some(0.0));
+        assert_eq!(rotations(&flat, &["A", "B"]), [0.0, 0.0]);
+        // Steeper long names take more room beneath the bars.
+        let mut long = unsorted();
+        long.groups = vec!["A long group name".into(), "Another long name".into()];
+        let at = |label_angle: f64| {
+            axis(&plot(
+                &long,
+                &Options {
+                    label_angle: Some(label_angle),
+                    ..Options::default()
+                },
+            ))
+        };
+        assert!(at(0.0) > at(30.0) && at(30.0) > at(90.0));
+        // Sample names too; out of range, the nearest angle allowed.
+        let samples = ["a", "m", "z", "b1"];
+        assert_eq!(
+            rotations(&with(Labels::Samples, Some(45.0)), &samples),
+            [45.0; 4]
+        );
+        assert_eq!(
+            rotations(&with(Labels::Samples, Some(120.0)), &samples),
+            [90.0; 4]
+        );
     }
 
     #[test]

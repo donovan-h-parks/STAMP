@@ -4,9 +4,9 @@
 //! (`community_plots`).
 
 use crate::axes::{
-    group_color, legend, marker_styled, repeated_colors_note, scaled_ticks, swatch_legend_at,
-    swatch_legend_origin, swatch_legend_size, x_axis, y_axis, y_axis_width, Frame, LabelRotation,
-    LegendPosition, Marker, AXES_COLOR, INCH,
+    group_color, marker_legend_at, marker_styled, repeated_colors_note, scaled_ticks,
+    swatch_legend_at, swatch_legend_origin, swatch_legend_size, x_axis, y_axis, y_axis_width,
+    Frame, LabelRotation, LegendPosition, Marker, AXES_COLOR, INCH,
 };
 use crate::axis::Ticks;
 use crate::figure::{Color, Figure, Stroke};
@@ -580,6 +580,16 @@ pub fn plot_ordination(
             .enumerate()
             .map(|(i, g)| (g.clone(), data.group_color(i)))
             .collect();
+        // Each group's shape beside its colour, when the groups have their
+        // own shapes.
+        let markers: Vec<Marker> = (0..entries.len()).map(Marker::for_group).collect();
+        let draw_at = |figure: &mut Figure, x: f64, y: f64| {
+            if options.unique_shapes {
+                marker_legend_at(figure, &entries, &markers, options.marker_size, x, y);
+            } else {
+                swatch_legend_at(figure, &entries, x, y);
+            }
+        };
         match spare {
             // The place is taken within the empty cell. A legend larger
             // than the cell is kept below the axis above it and clear of
@@ -591,11 +601,16 @@ pub fn plot_ordination(
                     let (legend_width, legend_height) = swatch_legend_size(&entries);
                     let x = x.max(main.right + 8.0).min(width - 4.0 - legend_width);
                     let y = y.max(cell.top);
-                    swatch_legend_at(&mut figure, &entries, x, y);
+                    draw_at(&mut figure, x, y);
                     figure.height = figure.height.max(y + legend_height + 4.0);
                 }
             }
-            None => legend(&mut figure, &main, &entries, options.legend),
+            None => {
+                if let Some((x, y)) = swatch_legend_origin(&figure, &main, &entries, options.legend)
+                {
+                    draw_at(&mut figure, x, y);
+                }
+            }
         }
     }
     figure
@@ -689,6 +704,55 @@ mod tests {
         );
         assert_eq!(two.regions.len(), 5);
         assert!(self::texts(&two).contains(&"A".to_string()));
+    }
+
+    /// What the legend draws beside a group's name: the shape just before
+    /// the last text that is the name.
+    fn key_of<'a>(figure: &'a Figure, name: &str) -> &'a Shape {
+        let at = figure
+            .shapes
+            .iter()
+            .rposition(|s| matches!(s, Shape::Text { text, .. } if text == name))
+            .unwrap();
+        &figure.shapes[at - 1]
+    }
+
+    #[test]
+    fn the_legend_shows_the_shape_of_each_group() {
+        for panels in [true, false] {
+            let with = |unique_shapes: bool| {
+                plot(
+                    &data(),
+                    &Options {
+                        unique_shapes,
+                        legend: LegendPosition::UpperRight,
+                        show_pc3_vs_pc2: panels,
+                        show_pc1_vs_pc3: panels,
+                        ..Options::default()
+                    },
+                )
+            };
+            // A's circle and B's square, as on the plot.
+            let shaped = with(true);
+            assert!(
+                matches!(key_of(&shaped, "A"), Shape::Circle { fill: Some(c), .. } if *c == group_color(0)),
+                "{:?}",
+                key_of(&shaped, "A")
+            );
+            assert!(matches!(
+                key_of(&shaped, "B"),
+                Shape::Rect { width, height, fill: Some(c), .. }
+                    if width == height && *c == group_color(1)
+            ));
+            // Every group a circle: colour swatches.
+            let swatches = with(false);
+            for name in ["A", "B"] {
+                assert!(matches!(
+                    key_of(&swatches, name),
+                    Shape::Rect { width, height, .. } if width > height
+                ));
+            }
+        }
     }
 
     #[test]

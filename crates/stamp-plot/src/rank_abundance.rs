@@ -214,6 +214,7 @@ mod tests {
             groups: vec!["A".to_string(), "B".to_string()],
             group_colors: Vec::new(),
             sort_keys: Vec::new(),
+            unclassified: Vec::new(),
         }
     }
 

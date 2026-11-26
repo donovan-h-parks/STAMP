@@ -260,7 +260,8 @@ Preferences
   (a feature absent from a sample);
 * the **smallest p-value reported**: smaller ones are shown as a bound, such
   as "< 1e-15";
-* the colours of the two samples, of "All other samples" and of axes;
+* the colours of the two samples, of "All other samples", of axes and of
+  "Unclassified" in the composition bar plot;
 * the **plot font** (Arial, Times New Roman, Courier New or DejaVu Sans) and
   the font sizes of axis labels, tick labels and legends.
 

@@ -651,6 +651,8 @@ pub struct PlotSettings {
     pub min_p_exponent: i32,
     pub axes_color: Color,
     pub sample_colors: [Color; 2],
+    /// The colour of "Unclassified" in the composition bar plot.
+    pub unclassified_color: Color,
     /// Font sizes of the tick labels, axis labels and legends of every
     /// plot, set in the preferences.
     pub fonts: stamp_plot::axes::Fonts,
@@ -790,6 +792,7 @@ impl Default for PlotSettings {
             min_p_exponent: -15,
             axes_color: AXES_COLOR,
             sample_colors: [SAMPLE1_COLOR, SAMPLE2_COLOR],
+            unclassified_color: composition::UNCLASSIFIED_COLOR,
             fonts: stamp_plot::axes::Fonts::default(),
         }
     }
@@ -1685,6 +1688,15 @@ fn composition_sort_keys(
         .collect()
 }
 
+/// The options of the composition bar plot, with the colour of
+/// "Unclassified" chosen in the preferences.
+fn composition_options(settings: &PlotSettings) -> composition::Options {
+    composition::Options {
+        unclassified_color: settings.unclassified_color,
+        ..settings.composition.clone()
+    }
+}
+
 fn proportion_plot(kind: PlotKind, data: &composition::Data, settings: &PlotSettings) -> Figure {
     match kind {
         PlotKind::SharedFeatures => {
@@ -2065,7 +2077,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         &data,
                         &composition::Options {
                             bars: composition::Bars::Samples,
-                            ..settings.composition.clone()
+                            ..composition_options(settings)
                         },
                     )
                 }
@@ -2242,7 +2254,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     data.group_colors = vec![color1, color2];
                     data.sort_keys = composition_sort_keys(session, settings, &data.samples);
                     if kind == PlotKind::Composition {
-                        composition::plot(&data, &settings.composition)
+                        composition::plot(&data, &composition_options(settings))
                     } else {
                         proportion_plot(kind, &data, settings)
                     }
@@ -2585,7 +2597,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     data.group_colors = colors.clone();
                     data.sort_keys = composition_sort_keys(session, settings, &data.samples);
                     if kind == PlotKind::Composition {
-                        composition::plot(&data, &settings.composition)
+                        composition::plot(&data, &composition_options(settings))
                     } else {
                         proportion_plot(kind, &data, settings)
                     }

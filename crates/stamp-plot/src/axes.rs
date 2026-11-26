@@ -704,18 +704,54 @@ pub fn swatch_legend_origin(
 /// A vertical list of colour swatches with names, its top-left corner at
 /// (`x`, `y`).
 pub fn swatch_legend_at(figure: &mut Figure, entries: &[(String, Color)], x: f64, y: f64) {
+    keyed_legend_at(figure, entries, None, x, y);
+}
+
+/// A vertical list of markers with names, its top-left corner at (`x`,
+/// `y`): each entry's marker is `markers[i]` in its colour, of about
+/// `area` square points (kept to the height of a line). It takes the room
+/// of [`swatch_legend_at`]'s legend of the same entries.
+pub fn marker_legend_at(
+    figure: &mut Figure,
+    entries: &[(String, Color)],
+    markers: &[Marker],
+    area: f64,
+    x: f64,
+    y: f64,
+) {
+    keyed_legend_at(figure, entries, Some((markers, area)), x, y);
+}
+
+/// The legend of [`swatch_legend_at`], or with markers instead of swatches.
+fn keyed_legend_at(
+    figure: &mut Figure,
+    entries: &[(String, Color)],
+    markers: Option<(&[Marker], f64)>,
+    x: f64,
+    y: f64,
+) {
     let (swatch_w, pad, line) = swatch_legend_metrics();
     let swatch_h = 6.0;
     for (i, (name, color)) in entries.iter().enumerate() {
         let centre = y + line * (i as f64 + 0.5);
-        figure.rect(
-            x,
-            centre - swatch_h / 2.0,
-            swatch_w,
-            swatch_h,
-            Some(*color),
-            Some(Stroke::solid(Color::BLACK, 1.0)),
-        );
+        match markers {
+            Some((markers, area)) => marker(
+                figure,
+                markers.get(i).copied().unwrap_or(Marker::Circle),
+                x + swatch_w / 2.0,
+                centre,
+                area.clamp(16.0, 64.0),
+                *color,
+            ),
+            None => figure.rect(
+                x,
+                centre - swatch_h / 2.0,
+                swatch_w,
+                swatch_h,
+                Some(*color),
+                Some(Stroke::solid(Color::BLACK, 1.0)),
+            ),
+        }
         figure.text(
             x + swatch_w + pad,
             centre,
@@ -734,6 +770,21 @@ pub fn legend(
 ) {
     if let Some((x, y)) = swatch_legend_origin(figure, frame, entries, position) {
         swatch_legend_at(figure, entries, x, y);
+    }
+}
+
+/// A vertical list of markers with names (see [`marker_legend_at`]), in a
+/// corner of a frame.
+pub fn marker_legend(
+    figure: &mut Figure,
+    frame: &Frame,
+    entries: &[(String, Color)],
+    markers: &[Marker],
+    area: f64,
+    position: LegendPosition,
+) {
+    if let Some((x, y)) = swatch_legend_origin(figure, frame, entries, position) {
+        marker_legend_at(figure, entries, markers, area, x, y);
     }
 }
 

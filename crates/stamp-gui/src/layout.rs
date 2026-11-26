@@ -233,11 +233,12 @@ fn plot_path(tree: &Tree<Frame>) -> Vec<TileId> {
 }
 
 /// Show the frames `shown` says are shown and hide the others. A frame that
-/// has just been shown is brought to the front of its tabs, and tabs whose
+/// has just been shown is brought to the front of its tabs if
+/// `bring_forward` (not when STAMP starts), and tabs whose
 /// open tab is hidden open a shown one instead. The room of a frame that is
 /// hidden goes to the plot (to the part of its row or column that holds
 /// the plot), and comes back when it is shown again.
-pub fn sync_visibility(tree: &mut Tree<Frame>, shown: impl Fn(Frame) -> bool) {
+pub fn sync_visibility(tree: &mut Tree<Frame>, bring_forward: bool, shown: impl Fn(Frame) -> bool) {
     let before = linear_children(tree);
     let mut appeared = Vec::new();
     for frame in Frame::ALL {
@@ -245,7 +246,7 @@ pub fn sync_visibility(tree: &mut Tree<Frame>, shown: impl Fn(Frame) -> bool) {
             continue;
         };
         let visible = shown(frame);
-        if visible && !tree.tiles.is_visible(tile) {
+        if visible && bring_forward && !tree.tiles.is_visible(tile) {
             appeared.push(tile);
         }
         tree.tiles.set_visible(tile, visible);
@@ -420,7 +421,7 @@ mod tests {
     #[test]
     fn hidden_frames_leave_their_tabs_on_a_shown_one() {
         let mut tree = default_tree();
-        sync_visibility(&mut tree, |f| f != Frame::Metadata);
+        sync_visibility(&mut tree, true, |f| f != Frame::Metadata);
         let bottom = tree
             .tiles
             .parent_of(tile_of(&tree, Frame::Metadata).unwrap())
@@ -430,7 +431,7 @@ mod tests {
         };
         assert_ne!(tabs.active, tile_of(&tree, Frame::Metadata));
         // Shown again, it comes to the front.
-        sync_visibility(&mut tree, |_| true);
+        sync_visibility(&mut tree, true, |_| true);
         let Some(Tile::Container(Container::Tabs(tabs))) = tree.tiles.get(bottom) else {
             panic!("the bottom frames are tabs");
         };
@@ -449,16 +450,16 @@ mod tests {
             Some(Tile::Container(Container::Linear(linear))) => linear.shares[tile],
             _ => panic!("the plot is in a row"),
         };
-        sync_visibility(&mut tree, |_| true);
+        sync_visibility(&mut tree, true, |_| true);
         let plot = share(&tree, plot_tabs);
         let features = tree
             .tiles
             .parent_of(tile_of(&tree, Frame::Features).unwrap())
             .unwrap();
         let room = share(&tree, features);
-        sync_visibility(&mut tree, |f| f != Frame::Features);
+        sync_visibility(&mut tree, true, |f| f != Frame::Features);
         assert_eq!(share(&tree, plot_tabs), plot + room);
-        sync_visibility(&mut tree, |_| true);
+        sync_visibility(&mut tree, true, |_| true);
         assert_eq!(share(&tree, plot_tabs), plot);
     }
 

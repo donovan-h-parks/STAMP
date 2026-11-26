@@ -336,26 +336,40 @@ Composition bar plot
 ^^^^^^^^^^^^^^^^^^^^
 
 *All except correlation.* Each sample (or each group's mean) as a stacked
-bar of its most abundant features; the rest are added up as *Other*. The
-bars are percentages of the whole sample, also when a parent level is set,
-so that each adds up to 100%.
+bar of its most abundant features; the rest are added up as *Other*, and
+the sequences that are unclassified at the profile level are drawn as
+*Unclassified* at the top of the bar. The bars are percentages of the whole
+sample, also when a parent level is set, so that each adds up to 100%.
+
+*Unclassified* holds both the unclassified sequences that are counted in
+the totals but set aside (the default *Unclassified* setting, "Use only for
+calculating feature proportions") and features named unclassified, when
+they are kept as features or pooled. With "Remove unclassified features"
+there is nothing unclassified to draw. *Other* is mid grey and
+*Unclassified* light grey; the colour of *Unclassified* can be changed in
+**Settings > Preferences**.
 
 .. figure:: images/mg_composition.png
    :width: 100%
 
    Genus composition of the enterotype samples, grouped by enterotype. The
    coloured strip beneath the bars shows each sample's group, and each group
-   is named beneath its bars.
+   is named beneath its bars. Much of each sample is unclassified at the
+   genus level (light grey, at the top).
 
 **What to look for.** Features that dominate some groups: here *Prevotella*
-(purple) is abundant in most samples of Enterotype 2 (orange strip) and rare
-elsewhere, and *Bacteroides* (the orange segments) makes up more of the
+(red) is abundant in most samples of Enterotype 2 (orange strip) and rare
+elsewhere, and *Bacteroides* (the blue segments) makes up more of the
 Enterotype 1 samples.
 
 *Configure plot* sets:
 
 * **Features to show**: how many of the most abundant features have a
   colour of their own; the rest are added up as *Other*.
+* **Show Other** and **Show Unclassified** (both ticked by default): untick
+  one to leave that part off the bars. The axis then reaches only as high
+  as the tallest bar drawn (40%, say, rather than 100%), so the features
+  shown fill the plot.
 * **Sort samples by**, within each group (the groups stay in their order):
   **Composition** (the default), so that samples with similar profiles
   stand side by side (the leaf order of an average-linkage clustering of
@@ -368,7 +382,10 @@ Enterotype 1 samples.
 * **Space between groups**, in points, to set the groups' bars apart.
 * **Labels for**: **Each group** (the default) names each group once,
   beneath the middle of its bars, tilted at 30 degrees; **Each sample**
-  names every bar; **None**.
+  names every bar, across where the names fit and upright where they do
+  not; **None**.
+* **Label angle**: tick it to write the names at an angle of your choosing,
+  from 0 (across) to 90 degrees (upright).
 
 Profile bar plot
 ^^^^^^^^^^^^^^^^
@@ -779,7 +796,9 @@ space at the bottom right, below the PCo3 against PCo2 panel, so that it
 never covers a sample; *Legend position* in Configure plot then places it
 within that space (upper left, lower right and so on). If one of the two
 smaller panels is switched off there is no such space, and the legend is
-placed within the main panel.
+placed within the main panel. Each group is shown in the legend by its
+marker, its shape as well as its colour (by a colour bar if *Assign unique
+shapes* is unticked and every group is drawn with circles).
 
 .. figure:: images/mg_pcoa_enterotypes.png
    :width: 90%
