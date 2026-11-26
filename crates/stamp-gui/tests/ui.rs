@@ -922,6 +922,99 @@ fn tables_are_sorted_by_their_headings() {
 }
 
 #[test]
+fn the_profile_table_shows_the_values_of_the_loaded_profile() {
+    use stamp_gui::layout::Frame;
+    use stamp_gui::profile_table::CellValues;
+    // Nothing to show until a profile is loaded.
+    let mut empty = Harness::new();
+    assert!(empty.app.profile_table().is_none());
+    empty.app.show_profile_table(true);
+    empty.settle();
+
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    assert!(!harness.app.frame_shown(Frame::ProfileTable));
+    harness.app.toggle_frame(Frame::ProfileTable);
+    harness.settle();
+    assert!(harness.app.frame_shown(Frame::ProfileTable));
+    // It opens beneath the plot, with the other tables.
+    let frame = frame_rect(&harness, Frame::ProfileTable);
+    assert!(frame.min.y > frame_rect(&harness, Frame::Plot).max.y - 1.0);
+    let image = harness.screenshot("profile_table");
+    let (x0, y0) = (frame.min.x as usize, frame.min.y as usize);
+    let (x1, y1) = (frame.max.x as usize, frame.max.y as usize);
+    assert!(ink(&image, x0, y0, x1, y1) > 0.02, "the table is blank");
+
+    // A row per feature at the profile level and a column per sample, as
+    // percentages of the parent level (here the entire sample).
+    let tree = harness.app.session.tree.clone().unwrap();
+    let level = harness.app.session.profile_level.clone();
+    let percent = harness.app.profile_table().unwrap().unwrap();
+    assert_eq!(percent.values, CellValues::Percent);
+    assert_eq!(percent.samples, tree.sample_names());
+    assert_eq!(percent.levels.last(), Some(&level));
+    let features = harness.app.feature_table().len();
+    assert_eq!(percent.rows.len(), features);
+    let column = |table: &stamp_gui::profile_table::ProfileTable, sample: usize| -> f64 {
+        table.rows.iter().map(|row| row.values[sample]).sum()
+    };
+    assert!((column(&percent, 0) - 100.0).abs() < 1e-9);
+    // The same table is kept until something it shows changes.
+    let again = harness.app.profile_table().unwrap().unwrap();
+    assert!(std::sync::Arc::ptr_eq(&percent, &again));
+
+    // The values of the file: a sample's column adds up to its total.
+    harness.app.set_profile_table_values(CellValues::Loaded);
+    let loaded = harness.app.profile_table().unwrap().unwrap();
+    let first = loaded.samples[0].clone();
+    let total = tree.sample_total(&first).unwrap();
+    assert!((column(&loaded, 0) - total).abs() < 1e-6 * total);
+    harness.app.set_profile_table_values(CellValues::Percent);
+
+    // Sorted by a sample's column (after the one name column), descending.
+    harness.app.sort_profile_table(1);
+    harness.app.sort_profile_table(1);
+    let order = harness.app.profile_table_order();
+    assert_eq!(order.len(), features);
+    assert!(order
+        .windows(2)
+        .all(|pair| percent.rows[pair[0]].values[0] >= percent.rows[pair[1]].values[0]));
+    // Searched: only the features with the text in their name.
+    harness.app.search_profile_table("bacter");
+    let found = harness.app.profile_table_order();
+    assert!(!found.is_empty() && found.len() < features);
+    assert!(found.iter().all(|&row| percent.rows[row]
+        .feature()
+        .to_lowercase()
+        .contains("bacter")));
+    harness.app.search_profile_table("");
+
+    // Only the active samples, when asked.
+    harness
+        .app
+        .session
+        .set_samples_active(std::slice::from_ref(&first), false);
+    assert_eq!(
+        harness.app.profile_table().unwrap().unwrap().samples.len(),
+        tree.num_samples()
+    );
+    harness.app.set_profile_table_columns(true, false);
+    let active = harness.app.profile_table().unwrap().unwrap();
+    assert_eq!(active.samples.len(), tree.num_samples() - 1);
+    assert!(!active.samples.contains(&first));
+    harness.app.set_profile_table_columns(false, true);
+    harness.settle();
+    harness.screenshot("profile_table_levels");
+
+    // The table follows the profile level.
+    let top = tree.hierarchy_headings()[0].clone();
+    harness.app.session.profile_level = top.clone();
+    let higher = harness.app.profile_table().unwrap().unwrap();
+    assert_eq!(higher.levels, [top]);
+    assert!(higher.rows.len() <= features);
+}
+
+#[test]
 fn switching_a_sample_off_keeps_the_selected_feature() {
     for mode in [Mode::TwoGroups, Mode::MultipleGroups] {
         let mut harness = Harness::enterotypes();

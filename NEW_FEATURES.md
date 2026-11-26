@@ -404,6 +404,17 @@ Add an entry here whenever a feature is added that v2 did not have.
   colour picker in the group list [27, 28].
 - **Sortable tables.** The feature, results and metadata tables sort by any
   column [38].
+- **Profile table** (View > Profile table; `crates/stamp-gui/src/profile_table.rs`).
+  The loaded profile as a table, a row per feature at the profile level and
+  a column per sample, so the values behind a result can be read without
+  opening the file. It follows the Profile level, Parent level and
+  Unclassified settings, and shows either the proportion of the parent
+  level in percent (what the tests compare) or the values of the file
+  summed to the level. Options: only the active samples; a column for each
+  higher level of the hierarchy; a search box over the names at every
+  level; sorting by any column; Copy, which puts the rows shown on the
+  clipboard as tab-separated text. Clicking a row selects its feature. It
+  is a movable frame, tabbed with the Metadata and Results tables.
 - **Feature table beside every plot**, with each feature's effect size and
   p-values, not only beside the single-feature plots [30, 33].
 - **Hover tooltips on plots**, where v2 showed a message box on a click.

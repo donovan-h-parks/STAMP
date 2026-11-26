@@ -27,6 +27,7 @@ use stamp_core::stats::two_sample::SampleTest;
 use stamp_core::stats::TestType;
 use stamp_core::Unclassified;
 use stamp_plot::Figure;
+use std::sync::Arc;
 
 use crate::assistant;
 use crate::figure_painter;
@@ -36,6 +37,7 @@ use crate::layout::{self, Frame};
 use crate::platform::{self, Auxiliary, Event, OpenedFile, Platform, ProfileDirectory, Request};
 use crate::plot_config;
 use crate::plots::{self, PlotKind, PlotSettings};
+use crate::profile_table::{self, CellValues, ProfileTable};
 use crate::select_features::{FeatureSelection, Outcome};
 use crate::session::{Mode, Relation, Session};
 
@@ -416,6 +418,11 @@ impl SortState {
                 descending: false,
             };
         }
+    }
+
+    /// The column sorted by and whether the order is descending.
+    pub fn sorted_by(&self) -> Option<(usize, bool)> {
+        self.column.map(|column| (column, self.descending))
     }
 
     /// The order in which to show `count` rows, given the text of each
@@ -869,6 +876,7 @@ pub struct Saved {
     pub show_properties_panel: bool,
     pub show_feature_table: bool,
     pub show_metadata_table: bool,
+    pub show_profile_table: bool,
     pub zoom: f32,
     pub seed: u64,
     pub replicates: usize,
@@ -925,6 +933,7 @@ impl Default for Saved {
             show_properties_panel: true,
             show_feature_table: true,
             show_metadata_table: false,
+            show_profile_table: false,
             zoom: DEFAULT_ZOOM,
             seed: session.seed,
             replicates: session.stats.replicates,
@@ -1069,6 +1078,17 @@ pub struct StampApp {
     table_sort: SortState,
     metadata_sort: SortState,
     show_metadata_table: bool,
+    /// The Profile table: whether it is shown, what its cells hold, which
+    /// samples and levels it shows, its sorting and its search box. The
+    /// table itself is kept with a description of what it was made from,
+    /// and made again when that changes.
+    show_profile_table: bool,
+    profile_table_values: CellValues,
+    profile_table_only_active: bool,
+    profile_table_levels: bool,
+    profile_table_sort: SortState,
+    profile_table_search: String,
+    profile_table: Option<(u64, Result<Arc<ProfileTable>, String>)>,
     show_plot_config: bool,
     show_correction_info: bool,
     /// Show only the features that pass the filters in the results table.
@@ -1292,6 +1312,13 @@ impl StampApp {
             table_sort: SortState::default(),
             metadata_sort: SortState::default(),
             show_metadata_table: false,
+            show_profile_table: false,
+            profile_table_values: CellValues::default(),
+            profile_table_only_active: false,
+            profile_table_levels: false,
+            profile_table_sort: SortState::default(),
+            profile_table_search: String::new(),
+            profile_table: None,
             show_plot_config: false,
             show_correction_info: false,
             results_only_active: false,
@@ -1511,6 +1538,91 @@ impl StampApp {
     /// Show or hide the metadata table along the bottom of the window.
     pub fn show_metadata_table(&mut self, show: bool) {
         self.show_metadata_table = show;
+    }
+
+    /// Show or hide the Profile table.
+    pub fn show_profile_table(&mut self, show: bool) {
+        self.show_profile_table = show;
+    }
+
+    /// What the cells of the Profile table show.
+    pub fn set_profile_table_values(&mut self, values: CellValues) {
+        self.profile_table_values = values;
+    }
+
+    /// Which columns the Profile table has: only the samples that are
+    /// active, and a column for every level above the profile level. The
+    /// sorting is dropped when the levels change, as the columns move.
+    pub fn set_profile_table_columns(&mut self, only_active: bool, higher_levels: bool) {
+        self.profile_table_only_active = only_active;
+        if self.profile_table_levels != higher_levels {
+            self.profile_table_levels = higher_levels;
+            self.profile_table_sort = SortState::default();
+        }
+    }
+
+    /// Show only the features with this text in one of their names.
+    pub fn search_profile_table(&mut self, text: &str) {
+        self.profile_table_search = text.to_string();
+    }
+
+    /// Sort the Profile table by a column, as clicking its heading does.
+    pub fn sort_profile_table(&mut self, column: usize) {
+        self.profile_table_sort.click(column);
+    }
+
+    /// The Profile table of the data loaded, at the profile level and with
+    /// the parent level and treatment of unclassified features of the
+    /// analyses; `None` without a profile. It is made again only when
+    /// something it depends on has changed.
+    pub fn profile_table(&mut self) -> Option<Result<Arc<ProfileTable>, String>> {
+        use std::hash::{Hash, Hasher};
+        let tree = self.session.tree.clone()?;
+        let samples: Vec<&str> = match &self.session.metadata {
+            Some(metadata) if self.profile_table_only_active => {
+                let active = metadata.active_samples();
+                tree.sample_names()
+                    .iter()
+                    .map(String::as_str)
+                    .filter(|sample| active.contains(sample))
+                    .collect()
+            }
+            _ => tree.sample_names().iter().map(String::as_str).collect(),
+        };
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        (Arc::as_ptr(&tree) as usize).hash(&mut hasher);
+        samples.hash(&mut hasher);
+        self.session.profile_level.hash(&mut hasher);
+        self.session.parent_level.hash(&mut hasher);
+        (self.session.unclassified as u8).hash(&mut hasher);
+        self.profile_table_values.hash(&mut hasher);
+        let made_from = hasher.finish();
+        if !matches!(&self.profile_table, Some((key, _)) if *key == made_from) {
+            let table = ProfileTable::build(
+                &tree,
+                &samples,
+                self.session.parent_level.as_deref(),
+                &self.session.profile_level,
+                self.session.unclassified,
+                self.profile_table_values,
+            )
+            .map(Arc::new);
+            self.profile_table = Some((made_from, table));
+        }
+        self.profile_table.as_ref().map(|(_, table)| table.clone())
+    }
+
+    /// The rows of the Profile table in the order shown: searched and
+    /// sorted.
+    pub fn profile_table_order(&mut self) -> Vec<usize> {
+        match self.profile_table() {
+            Some(Ok(table)) => table.order(
+                self.profile_table_sort.sorted_by(),
+                self.profile_table_levels,
+                &self.profile_table_search,
+            ),
+            _ => Vec::new(),
+        }
     }
 
     /// Open or close the "Configure plot" window.
@@ -1931,6 +2043,7 @@ impl StampApp {
             show_properties_panel: self.show_properties_panel,
             show_feature_table: self.show_feature_table,
             show_metadata_table: self.show_metadata_table,
+            show_profile_table: self.show_profile_table,
             zoom: self.zoom,
             seed: self.session.seed,
             replicates: self.session.stats.replicates,
@@ -1973,6 +2086,7 @@ impl StampApp {
         self.show_properties_panel = saved.show_properties_panel;
         self.show_feature_table = saved.show_feature_table;
         self.show_metadata_table = saved.show_metadata_table;
+        self.show_profile_table = saved.show_profile_table;
         self.set_zoom(saved.zoom);
         self.session.seed = saved.seed;
         self.session.stats.replicates = saved.replicates.clamp(10, 1_000_000);
@@ -2691,6 +2805,8 @@ impl StampApp {
                 self.highlight_value.clear();
                 self.metadata_filter = MetadataFilterUi::default();
                 self.metadata_sort = SortState::default();
+                self.profile_table_sort = SortState::default();
+                self.profile_table_search.clear();
                 self.mode = Mode::TwoSamples;
                 self.apply_filters();
             }
@@ -3288,6 +3404,7 @@ impl StampApp {
             Frame::Features => self.show_feature_table && self.session.tree.is_some(),
             Frame::Metadata => self.show_metadata_table,
             Frame::Results => self.show_table,
+            Frame::ProfileTable => self.show_profile_table,
             Frame::ConfigurePlot => self.show_plot_config,
             Frame::ClaudeCode => self.assistant.show_terminal,
         }
@@ -3302,6 +3419,7 @@ impl StampApp {
             Frame::Features => self.show_feature_table = shown,
             Frame::Metadata => self.show_metadata_table = shown,
             Frame::Results => self.show_table = shown,
+            Frame::ProfileTable => self.show_profile_table = shown,
             Frame::ConfigurePlot => self.show_plot_config = shown,
             Frame::ClaudeCode => self.assistant.show_terminal = shown,
         }
@@ -3407,6 +3525,9 @@ impl StampApp {
             }
             Frame::Results => {
                 padded.show(ui, |ui| self.results_table_ui(ui));
+            }
+            Frame::ProfileTable => {
+                padded.show(ui, |ui| self.profile_table_panel(ui));
             }
             Frame::ConfigurePlot => {
                 padded.show(ui, |ui| self.plot_config_ui(ui));
@@ -3525,6 +3646,7 @@ impl StampApp {
                 toggle(ui, Frame::Features, icons::LIST, None);
                 toggle(ui, Frame::Results, icons::TABLE, Some(&shortcut::RESULTS));
                 toggle(ui, Frame::Metadata, icons::ROWS, Some(&shortcut::METADATA));
+                toggle(ui, Frame::ProfileTable, icons::GRID_FOUR, None);
                 ui.separator();
                 toggle(ui, Frame::ClaudeCode, icons::TERMINAL, None);
                 let activity = item(icons::PULSE, "Assistant activity", None)
@@ -4823,6 +4945,133 @@ impl StampApp {
         });
         if let Some((samples, active)) = switch {
             session.set_samples_active(&samples, active);
+        }
+    }
+
+    /// The Profile table: the value of every feature at the profile level
+    /// in every sample. Clicking a row selects its feature, as in the
+    /// Feature table.
+    fn profile_table_panel(&mut self, ui: &mut egui::Ui) {
+        use egui_extras::{Column, TableBuilder};
+
+        ui.add_space(2.0);
+        let table = match self.profile_table() {
+            None => {
+                ui.label("Use File > Load profile file to see the profiles of the samples.");
+                return;
+            }
+            Some(Err(message)) => {
+                ui.label(message);
+                return;
+            }
+            Some(Ok(table)) => table,
+        };
+        let order = self.profile_table_order();
+        let has_metadata = self.session.metadata.is_some();
+        let mut levels = self.profile_table_levels;
+        let mut only_active = self.profile_table_only_active;
+        ui.horizontal_wrapped(|ui| {
+            ui.strong("Profiles");
+            ui.separator();
+            ui.label("Show:");
+            let values = named(&CellValues::ALL, CellValues::name);
+            choose(
+                ui,
+                "profile-table-values",
+                &mut self.profile_table_values,
+                &values,
+            );
+            ui.add_enabled(
+                has_metadata,
+                egui::Checkbox::new(&mut only_active, "Show only active samples"),
+            )
+            .on_hover_text("Leave out the samples that are switched off in the Metadata table")
+            .on_disabled_hover_text("Every sample is active until metadata is loaded");
+            ui.checkbox(&mut levels, "Show higher levels")
+                .on_hover_text("A column for each level of the hierarchy above the features");
+            ui.separator();
+            ui.add(
+                egui::TextEdit::singleline(&mut self.profile_table_search)
+                    .hint_text("Find features")
+                    .desired_width(140.0),
+            )
+            .on_hover_text("Show the features with this text in their name, at any level");
+            let copy = ui
+                .button(icons::label(icons::CLIPBOARD_TEXT, "Copy"))
+                .on_hover_text(
+                    "Copy the rows shown, as tab-separated text with every level and full values",
+                );
+            if copy.clicked() {
+                ui.ctx().copy_text(table.to_tsv(&order));
+            }
+            ui.separator();
+            let parent = self.session.parent_level.as_deref();
+            let of = match table.values {
+                CellValues::Percent => format!(
+                    " as a percentage of {}",
+                    parent.unwrap_or("the entire sample")
+                ),
+                CellValues::Loaded => String::new(),
+            };
+            ui.label(format!(
+                "{} of {} features in {} samples; {}{of}",
+                order.len(),
+                table.rows.len(),
+                table.samples.len(),
+                self.session.profile_level,
+            ));
+        });
+        self.set_profile_table_columns(only_active, levels);
+        ui.separator();
+
+        let levels = self.profile_table_levels;
+        let headings = table.headings(levels);
+        let names = table.name_columns(levels);
+        let mut sort = self.profile_table_sort;
+        let selected = self.session.selected_feature.clone();
+        let mut select = None;
+        egui::ScrollArea::horizontal().show(ui, |ui| {
+            TableBuilder::new(ui)
+                .id_salt(("profile-table", levels))
+                .striped(true)
+                .sense(egui::Sense::click())
+                .columns(
+                    Column::auto().at_least(110.0).clip(true).resizable(true),
+                    names,
+                )
+                .columns(
+                    Column::auto().at_least(70.0).clip(true).resizable(true),
+                    table.samples.len(),
+                )
+                .header(20.0, |mut header| {
+                    for (column, heading) in headings.iter().enumerate() {
+                        header.col(|ui| sort.heading(ui, column, heading));
+                    }
+                })
+                .body(|body| {
+                    body.rows(18.0, order.len(), |mut table_row| {
+                        let index = order[table_row.index()];
+                        let row = &table.rows[index];
+                        table_row.set_selected(selected.as_deref() == Some(row.feature()));
+                        for column in 0..names {
+                            table_row.col(|ui| {
+                                plain_label(ui, table.name(index, column, levels));
+                            });
+                        }
+                        for value in &row.values {
+                            table_row.col(|ui| {
+                                plain_label(ui, profile_table::cell_text(*value));
+                            });
+                        }
+                        if table_row.response().clicked() {
+                            select = Some(row.feature().to_string());
+                        }
+                    });
+                });
+        });
+        self.profile_table_sort = sort;
+        if let Some(feature) = select {
+            self.select_feature(&feature);
         }
     }
 

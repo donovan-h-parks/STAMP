@@ -27,6 +27,7 @@ pub const SLIDERS: &str = "\u{E434}";
 pub const LIST: &str = "\u{E2F2}";
 pub const ROWS: &str = "\u{E5A2}";
 pub const TABLE: &str = "\u{E476}";
+pub const GRID_FOUR: &str = "\u{E296}";
 pub const WINDOW_OUT: &str = "\u{E5DE}";
 pub const MOON: &str = "\u{E330}";
 pub const GEAR: &str = "\u{E270}";
@@ -39,7 +40,7 @@ pub const PULSE: &str = "\u{E000}";
 pub const ARROW_COUNTER_CLOCKWISE: &str = "\u{E038}";
 
 /// Every icon, for checking that the font has them all.
-pub const ALL: [&str; 25] = [
+pub const ALL: [&str; 26] = [
     FOLDER_OPEN,
     FILE,
     TAG,
@@ -55,6 +56,7 @@ pub const ALL: [&str; 25] = [
     LIST,
     ROWS,
     TABLE,
+    GRID_FOUR,
     WINDOW_OUT,
     MOON,
     GEAR,

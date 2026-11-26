@@ -148,6 +148,27 @@ Tables
   filter to tick or untick all samples matching a condition (for example,
   *Remove all samples where Nationality = american*). Samples left out by
   the *Sample filter* are greyed out here.
+* **View > Profile table** shows the profile itself along the bottom of
+  the window: a row for every feature at the *Profile level* and a column
+  for every sample, so the numbers behind a result can be read. It follows
+  the *Profile level*, *Parent level* and *Unclassified* settings of
+  *Profile and groups*, and so shows what the tests and plots are given.
+
+  * **Show** chooses what the cells hold: *Proportion (%)*, the feature as
+    a percentage of its parent level in the sample (the values the tests of
+    groups compare), or *Values in the file*, the counts or coverage of the
+    profile file summed over the rows that belong to the feature.
+  * *Show only active samples* leaves out the samples switched off in the
+    metadata table or by the *Sample filter*.
+  * *Show higher levels* adds a column for each level of the hierarchy
+    above the features.
+  * Type in *Find features* to show only the features with that text in
+    their name, at any level of the hierarchy.
+  * Click a column heading to sort by it (a sample's column sorts by
+    value), and a row to select its feature, as in the feature table.
+  * **Copy** puts the rows shown on the clipboard as tab-separated text,
+    with every level of the hierarchy and the values in full, ready to
+    paste into a spreadsheet.
 * **View > Assistant** (desktop application) shows or hides the assistant
   panel on the right of the window, with a tab for each assistant open
   (OpenCode, Claude Code, Google Antigravity); see :doc:`assistant`. **View
@@ -161,18 +182,23 @@ its table to the front.
 
    The metadata table along the bottom of the window.
 
+.. figure:: images/gui_profile_table.png
+   :width: 100%
+
+   The profile table: the proportion of each phylum in each sample.
+
 .. _arranging-the-window:
 
 Arranging the window
 --------------------
 
-Seven parts of the window are frames you can move: *Profile and groups*,
+Eight parts of the window are frames you can move: *Profile and groups*,
 *Statistics*, the *Feature table*, the *Metadata table*, the *Results
-table*, *Configure plot* and, in the desktop application, the *Assistant*.
+table*, the *Profile table*, *Configure plot* and the *Assistant*.
 Each has a tab with its name. STAMP starts with *Profile and groups* and
 *Statistics* as tabs on the left, the *Feature table* on the right, and the
-*Metadata table* and *Results table* as tabs along the bottom (shown when
-you choose them in the View menu); the *Assistant* appears on the right
+*Metadata table*, *Results table* and *Profile table* as tabs along the
+bottom (shown when you choose them in the View menu); the *Assistant* appears on the right
 when you open an assistant.
 
 * **Move a frame** by dragging its tab. While you drag, STAMP shows where

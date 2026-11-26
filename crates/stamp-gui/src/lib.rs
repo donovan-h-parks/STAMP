@@ -12,6 +12,7 @@ pub mod layout;
 pub mod platform;
 pub mod plot_config;
 pub mod plots;
+pub mod profile_table;
 pub mod select_features;
 pub mod session;
 pub mod theme;

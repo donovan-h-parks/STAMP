@@ -6,6 +6,24 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-27, the glacier/example-data session):
+**Profile table**. New frame `Frame::ProfileTable` ("Profile table", View
+menu, icon GRID_FOUR added with scripts/icons/subset.sh), a tab along the
+bottom with the Metadata and Results tables; `LAYOUT_VERSION` 4, so
+remembered layouts start again from the default. Data and logic in the new
+`crates/stamp-gui/src/profile_table.rs` (`ProfileTable::build/order/to_tsv`,
+`CellValues`, `cell_text`; unit tests there); drawn by
+`StampApp::profile_table_panel` in app.rs; the table is cached under a hash
+of what it is made from (`StampApp::profile_table`). Follows the session's
+profile level, parent level and unclassified setting; all samples, or only
+the active ones. Public methods for tests: `show_profile_table`,
+`set_profile_table_values`, `set_profile_table_columns`,
+`search_profile_table`, `sort_profile_table`, `profile_table_order`.
+`Saved::show_profile_table`. ui.rs
+`the_profile_table_shows_the_values_of_the_loaded_profile`; main_window.rst
+(with images/gui_profile_table.png), NEW_FEATURES. fmt, clippy and the
+workspace tests pass.
+
 Finished and committed (2026-11-27, the layout/assistant session):
 **composition bar plot options**. stamp-plot `composition.rs`:
 `SampleOrder` (Composition = UPGMA leaf order, the default; Name,

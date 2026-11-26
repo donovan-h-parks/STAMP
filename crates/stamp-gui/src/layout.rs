@@ -1,9 +1,10 @@
 //! The arrangement of the main window: frames that can be moved around the
 //! plot by dragging their tabs, using `egui_tiles`.
 //!
-//! The plot stays in the middle. Seven frames can be put to any side of it
+//! The plot stays in the middle. Eight frames can be put to any side of it
 //! or of each other, or tabbed together: Profile and groups, Statistics,
-//! the Feature table, the Metadata table, the Results table, Configure plot
+//! the Feature table, the Metadata table, the Results table, the Profile
+//! table, Configure plot
 //! and (on the desktop) the assistant panel. Which frames are shown is decided by
 //! the window's own flags (the View menu); the layout only follows them.
 //! See `docs/LAYOUT_PLAN.md`.
@@ -21,7 +22,8 @@ use egui_tiles::{Container, Tile, TileId, Tiles, Tree};
 ///    along the bottom).
 /// 3: the left frame as wide as the analysis buttons need (was a share of
 ///    the window's width).
-pub const LAYOUT_VERSION: u32 = 3;
+/// 4: the Profile table added, as a tab along the bottom.
+pub const LAYOUT_VERSION: u32 = 4;
 
 /// The gap between frames, in points.
 const GAP: f32 = 2.0;
@@ -39,6 +41,9 @@ pub enum Frame {
     Features,
     Metadata,
     Results,
+    /// The table of the profile's values, a row per feature and a column
+    /// per sample.
+    ProfileTable,
     ConfigurePlot,
     /// The assistant panel, with a tab for each assistant program running
     /// (Claude Code, OpenCode, Antigravity); named for the first, as saved
@@ -47,13 +52,14 @@ pub enum Frame {
 }
 
 impl Frame {
-    pub const ALL: [Frame; 8] = [
+    pub const ALL: [Frame; 9] = [
         Frame::Plot,
         Frame::Profile,
         Frame::Statistics,
         Frame::Features,
         Frame::Metadata,
         Frame::Results,
+        Frame::ProfileTable,
         Frame::ConfigurePlot,
         Frame::ClaudeCode,
     ];
@@ -67,6 +73,7 @@ impl Frame {
             Frame::Features => "Feature table",
             Frame::Metadata => "Metadata table",
             Frame::Results => "Results table",
+            Frame::ProfileTable => "Profile table",
             Frame::ConfigurePlot => "Configure plot",
             Frame::ClaudeCode => "Assistant",
         }
@@ -81,8 +88,8 @@ impl Frame {
 /// The layout STAMP starts with: Profile and groups and Statistics as tabs
 /// on the left (with Configure plot as a third tab when it is opened); the
 /// plot, then the Feature table, then the assistant (hidden until an
-/// assistant is opened) to its right; the Metadata table and the Results
-/// table as tabs along the bottom.
+/// assistant is opened) to its right; the Metadata table, the Results table
+/// and the Profile table as tabs along the bottom.
 pub fn default_tree() -> Tree<Frame> {
     let mut tiles = Tiles::default();
     let tabs = |tiles: &mut Tiles<Frame>, frames: &[Frame]| {
@@ -96,7 +103,10 @@ pub fn default_tree() -> Tree<Frame> {
     let plot = tabs(&mut tiles, &[Frame::Plot]);
     let features = tabs(&mut tiles, &[Frame::Features]);
     let assistant = tabs(&mut tiles, &[Frame::ClaudeCode]);
-    let bottom = tabs(&mut tiles, &[Frame::Metadata, Frame::Results]);
+    let bottom = tabs(
+        &mut tiles,
+        &[Frame::Metadata, Frame::Results, Frame::ProfileTable],
+    );
     let top = tiles.insert_horizontal_tile(vec![left, plot, features, assistant]);
     // Widths and heights in points of a 1280 by 800 window with every frame
     // shown (only their proportions matter): the side frames as wide as
