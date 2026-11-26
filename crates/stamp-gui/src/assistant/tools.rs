@@ -378,9 +378,10 @@ pub fn list() -> Vec<ToolInfo> {
                           place of the data loaded now, as File > Load profile and Load \
                           metadata do. Use it only when the user asks for other data. Give \
                           full paths (\"~/\" stands for the home folder). 'profile': a \
-                          STAMP profile, a BIOM table, a SingleM or Sandpiper profile or a \
-                          mothur taxonomy file; or several SingleM or Sandpiper files (one per \
-                          sample), which are combined into one profile. 'metadata': a \
+                          STAMP profile, a BIOM table, a mothur taxonomy file, or the output \
+                          of SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken or HUMAnN; \
+                          or several files of one of these profilers (one per sample), which \
+                          are combined into one profile. 'metadata': a \
                           tab-separated file with a row per sample, for the profile given \
                           with it or, without 'profile', for the profile loaded now. A BIOM \
                           table takes its hierarchy from the observation metadata field \
@@ -396,8 +397,8 @@ pub fn list() -> Vec<ToolInfo> {
                 "properties": {
                     "profile": {"type": "array", "items": {"type": "string"},
                                 "description": "Full path of the profile file, or of several \
-                                                SingleM or Sandpiper files to combine. A \
-                                                single path may also be given as a string."},
+                                                files of one profiler to combine. A single \
+                                                path may also be given as a string."},
                     "metadata": {"type": "string",
                                  "description": "Full path of the metadata file."},
                     "biom_metadata_field": {"type": ["string", "null"]},
@@ -1338,15 +1339,15 @@ fn read_file(path: &str) -> Result<crate::platform::OpenedFile, String> {
     }
     if full.is_dir() {
         return Err(format!(
-            "{path} is a folder: give the files in it (several SingleM or Sandpiper files \
-             are combined)."
+            "{path} is a folder: give the files in it (several files of one profiler, such \
+             as Kraken reports, are combined)."
         ));
     }
     let bytes = std::fs::read(&full).map_err(|e| format!("Could not read {path}: {e}."))?;
     let name = Path::new(&full)
         .file_name()
         .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
-    Ok(crate::platform::OpenedFile { name, bytes })
+    crate::platform::OpenedFile::new(name, bytes)
 }
 
 /// In the browser, files are only opened by the user.

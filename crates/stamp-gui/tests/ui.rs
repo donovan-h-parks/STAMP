@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 
 use eframe::egui;
+use stamp_core::import::profiler::ProfilerFormat;
 use stamp_gui::headless::{Image, Renderer};
 use stamp_gui::platform::Event;
 use stamp_gui::plots::PlotKind;
@@ -1050,6 +1051,60 @@ fn mothur_files_open_from_load_profile() {
     assert_eq!(harness.app.session.tree.as_ref().unwrap().num_samples(), 39);
 }
 
+/// A file of `examples/input_file_formats` (all gzip-compressed), opened as
+/// the file dialogs open files.
+fn compressed_example(relative: &str) -> Result<stamp_gui::platform::OpenedFile, String> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/input_file_formats")
+        .join(relative);
+    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let name = path.file_name().unwrap().to_string_lossy().into_owned();
+    stamp_gui::platform::OpenedFile::new(name, bytes)
+}
+
+#[test]
+fn compressed_files_open_like_plain_ones() {
+    // A mothur taxonomy file is told by its name, `.gz` or not.
+    let taxonomy = compressed_example("mothur/stool.unique.rdp.wang.taxonomy.gz").unwrap();
+    assert!(taxonomy.is_mothur_taxonomy());
+    assert!(
+        taxonomy.text().starts_with("M0000001\t"),
+        "decompressed when opened"
+    );
+    let mut harness = Harness::new();
+    harness.app.open_profile_file(taxonomy);
+    assert_eq!(harness.app.pending_profile(), Some("mothur"));
+    harness.app.deliver(Event::Auxiliary(
+        stamp_gui::platform::Auxiliary::MothurGroups,
+        compressed_example("mothur/stool.groups.gz").unwrap(),
+    ));
+    harness.settle();
+    harness.app.accept_pending_profile();
+    harness.settle();
+    assert_eq!(harness.app.notice(), None);
+    assert_eq!(harness.app.session.tree.as_ref().unwrap().num_samples(), 10);
+
+    // Compressed metadata.
+    harness.app.deliver(Event::Metadata(
+        compressed_example("metadata.tsv.gz").unwrap(),
+    ));
+    harness.settle();
+    assert_eq!(harness.app.notice(), None);
+    assert_eq!(harness.app.session.metadata_name, "metadata.tsv.gz");
+
+    // A compressed file cut short is refused when it is opened.
+    let bytes = std::fs::read(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/input_file_formats/metadata.tsv.gz"),
+    )
+    .unwrap();
+    let cut = bytes[..bytes.len() / 2].to_vec();
+    let error = stamp_gui::platform::OpenedFile::new("m.tsv.gz".into(), cut)
+        .err()
+        .unwrap();
+    assert!(error.contains("could not be decompressed"), "{error}");
+}
+
 #[test]
 fn singlem_and_sandpiper_profiles_open_from_load_profile() {
     let data = "../stamp-core/tests/data/singlem";
@@ -1118,7 +1173,7 @@ fn singlem_and_sandpiper_profiles_open_from_load_profile() {
         .app
         .notice()
         .unwrap()
-        .contains("only if they are SingleM or Sandpiper profiles"));
+        .contains("only if they are profiles written by"));
     assert!(harness.app.session.tree.is_none());
 }
 
@@ -1218,7 +1273,7 @@ fn a_directory_of_singlem_profiles_opens_from_load_profile_directory() {
     );
     assert_eq!(
         harness.app.notice(),
-        Some("Skipped 1 file that is not a SingleM or Sandpiper profile: reads_1.fastq.")
+        Some("Skipped 1 file that is not a profile: reads_1.fastq.")
     );
     harness.screenshot("profile_directory");
 
@@ -1235,8 +1290,90 @@ fn a_directory_of_singlem_profiles_opens_from_load_profile_directory() {
         .app
         .notice()
         .unwrap()
-        .contains("No SingleM or Sandpiper profiles were found in reads"));
+        .contains("No profiles were found in reads"));
     assert_eq!(harness.app.session.tree.as_ref().unwrap().num_samples(), 2);
+}
+
+/// A directory of the example profiler outputs, read as Load profile
+/// directory reads it.
+fn example_directory(name: &str) -> stamp_gui::platform::ProfileDirectory {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/input_file_formats")
+        .join(name);
+    stamp_gui::platform::read_directory(&path).unwrap()
+}
+
+#[test]
+fn directories_of_profiler_outputs_load() {
+    let samples = [
+        "H01", "H02", "H03", "H04", "H05", "I01", "I02", "I03", "I04", "I05",
+    ];
+    for (directory, format, levels) in [
+        ("Kraken2", "Kraken", 8),
+        ("Bracken", "Bracken", 1),
+        ("MetaPhlAn", "MetaPhlAn", 8),
+        ("mOTUs", "mOTUs", 7),
+    ] {
+        let read = example_directory(directory);
+        // Subdirectories (merged tables, Bracken's reports) are not read.
+        assert_eq!(read.files.len(), 10, "{directory}");
+        let mut harness = Harness::new();
+        harness.app.deliver(Event::ProfileDirectory(read));
+        harness.settle();
+        let tree = harness.app.session.tree.as_ref().expect(directory);
+        assert_eq!(tree.sample_names(), samples, "{directory}");
+        assert_eq!(tree.hierarchy_headings().len(), levels, "{directory}");
+        assert_eq!(
+            harness.app.session.profile_name,
+            format!("{directory} (10 {format} profiles)")
+        );
+        assert_eq!(harness.app.notice(), None, "{directory}");
+    }
+}
+
+#[test]
+fn a_directory_of_several_kinds_asks_which_to_load() {
+    let mut harness = Harness::new();
+    harness
+        .app
+        .deliver(Event::ProfileDirectory(example_directory("HUMAnN")));
+    harness.settle();
+    // HUMAnN writes three tables per sample: nothing loads before the
+    // choice, and the kind with the most files (here the first) is offered.
+    assert_eq!(harness.app.pending_profile(), Some("directory"));
+    assert!(harness.app.session.tree.is_none());
+    harness.screenshot("profile_directory_kind");
+
+    harness
+        .app
+        .choose_directory_format(ProfilerFormat::HumannPathAbundance);
+    harness.app.accept_pending_profile();
+    harness.settle();
+    let tree = harness.app.session.tree.as_ref().expect("pathways loaded");
+    assert_eq!(tree.hierarchy_headings(), ["Pathway"]);
+    assert_eq!(tree.num_samples(), 10);
+    assert_eq!(
+        harness.app.session.profile_name,
+        "HUMAnN (10 HUMAnN pathway abundance profiles)"
+    );
+    let notice = harness.app.notice().unwrap();
+    assert!(
+        notice.starts_with(
+            "Skipped 20 files that are not HUMAnN pathway abundance profiles: \
+             H01_genefamilies.tsv.gz, H01_pathcoverage.tsv.gz,"
+        ),
+        "{notice}"
+    );
+
+    // Cancelling loads nothing.
+    let mut harness = Harness::new();
+    harness
+        .app
+        .deliver(Event::ProfileDirectory(example_directory("HUMAnN")));
+    harness.settle();
+    harness.app.cancel_pending_profile();
+    harness.settle();
+    assert!(harness.app.session.tree.is_none());
 }
 
 #[test]

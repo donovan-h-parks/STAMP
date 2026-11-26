@@ -6,6 +6,97 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-26): **gzip-compressed input files**.
+Asked for: gzip all the example input files; make STAMP read compressed or
+plain profile and metadata files. Done: `stamp_core::text::{is_gzip,
+decompress, decompressed_start}` (flate2 rust backend, multi-member, a
+file cut short is an error); `sample_name_of` drops `.gz`; CLI `read_bytes`
+decompresses every input and directory detection decompresses the first
+64 KiB; GUI `OpenedFile::new` decompresses (desktop dialogs, browser picker
+and directories, assistant `load_data`, command-line arguments),
+`OpenedFile::is_mothur_taxonomy` accepts `.taxonomy.gz`, every file dialog
+filter offers `gz`; `imp::open` now returns Result (an unreadable file is
+reported instead of skipped). Every file in examples/input_file_formats is
+now `.gz` (make_examples.py writes gzip with mtime 0, byte-identical
+reruns; stool outputs `gzip -9 -n`); the two mOTUs 3 mOTU-level tables
+(235/435 kB compressed) are now included and tested. Tests: text.rs (2),
+mod.rs sample names, cli.rs `gzip_compressed_profiles_and_metadata_are_read`,
+ui.rs `compressed_files_open_like_plain_ones`, example tests read `.gz`.
+Docs: input_files.rst, command_line.rst, CLI help, examples README,
+make_stool_outputs.sh, NEW_FEATURES.
+
+Finished and committed (2026-11-26): **human stool sample replaces the
+glacier sample as the real profiler outputs**. Asked for: find a human stool
+Illumina run on the SRA, subsample to 1M read pairs, run every profiler, use
+the outputs as the parsing test cases. Done: SRR17283923 (PRJNA787665, Hong
+Kong population survey, NovaSeq, 4.6M pairs, ENA MD5s checked), seqtk seed
+20261126; outputs in `examples/input_file_formats/<tool>/stool_SRR17283923/`
+(glacier_SRR23617190 folders deleted); `make_stool_outputs.sh` replaces
+make_glacier_outputs.sh; `crates/stamp-core/tests/stool_sample.rs` (8 tests,
+checking values against the tools' own numbers) replaces glacier_sample.rs;
+new unit test metaphlan.rs `a_profile_with_nothing_above_zero_is_refused`
+(the glacier files had tested that message). HUMAnN gene families table kept
+(8.9 MB); mOTUs 3 mOTU-level tables (2.3, 6.8 MB) left out (since added,
+compressed). README there,
+PROFILER_FORMATS ("Checked against real output"), input_files.rst,
+NEW_FEATURES updated. Work dir: session scratchpad `stool/` (disposable).
+
+Finished and committed (2026-11-26): **real profiler outputs of one
+glacier-fed sample** (since replaced by the stool sample, above). Asked for: take a glacier-fed run, subsample to
+100,000 read pairs, run every profiler STAMP reads, make sure STAMP reads
+the outputs, put them in examples/input_file_formats, add unit tests on
+them. Done: SRR23617190 (GL126_DN) subsampled with seqtk (seed 20261126);
+outputs in `examples/input_file_formats/<tool>/glacier_SRR23617190/`
+(SingleM 0.21.4, Sandpiper whole-run JSON, mOTUs 3.1 -g 1 -A and -k genus,
+mOTUs 4.1 default and -g 1, MetaPhlAn 4.1.1 rel_ab / read stats / GTDB,
+HUMAnN 3.9, Kraken 2.17.2 report / minimizers / mpa, Bracken 3.1 species and
+genus tables and reports); `make_glacier_outputs.sh` records the commands
+(work dir was the session scratchpad, now disposable); README section;
+tests `crates/stamp-core/tests/glacier_sample.rs` (8). Code changes from
+real data: Bracken reports read by clade reads (Bracken 3.1 genus reports
+have 0 direct reads on genera); a profile with no value above zero now says
+so ("Nothing in the files has a value above zero"). Docs: PROFILER_FORMATS
+("Checked against real output"), input_files.rst, NEW_FEATURES. Not
+included: two mOTUs 3 tables of 2.3 and 6.8 MB (every database mOTU listed).
+A MetaPhlAn run briefly created lib/python3.12/... with a partial database
+download inside the shared env /opt/centos7/sw/miniconda3/envs/
+metaphlan_4.1.1; it was removed (the tree was created by this session).
+
+Finished and committed (2026-11-26): **profiles of mOTUs, MetaPhlAn,
+Kraken, Bracken and HUMAnN loaded natively, from a file or a directory;
+CoMet, RITA and MG-RAST removed; example inputs for every format**. Asked
+for (in one task, with three later additions): research the formats
+(`docs/PROFILER_FORMATS.md`, with a table of supported versions, also in
+input_files.rst), parse them in `stamp-core`, directory loading in GUI,
+browser and CLI, examples, tests, docs; then remove CoMet/RITA/MG-RAST, add
+HUMAnN 3, generate examples of the formats already read, and tabulate the
+supported versions. Done:
+- stamp-core: `import/profiler.rs` (was coverage.rs: `ProfilerFormat`, 11
+  formats, detection from the first 64 KiB, `combine`, `formats_of`,
+  `directory_to_spf(dir, files, only)`), new `motus.rs`, `metaphlan.rs`,
+  `kraken.rs` (Kraken report, MPA style, Bracken report and table),
+  `humann.rs`; `lineage.rs` (owned `Ranks`, `add_ranked` with `(no <rank>)`
+  fillers, `own_values` for clade tables, `add_clades`); `mod.rs`
+  (`sample_name_of`, `complete_lines`, `check_unique`); comet/rita/mgrast
+  deleted. Unit tests in each module; `tests/profiler_examples.rs`.
+- CLI: `--profile` reads all formats and directories; new
+  `--profile-format`; new `convert profiles [--format]`; convert
+  mgrast/comet/rita gone; tests in tests/cli.rs (convert test now on BIOM).
+- GUI: Load profile file/directory accept all formats; a directory with
+  several kinds opens a "Profile directory" window to choose
+  (`PendingProfile::Directory`, `StampApp::choose_directory_format`);
+  messages updated; GUI tests `directories_of_profiler_outputs_load`,
+  `a_directory_of_several_kinds_asks_which_to_load`; assistant tool text.
+- Examples: `examples/input_file_formats/` (README, make_examples.py, run
+  with pixi Python 3.12 + h5py).
+- Docs: input_files.rst, command_line.rst, README.md, NEW_FEATURES.md,
+  CHANGES_FROM_PYTHON #69 (removal) and #70 (new formats), golden README.
+Checks: fmt, clippy (native and wasm32), `cargo test --workspace --release`
+(625 passed, 0 failed) and Sphinx -W all pass. Not verified: the browser build in a real
+browser, and the readers against real tool output (only the documented
+formats and made-up examples). Old example data sets of the removed formats
+kept (their .spf files feed golden tests). Nothing staged or committed.
+
 Finished and committed (2026-11-26, separate session): **White's
 non-parametric t-test verified against Metastats**. The original
 detect_DA_features.r (Metastats 4/14/2009, archived copy in that session's

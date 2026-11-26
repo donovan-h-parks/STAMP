@@ -9,6 +9,52 @@ pub fn decode(bytes: &[u8]) -> Cow<'_, str> {
     String::from_utf8_lossy(bytes)
 }
 
+/// True if a file's contents start like a gzip-compressed file.
+pub fn is_gzip(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0x1f, 0x8b])
+}
+
+/// A file's contents, decompressed if they are gzip-compressed (told by
+/// their first bytes, not by the file's name), otherwise as they are.
+/// Several gzip members one after another (as `cat a.gz b.gz` makes) are
+/// read as one file.
+pub fn decompress(bytes: &[u8]) -> Result<Cow<'_, [u8]>, String> {
+    use std::io::Read;
+    if !is_gzip(bytes) {
+        return Ok(bytes.into());
+    }
+    let mut buffer = Vec::new();
+    flate2::read::MultiGzDecoder::new(bytes)
+        .read_to_end(&mut buffer)
+        .map_err(|e| {
+            format!(
+                "it is gzip-compressed but could not be decompressed ({e}); it may be incomplete"
+            )
+        })?;
+    Ok(buffer.into())
+}
+
+/// Up to `limit` bytes from the start of a file's contents, decompressed if
+/// they are gzip-compressed. `bytes` may be only the start of a compressed
+/// file (as read to tell a file's format): whatever can be decompressed
+/// from it is returned.
+pub fn decompressed_start(bytes: &[u8], limit: usize) -> Vec<u8> {
+    use std::io::Read;
+    if !is_gzip(bytes) {
+        return bytes[..bytes.len().min(limit)].to_vec();
+    }
+    let mut decoder = flate2::read::MultiGzDecoder::new(bytes).take(limit as u64);
+    let mut out = Vec::new();
+    let mut chunk = [0u8; 8192];
+    loop {
+        match decoder.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => out.extend_from_slice(&chunk[..n]),
+        }
+    }
+    out
+}
+
 /// Split text into lines, accepting `\n`, `\r\n` and `\r` line endings.
 /// A final line terminator does not produce an empty last line.
 pub fn lines(text: &str) -> Vec<&str> {
@@ -104,6 +150,46 @@ mod tests {
     fn formats_like_python() {
         assert_eq!(format_float(3.0), "3.0");
         assert_eq!(format_float(0.5), "0.5");
+    }
+
+    fn gzip(bytes: &[u8]) -> Vec<u8> {
+        use std::io::Write;
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(bytes).unwrap();
+        encoder.finish().unwrap()
+    }
+
+    #[test]
+    fn gzip_files_are_decompressed() {
+        let text = "sample\tcoverage\ttaxonomy\nA\t1\tRoot; d__Bacteria\n".repeat(2000);
+        let compressed = gzip(text.as_bytes());
+        assert!(is_gzip(&compressed));
+        assert_eq!(decompress(&compressed).unwrap(), text.as_bytes());
+        // Plain files are given back as they are, without a copy.
+        assert!(matches!(decompress(text.as_bytes()), Ok(Cow::Borrowed(_))));
+        // Two members one after the other, as `cat a.gz b.gz` writes.
+        let mut two = gzip(b"a\n");
+        two.extend(gzip(b"b\n"));
+        assert_eq!(decompress(&two).unwrap(), b"a\nb\n".as_slice());
+        // A file cut short is an error, not a shorter file.
+        let cut = &compressed[..compressed.len() / 2];
+        assert!(decompress(cut)
+            .unwrap_err()
+            .contains("could not be decompressed"));
+    }
+
+    #[test]
+    fn the_start_of_a_compressed_file_is_decompressed() {
+        let text = "line of a profile\n".repeat(20_000);
+        let compressed = gzip(text.as_bytes());
+        assert_eq!(
+            decompressed_start(&compressed, 100),
+            &text.as_bytes()[..100]
+        );
+        // Only the start of the compressed file: what it holds is returned.
+        let start = decompressed_start(&compressed[..compressed.len() / 2], usize::MAX);
+        assert!(!start.is_empty() && text.as_bytes().starts_with(&start));
+        assert_eq!(decompressed_start(b"plain text", 5), b"plain".as_slice());
     }
 
     #[test]

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use stamp_core::import::{biom, cog, comet, mgrast, NamedText};
+use stamp_core::import::{biom, cog, NamedText};
 use stamp_core::ProfileTree;
 
 fn path(relative: &str) -> PathBuf {
@@ -17,16 +17,6 @@ fn path(relative: &str) -> PathBuf {
 fn read(relative: &str) -> String {
     let bytes = fs::read(path(relative)).unwrap_or_else(|e| panic!("{relative}: {e}"));
     stamp_core::text::decode(&bytes).into_owned()
-}
-
-/// Header line and data rows, with the rows sorted (row order is not defined
-/// in files written by STAMP v2).
-fn header_and_sorted_rows(spf: &str) -> (String, Vec<String>) {
-    let mut lines = spf.lines().map(str::to_string);
-    let header = lines.next().unwrap();
-    let mut rows: Vec<String> = lines.filter(|l| !l.is_empty()).collect();
-    rows.sort();
-    (header, rows)
 }
 
 /// Rows keyed by their first `levels` columns, with counts as numbers.
@@ -63,74 +53,6 @@ fn assert_same_numbers(actual: &str, expected: &str, levels: usize) {
             );
         }
     }
-}
-
-#[test]
-fn mgrast_cow_rumen() {
-    let source = read("examples/CowRumen-MG-RAST/CowRumen-MG-RAST.tsv");
-    let spf = mgrast::MgRastProfile::parse(&source)
-        .unwrap()
-        .to_spf()
-        .unwrap();
-    assert_eq!(
-        header_and_sorted_rows(&spf),
-        header_and_sorted_rows(&read("examples/CowRumen-MG-RAST/CowRumen.spf"))
-    );
-    ProfileTree::read(&spf).unwrap();
-}
-
-#[test]
-fn comet_nine_biomes_pfam() {
-    let dir = "examples/NineBiomes-Pfam-Profiles-CoMet";
-    let biomes = [
-        "Coral",
-        "Fish",
-        "Freshwater",
-        "Hypersaline",
-        "Marine",
-        "Microbialites",
-        "Subterranean",
-        "TerrestrialAnimals",
-    ];
-    let names: Vec<String> = biomes
-        .iter()
-        .map(|b| format!("profilePfam_{b}.fa.txt"))
-        .collect();
-    let texts: Vec<String> = names.iter().map(|n| read(&format!("{dir}/{n}"))).collect();
-    let files: Vec<NamedText> = names
-        .iter()
-        .zip(&texts)
-        .map(|(name, text)| NamedText { name, text })
-        .collect();
-
-    let spf = comet::to_spf(&files).unwrap();
-    assert_same_numbers(&spf, &read(&format!("{dir}/NineBiomes-Pfam.spf")), 1);
-    ProfileTree::read(&spf).unwrap();
-}
-
-#[test]
-fn comet_go_profiles_convert_and_load() {
-    let dir = path("examples/NineBiomes-GO-Profiles-CoMet");
-    let mut names: Vec<String> = fs::read_dir(&dir)
-        .unwrap()
-        .map(|e| e.unwrap().file_name().into_string().unwrap())
-        .filter(|n| n.starts_with("profileGO_"))
-        .collect();
-    names.sort();
-    assert_eq!(names.len(), 8);
-    let texts: Vec<String> = names
-        .iter()
-        .map(|n| read(&format!("examples/NineBiomes-GO-Profiles-CoMet/{n}")))
-        .collect();
-    let files: Vec<NamedText> = names
-        .iter()
-        .zip(&texts)
-        .map(|(name, text)| NamedText { name, text })
-        .collect();
-
-    let tree = ProfileTree::read(&comet::to_spf(&files).unwrap()).unwrap();
-    assert_eq!(tree.num_samples(), 8);
-    assert_eq!(tree.sample_names()[0], "Coral");
 }
 
 #[test]

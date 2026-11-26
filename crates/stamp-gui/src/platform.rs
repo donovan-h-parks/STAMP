@@ -14,8 +14,8 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use eframe::egui;
-use stamp_core::import::coverage::{self, CoverageFormat};
-use stamp_core::import::{biom, cog, comet, mgrast, mothur, rita, sandpiper, singlem, NamedText};
+use stamp_core::import::profiler::{self, ProfilerFormat};
+use stamp_core::import::{biom, cog, mothur, sandpiper, singlem, NamedText};
 use stamp_plot::export::{export, Format};
 use stamp_plot::Figure;
 
@@ -26,52 +26,65 @@ pub struct OpenedFile {
 }
 
 impl OpenedFile {
+    /// A file as read, decompressed if it is gzip-compressed, so that every
+    /// file can be given compressed or not.
+    pub fn new(name: String, bytes: Vec<u8>) -> Result<Self, String> {
+        let bytes = match stamp_core::text::decompress(&bytes) {
+            Ok(std::borrow::Cow::Owned(decompressed)) => decompressed,
+            Ok(std::borrow::Cow::Borrowed(_)) => bytes,
+            Err(error) => return Err(format!("Could not read {name}: {error}.")),
+        };
+        Ok(Self { name, bytes })
+    }
+
     pub fn text(&self) -> String {
         stamp_core::text::decode(&self.bytes).into_owned()
     }
+
+    /// True if the file is named as a mothur taxonomy file
+    /// (`*.taxonomy`, or `*.taxonomy.gz`).
+    pub fn is_mothur_taxonomy(&self) -> bool {
+        let name = self.name.to_lowercase();
+        let name = name.strip_suffix(".gz").unwrap_or(&name);
+        name.ends_with(".taxonomy")
+    }
 }
 
-/// The files of a directory that may be SingleM or Sandpiper profiles.
+/// The files of a directory that may be profiles written by profilers
+/// (SingleM, mOTUs, MetaPhlAn, Kraken, HUMAnN, ...).
 pub struct ProfileDirectory {
     /// The directory's name, without its parent directories.
     pub name: String,
-    /// Files that start like a SingleM or Sandpiper profile, in order of
-    /// name.
+    /// Files that start like a profiler's output, in order of name.
     pub files: Vec<OpenedFile>,
     /// Names of the other files, which are not read in full.
     pub skipped: Vec<String>,
 }
 
-/// How much of a file is read to tell whether it is a SingleM or Sandpiper
-/// profile.
+/// How much of a file is read to tell whether it is a profiler's output.
 const DETECTION_BYTES: usize = 65536;
 
-/// True if a file starting with these bytes is a SingleM or Sandpiper
-/// profile.
+/// True if a file starting with these bytes (compressed or not) is a
+/// profiler's output.
 fn starts_like_profile(start: &[u8]) -> bool {
-    CoverageFormat::detect(&String::from_utf8_lossy(start)).is_some()
+    let start = stamp_core::text::decompressed_start(start, DETECTION_BYTES);
+    ProfilerFormat::detect(&String::from_utf8_lossy(&start)).is_some()
 }
 
 /// File formats that can be converted to a STAMP profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     Biom,
-    CoMet,
-    MgRast,
     Mothur,
-    Rita,
     SingleM,
     Sandpiper,
     ImgCog,
 }
 
 impl Source {
-    pub const ALL: [Source; 8] = [
+    pub const ALL: [Source; 5] = [
         Source::Biom,
-        Source::CoMet,
-        Source::MgRast,
         Source::Mothur,
-        Source::Rita,
         Source::SingleM,
         Source::Sandpiper,
         Source::ImgCog,
@@ -80,10 +93,7 @@ impl Source {
     pub fn name(self) -> &'static str {
         match self {
             Source::Biom => "BIOM table...",
-            Source::CoMet => "CoMet profiles...",
-            Source::MgRast => "MG-RAST profile...",
             Source::Mothur => "mothur files...",
-            Source::Rita => "RITA profiles...",
             Source::SingleM => "SingleM condensed profiles...",
             Source::Sandpiper => "Sandpiper profiles...",
             Source::ImgCog => "IMG/M COG profile (add COG categories)...",
@@ -96,21 +106,28 @@ impl Source {
     fn steps(self) -> &'static [(&'static str, &'static [&'static str], bool, bool)] {
         match self {
             Source::Biom => &[("BIOM table", &["biom", "gz"], false, false)],
-            Source::MgRast => &[("MG-RAST profile", &["tsv"], false, false)],
-            Source::ImgCog => &[("IMG/M COG profile", &["xls", "tsv"], false, false)],
-            Source::CoMet => &[("CoMet profiles, one per sample", &["txt"], true, false)],
-            Source::Rita => &[("RITA profiles, one per sample", &["txt"], true, false)],
+            Source::ImgCog => &[("IMG/M COG profile", &["xls", "tsv", "gz"], false, false)],
             Source::SingleM => &[(
                 "SingleM condensed profiles",
-                &["tsv", "txt", "csv"],
+                &["tsv", "txt", "csv", "gz"],
                 true,
                 false,
             )],
-            Source::Sandpiper => &[("Sandpiper profiles, one per sample", &["json"], true, false)],
+            Source::Sandpiper => &[(
+                "Sandpiper profiles, one per sample",
+                &["json", "gz"],
+                true,
+                false,
+            )],
             Source::Mothur => &[
-                ("mothur taxonomy file", &["taxonomy"], false, false),
-                ("mothur groups file", &["groups"], false, false),
-                ("mothur names file (optional)", &["names"], false, true),
+                ("mothur taxonomy file", &["taxonomy", "gz"], false, false),
+                ("mothur groups file", &["groups", "gz"], false, false),
+                (
+                    "mothur names file (optional)",
+                    &["names", "gz"],
+                    false,
+                    true,
+                ),
             ],
         }
     }
@@ -126,7 +143,7 @@ pub enum Auxiliary {
 /// Something the interface wants done with files.
 pub enum Request {
     OpenProfile,
-    /// Choose a directory of SingleM or Sandpiper profiles.
+    /// Choose a directory of profiles written by a profiler.
     OpenProfileDirectory,
     OpenMetadata,
     /// Ask for a further file of a profile that is being opened.
@@ -152,8 +169,8 @@ pub enum Request {
 
 /// The outcome of a request.
 pub enum Event {
-    /// Files chosen with Load profile file: one, or several SingleM or
-    /// Sandpiper profiles.
+    /// Files chosen with Load profile file: one, or several profiles of one
+    /// profiler.
     Profile(Vec<OpenedFile>),
     /// The profiles in a directory chosen with Load profile directory.
     ProfileDirectory(ProfileDirectory),
@@ -185,9 +202,6 @@ pub fn convert_files(source: Source, files: &[OpenedFile]) -> Result<String, Str
         .collect();
     let result = match source {
         Source::Biom => biom::to_spf(&first.bytes, None),
-        Source::CoMet => comet::to_spf(&named),
-        Source::MgRast => mgrast::MgRastProfile::parse(&texts[0]).and_then(|p| p.to_spf()),
-        Source::Rita => rita::to_spf(&named, &rita::GROUPS),
         Source::SingleM => singlem::to_spf(&named),
         Source::Sandpiper => sandpiper::to_spf(&named),
         Source::ImgCog => cog::append_categories(&texts[0], cog::MultiCodeTreatment::AsFeature),
@@ -226,10 +240,13 @@ impl Default for Platform {
     }
 }
 
-/// STAMP profiles, BIOM tables, mothur taxonomy files, SingleM profiles and
-/// Sandpiper profiles (JSON).
-const PROFILE_EXTENSIONS: [&str; 7] = ["spf", "tsv", "txt", "biom", "gz", "taxonomy", "json"];
-const METADATA_EXTENSIONS: [&str; 3] = ["tsv", "txt", "csv"];
+/// STAMP profiles, BIOM tables, mothur taxonomy files, and the outputs of
+/// SingleM, Sandpiper (JSON), mOTUs, MetaPhlAn, Kraken, Bracken and HUMAnN.
+const PROFILE_EXTENSIONS: [&str; 15] = [
+    "spf", "tsv", "txt", "biom", "gz", "taxonomy", "json", "motus", "relab", "report", "kreport",
+    "k2report", "kreport2", "bracken", "mpa",
+];
+const METADATA_EXTENSIONS: [&str; 4] = ["tsv", "txt", "csv", "gz"];
 
 impl Platform {
     /// Outcomes that have arrived since the last call.
@@ -254,25 +271,25 @@ impl Platform {
 async fn perform(request: Request) -> Result<Option<Event>, String> {
     match request {
         Request::OpenProfile => {
-            // Several files can be chosen: SingleM and Sandpiper profiles
-            // are often one per sample.
-            let files = imp::open("Load profile file", &PROFILE_EXTENSIONS, true).await;
+            // Several files can be chosen: profilers usually write one file
+            // per sample.
+            let files = imp::open("Load profile file", &PROFILE_EXTENSIONS, true).await?;
             Ok((!files.is_empty()).then_some(Event::Profile(files)))
         }
         Request::OpenProfileDirectory => Ok(imp::open_directory("Load profile directory")
             .await?
             .map(Event::ProfileDirectory)),
         Request::OpenMetadata => Ok(imp::open("Load metadata", &METADATA_EXTENSIONS, false)
-            .await
+            .await?
             .pop()
             .map(Event::Metadata)),
         Request::OpenAuxiliary(which) => {
             let (title, extensions): (&str, &[&str]) = match which {
-                Auxiliary::MothurGroups => ("mothur groups file", &["groups"]),
-                Auxiliary::MothurNames => ("mothur names file", &["names"]),
+                Auxiliary::MothurGroups => ("mothur groups file", &["groups", "gz"]),
+                Auxiliary::MothurNames => ("mothur names file", &["names", "gz"]),
             };
             Ok(imp::open(title, extensions, false)
-                .await
+                .await?
                 .pop()
                 .map(|file| Event::Auxiliary(which, file)))
         }
@@ -287,7 +304,7 @@ async fn perform(request: Request) -> Result<Option<Event>, String> {
         Request::Convert(source) => {
             let mut files = Vec::new();
             for (title, extensions, several, optional) in source.steps() {
-                let chosen = imp::open(title, extensions, *several).await;
+                let chosen = imp::open(title, extensions, *several).await?;
                 if chosen.is_empty() && !optional {
                     return Ok(None); // cancelled
                 }
@@ -336,13 +353,21 @@ mod imp {
         deliver(run_now(perform(request)), &sender, &ctx);
     }
 
-    fn read(path: &std::path::Path) -> Option<OpenedFile> {
-        let bytes = std::fs::read(path).ok()?;
-        let name = path.file_name()?.to_string_lossy().into_owned();
-        Some(OpenedFile { name, bytes })
+    fn read(path: &std::path::Path) -> Result<OpenedFile, String> {
+        let bytes =
+            std::fs::read(path).map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        OpenedFile::new(name, bytes)
     }
 
-    pub async fn open(title: &str, extensions: &[&str], several: bool) -> Vec<OpenedFile> {
+    pub async fn open(
+        title: &str,
+        extensions: &[&str],
+        several: bool,
+    ) -> Result<Vec<OpenedFile>, String> {
         let dialog = rfd::FileDialog::new()
             .set_title(title)
             .add_filter(title, extensions)
@@ -352,7 +377,7 @@ mod imp {
         } else {
             dialog.pick_file().into_iter().collect()
         };
-        paths.iter().filter_map(|p| read(p)).collect()
+        paths.iter().map(|p| read(p)).collect()
     }
 
     pub async fn open_directory(title: &str) -> Result<Option<ProfileDirectory>, String> {
@@ -363,7 +388,7 @@ mod imp {
     }
 
     /// The files directly in a directory (not in its subdirectories) that
-    /// may be SingleM or Sandpiper profiles. Only the start of other files
+    /// may be profilers' outputs. Only the start of other files
     /// is read, so that large files beside the profiles, such as reads,
     /// cost little. Hidden files are left out.
     pub fn read_directory(path: &std::path::Path) -> Result<ProfileDirectory, String> {
@@ -377,7 +402,7 @@ mod imp {
                 let path = entry.path();
                 // Follows links, unlike the entry's own file type.
                 let is_file = std::fs::metadata(&path).is_ok_and(|m| m.is_file());
-                (is_file && coverage::is_candidate(&name)).then_some((name, path))
+                (is_file && profiler::is_candidate(&name)).then_some((name, path))
             })
             .collect();
         entries.sort();
@@ -394,12 +419,10 @@ mod imp {
             let opened = std::fs::File::open(&path)
                 .and_then(|file| file.take(DETECTION_BYTES as u64).read_to_end(&mut start));
             if opened.is_ok() && starts_like_profile(&start) {
-                if let Some(file) = read(&path) {
-                    directory.files.push(file);
-                    continue;
-                }
+                directory.files.push(read(&path)?);
+            } else {
+                directory.skipped.push(name);
             }
-            directory.skipped.push(name);
         }
         Ok(directory)
     }
@@ -460,7 +483,11 @@ mod imp {
         });
     }
 
-    pub async fn open(title: &str, extensions: &[&str], several: bool) -> Vec<OpenedFile> {
+    pub async fn open(
+        title: &str,
+        extensions: &[&str],
+        several: bool,
+    ) -> Result<Vec<OpenedFile>, String> {
         let dialog = rfd::AsyncFileDialog::new()
             .set_title(title)
             .add_filter(title, extensions);
@@ -471,12 +498,9 @@ mod imp {
         };
         let mut files = Vec::new();
         for handle in handles {
-            files.push(OpenedFile {
-                name: handle.file_name(),
-                bytes: handle.read().await,
-            });
+            files.push(OpenedFile::new(handle.file_name(), handle.read().await)?);
         }
-        files
+        Ok(files)
     }
 
     /// The contents of a blob, such as a file or part of one.
@@ -489,7 +513,7 @@ mod imp {
 
     /// Ask for a directory with the browser's folder picker (an input
     /// element with `webkitdirectory`, which rfd does not offer), and read
-    /// the files directly in it that may be SingleM or Sandpiper profiles.
+    /// the files directly in it that may be profilers' outputs.
     /// The browser asks the user to allow the page to read the folder.
     pub async fn open_directory(_title: &str) -> Result<Option<ProfileDirectory>, String> {
         let failed = |_| "The browser could not open a folder picker.".to_string();
@@ -538,7 +562,7 @@ mod imp {
             let parts: Vec<&str> = path.split('/').collect();
             if let [folder, file_name] = parts.as_slice() {
                 name = folder.to_string();
-                if coverage::is_candidate(file_name) {
+                if profiler::is_candidate(file_name) {
                     entries.push((file_name.to_string(), file));
                 }
             }
@@ -555,7 +579,7 @@ mod imp {
                 .map_err(|_| "The browser could not read a file.".to_string())?;
             if starts_like_profile(&blob_bytes(&start).await?) {
                 let bytes = blob_bytes(&file).await?;
-                directory.files.push(OpenedFile { name, bytes });
+                directory.files.push(OpenedFile::new(name, bytes)?);
             } else {
                 directory.skipped.push(name);
             }
@@ -712,15 +736,6 @@ mod tests {
 
     #[test]
     fn converts_chosen_files() {
-        let comet = [
-            file("profilePfam_A.fa.txt", "PF1 (Kinase): 5\n"),
-            file("profilePfam_B.fa.txt", "PF1 (Kinase): 2\n"),
-        ];
-        assert_eq!(
-            convert_files(Source::CoMet, &comet).unwrap(),
-            "Category\tA\tB\nKinase\t5.0\t2.0\n"
-        );
-
         let singlem = [file(
             "p.tsv",
             "sample\tcoverage\ttaxonomy\nA\t1\tRoot; d__Bacteria\nB\t2\tRoot; d__Archaea\n",
@@ -743,11 +758,6 @@ mod tests {
             .unwrap_err()
             .contains("groups file"));
 
-        assert!(
-            convert_files(Source::MgRast, &[file("x.tsv", "not mg-rast\n")])
-                .unwrap_err()
-                .contains("MG-RAST")
-        );
         assert_eq!(
             convert_files(Source::Biom, &[]).unwrap_err(),
             "No file was chosen."

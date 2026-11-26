@@ -17,13 +17,61 @@ use super::Rows;
 use crate::error::{Result, StampError};
 use crate::text;
 
-/// Hierarchical levels of the profiles made from taxonomic lineages.
+/// Hierarchical levels of the profiles made from GTDB lineages.
 pub const RANKS: [&str; 7] = [
     "Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species",
 ];
 
 /// GTDB rank prefixes, by rank.
 pub const PREFIXES: [&str; 7] = ["d__", "p__", "c__", "o__", "f__", "g__", "s__"];
+
+/// The ranks of a profile: the headings of its hierarchical levels and the
+/// prefix written before a taxon of each rank in `unclassified <taxon>`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Ranks {
+    names: Vec<String>,
+    prefixes: Vec<String>,
+}
+
+impl Ranks {
+    /// Ranks with these headings and prefixes (one of each per rank).
+    pub fn new(names: &[&str], prefixes: &[&str]) -> Ranks {
+        assert_eq!(names.len(), prefixes.len());
+        Ranks {
+            names: names.iter().map(|s| s.to_string()).collect(),
+            prefixes: prefixes.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    /// The seven GTDB ranks, from domain to species.
+    pub fn gtdb() -> Ranks {
+        Ranks::new(&RANKS, &PREFIXES)
+    }
+
+    /// A profile of one level, such as the species of a Bracken table.
+    pub fn single(name: &str) -> Ranks {
+        Ranks::new(&[name], &[""])
+    }
+
+    /// These ranks with one more below them.
+    pub fn with(mut self, name: &str, prefix: &str) -> Ranks {
+        self.names.push(name.to_string());
+        self.prefixes.push(prefix.to_string());
+        self
+    }
+
+    pub fn names(&self) -> &[String] {
+        &self.names
+    }
+
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+}
 
 /// Name given at every rank to coverage that was not placed in any domain.
 const UNPLACED: &str = "unclassified Root";
@@ -46,6 +94,9 @@ type LineageRow = (Vec<String>, Vec<(usize, f64)>);
 /// Coverages of lineages in a set of samples, collected before the profile
 /// is written.
 pub(crate) struct Lineages {
+    ranks: Ranks,
+    /// Values are whole numbers (read counts), written without rounding.
+    counts: bool,
     samples: Vec<String>,
     sample_index: HashMap<String, usize>,
     /// Each lineage (names from the domain down, without prefixes) with its
@@ -54,8 +105,15 @@ pub(crate) struct Lineages {
 }
 
 impl Lineages {
+    /// Lineages of the seven GTDB ranks.
     pub(crate) fn new() -> Self {
+        Lineages::with_ranks(Ranks::gtdb())
+    }
+
+    pub(crate) fn with_ranks(ranks: Ranks) -> Self {
         Lineages {
+            ranks,
+            counts: false,
             samples: Vec::new(),
             sample_index: HashMap::new(),
             rows: Rows::new(),
@@ -77,13 +135,61 @@ impl Lineages {
         self.sample_index.contains_key(name)
     }
 
-    /// Add coverage to a lineage of at most seven names (none for coverage
-    /// that was not placed in a domain).
+    /// Values are read counts: written as whole numbers, not rounded to six
+    /// significant digits.
+    pub(crate) fn set_counts(&mut self, counts: bool) {
+        self.counts = counts;
+    }
+
+    /// Add a value to a lineage given as `(rank, name)` pairs from the top,
+    /// ranks being indexes into the profile's ranks in increasing order.
+    /// A rank the lineage skips (NCBI taxa often have no class, say) is
+    /// filled with `<parent> (no <rank>)`, `Root` standing for the parent of
+    /// the top rank.
+    pub(crate) fn add_ranked(
+        &mut self,
+        sample: usize,
+        lineage: &[(usize, &str)],
+        value: f64,
+    ) -> Result<()> {
+        let mut names: Vec<String> = Vec::new();
+        for &(rank, name) in lineage {
+            if rank >= self.ranks.names.len() || rank < names.len() {
+                return Err(StampError::new(format!(
+                    "The lineage {} does not go down the ranks in order.",
+                    lineage
+                        .iter()
+                        .map(|(_, n)| *n)
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                )));
+            }
+            while names.len() < rank {
+                let parent = names.last().map_or("Root", |p| p.as_str());
+                let filler = format!(
+                    "{} (no {})",
+                    parent.split(" (no ").next().unwrap_or(parent),
+                    self.ranks.names[names.len()].to_lowercase()
+                );
+                names.push(filler);
+            }
+            names.push(name.to_string());
+        }
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        self.add(sample, &names, value)
+    }
+
+    /// Add coverage to a lineage of at most as many names as there are
+    /// ranks (none for coverage that was not placed in the top rank).
     pub(crate) fn add(&mut self, sample: usize, lineage: &[&str], coverage: f64) -> Result<()> {
-        if lineage.len() > RANKS.len() {
+        let ranks = &self.ranks.names;
+        if lineage.len() > ranks.len() {
             return Err(StampError::new(format!(
-                "The lineage {} has more than the seven ranks from domain to species.",
-                lineage.join("; ")
+                "The lineage {} has more than the {} ranks from {} to {}.",
+                lineage.join("; "),
+                ranks.len(),
+                ranks[0].to_lowercase(),
+                ranks[ranks.len() - 1].to_lowercase()
             )));
         }
         let key = lineage.join("\u{1}");
@@ -99,24 +205,32 @@ impl Lineages {
         if self.samples.is_empty() {
             return Err(StampError::new("The files contain no samples."));
         }
+        if self.rows.iter().next().is_none() {
+            // A tool that found nothing (MetaPhlAn's reads for a sample of
+            // unknown organisms, HUMAnN's pathways without species).
+            return Err(StampError::new(
+                "Nothing in the files has a value above zero: the tool found nothing to \
+                 profile, so there is no profile to load.",
+            ));
+        }
         let mut lineages: Vec<Vec<String>> = self
             .rows
             .iter()
             .map(|(_, (lineage, _))| lineage.clone())
             .collect();
-        qualify_reused_names(&mut lineages);
+        qualify_reused_names(&mut lineages, self.ranks.names.len());
 
         // Rows that are the same once padded are merged.
         let mut padded: Rows<Vec<usize>> = Rows::new();
         for (i, lineage) in lineages.iter().enumerate() {
-            let row = pad(lineage);
+            let row = pad(lineage, &self.ranks);
             padded.entry(&row.join("\t"), Vec::new).push(i);
         }
 
         let coverages: Vec<&Vec<(usize, f64)>> =
             self.rows.iter().map(|(_, (_, values))| values).collect();
         let mut out = String::with_capacity(64 * self.samples.len());
-        out.push_str(&RANKS.join("\t"));
+        out.push_str(&self.ranks.names.join("\t"));
         for sample in &self.samples {
             out.push('\t');
             out.push_str(sample);
@@ -135,6 +249,8 @@ impl Lineages {
                 out.push('\t');
                 if value == 0.0 {
                     out.push('0');
+                } else if self.counts {
+                    out.push_str(&format!("{}", value.round()));
                 } else {
                     out.push_str(&text::format_float(round_significant(value)));
                 }
@@ -153,8 +269,8 @@ fn round_significant(value: f64) -> f64 {
 
 /// Give every name that has more than one parent at its rank the name of its
 /// parent, `name (parent)`, rank by rank from the top.
-fn qualify_reused_names(lineages: &mut [Vec<String>]) {
-    for rank in 1..RANKS.len() {
+fn qualify_reused_names(lineages: &mut [Vec<String>], ranks: usize) {
+    for rank in 1..ranks {
         let mut parents: HashMap<&str, HashSet<&str>> = HashMap::new();
         for lineage in lineages.iter() {
             if let (Some(parent), Some(name)) = (lineage.get(rank - 1), lineage.get(rank)) {
@@ -177,15 +293,160 @@ fn qualify_reused_names(lineages: &mut [Vec<String>]) {
     }
 }
 
-/// A lineage padded to seven ranks with `unclassified <prefix><taxon>`.
-fn pad(lineage: &[String]) -> Vec<String> {
+/// A lineage padded to every rank with `unclassified <prefix><taxon>`.
+fn pad(lineage: &[String], ranks: &Ranks) -> Vec<String> {
     let mut row: Vec<String> = lineage.to_vec();
     let filler = match lineage.last() {
-        Some(deepest) => format!("unclassified {}{deepest}", PREFIXES[lineage.len() - 1]),
+        Some(deepest) => format!(
+            "unclassified {}{deepest}",
+            ranks.prefixes[lineage.len() - 1]
+        ),
         None => UNPLACED.to_string(),
     };
-    row.resize(RANKS.len(), filler);
+    row.resize(ranks.names.len(), filler);
     row
+}
+
+/// A number as a tool printed it, with the uncertainty its printing leaves:
+/// half a unit in its last digit, none for a whole number. `None` if it is
+/// not a non-negative number.
+pub(crate) fn parse_value(text: &str) -> Option<(f64, f64)> {
+    let text = text.trim();
+    let value: f64 = text.parse().ok()?;
+    if !value.is_finite() || value < 0.0 {
+        return None;
+    }
+    let (mantissa, exponent) = match text.find(['e', 'E']) {
+        Some(i) => (&text[..i], text[i + 1..].parse::<i32>().ok()?),
+        None => (text, 0),
+    };
+    let decimals = mantissa.find('.').map_or(0, |i| mantissa.len() - i - 1) as i32;
+    let slack = if decimals == 0 && exponent == 0 {
+        0.0
+    } else {
+        0.5 * 10f64.powi(exponent - decimals)
+    };
+    Some((value, slack))
+}
+
+/// A row of a table of clades: the parts of its name from the top (each
+/// clade's path starting with its ancestors' paths; empty for what was not
+/// classified), and its value in each sample with that value's rounding.
+#[derive(Debug, Clone)]
+pub(crate) struct Clade {
+    pub path: Vec<String>,
+    pub values: Vec<(f64, f64)>,
+}
+
+/// The own value of each clade in each sample: its value less the values of
+/// the clades nearest below it in the table. A table that lists only the
+/// lowest clades is left as it is. A remainder within the rounding of the
+/// numbers involved, or below zero, is zero.
+pub(crate) fn own_values(clades: &[Clade]) -> Vec<Vec<f64>> {
+    let index: HashMap<&[String], usize> = clades
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| !c.path.is_empty())
+        .map(|(i, c)| (c.path.as_slice(), i))
+        .collect();
+    let mut own: Vec<Vec<f64>> = clades
+        .iter()
+        .map(|c| c.values.iter().map(|v| v.0).collect())
+        .collect();
+    let mut slack: Vec<Vec<f64>> = clades
+        .iter()
+        .map(|c| c.values.iter().map(|v| v.1).collect())
+        .collect();
+    let mut parent_of_some = vec![false; clades.len()];
+    for clade in clades {
+        let parent = (1..clade.path.len())
+            .rev()
+            .find_map(|k| index.get(&clade.path[..k]).copied());
+        if let Some(parent) = parent {
+            parent_of_some[parent] = true;
+            for (s, &(value, rounding)) in clade.values.iter().enumerate() {
+                own[parent][s] -= value;
+                slack[parent][s] += rounding;
+            }
+        }
+    }
+    for (i, clade) in clades.iter().enumerate() {
+        if !parent_of_some[i] {
+            continue;
+        }
+        for (s, value) in own[i].iter_mut().enumerate() {
+            let tolerance = slack[i][s] + 1e-9 * clade.values[s].0.abs();
+            if *value <= tolerance {
+                *value = 0.0;
+            }
+        }
+    }
+    own
+}
+
+/// The parts of a lineage written with rank prefixes and joined with `|` or
+/// `;` (`k__Bacteria|p__Firmicutes`, `d__Bacteria;p__Bacillota`).
+pub(crate) fn split_lineage(text: &str) -> Vec<String> {
+    text.split(['|', ';'])
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// The rank letter and name of a taxon written with a rank prefix
+/// (`p__Firmicutes` is `('p', "Firmicutes")`).
+pub(crate) fn rank_prefix(taxon: &str) -> Option<(char, &str)> {
+    let bytes = taxon.as_bytes();
+    if bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && &bytes[1..3] == b"__" {
+        Some(((bytes[0] as char).to_ascii_lowercase(), taxon[3..].trim()))
+    } else {
+        None
+    }
+}
+
+/// The `(rank, name)` pairs of a path of prefixed taxa. Taxa whose prefix
+/// `rank_of` gives no rank are left out; an empty name (`s__`) ends the
+/// lineage.
+pub(crate) fn ranked<'a>(
+    path: &'a [String],
+    rank_of: &impl Fn(char) -> Option<usize>,
+) -> Result<Vec<(usize, &'a str)>> {
+    let mut lineage = Vec::new();
+    for part in path {
+        let Some((letter, name)) = rank_prefix(part) else {
+            return Err(StampError::new(format!(
+                "The taxon '{part}' has no rank prefix such as p__."
+            )));
+        };
+        if name.is_empty() {
+            break;
+        }
+        if let Some(rank) = rank_of(letter) {
+            lineage.push((rank, name));
+        }
+    }
+    Ok(lineage)
+}
+
+/// Add the own values of a table of clades with prefixed names to the
+/// samples `samples` (one per value column).
+pub(crate) fn add_clades(
+    lineages: &mut Lineages,
+    samples: &[usize],
+    clades: &[Clade],
+    rank_of: impl Fn(char) -> Option<usize>,
+) -> Result<()> {
+    let own = own_values(clades);
+    for (clade, own) in clades.iter().zip(&own) {
+        let lineage = ranked(&clade.path, &rank_of)?;
+        for (column, &value) in own.iter().enumerate() {
+            if value > 0.0 {
+                lineages.add_ranked(samples[column], &lineage, value)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -284,6 +545,9 @@ mod tests {
         lineages.add(a, &["Bacteria"], 0.18000000715255737).unwrap();
         lineages.add(a, &["Bacteria"], 0.1).unwrap();
         assert!(lineages.to_spf().unwrap().ends_with("\t0.28\t0\n"));
+        let mut empty = Lineages::new();
+        empty.sample("A");
+        assert!(empty.to_spf().unwrap_err().0.contains("no profile to load"));
         let mut deep = Lineages::new();
         let s = deep.sample("A");
         assert!(deep.add(s, &["a"; 8], 1.0).is_err());

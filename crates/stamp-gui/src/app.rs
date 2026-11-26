@@ -7,6 +7,7 @@
 //! beneath it.
 
 use eframe::egui::{self, Color32, RichText};
+use stamp_core::import::profiler::ProfilerFormat;
 use stamp_core::stats::ci::SampleCi;
 use stamp_core::stats::correction::Correction;
 use stamp_core::stats::correlation::CorrelationMethod;
@@ -834,6 +835,14 @@ enum PendingProfile {
         groups: Option<OpenedFile>,
         names: Option<OpenedFile>,
     },
+    /// A directory holding profiles of several kinds (HUMAnN's three tables,
+    /// or Kraken and Bracken reports): which kind to load, with the number
+    /// of files of each.
+    Directory {
+        directory: ProfileDirectory,
+        formats: Vec<(ProfilerFormat, usize)>,
+        chosen: ProfilerFormat,
+    },
 }
 
 /// A plot sent to a window of its own: a copy that stays as it was while
@@ -1546,7 +1555,7 @@ impl StampApp {
         let needs_choices = matches!(files.as_slice(), [file]
             if biom::looks_like_biom(&file.bytes)
                 && !stamp_core::import::sandpiper::looks_like_sandpiper(&file.bytes)
-            || file.name.to_lowercase().ends_with(".taxonomy"));
+            || file.is_mothur_taxonomy());
         if files.is_empty() || needs_choices {
             self.open_profile_files(files);
             return;
@@ -1660,8 +1669,8 @@ impl StampApp {
     }
 
     /// Open the files chosen with File > Load profile file: one profile in
-    /// any format that is read, or several SingleM or Sandpiper profiles,
-    /// which are combined.
+    /// any format that is read, or several profiles written by one
+    /// profiler, which are combined.
     pub fn open_profile_files(&mut self, mut files: Vec<OpenedFile>) {
         if files.len() == 1 {
             let file = files.pop().expect("one file");
@@ -1683,20 +1692,67 @@ impl StampApp {
         }
     }
 
-    /// Load the SingleM or Sandpiper profiles of a directory chosen with
-    /// File > Load profile directory, in a job, as one profile. The files
-    /// that are not profiles are named in a notice once it has loaded.
+    /// Load the profiles of a directory chosen with File > Load profile
+    /// directory, in a job, as one profile. A directory holding profiles of
+    /// several kinds first asks which kind to load. The files that are not
+    /// loaded are named in a notice once it has loaded.
     pub fn open_profile_directory(&mut self, directory: ProfileDirectory) {
-        use stamp_core::import::{coverage, NamedText};
+        use stamp_core::import::profiler::DETECTION_BYTES;
         self.pending_profile = None;
         self.pending_metadata = None;
+        let mut counts = std::collections::BTreeMap::new();
+        for file in &directory.files {
+            let start = &file.bytes[..file.bytes.len().min(DETECTION_BYTES)];
+            if let Some(format) = ProfilerFormat::detect(&String::from_utf8_lossy(start)) {
+                *counts.entry(format).or_insert(0) += 1;
+            }
+        }
+        let formats: Vec<(ProfilerFormat, usize)> = counts.into_iter().collect();
+        if formats.len() > 1 {
+            // The kind with the most files is offered first.
+            let chosen = formats
+                .iter()
+                .max_by_key(|(format, n)| (*n, std::cmp::Reverse(*format)))
+                .map(|(format, _)| *format)
+                .expect("several formats");
+            self.pending_profile = Some(PendingProfile::Directory {
+                directory,
+                formats,
+                chosen,
+            });
+            return;
+        }
+        self.load_profile_directory(directory, None);
+    }
+
+    /// Load the profiles of a directory, of the kind `only` if it is given,
+    /// in a job.
+    fn load_profile_directory(
+        &mut self,
+        directory: ProfileDirectory,
+        only: Option<ProfilerFormat>,
+    ) {
+        use stamp_core::import::profiler::{self, DETECTION_BYTES};
+        use stamp_core::import::NamedText;
         let ProfileDirectory {
             name,
-            files,
+            mut files,
             mut skipped,
         } = directory;
+        // Files of other kinds than the one chosen are skipped and named.
+        if let Some(format) = only {
+            files.retain(|file| {
+                let start = &file.bytes[..file.bytes.len().min(DETECTION_BYTES)];
+                let keep = ProfilerFormat::detect(&String::from_utf8_lossy(start)) == Some(format);
+                if !keep {
+                    skipped.push(file.name.clone());
+                }
+                keep
+            });
+            skipped.sort();
+        }
         let label = format!("Reading {} files from {name}", files.len());
-        let note = skipped_note(&skipped);
+        let note = skipped_note(&skipped, only);
         let mut loading = Loading::start(label, move || {
             let texts: Vec<String> = files.iter().map(OpenedFile::text).collect();
             let named: Vec<NamedText<'_>> = files
@@ -1707,10 +1763,8 @@ impl StampApp {
                     text,
                 })
                 .collect();
-            let profile = coverage::directory_to_spf(&name, &named)
+            let profile = profiler::directory_to_spf(&name, &named, only)
                 .map_err(|error| format!("Could not load {name}:\n{error}"))?;
-            // Files the platform kept are profiles, so none are skipped here.
-            skipped.extend(profile.skipped);
             let title = format!(
                 "{name} ({} {} profiles)",
                 profile.used,
@@ -1725,7 +1779,8 @@ impl StampApp {
     }
 
     /// Open a profile in any of the formats that are read: a STAMP profile,
-    /// a SingleM condensed profile or a Sandpiper profile is loaded at once;
+    /// a profiler's output (SingleM, mOTUs, MetaPhlAn, Kraken, HUMAnN, ...) is
+    /// loaded at once;
     /// a BIOM table (JSON or HDF5) or a mothur taxonomy file first asks for
     /// what it needs.
     pub fn open_profile_file(&mut self, file: OpenedFile) {
@@ -1767,7 +1822,7 @@ impl StampApp {
                     self.notice = Some(format!("Could not load {}:\n{error}", file.name));
                 }
             }
-        } else if file.name.to_lowercase().ends_with(".taxonomy") {
+        } else if file.is_mothur_taxonomy() {
             self.pending_profile = Some(PendingProfile::Mothur {
                 taxonomy: file,
                 groups: None,
@@ -1782,6 +1837,7 @@ impl StampApp {
         match self.pending_profile {
             Some(PendingProfile::Biom { .. }) => Some("BIOM"),
             Some(PendingProfile::Mothur { .. }) => Some("mothur"),
+            Some(PendingProfile::Directory { .. }) => Some("directory"),
             None => None,
         }
     }
@@ -1794,11 +1850,25 @@ impl StampApp {
         }
     }
 
+    /// Choose the kind of profile to load from a directory that holds
+    /// several kinds.
+    pub fn choose_directory_format(&mut self, format: ProfilerFormat) {
+        if let Some(PendingProfile::Directory { chosen, .. }) = &mut self.pending_profile {
+            *chosen = format;
+        }
+    }
+
     /// Make a STAMP profile from the file being opened, with the choices
     /// made so far, and load it.
     pub fn accept_pending_profile(&mut self) {
         use stamp_core::import::{biom, mothur};
         let (name, converted) = match self.pending_profile.take() {
+            Some(PendingProfile::Directory {
+                directory, chosen, ..
+            }) => {
+                self.load_profile_directory(directory, Some(chosen));
+                return;
+            }
             Some(PendingProfile::Biom { file, chosen, .. }) => {
                 let spf = biom::to_spf(&file.bytes, chosen.as_deref());
                 (file.name, spf)
@@ -3377,8 +3447,9 @@ impl StampApp {
                 }
                 let directory = item(icons::FOLDER_OPEN, "Load profile directory...", None);
                 let directory = ui.add(directory).on_hover_text(
-                    "Load a directory of SingleM or Sandpiper profiles, such as one per \
-                     sample. Other files in it are skipped.",
+                    "Load a directory of profiles written by SingleM, Sandpiper, mOTUs, \
+                     MetaPhlAn, Kraken, Bracken or HUMAnN, such as one per sample. Other \
+                     files in it are skipped.",
                 );
                 if directory.clicked() {
                     self.platform.request(Request::OpenProfileDirectory, &ctx);
@@ -4870,6 +4941,37 @@ impl StampApp {
                         });
                     });
             }
+            Some(PendingProfile::Directory {
+                directory,
+                formats,
+                chosen,
+            }) => {
+                egui::Window::new("Profile directory")
+                    .collapsible(false)
+                    .resizable(false)
+                    .default_pos([400.0, 180.0])
+                    .show(ctx, |ui| {
+                        ui.label(format!(
+                            "{} holds profiles of several kinds.",
+                            directory.name
+                        ));
+                        ui.horizontal(|ui| {
+                            ui.label("Load:");
+                            let options: Vec<(ProfilerFormat, String)> = formats
+                                .iter()
+                                .map(|(format, n)| {
+                                    let files = if *n == 1 { "file" } else { "files" };
+                                    (*format, format!("{} ({n} {files})", format.name()))
+                                })
+                                .collect();
+                            choose(ui, "directory-format", chosen, &options);
+                        });
+                        ui.horizontal(|ui| {
+                            accept = ui.button("OK").clicked();
+                            cancel = ui.button("Cancel").clicked();
+                        });
+                    });
+            }
             Some(PendingProfile::Mothur {
                 taxonomy,
                 groups,
@@ -5381,44 +5483,49 @@ fn progress_text(stage: &str, (done, total): (usize, usize)) -> String {
 }
 
 /// A STAMP profile from files that can be loaded at once (a STAMP profile,
-/// a SingleM condensed profile, one or more Sandpiper profiles): its name,
+/// or one or more profiles written by one profiler): its name,
 /// its text, and a hint to add should loading it fail. `None` for a single
 /// file that first needs choices (BIOM, mothur); `Err` holds the message
 /// for the user.
 type ProfileText = Result<(String, String, Option<&'static str>), String>;
 
 /// A notice naming the files of a directory that were skipped, the first
-/// few by name.
-fn skipped_note(skipped: &[String]) -> Option<String> {
+/// few by name: files that are not profiles, or not of the format `only`.
+fn skipped_note(skipped: &[String], only: Option<ProfilerFormat>) -> Option<String> {
     const SHOWN: usize = 5;
+    let (one, several) = match only {
+        Some(format) => (
+            format!("{} profile", format.name()),
+            format!("{} profiles", format.name()),
+        ),
+        None => ("profile".to_string(), "profiles".to_string()),
+    };
     let (first, rest) = skipped.split_at(skipped.len().min(SHOWN));
     let names = first.join(", ");
     match (first.len(), rest.len()) {
         (0, _) => None,
-        (1, 0) => Some(format!(
-            "Skipped 1 file that is not a SingleM or Sandpiper profile: {names}."
-        )),
+        (1, 0) => Some(format!("Skipped 1 file that is not a {one}: {names}.")),
         (n, 0) => Some(format!(
-            "Skipped {n} files that are not SingleM or Sandpiper profiles: {names}."
+            "Skipped {n} files that are not {several}: {names}."
         )),
         (n, more) => Some(format!(
-            "Skipped {} files that are not SingleM or Sandpiper profiles: {names} and {more} more.",
+            "Skipped {} files that are not {several}: {names} and {more} more.",
             n + more
         )),
     }
 }
 
-/// What is said when a SingleM or Sandpiper file opened on its own holds a
-/// single sample, should loading it fail.
+/// What is said when a profiler's file opened on its own holds a single
+/// sample, should loading it fail.
 const ONE_SAMPLE_HINT: &str = "This file holds one sample: choose the files of all samples \
      together, or use File > Load profile directory.";
 
 /// The text of the profile in files chosen together: one file in a format
-/// read without choices, or SingleM or Sandpiper profiles, which are
+/// read without choices, or profiles written by one profiler, which are
 /// combined. `None` for a BIOM table or mothur file, which need choices
 /// first.
 fn profile_text(files: &[OpenedFile]) -> Option<ProfileText> {
-    use stamp_core::import::{biom, coverage, NamedText};
+    use stamp_core::import::{biom, profiler, NamedText};
     let texts: Vec<String> = files.iter().map(OpenedFile::text).collect();
     let named: Vec<NamedText<'_>> = files
         .iter()
@@ -5432,16 +5539,19 @@ fn profile_text(files: &[OpenedFile]) -> Option<ProfileText> {
         [file] => Some(file),
         _ => None,
     };
-    match coverage::combine(&named) {
+    match profiler::combine(&named) {
         Ok(Some((format, spf))) => {
             let name = match single {
                 Some(file) => file.name.clone(),
                 None => format!("{} {} profiles", files.len(), format.name()),
             };
-            let samples = spf
-                .lines()
-                .next()
-                .map_or(0, |h| h.split('\t').count().saturating_sub(7));
+            // The values that end the first row, one per sample.
+            let samples = spf.lines().nth(1).map_or(0, |row| {
+                row.split('\t')
+                    .rev()
+                    .take_while(|cell| cell.parse::<f64>().is_ok())
+                    .count()
+            });
             let hint = (single.is_some() && samples == 1).then_some(ONE_SAMPLE_HINT);
             return Some(Ok((name, spf, hint)));
         }
@@ -5452,16 +5562,12 @@ fn profile_text(files: &[OpenedFile]) -> Option<ProfileText> {
         Ok(None) => {}
     }
     match single {
-        Some(file)
-            if biom::looks_like_biom(&file.bytes)
-                || file.name.to_lowercase().ends_with(".taxonomy") =>
-        {
-            None
-        }
+        Some(file) if biom::looks_like_biom(&file.bytes) || file.is_mothur_taxonomy() => None,
         Some(file) => Some(Ok((file.name.clone(), texts[0].clone(), None))),
         None => Some(Err(
-            "Several files can be loaded together only if they are SingleM or Sandpiper \
-             profiles. Choose a single file for other formats."
+            "Several files can be loaded together only if they are profiles written by \
+             SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken or HUMAnN. Choose a single \
+             file for other formats."
                 .to_string(),
         )),
     }

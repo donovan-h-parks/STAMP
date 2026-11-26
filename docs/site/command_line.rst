@@ -72,11 +72,20 @@ Options common to the analyses
 ------------------------------
 
 ``-p, --profile FILE``
-   The profile: a STAMP profile, a SingleM or Sandpiper profile, or a
-   directory of SingleM or Sandpiper profiles (see
-   :ref:`profile-directory`), read without first being converted.
+   The profile: a STAMP profile, a file written by SingleM, Sandpiper,
+   mOTUs, MetaPhlAn, Kraken, Bracken or HUMAnN, or a directory of such files
+   (see :ref:`profile-directory`), read without first being converted.
+   Files may be gzip-compressed (``.gz``).
+``--profile-format FORMAT``
+   The kind of profile to read from a directory that holds several kinds
+   (HUMAnN's three tables per sample, Kraken and Bracken reports side by
+   side); a file given as ``--profile`` must be of this kind. One of
+   ``singlem``, ``sandpiper``, ``motus``, ``metaphlan``, ``kraken``,
+   ``kraken-mpa``, ``bracken-report``, ``bracken``, ``humann-genefamilies``,
+   ``humann-pathabundance`` and ``humann-pathcoverage``.
 ``-m, --metadata FILE``
-   The metadata (all commands but ``two-samples``).
+   The metadata (all commands but ``two-samples``), plain or
+   gzip-compressed.
 ``--profile-level HEADING``
    The level to analyse, by its heading in the profile (default: the most
    specific level).
@@ -605,9 +614,9 @@ written to the screen or to ``-o FILE``:
 
 .. code-block:: text
 
-   stamp-cli convert mgrast table.tsv --heading Level1 --heading Level2 -o profile.spf
-   stamp-cli convert comet sample1.txt sample2.txt -o profile.spf
-   stamp-cli convert rita sample1.txt sample2.txt -o profile.spf
+   stamp-cli convert profiles kraken_reports/ -o profile.spf
+   stamp-cli convert profiles humann/ --format humann-pathabundance -o profile.spf
+   stamp-cli convert profiles a_profile.txt b_profile.txt -o profile.spf
    stamp-cli convert mothur --taxonomy x.taxonomy --groups x.groups --names x.names -o profile.spf
    stamp-cli convert biom table.biom --metadata-field taxonomy -o profile.spf
    stamp-cli convert cog img_profile.tsv -o profile.spf
@@ -615,10 +624,12 @@ written to the screen or to ``-o FILE``:
    stamp-cli convert singlem singlem_profiles/ -o profile.spf
    stamp-cli convert sandpiper runs/*.json -o profile.spf
 
-* **mgrast**: an MG-RAST abundance table; ``--heading`` names each level of
-  the hierarchy, in order.
-* **comet**, **rita**: one result file per sample. For RITA, ``--group``
-  chooses the classification groups to count.
+* **profiles**: the outputs of SingleM, Sandpiper, mOTUs, MetaPhlAn,
+  Kraken, Bracken or HUMAnN, recognised by their contents (see
+  :ref:`supported-versions`), given as files or directories; files of one
+  tool are combined, one sample per file or per column. ``--format`` (the
+  names of ``--profile-format``) chooses the kind read from directories that
+  hold several.
 * **mothur**: a taxonomy file and a groups file, and optionally a names
   file.
 * **biom**: a BIOM table (JSON or HDF5, optionally gzip-compressed).
@@ -635,9 +646,9 @@ written to the screen or to ``-o FILE``:
   given as files or directories.
   Converting 1,307 runs takes about two seconds.
 
-SingleM and Sandpiper profiles become seven levels from *Domain* to
-*Species*, with coverages as values; :ref:`singlem-profiles` describes the
-names given to coverage that stops at a higher rank.
+:ref:`profiler-rules` describes how the profilers' outputs become profiles:
+their levels, values, and the names given to what stops at a higher rank or
+was not classified.
 
 Scripting
 ---------

@@ -159,6 +159,38 @@ Add an entry here whenever a feature is added that v2 did not have.
   (only their first 64 KB are read) and naming them in a message. Works in
   the browser too (its folder picker). `stamp-cli --profile` and
   `stamp-cli convert singlem|sandpiper` take a directory as well.
+- **mOTUs, MetaPhlAn, Kraken, Bracken and HUMAnN outputs**, read directly
+  and recognised by their contents: mOTUs 2, 3 and 4 profiles and merged
+  tables (with or without full taxonomy, counts or relative abundances);
+  MetaPhlAn 3 and 4 profiles (relative abundance, or estimated reads with
+  `rel_ab_w_read_stats`), merged tables and GTDB profiles, with the SGB as
+  a level; Kraken 1 and 2 reports (also with minimizer columns) and
+  MPA-style reports, with a Strain level when reads were assigned below
+  species; Bracken tables, combined tables and reports; HUMAnN 3 gene
+  families (gene family, genus, species), pathway abundance and pathway
+  coverage, joined or not. Clade values become own values, unplaced reads
+  `unclassified Root`, missing NCBI ranks `<parent> (no <rank>)`. From a
+  file, several files of one tool, or a directory (the window asks which
+  kind to load when a directory holds several, such as HUMAnN's three
+  tables; `--profile-format` on the command line), in the browser too, and
+  `stamp-cli convert profiles`. Design notes and supported versions:
+  `docs/PROFILER_FORMATS.md`.
+- **Example inputs in every format read**, in
+  `examples/input_file_formats`: one made-up community of ten gut
+  metagenomes (healthy and IBD) written as SingleM, Sandpiper, mOTUs,
+  MetaPhlAn, Kraken 2, Bracken, HUMAnN, BIOM (JSON and HDF5), mothur and
+  IMG/M COG files, with metadata, by `make_examples.py`. Beside them, in
+  `<tool>/stool_SRR17283923/`, real output of every profiler for one human
+  stool metagenome subsampled to 1,000,000 read pairs, read by the tests in
+  `crates/stamp-core/tests/stool_sample.rs`. All of them are kept
+  gzip-compressed.
+- **Gzip-compressed files** (`stamp_core::text::decompress`): every file
+  STAMP reads, profiles, metadata, profilers' outputs and the other formats,
+  can be gzip-compressed, in the window, the browser and on the command line,
+  and in directories of profiles. A compressed file is told by its contents,
+  not its name; `.gz` is left out of sample names taken from file names. A
+  compressed file cut short is reported as such. (STAMP v2 read only plain
+  text, and BIOM tables in this port already could be compressed.)
 
 ## Statistics
 

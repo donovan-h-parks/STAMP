@@ -119,7 +119,7 @@ stamp-cli multi-groups --profile examples/Eggerthellaceae/eggerthellaceae_mgr_sp
     --plot genera_by_host.png --plot-type group-heatmap --heatmap-scale log10 --heatmap-values
 
 # Convert another tool's output to a STAMP profile
-stamp-cli convert mgrast examples/CowRumen-MG-RAST/CowRumen-MG-RAST.tsv --output cow_rumen.spf
+stamp-cli convert profiles examples/input_file_formats/Kraken2 --output kraken.spf
 stamp-cli convert singlem singlem_condensed_profile.tsv --output community.spf
 stamp-cli convert sandpiper sandpiper/*.json --output community.spf
 ```

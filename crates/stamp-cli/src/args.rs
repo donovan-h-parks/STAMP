@@ -3,6 +3,18 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use stamp_core::import::profiler::ProfilerFormat;
+
+/// A `--profile-format` value.
+fn parse_profiler_format(value: &str) -> Result<ProfilerFormat, String> {
+    ProfilerFormat::from_key(value).ok_or_else(|| {
+        let keys: Vec<&str> = ProfilerFormat::ALL.iter().map(|f| f.key()).collect();
+        format!(
+            "unknown profile format '{value}' (known: {})",
+            keys.join(", ")
+        )
+    })
+}
 use stamp_core::stats::ci::SampleCi;
 use stamp_core::stats::correction::Correction;
 use stamp_core::stats::correlation::CorrelationMethod;
@@ -51,11 +63,18 @@ pub enum Command {
 
 #[derive(Args)]
 pub struct InfoArgs {
-    /// Profile: a STAMP profile file, a SingleM or Sandpiper profile, or a
-    /// directory of SingleM or Sandpiper profiles
+    /// Profile: a STAMP profile file, a profile written by SingleM,
+    /// Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken or HUMAnN, or a directory
+    /// of such profiles (one sample per file or per column); files may be
+    /// gzip-compressed
     #[arg(long, short)]
     pub profile: PathBuf,
-    /// Metadata file describing the samples
+    /// Kind of profile to read from a directory that holds several kinds
+    /// (such as HUMAnN's three tables per sample); a file given as --profile
+    /// must be of this kind
+    #[arg(long, value_name = "FORMAT", value_parser = parse_profiler_format)]
+    pub profile_format: Option<ProfilerFormat>,
+    /// Metadata file describing the samples (may be gzip-compressed)
     #[arg(long, short)]
     pub metadata: Option<PathBuf>,
     #[command(flatten)]
@@ -79,10 +98,17 @@ pub struct SampleFilterArgs {
 /// Which features to analyse and where to write the results.
 #[derive(Args)]
 pub struct ProfileArgs {
-    /// Profile: a STAMP profile file, a SingleM or Sandpiper profile, or a
-    /// directory of SingleM or Sandpiper profiles
+    /// Profile: a STAMP profile file, a profile written by SingleM,
+    /// Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken or HUMAnN, or a directory
+    /// of such profiles (one sample per file or per column); files may be
+    /// gzip-compressed
     #[arg(long, short)]
     pub profile: PathBuf,
+    /// Kind of profile to read from a directory that holds several kinds
+    /// (such as HUMAnN's three tables per sample); a file given as --profile
+    /// must be of this kind
+    #[arg(long, value_name = "FORMAT", value_parser = parse_profiler_format)]
+    pub profile_format: Option<ProfilerFormat>,
     /// Hierarchical level to analyse [default: the most specific level]
     #[arg(long, value_name = "HEADING")]
     pub profile_level: Option<String>,
@@ -100,7 +126,7 @@ pub struct ProfileArgs {
 /// Samples and the metadata field that groups them.
 #[derive(Args)]
 pub struct MetadataArgs {
-    /// Metadata file describing the samples
+    /// Metadata file describing the samples (may be gzip-compressed)
     #[arg(long, short)]
     pub metadata: PathBuf,
     /// Metadata field that defines the groups
@@ -509,7 +535,7 @@ pub struct MultiGroupsArgs {
 pub struct CorrelationArgs {
     #[command(flatten)]
     pub profile: ProfileArgs,
-    /// Metadata file describing the samples
+    /// Metadata file describing the samples (may be gzip-compressed)
     #[arg(long, short)]
     pub metadata: PathBuf,
     /// Metadata field holding a number for each sample; samples without a
@@ -601,35 +627,6 @@ pub struct ConvertArgs {
 
 #[derive(Subcommand)]
 pub enum ConvertFormat {
-    /// MG-RAST functional or taxonomic abundance table
-    Mgrast {
-        /// MG-RAST table (.tsv)
-        input: PathBuf,
-        /// Heading for a hierarchical level, in order (repeat for each level)
-        #[arg(long = "heading", value_name = "HEADING")]
-        headings: Vec<String>,
-        #[command(flatten)]
-        output: OutputArg,
-    },
-    /// CoMet profiles, one file per sample
-    Comet {
-        /// CoMet result files
-        #[arg(required = true)]
-        inputs: Vec<PathBuf>,
-        #[command(flatten)]
-        output: OutputArg,
-    },
-    /// RITA classifications, one file per sample
-    Rita {
-        /// RITA result files
-        #[arg(required = true)]
-        inputs: Vec<PathBuf>,
-        /// Classification group to count (may be repeated) [default: all groups]
-        #[arg(long = "group", value_name = "GROUP")]
-        groups: Vec<String>,
-        #[command(flatten)]
-        output: OutputArg,
-    },
     /// mothur taxonomy, groups and optional names files
     Mothur {
         /// Taxonomy file
@@ -652,6 +649,20 @@ pub enum ConvertFormat {
         /// or KEGG_Pathways [default: observation ids only]
         #[arg(long, value_name = "FIELD")]
         metadata_field: Option<String>,
+        #[command(flatten)]
+        output: OutputArg,
+    },
+    /// Profiles written by SingleM, Sandpiper, mOTUs, MetaPhlAn, Kraken,
+    /// Bracken or HUMAnN, recognised by their contents: files of one kind,
+    /// combined one sample per file or per column, or directories of them
+    Profiles {
+        /// Profile files, or directories of them (other files in a directory
+        /// are skipped)
+        #[arg(required = true)]
+        inputs: Vec<PathBuf>,
+        /// Kind of profile to read from directories that hold several kinds
+        #[arg(long, value_name = "FORMAT", value_parser = parse_profiler_format)]
+        format: Option<ProfilerFormat>,
         #[command(flatten)]
         output: OutputArg,
     },

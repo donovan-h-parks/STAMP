@@ -22,8 +22,8 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 8 | done | `metagenomics/fileIO/StampIO.py` | A profile with two samples of the same name was accepted and their counts silently added together. | Rejected with a message naming the sample. |
 | 9 | done | `metagenomics/fileIO/StampIO.py`, `MetadataIO.py` | Several malformed inputs crashed and were reported only as "Unknown parsing error": an empty file, a file with only a header, an empty cell in the first data row, a metadata row longer than the header. | Each gives a specific message, or is tolerated (short metadata rows are padded with empty values, extra cells ignored). |
 | 10 | done | `metagenomics/fileIO/MetadataIO.py` | A sample listed twice was reported as an "unknown sample", and that warning was overwritten if any sample lacked metadata. | A separate warning for repeated samples; all warnings are returned. |
-| 11 | done | `GUI/createProfileMgRastDlg.py` | A blank line in the middle of an MG-RAST table added a sample with an empty name. | Blank lines are skipped. |
-| 12 | done | `GUI/createProfileCoMetDlg.py` | A CoMet entry with an empty description (as in the GO example, `GO:0018346 (): 5`) produced a row with an empty name, giving a profile STAMP could not load. | Such entries are named by their identifier. |
+| 11 | removed (#69) | `GUI/createProfileMgRastDlg.py` | A blank line in the middle of an MG-RAST table added a sample with an empty name. | Blank lines are skipped. |
+| 12 | removed (#69) | `GUI/createProfileCoMetDlg.py` | A CoMet entry with an empty description (as in the GO example, `GO:0018346 (): 5`) produced a row with an empty name, giving a profile STAMP could not load. | Such entries are named by their identifier. |
 | 13 | done | `GUI/createProfileMothurDlg.py` | Sequence ids in a names file were not stripped of spaces; blank lines and ids missing from the groups or names file crashed the conversion. | Ids are stripped, blank lines skipped, and missing ids reported by name. |
 | 14 | done | `GUI/createProfileBiomDlg.py` | Observation metadata given as a single string (QIIME's `k__Bacteria; p__...` taxonomy) was split into single characters; nested lists crashed. | A string is split on `;`. Nested lists (several pathways per gene) give an explanatory error. |
 | 15 | done | `metagenomics/fileIO/COG_IO.py` | An unknown COG identifier or a blank line crashed the conversion. | Unknown identifiers are reported by name; blank lines are skipped. |
@@ -55,7 +55,7 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 5 | done | Results-table row order is fully defined (p-value, then feature name). In Python, the order of tied p-values depended on dictionary ordering. |
 | 6 | done | Benjamini-Hochberg uses the standard adjustment (as R's `p.adjust(method = "BH")`): `p * n / rank` followed by a running minimum from the largest p-value down, capped at 1. Python omitted the running minimum, so tied p-values could get different corrected values and corrected values were not monotonic. Corrected p-values can therefore be smaller than in STAMP v2, never larger. The `corr:Benjamini-Hochberg FDR` columns in `tests/golden` hold the old values and are an expected difference. |
 | 7 | done | Features, and the rows of converted profiles, are kept in order of first appearance in the input. Python used dictionary order, which was arbitrary. |
-| 8 | done | Counts written by the BIOM and CoMet converters use the shortest exact decimal form instead of Python's 12 significant digits. |
+| 8 | done | Counts written by the BIOM converter (and the CoMet converter, before it was removed in #69) use the shortest exact decimal form instead of Python's 12 significant digits. |
 | 9 | done | BIOM 2.x (HDF5) tables are read as well as BIOM 1.0 (JSON) tables, which is all v2 read. The `hdf5-pure` crate reads them without the HDF5 C library, so this also works in the browser. Tables written by biom-format 2.1 give the same profile from either format. |
 | 10 | done | The COG lookup table is a compact extract (`crates/stamp-core/data/cog_codes.tsv`) of `whog.txt`, embedded in the program. |
 | 11 | done | Bonferroni-corrected p-values are capped at 1. Python reported `p * n` even when it exceeded 1. |
@@ -116,6 +116,8 @@ Status: **planned** = found, not yet ported. **done** = ported and tested.
 | 66 | done | Plot labels: the extended error bar plot draws a ratio below one mirrored, as v2 did, but now says so with *(larger / smaller)* after the axis title (and, in the tooltip, the value drawn); the two-sample bar plot calls its logarithmic effect-size axis log10(...) rather than log(...); logarithmic axes of the bar, box, prevalence and histogram plots add *(log scale)* to their titles; the post-hoc plot honours the preference for the smallest p-value reported. |
 | 67 | done | The bar plot of a single feature puts its p-value on a line of its own, centred under the title (the feature's name), rather than in the top-right corner as v2 did (`BarPlot.py`), where it collided with the title in narrow plots (decided by the user, 2026-11-18). The box plot keeps it in the corner. `crates/stamp-plot/src/feature_plots.rs`. |
 | 68 | done | File > "Load profile..." is now **Load profile file...** (same shortcut), beside a new **Load profile directory...**, which loads the SingleM or Sandpiper profiles in a directory as one profile and skips other files. Load profile file combines several SingleM files chosen together, as it did for Sandpiper files (#59). `stamp-cli --profile` reads SingleM and Sandpiper profiles and directories of them directly. v2 had neither format. |
+| 69 | done | Support for **CoMet**, **RITA** and **MG-RAST** files is removed, from the command line (`convert comet`, `convert rita`, `convert mgrast`) and from the library (`import::comet`, `import::rita`, `import::mgrast`); v2 converted all three. Decided by the user (2026-11-26). The example data sets that came with them (`examples/CowRumen-MG-RAST`, `examples/NineBiomes-*-CoMet`, `examples/EnterotypesRITA`) are kept, as their STAMP profiles are used by the reference tests. |
+| 70 | done | Profiles written by **mOTUs**, **MetaPhlAn**, **Kraken** (and its MPA-style reports), **Bracken** and **HUMAnN** are read directly, from a file, several files chosen together, or a directory, as SingleM's are (#68), and `stamp-cli convert profiles` converts any of them; v2 read none of these. A directory holding profiles of several kinds (HUMAnN's three tables per sample, Kraken and Bracken reports together) asks which kind to load in the window, and on the command line needs `--profile-format` (new); #68 refused a directory of SingleM and Sandpiper files outright. How each format becomes a profile is in `docs/PROFILER_FORMATS.md` and the user guide's *Input files* page. |
 
 ## Kept as is
 
@@ -147,10 +149,9 @@ numerical methods rather than from different formulas:
 
 * Signed installers. The desktop applications are distributed as plain
   archives, unsigned (see `docs/RELEASING.md`).
-* In the graphical application: opening MG-RAST, RITA and CoMet profiles
-  and adding COG categories from File > Load profile, with the choices the
-  v2 converters offered (MG-RAST level headings, RITA groups to retain, the
-  treatment of multi-category COGs). The command line converts all of them.
+* In the graphical application: adding COG categories to an IMG/M COG
+  profile from File > Load profile, with v2's choice of the treatment of
+  multi-category COGs. The command line does it (`convert cog`).
 * The stand-alone `checkHierarchy.py` script, which lists every row of a
   profile with an unclassified parent or several parents. The loader stops
   at the first such row.

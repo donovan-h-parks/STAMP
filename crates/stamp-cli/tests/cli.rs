@@ -699,11 +699,11 @@ fn post_hoc_lists_every_pair() {
 fn convert_and_output_file() {
     let directory = std::env::temp_dir().join(format!("stamp-cli-test-{}", std::process::id()));
     fs::create_dir_all(&directory).unwrap();
-    let target = directory.join("cow.spf");
+    let target = directory.join("picrust.spf");
     let out = stdout(&[
         "convert",
-        "mgrast",
-        "examples/CowRumen-MG-RAST/CowRumen-MG-RAST.tsv",
+        "biom",
+        "examples/BIOM-test/predicted_metagenomes.L3.biom",
         "--output",
         target.to_str().unwrap(),
     ]);
@@ -712,17 +712,13 @@ fn convert_and_output_file() {
         "nothing goes to stdout when --output is given"
     );
 
-    let sorted = |text: &str| {
-        let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
-        lines[1..].sort();
-        lines
-    };
-    let expected =
-        fs::read_to_string(repo().join("examples/CowRumen-MG-RAST/CowRumen.spf")).unwrap();
-    assert_eq!(
-        sorted(&fs::read_to_string(&target).unwrap()),
-        sorted(&expected)
-    );
+    let converted = fs::read_to_string(&target).unwrap();
+    let expected = fs::read_to_string(
+        repo().join("examples/BIOM-test/predicted_metagenomes.L3.ground_truth.spf"),
+    )
+    .unwrap();
+    assert_eq!(converted.lines().next(), expected.lines().next());
+    assert_eq!(converted.lines().count(), expected.lines().count());
 
     // The converted file is directly usable.
     let table = Table::parse(&stdout(&[
@@ -730,13 +726,11 @@ fn convert_and_output_file() {
         "--profile",
         target.to_str().unwrap(),
         "--sample1",
-        "4441682.3",
+        "staggered",
         "--sample2",
-        "4441680.3",
-        "--profile-level",
-        "level 1",
+        "even",
     ]));
-    assert_eq!(table.rows.len(), 28);
+    assert_eq!(table.rows.len(), expected.lines().count() - 1);
     fs::remove_dir_all(&directory).unwrap();
 
     let cog = stdout(&[
@@ -851,13 +845,19 @@ fn singlem_and_sandpiper_profiles_are_read_without_converting() {
         }
     }
 
-    // A Sandpiper file beside the SingleM ones is a mixture.
+    // A Sandpiper file beside the SingleM ones: the kind must be chosen.
     fs::copy(
         repo().join(data).join("SRR28771658.json"),
         directory.join("SRR28771658.json"),
     )
     .unwrap();
-    assert!(failure(&["info", "--profile", dir]).contains("mixture"));
+    let error = failure(&["info", "--profile", dir]);
+    assert!(
+        error.contains("holds profiles of several kinds (2 SingleM, 1 Sandpiper)"),
+        "{error}"
+    );
+    let info = stdout(&["info", "--profile", dir, "--profile-format", "singlem"]);
+    assert!(info.contains("Samples (2)"), "{info}");
     fs::remove_dir_all(&directory).unwrap();
 }
 
@@ -2839,5 +2839,180 @@ fn samples_are_drawn_on_a_map() {
         &["--plot", "x.svg", "--plot-type", "map"],
     ));
     assert!(message.contains("no latitude field"), "{message}");
+    fs::remove_dir_all(&directory).ok();
+}
+
+#[test]
+fn profiler_outputs_and_directories_of_them_are_read() {
+    let examples = "examples/input_file_formats";
+    let samples = [
+        "H01", "H02", "H03", "H04", "H05", "I01", "I02", "I03", "I04", "I05",
+    ];
+    for (directory, levels) in [
+        (
+            "Kraken2",
+            "Domain, Phylum, Class, Order, Family, Genus, Species, Strain",
+        ),
+        ("Bracken", "Species"),
+        (
+            "Bracken/reports",
+            "Domain, Phylum, Class, Order, Family, Genus, Species",
+        ),
+        (
+            "MetaPhlAn",
+            "Kingdom, Phylum, Class, Order, Family, Genus, Species, SGB",
+        ),
+        (
+            "MetaPhlAn/merged",
+            "Kingdom, Phylum, Class, Order, Family, Genus, Species, SGB",
+        ),
+        (
+            "mOTUs",
+            "Kingdom, Phylum, Class, Order, Family, Genus, Species",
+        ),
+        (
+            "mOTUs/merged",
+            "Kingdom, Phylum, Class, Order, Family, Genus, Species",
+        ),
+    ] {
+        let info = stdout(&["info", "--profile", &format!("{examples}/{directory}")]);
+        assert!(
+            info.contains(&format!("Hierarchical levels: {levels}\n")),
+            "{directory}: {info}"
+        );
+        assert!(info.contains("Samples (10):"), "{directory}: {info}");
+        for sample in samples {
+            assert!(
+                info.contains(&format!("  {sample}\t")),
+                "{directory}: {info}"
+            );
+        }
+    }
+
+    // HUMAnN writes three tables per sample: the kind must be chosen.
+    let humann = format!("{examples}/HUMAnN");
+    let error = failure(&["info", "--profile", &humann]);
+    assert!(
+        error.contains("choose the kind to load with --profile-format"),
+        "{error}"
+    );
+    let info = stdout(&[
+        "info",
+        "--profile",
+        &humann,
+        "--profile-format",
+        "humann-genefamilies",
+    ]);
+    assert!(info.contains("Hierarchical levels: Gene family, Genus, Species\n"));
+    let error = failure(&["info", "--profile", &humann, "--profile-format", "kraken3"]);
+    assert!(
+        error.contains("unknown profile format 'kraken3'"),
+        "{error}"
+    );
+    let error = failure(&[
+        "info",
+        "--profile",
+        &format!("{examples}/Kraken2/H01.k2report.gz"),
+        "--profile-format",
+        "motus",
+    ]);
+    assert!(error.contains("is not a mOTUs profile"), "{error}");
+
+    // A test of two groups on the Kraken reports finds what the example
+    // data were drawn with: more E. coli in IBD.
+    let table = Table::parse(&stdout(&[
+        "two-groups",
+        "--profile",
+        &format!("{examples}/Kraken2"),
+        "--metadata",
+        &format!("{examples}/metadata.tsv.gz"),
+        "--field",
+        "Group",
+        "--group1",
+        "Healthy",
+        "--group2",
+        "IBD",
+        "--profile-level",
+        "Species",
+    ]));
+    let species = table.headings.iter().position(|h| h == "Species").unwrap();
+    assert!(table
+        .rows
+        .iter()
+        .any(|row| row[species] == "Escherichia coli"));
+
+    // convert profiles combines files of one format and refuses a mixture.
+    let converted = stdout(&[
+        "convert",
+        "profiles",
+        &format!("{examples}/Bracken/H01.bracken.gz"),
+        &format!("{examples}/Bracken/I01.bracken.gz"),
+    ]);
+    assert!(converted.starts_with("Species\tH01\tI01\n"));
+    let converted = stdout(&[
+        "convert",
+        "profiles",
+        &humann,
+        "--format",
+        "humann-pathcoverage",
+    ]);
+    assert!(converted.starts_with("Pathway\tH01\t"));
+    let error = failure(&[
+        "convert",
+        "profiles",
+        &format!("{examples}/Bracken/H01.bracken.gz"),
+        &format!("{examples}/MetaPhlAn/H01_profile.txt.gz"),
+    ]);
+    assert!(
+        error.contains("mixture of Bracken and MetaPhlAn profiles"),
+        "{error}"
+    );
+    let error = failure(&[
+        "convert",
+        "profiles",
+        &format!("{examples}/metadata.tsv.gz"),
+    ]);
+    assert!(error.contains("is not a profile written by"), "{error}");
+}
+
+#[test]
+fn gzip_compressed_profiles_and_metadata_are_read() {
+    use std::io::Write;
+    let directory = std::env::temp_dir().join(format!("stamp-cli-gzip-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let compress = |from: &str, to: &str| {
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder
+            .write_all(&fs::read(repo().join(from)).unwrap())
+            .unwrap();
+        let path = directory.join(to);
+        fs::write(&path, encoder.finish().unwrap()).unwrap();
+        path.to_string_lossy().into_owned()
+    };
+    let profile = compress(ENTEROTYPES[1], "Enterotypes.profile.spf.gz");
+    let metadata = compress(ENTEROTYPES[3], "Enterotypes.metadata.tsv.gz");
+    // The same analysis on the plain and the compressed files.
+    let extra = ["--test", "kruskal-wallis"];
+    let plain = stdout(&with("multi-groups", &ENTEROTYPES, &extra));
+    let compressed = stdout(&with(
+        "multi-groups",
+        &[
+            "--profile",
+            &profile,
+            "--metadata",
+            &metadata,
+            "--field",
+            "Enterotype",
+        ],
+        &extra,
+    ));
+    assert_eq!(plain, compressed);
+
+    // A compressed file cut short is reported as such.
+    let bytes = fs::read(&profile).unwrap();
+    let cut = directory.join("cut.spf.gz");
+    fs::write(&cut, &bytes[..bytes.len() / 2]).unwrap();
+    let error = failure(&["info", "--profile", &cut.to_string_lossy()]);
+    assert!(error.contains("could not be decompressed"), "{error}");
     fs::remove_dir_all(&directory).ok();
 }

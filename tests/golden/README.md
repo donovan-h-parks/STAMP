@@ -42,5 +42,5 @@ pixi run golden      # rewrites tests/golden
 
 * Filtering, PCA, clustering and plots.
 * File converters. Use the paired files in `examples/` instead, for example
-  `CowRumen-MG-RAST.tsv` and `CowRumen.spf`, or the `.biom` files and their
-  ground-truth `.spf` files in `examples/BIOM-test`.
+  the `.biom` files and their ground-truth `.spf` files in
+  `examples/BIOM-test`.

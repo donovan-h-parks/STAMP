@@ -4,8 +4,8 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use stamp_core::import::coverage::{self, CoverageFormat};
-use stamp_core::import::{biom, cog, comet, mgrast, mothur, rita, sandpiper, singlem, NamedText};
+use stamp_core::import::profiler::{self, ProfilerFormat};
+use stamp_core::import::{biom, cog, mothur, sandpiper, singlem, NamedText};
 use stamp_core::stats::correction::Correction;
 use stamp_core::stats::multi_group::MultiGroupEffectSize;
 use stamp_core::stats::results::{
@@ -67,8 +67,15 @@ fn fonts_of(plot: &PlotArgs) -> CliResult<stamp_plot::axes::Fonts> {
 
 // ------------------------------------------------------------------- files
 
+/// A file's contents, decompressed if it is gzip-compressed, so that every
+/// input can be given compressed or not.
 fn read_bytes(path: &Path) -> CliResult<Vec<u8>> {
-    fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))
+    let bytes = fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    match stamp_core::text::decompress(&bytes) {
+        Ok(std::borrow::Cow::Owned(decompressed)) => Ok(decompressed),
+        Ok(std::borrow::Cow::Borrowed(_)) => Ok(bytes),
+        Err(e) => Err(format!("cannot read {}: {e}", path.display())),
+    }
 }
 
 fn read_text(path: &Path) -> CliResult<String> {
@@ -99,22 +106,50 @@ fn core<T>(result: stamp_core::Result<T>) -> CliResult<T> {
     result.map_err(|e| e.to_string())
 }
 
-/// Read a profile: a STAMP profile, a SingleM or Sandpiper profile, or a
-/// directory of SingleM or Sandpiper profiles.
-fn load_profile(path: &Path) -> CliResult<ProfileTree> {
+/// Read a profile: a STAMP profile, a profiler's output (SingleM,
+/// Sandpiper, mOTUs, MetaPhlAn, Kraken, Bracken, HUMAnN), or a directory of
+/// such outputs. `format` chooses the kind read from a directory holding
+/// several, and must be the kind of a file.
+fn load_profile(path: &Path, format: Option<ProfilerFormat>) -> CliResult<ProfileTree> {
     let in_file = |e: String| format!("{}: {e}", path.display());
     let spf = if path.is_dir() {
-        let (names, texts) = read_directory(path, "SingleM or Sandpiper", |_| true)?;
+        let kind = format.map_or("taxonomic or functional", ProfilerFormat::name);
+        let (names, texts) = read_directory(path, kind, |f| format.is_none_or(|g| g == f))?;
+        let files = named(&names, &texts);
+        let formats = profiler::formats_of(&files);
+        if formats.len() > 1 {
+            let kinds: Vec<String> = formats
+                .iter()
+                .map(|(f, count)| format!("{count} {}", f.name()))
+                .collect();
+            return Err(format!(
+                "{} holds profiles of several kinds ({}); choose the kind to load with \
+                 --profile-format",
+                path.display(),
+                kinds.join(", ")
+            ));
+        }
         let _task = Task::start(&format!("Combining {} profiles", names.len()));
-        core(coverage::directory_to_spf(
+        core(profiler::directory_to_spf(
             &path.display().to_string(),
-            &named(&names, &texts),
+            &files,
+            format,
         ))?
         .spf
     } else {
         let _task = Task::start(&format!("Reading {}", path.display()));
         let text = read_text(path)?;
-        match CoverageFormat::detect(&text) {
+        let detected = ProfilerFormat::detect(&text);
+        if let Some(wanted) = format {
+            if detected != Some(wanted) {
+                return Err(format!(
+                    "{} is not a {} profile",
+                    path.display(),
+                    wanted.name()
+                ));
+            }
+        }
+        match detected {
             Some(format) => {
                 core(format.to_spf(&named(&[file_name(path)], &[text]))).map_err(in_file)?
             }
@@ -124,18 +159,17 @@ fn load_profile(path: &Path) -> CliResult<ProfileTree> {
     core(ProfileTree::read(&spf)).map_err(in_file)
 }
 
-/// How much of a file is read to tell whether it is a SingleM or Sandpiper
-/// profile.
+/// How much of a file is read to tell whether it is a profiler's output.
 const DETECTION_BYTES: u64 = 65536;
 
 /// The files directly in a directory (not in its subdirectories) that are
-/// SingleM or Sandpiper profiles accepted by `keep`, in order of name.
-/// Only the start of other files is read, and they are named in a note
-/// that calls the files kept `kind` profiles. Hidden files are left out.
+/// profiles of a format accepted by `keep`, in order of name. Only the start
+/// of other files is read, and they are named in a note that calls the
+/// files kept `kind` profiles. Hidden files are left out.
 fn read_directory(
     path: &Path,
     kind: &str,
-    keep: impl Fn(CoverageFormat) -> bool,
+    keep: impl Fn(ProfilerFormat) -> bool,
 ) -> CliResult<(Vec<String>, Vec<String>)> {
     use std::io::Read;
     let _task = Task::start(&format!("Reading {}", path.display()));
@@ -146,7 +180,7 @@ fn read_directory(
         let name = entry.file_name().to_string_lossy().into_owned();
         let file = entry.path();
         // Follows links, unlike the entry's own file type.
-        if coverage::is_candidate(&name) && fs::metadata(&file).is_ok_and(|m| m.is_file()) {
+        if profiler::is_candidate(&name) && fs::metadata(&file).is_ok_and(|m| m.is_file()) {
             entries.push((name, file));
         }
     }
@@ -157,7 +191,8 @@ fn read_directory(
         fs::File::open(&file)
             .and_then(|f| f.take(DETECTION_BYTES).read_to_end(&mut start))
             .map_err(|e| format!("cannot read {}: {e}", file.display()))?;
-        match CoverageFormat::detect(&String::from_utf8_lossy(&start)) {
+        let start = stamp_core::text::decompressed_start(&start, DETECTION_BYTES as usize);
+        match ProfilerFormat::detect(&String::from_utf8_lossy(&start)) {
             Some(format) if keep(format) => {
                 texts.push(read_text(&file)?);
                 names.push(name);
@@ -317,7 +352,7 @@ fn info(args: InfoArgs) -> CliResult {
     if args.metadata.is_none() && !(filter.where_.is_empty() && filter.where_not.is_empty()) {
         return Err("--where and --where-not need a metadata file (--metadata)".to_string());
     }
-    let tree = load_profile(&args.profile)?;
+    let tree = load_profile(&args.profile, args.profile_format)?;
     let mut out = String::new();
     out.push_str(&format!("Profile: {}\n", args.profile.display()));
     out.push_str(&format!(
@@ -414,7 +449,7 @@ fn two_samples(args: TwoSamplesArgs) -> CliResult {
         operator: args.effect_size_operator.into(),
     };
 
-    let tree = load_profile(&args.profile.profile)?;
+    let tree = load_profile(&args.profile.profile, args.profile.profile_format)?;
     let (parent_level, profile_level) = levels(&tree, &args.profile);
     let profile = core(tree.sample_profile(
         &args.sample1,
@@ -590,7 +625,7 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
         operator: args.effect_size_operator.into(),
     };
 
-    let tree = load_profile(&args.profile.profile)?;
+    let tree = load_profile(&args.profile.profile, args.profile.profile_format)?;
     let metadata = load_metadata(
         &tree,
         &args.metadata.metadata,
@@ -992,7 +1027,7 @@ fn multi_group_profile_and_metadata(
 }
 
 fn multi_groups(args: MultiGroupsArgs) -> CliResult {
-    let tree = load_profile(&args.profile.profile)?;
+    let tree = load_profile(&args.profile.profile, args.profile.profile_format)?;
     let test: stamp_core::stats::multi_group::MultiGroupTest = args.test.into();
     match (test.is_matched(), &args.pair_field) {
         (true, None) => {
@@ -1258,7 +1293,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
 
 fn post_hoc(args: PostHocArgs) -> CliResult {
     check_coverage(args.coverage)?;
-    let tree = load_profile(&args.profile.profile)?;
+    let tree = load_profile(&args.profile.profile, args.profile.profile_format)?;
     let test: stamp_core::stats::post_hoc::PostHocTest = args.test.into();
     match (test.is_matched(), &args.pair_field) {
         (true, None) => {
@@ -1323,7 +1358,7 @@ fn post_hoc(args: PostHocArgs) -> CliResult {
 
 /// Correlate every feature with a numeric metadata field.
 fn correlation(args: CorrelationArgs) -> CliResult {
-    let tree = load_profile(&args.profile.profile)?;
+    let tree = load_profile(&args.profile.profile, args.profile.profile_format)?;
     let metadata = load_metadata(
         &tree,
         &args.metadata,
@@ -1958,7 +1993,7 @@ fn co_occurrence(args: CoOccurrenceArgs) -> CliResult {
     if !(0.0..=100.0).contains(&args.min_feature_prevalence) {
         return Err("--min-feature-prevalence must be a percentage from 0 to 100".to_string());
     }
-    let tree = load_profile(&args.profile.profile)?;
+    let tree = load_profile(&args.profile.profile, args.profile.profile_format)?;
     let (parent_level, profile_level) = levels(&tree, &args.profile);
     // The samples: those the metadata keeps (and of one group), or all.
     let samples: Vec<String> = match &args.metadata {
@@ -2471,7 +2506,7 @@ fn ancom_figure(
 
 /// ANCOM between groups, written as a table.
 fn ancom(args: AncomArgs) -> CliResult {
-    let tree = load_profile(&args.profile.profile)?;
+    let tree = load_profile(&args.profile.profile, args.profile.profile_format)?;
     let profile = multi_group_profile(&tree, &args.profile, &args.metadata, &args.groups, None)?;
     let sample_groups: Vec<usize> = profile
         .samples_in_groups()
@@ -2611,50 +2646,6 @@ fn file_name(path: &Path) -> String {
 fn convert(format: ConvertFormat) -> CliResult {
     let task = Task::start("Converting");
     let (spf, output) = match format {
-        ConvertFormat::Mgrast {
-            input,
-            headings,
-            output,
-        } => {
-            let mut profile = core(mgrast::MgRastProfile::parse(&read_text(&input)?))?;
-            if !headings.is_empty() {
-                if headings.len() != profile.headings.len() {
-                    return Err(format!(
-                        "this MG-RAST profile has {} hierarchical levels ({}), but {} --heading options were given",
-                        profile.headings.len(),
-                        profile.headings.join(", "),
-                        headings.len()
-                    ));
-                }
-                profile.headings = headings;
-            }
-            (core(profile.to_spf())?, output)
-        }
-        ConvertFormat::Comet { inputs, output } => {
-            let (names, texts) = read_named(&inputs)?;
-            (core(comet::to_spf(&named(&names, &texts)))?, output)
-        }
-        ConvertFormat::Rita {
-            inputs,
-            groups,
-            output,
-        } => {
-            let (names, texts) = read_named(&inputs)?;
-            let groups: Vec<&str> = if groups.is_empty() {
-                rita::GROUPS.to_vec()
-            } else {
-                for group in &groups {
-                    if !rita::GROUPS.contains(&group.as_str()) {
-                        return Err(format!(
-                            "unknown RITA group '{group}' (known groups: {})",
-                            rita::GROUPS.join(", ")
-                        ));
-                    }
-                }
-                groups.iter().map(String::as_str).collect()
-            };
-            (core(rita::to_spf(&named(&names, &texts), &groups))?, output)
-        }
         ConvertFormat::Mothur {
             taxonomy,
             groups,
@@ -2680,12 +2671,37 @@ fn convert(format: ConvertFormat) -> CliResult {
             ))?,
             output,
         ),
+        ConvertFormat::Profiles {
+            inputs,
+            format,
+            output,
+        } => {
+            let (names, texts) = read_any_profiles(&inputs, format)?;
+            let files = named(&names, &texts);
+            let spf = match format {
+                Some(format) => core(format.to_spf(&files))?,
+                None => match core(profiler::combine(&files))? {
+                    Some((_, spf)) => spf,
+                    None => {
+                        let other = files
+                            .iter()
+                            .find(|f| ProfilerFormat::detect(f.text).is_none())
+                            .map_or("a file", |f| f.name);
+                        return Err(format!(
+                            "{other} is not a profile written by SingleM, Sandpiper, mOTUs, \
+                             MetaPhlAn, Kraken, Bracken or HUMAnN"
+                        ));
+                    }
+                },
+            };
+            (spf, output)
+        }
         ConvertFormat::Singlem { inputs, output } => {
-            let (names, texts) = read_profiles(&inputs, CoverageFormat::SingleM)?;
+            let (names, texts) = read_profiles(&inputs, ProfilerFormat::SingleM)?;
             (core(singlem::to_spf(&named(&names, &texts)))?, output)
         }
         ConvertFormat::Sandpiper { inputs, output } => {
-            let (names, texts) = read_profiles(&inputs, CoverageFormat::Sandpiper)?;
+            let (names, texts) = read_profiles(&inputs, ProfilerFormat::Sandpiper)?;
             (core(sandpiper::to_spf(&named(&names, &texts)))?, output)
         }
         ConvertFormat::Cog {
@@ -2729,7 +2745,7 @@ fn read_named(paths: &[std::path::PathBuf]) -> CliResult<(Vec<String>, Vec<Strin
 /// directory, only the files that are profiles of this format.
 fn read_profiles(
     paths: &[std::path::PathBuf],
-    format: CoverageFormat,
+    format: ProfilerFormat,
 ) -> CliResult<(Vec<String>, Vec<String>)> {
     let (mut names, mut texts) = (Vec::new(), Vec::new());
     for path in paths {
@@ -2741,6 +2757,43 @@ fn read_profiles(
                     path.display(),
                     format.name()
                 ));
+            }
+            (n, t)
+        } else {
+            read_named(std::slice::from_ref(path))?
+        };
+        names.extend(n);
+        texts.extend(t);
+    }
+    Ok((names, texts))
+}
+
+/// Read profiles of any of the formats, given as files or directories. From
+/// a directory, the files of `format`, or without it the profiles of the one
+/// format the directory holds.
+fn read_any_profiles(
+    paths: &[std::path::PathBuf],
+    format: Option<ProfilerFormat>,
+) -> CliResult<(Vec<String>, Vec<String>)> {
+    let (mut names, mut texts) = (Vec::new(), Vec::new());
+    for path in paths {
+        let (n, t) = if path.is_dir() {
+            let kind = format.map_or("taxonomic or functional", ProfilerFormat::name);
+            let (n, t) = read_directory(path, kind, |f| format.is_none_or(|g| g == f))?;
+            let formats = profiler::formats_of(&named(&n, &t));
+            if formats.len() > 1 {
+                let kinds: Vec<String> = formats
+                    .iter()
+                    .map(|(f, count)| format!("{count} {}", f.name()))
+                    .collect();
+                return Err(format!(
+                    "{} holds profiles of several kinds ({}); choose one with --format",
+                    path.display(),
+                    kinds.join(", ")
+                ));
+            }
+            if n.is_empty() {
+                return Err(format!("{} holds no {kind} profiles", path.display()));
             }
             (n, t)
         } else {

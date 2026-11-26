@@ -29,6 +29,7 @@ fn main() -> eframe::Result {
                     .file_name()?
                     .to_string_lossy()
                     .into_owned();
+                let bytes = stamp_core::text::decompress(&bytes).ok()?;
                 Some((name, stamp_core::text::decode(&bytes).into_owned()))
             };
             if let Some((name, text)) = arguments.first().and_then(read) {
