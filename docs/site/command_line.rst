@@ -168,8 +168,9 @@ Two samples
        --output red_vs_black.tsv --plot red_vs_black.png
 
 ``--test``
-   ``fisher`` (default), ``g-test-fisher``, ``g-test``, ``g-test-yates``,
-   ``chi-square``, ``chi-square-yates``, ``diff-between-prop``,
+   ``fisher`` (default) or ``g-test-fisher``; or, kept for compatibility
+   with STAMP v2 (see :doc:`statistics`), ``g-test-yates``, ``g-test``,
+   ``chi-square-yates``, ``chi-square``, ``diff-between-prop``,
    ``hypergeometric``, ``bootstrap``, ``permutation``.
 ``--type``
    ``two-sided`` (default) or ``one-sided``.

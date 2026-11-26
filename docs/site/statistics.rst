@@ -196,29 +196,34 @@ than random sampling of sequences would explain.
 Statistical tests
 ^^^^^^^^^^^^^^^^^
 
-Fisher's exact test
-   Computes the p-value exactly, from all ways the sequences could be split
-   between the samples. Valid for any counts, including very small ones.
-   Slow only for very large counts.
-
-Chi-square test, Chi-square test (w/ Yates')
-   The classic test of a 2×2 table, using an approximation that is accurate
-   when every count is large (as a rule of thumb, at least 5 to 20). Yates'
-   correction makes the approximation more cautious for smaller counts.
-   Two-sided only.
-
-G-test, G-test (w/ Yates')
-   Like the chi-square test but based on the likelihood ratio; it gives very
-   similar results. Two-sided only.
+The list of tests starts with the two to choose from:
 
 G-test (w/ Yates') + Fisher's
    Uses Fisher's exact test when any of the four counts is below 20, and the
    G-test with Yates' correction otherwise. This is STAMP's default: exact
    where it matters, fast where it does not.
 
+Fisher's exact test
+   Computes the p-value exactly, from all ways the sequences could be split
+   between the samples. Valid for any counts, including very small ones.
+   Slow only for very large counts.
+
+Below a line come the other tests:
+
+G-test, G-test (w/ Yates')
+   A test of a 2×2 table based on the likelihood ratio, using an
+   approximation that is accurate when every count is large (as a rule of
+   thumb, at least 5 to 20). Yates' correction makes the approximation more
+   cautious for smaller counts. Two-sided only.
+
+Chi-square test, Chi-square test (w/ Yates')
+   The classic test of a 2×2 table, with the same kind of approximation as
+   the G-test, and very similar results. Two-sided only.
+
 Difference between proportions
-   A z-test on the difference between the two proportions, using the normal
-   approximation. Like the chi-square test, it needs large counts.
+   A z-test on the difference between the two proportions, using the
+   pooled proportion. Its two-sided p-value is that of the chi-square test
+   (without Yates' correction); it also gives a one-sided p-value.
 
 Hypergeometric
    The one-sided Fisher's exact test; its two-sided p-value is twice the
@@ -232,6 +237,26 @@ Bootstrap, Permutation
    reshuffles the pooled sequences between the two samples. They need no
    approximation but take longer, and their p-values are limited by the
    number of replicates.
+
+.. note::
+
+   The tests below the line are kept for compatibility with STAMP v2, so
+   that analyses made with it can be repeated, and scripts that use them
+   keep working. None gives anything the first two do not:
+
+   - The **chi-square** and **G-tests** approximate what Fisher's exact test
+     computes exactly; they agree with it for abundant features and are
+     less reliable for rare ones, which is where the default switches to
+     Fisher's test.
+   - The **difference between proportions** gives the chi-square test's
+     p-value.
+   - The **permutation** test keeps the totals of both samples and of the
+     feature fixed, as Fisher's test does, so it estimates Fisher's p-value
+     by resampling: the same answer with random error, more slowly, and
+     never below about one in the number of replicates. After correction
+     for testing hundreds of features, that limit can hide real
+     differences. The **bootstrap** does not keep the totals fixed, but has
+     the same limit.
 
 .. tip::
 

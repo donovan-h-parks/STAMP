@@ -1337,16 +1337,18 @@ impl From<TestTypeArg> for TestType {
 }
 
 #[derive(Clone, Copy, ValueEnum)]
+/// Listed as in the graphical application: the preferred tests first, then
+/// those kept for compatibility with STAMP v2 (see `SampleTest::OTHERS`).
 pub enum SampleTestArg {
-    Bootstrap,
-    ChiSquare,
-    ChiSquareYates,
-    DiffBetweenProp,
     Fisher,
-    GTest,
-    GTestYates,
     GTestFisher,
+    GTestYates,
+    GTest,
+    ChiSquareYates,
+    ChiSquare,
+    DiffBetweenProp,
     Hypergeometric,
+    Bootstrap,
     Permutation,
 }
 

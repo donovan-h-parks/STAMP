@@ -204,7 +204,11 @@ Saving plots
   copied.
 
 **View > Send plot to window** opens the current plot in a window of its own,
-so that several plots can be compared side by side.
+so that several plots can be compared side by side. It is a window of
+the system, which can be moved anywhere, outside STAMP's window or onto
+another screen. Its **Save as PNG**, **Save as SVG** and **Save as PDF**
+buttons save that plot as **File > Save plot as** saves the plot of the main
+window (PNG asks for the resolution first).
 
 Preferences
 -----------

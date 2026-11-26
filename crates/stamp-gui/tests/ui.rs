@@ -4430,6 +4430,8 @@ fn documentation_screenshots_of_the_wizard() {
     harness.settle();
     assert!(!harness.app.wizard.glance);
     assert!(harness.app.apply_wizard(None));
+    // The wizard stays open, so that its other plots can be shown.
+    assert!(harness.app.wizard_shown());
     harness.settle();
     assert_eq!(harness.app.mode, Mode::MultipleGroups);
     assert_eq!(harness.app.plot_kind(), PlotKind::Pcoa);

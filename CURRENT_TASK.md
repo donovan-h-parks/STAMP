@@ -6,6 +6,20 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-27, the layout/assistant session): **two-sample test
+order**. Asked for: list the preferred tests first and say the others are
+kept for compatibility. Done: `SampleTest::PREFERRED`/`OTHERS` (two_sample.rs,
+with a test that the z-test gives the chi-square p-value), grouped combo in
+the GUI (`choose_grouped`), CLI value order, statistics.rst note,
+command_line.rst, CHANGES_FROM_PYTHON #72. fmt, clippy and the full test
+suite (668 tests) pass.
+Then: the analysis wizard stays an egui::Window, now in the foreground
+order, stays open after Set up / Show (`apply_wizard` no longer closes it),
+and has a Close button at the bottom (a separate system window was tried
+and reverted at the user's request). Docs: wizard.rst, NEW_FEATURES. Plot windows: Close button
+removed, Save as PNG/SVG/PDF buttons (PNG asks the resolution in that
+window; `png_resolution_dialog`, `save_vector_plot` in app.rs).
+
 Finished and committed (2026-11-27, the layout/assistant session):
 **colour schemes, menus, assistant dialog, wizard reasons**. Done:
 `crates/stamp-gui/src/theme.rs` (`ColorScheme`: Dark, Light and the four

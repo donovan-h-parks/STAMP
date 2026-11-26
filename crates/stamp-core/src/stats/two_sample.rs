@@ -60,6 +60,27 @@ impl SampleTest {
         SampleTest::Permutation,
     ];
 
+    /// The tests to choose from first: exact, or exact where an
+    /// approximation would not be, and reliable for rare and abundant
+    /// features alike.
+    pub const PREFERRED: [SampleTest; 2] = [SampleTest::GTestFisher, SampleTest::Fisher];
+
+    /// The other tests, listed after [`Self::PREFERRED`]. They are kept for
+    /// compatibility with STAMP v2: the chi-square and G-tests approximate
+    /// what Fisher's test computes exactly, the difference between
+    /// proportions gives the chi-square test's two-sided p-value, and the
+    /// permutation test estimates Fisher's p-value by resampling.
+    pub const OTHERS: [SampleTest; 8] = [
+        SampleTest::GTestYates,
+        SampleTest::GTest,
+        SampleTest::ChiSquareYates,
+        SampleTest::ChiSquare,
+        SampleTest::DiffBetweenProp,
+        SampleTest::Hypergeometric,
+        SampleTest::Bootstrap,
+        SampleTest::Permutation,
+    ];
+
     pub fn name(self) -> &'static str {
         match self {
             SampleTest::Bootstrap => "Bootstrap",
@@ -631,5 +652,35 @@ mod tests {
             assert_eq!(SampleTest::from_name(test.name()), Some(test));
         }
         assert_eq!(SampleTest::from_name("nope"), None);
+    }
+
+    #[test]
+    fn preferred_and_other_tests_list_each_test_once() {
+        let mut listed: Vec<SampleTest> = SampleTest::PREFERRED
+            .into_iter()
+            .chain(SampleTest::OTHERS)
+            .collect();
+        listed.sort_by_key(|test| test.name());
+        assert_eq!(listed, SampleTest::ALL);
+    }
+
+    /// The z-test of the difference between proportions uses the pooled
+    /// proportion, so its statistic squared is Pearson's chi-square and the
+    /// two-sided p-values are the same (as the documentation says).
+    #[test]
+    fn difference_between_proportions_is_the_chi_square_test() {
+        let mut rng = rng_from_seed(1);
+        let settings = StatsSettings::default();
+        for [s1, s2, t1, t2] in [
+            TABLE1,
+            TABLE2,
+            [1.0, 9.0, 1000.0, 1200.0],
+            [250.0, 30.0, 5000.0, 900.0],
+        ] {
+            let z = SampleTest::DiffBetweenProp.run(s1, s2, t1, t2, &settings, &mut rng);
+            let chi = SampleTest::ChiSquare.run(s1, s2, t1, t2, &settings, &mut rng);
+            let gap = (z.two_sided - chi.two_sided).abs();
+            assert!(gap <= 1e-12 * chi.two_sided.max(1e-300), "{s1} {s2}: {gap}");
+        }
     }
 }

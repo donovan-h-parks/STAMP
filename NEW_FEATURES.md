@@ -90,6 +90,11 @@ Add an entry here whenever a feature is added that v2 did not have.
   (`plot`) and replaces it in place; `show_plot` shows a plot drawn earlier
   by its name. Undone
   like any change of the assistant's.
+- **Plot windows that can be saved** (View > Send plot to window, which v2
+  had): each plot window has Save as PNG, Save as SVG and Save as PDF
+  buttons, so a plot sent to a window can be saved after the main window
+  has moved on; the window can be moved outside STAMP's, onto another
+  screen.
 - **One program per platform, no Python.** A single executable for Linux,
   Windows and macOS with no interpreter or libraries to install.
 - **Command line.** `stamp-cli` runs every analysis, writes the result
@@ -347,7 +352,9 @@ Add an entry here whenever a feature is added that v2 did not have.
 
 - **Analysis wizard** (Help > Analysis wizard, and a button at the top of
   the Statistics panel; `crates/stamp-gui/src/wizard.rs`, `wizard_ui.rs`,
-  `docs/site/wizard.rst`). A few questions lead from what the user wants to
+  `docs/site/wizard.rst`), in front of STAMP's other windows; it stays open
+  after setting up an analysis, so that each recommended plot can be shown in
+  turn. A few questions lead from what the user wants to
   know to the analysis, test and plots that answer it: what is compared
   (two samples, two groups, multiple groups, samples along a measured
   variable), the research question (features that differ, that follow the

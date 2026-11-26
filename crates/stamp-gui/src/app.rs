@@ -218,9 +218,20 @@ pub(crate) fn choose<T: PartialEq + Clone>(
     current: &mut T,
     options: &[(T, String)],
 ) -> bool {
+    choose_grouped(ui, id, current, &[options])
+}
+
+/// As [`choose`], with the options in groups divided by lines.
+pub(crate) fn choose_grouped<T: PartialEq + Clone>(
+    ui: &mut egui::Ui,
+    id: &str,
+    current: &mut T,
+    groups: &[&[(T, String)]],
+) -> bool {
     let mut changed = false;
-    let selected = options
+    let selected = groups
         .iter()
+        .flat_map(|group| group.iter())
         .find(|(value, _)| value == current)
         .map(|(_, name)| name.clone())
         .unwrap_or_default();
@@ -231,14 +242,19 @@ pub(crate) fn choose<T: PartialEq + Clone>(
         .width(COMBO_WIDTH)
         .truncate()
         .show_ui(ui, |ui| {
-            for (value, name) in options {
-                if ui
-                    .selectable_label(current == value, name.as_str())
-                    .clicked()
-                    && current != value
-                {
-                    *current = value.clone();
-                    changed = true;
+            for (index, group) in groups.iter().enumerate() {
+                if index > 0 {
+                    ui.separator();
+                }
+                for (value, name) in group.iter() {
+                    if ui
+                        .selectable_label(current == value, name.as_str())
+                        .clicked()
+                        && current != value
+                    {
+                        *current = value.clone();
+                        changed = true;
+                    }
                 }
             }
         });
@@ -838,6 +854,9 @@ struct PlotWindow {
     id: u64,
     title: String,
     figure: Figure,
+    /// The resolution being chosen for a PNG image of this plot, while
+    /// that dialog is open.
+    png_dpi: Option<f64>,
 }
 
 /// What is remembered from one run to the next: the layout of the window,
@@ -1349,6 +1368,11 @@ impl StampApp {
         self.show_wizard = show;
     }
 
+    /// Whether the analysis wizard is open.
+    pub fn wizard_shown(&self) -> bool {
+        self.show_wizard
+    }
+
     /// What the wizard knows about the loaded data, found again only when
     /// the data or the choices it depends on change.
     pub fn wizard_facts(&mut self) -> crate::wizard::Facts {
@@ -1431,7 +1455,7 @@ impl StampApp {
             }
             _ => {}
         }
-        self.show_wizard = false;
+        // The wizard stays open, so that its other plots can be shown.
         true
     }
 
@@ -1971,6 +1995,7 @@ impl StampApp {
             id,
             title: format!("{} ({id})", self.plot_name()),
             figure: self.figure.clone(),
+            png_dpi: None,
         });
     }
 
@@ -3413,15 +3438,10 @@ impl StampApp {
                             if !ui.add(item(icon, label, None)).clicked() {
                                 continue;
                             }
-                            match platform::encode_plot(&self.figure, name, platform::DEFAULT_DPI) {
-                                Ok(bytes) => self.platform.request(
-                                    Request::Save {
-                                        name: name.to_string(),
-                                        bytes,
-                                    },
-                                    &ctx,
-                                ),
-                                Err(message) => self.notice = Some(message),
+                            if let Err(message) =
+                                save_vector_plot(&self.platform, &self.figure, name, &ctx)
+                            {
+                                self.notice = Some(message);
                             }
                         }
                     });
@@ -4003,8 +4023,16 @@ impl StampApp {
                             choose(ui, "sample2", &mut state.sample2, &samples)
                         });
                         rerun |= row(ui, "Statistical test:", |ui| {
-                            let tests = named(&SampleTest::ALL, SampleTest::name);
-                            choose(ui, "sample-test", &mut state.analysis.test, &tests)
+                            // The preferred tests first; below the line, those
+                            // kept for compatibility with STAMP v2.
+                            let preferred = named(&SampleTest::PREFERRED, SampleTest::name);
+                            let others = named(&SampleTest::OTHERS, SampleTest::name);
+                            choose_grouped(
+                                ui,
+                                "sample-test",
+                                &mut state.analysis.test,
+                                &[&preferred, &others],
+                            )
                         });
                         ui.label("Type:");
                         ui.add_enabled_ui(state.analysis.test.has_one_sided(), |ui| {
@@ -5141,26 +5169,7 @@ impl StampApp {
             });
 
         if let Some(dpi) = &mut self.png_dpi {
-            let (mut save, mut cancel) = (false, false);
-            egui::Window::new("Save plot as PNG")
-                .collapsible(false)
-                .resizable(false)
-                .default_pos([420.0, 200.0])
-                .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("Resolution of the image:");
-                        ui.add(
-                            egui::DragValue::new(dpi)
-                                .speed(5.0)
-                                .range(50.0..=1200.0)
-                                .suffix(" dpi"),
-                        );
-                    });
-                    ui.horizontal(|ui| {
-                        save = ui.button("Save").clicked();
-                        cancel = ui.button("Cancel").clicked();
-                    });
-                });
+            let (save, cancel) = png_resolution_dialog(ctx, dpi);
             let dpi = *dpi;
             if save {
                 self.save_png(ctx, dpi);
@@ -5298,7 +5307,8 @@ impl StampApp {
 
         // Plots in windows of their own.
         let mut closed = Vec::new();
-        for window in &self.plot_windows {
+        let mut notice = None;
+        for window in &mut self.plot_windows {
             let size = [
                 (window.figure.width as f32 + 24.0).clamp(240.0, 1400.0),
                 (window.figure.height as f32 + 60.0).clamp(200.0, 1000.0),
@@ -5307,12 +5317,31 @@ impl StampApp {
                 .with_title(format!("STAMP - {}", window.title))
                 .with_inner_size(size);
             let id = egui::ViewportId::from_hash_of(("plot-window", window.id));
+            let platform = &self.platform;
             ctx.show_viewport_immediate(id, builder, |ui, class| {
                 let embedded = class == egui::ViewportClass::EmbeddedWindow;
+                let viewport = ui.ctx().clone();
                 let mut contents = |ui: &mut egui::Ui| {
-                    if ui.button("Close").clicked() {
-                        closed.push(window.id);
-                    }
+                    // Saved as File > Save plot as saves the plot of the
+                    // main window.
+                    ui.horizontal(|ui| {
+                        let png = icons::label(icons::FILE_PNG, "Save as PNG");
+                        if ui.button(png).clicked() {
+                            window.png_dpi = Some(platform::DEFAULT_DPI);
+                        }
+                        for (icon, label, name) in [
+                            (icons::FILE_SVG, "Save as SVG", "plot.svg"),
+                            (icons::FILE_PDF, "Save as PDF", "plot.pdf"),
+                        ] {
+                            if ui.button(icons::label(icon, label)).clicked() {
+                                if let Err(message) =
+                                    save_vector_plot(platform, &window.figure, name, &viewport)
+                                {
+                                    notice = Some(message);
+                                }
+                            }
+                        }
+                    });
                     let space = ui.available_size();
                     egui::ScrollArea::both()
                         .auto_shrink([false, false])
@@ -5325,10 +5354,29 @@ impl StampApp {
                 } else {
                     egui::CentralPanel::default().show(ui, contents);
                 }
+                // The resolution is asked for in the plot's own window.
+                if let Some(dpi) = &mut window.png_dpi {
+                    let (save, cancel) = png_resolution_dialog(&viewport, dpi);
+                    if save {
+                        platform.request(
+                            Request::SavePng {
+                                figure: Box::new(window.figure.clone()),
+                                dpi: *dpi,
+                            },
+                            &viewport,
+                        );
+                    }
+                    if save || cancel {
+                        window.png_dpi = None;
+                    }
+                }
                 if ui.ctx().input(|i| i.viewport().close_requested()) {
                     closed.push(window.id);
                 }
             });
+        }
+        if notice.is_some() {
+            self.notice = notice;
         }
         self.plot_windows
             .retain(|window| !closed.contains(&window.id));
@@ -5381,6 +5429,51 @@ fn shorten_number(cell: &str) -> String {
         }
         _ => cell.to_string(),
     }
+}
+
+/// The dialog that asks for the resolution of a PNG image of a plot, in
+/// the window of `ctx`: whether Save or Cancel was clicked.
+fn png_resolution_dialog(ctx: &egui::Context, dpi: &mut f64) -> (bool, bool) {
+    let (mut save, mut cancel) = (false, false);
+    egui::Window::new("Save plot as PNG")
+        .collapsible(false)
+        .resizable(false)
+        .default_pos([420.0, 200.0])
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Resolution of the image:");
+                ui.add(
+                    egui::DragValue::new(dpi)
+                        .speed(5.0)
+                        .range(50.0..=1200.0)
+                        .suffix(" dpi"),
+                );
+            });
+            ui.horizontal(|ui| {
+                save = ui.button("Save").clicked();
+                cancel = ui.button("Cancel").clicked();
+            });
+        });
+    (save, cancel)
+}
+
+/// Save `figure` as an SVG image or a PDF document, chosen by the ending of
+/// `name`, through the save dialog.
+fn save_vector_plot(
+    platform: &platform::Platform,
+    figure: &Figure,
+    name: &str,
+    ctx: &egui::Context,
+) -> Result<(), String> {
+    let bytes = platform::encode_plot(figure, name, platform::DEFAULT_DPI)?;
+    platform.request(
+        Request::Save {
+            name: name.to_string(),
+            bytes,
+        },
+        ctx,
+    );
+    Ok(())
 }
 
 impl eframe::App for StampApp {

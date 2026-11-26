@@ -28,6 +28,8 @@ const GREEN: Color32 = Color32::from_rgb(110, 170, 90);
 const PURPLE: Color32 = Color32::from_rgb(150, 120, 190);
 const RED: Color32 = Color32::from_rgb(210, 80, 70);
 
+/// The wizard, in a window in front of the others, which stays open when
+/// a recommendation is set up so that its other plots can be shown.
 pub fn show(app: &mut StampApp, ctx: &egui::Context) {
     if !app.show_wizard {
         return;
@@ -35,6 +37,7 @@ pub fn show(app: &mut StampApp, ctx: &egui::Context) {
     let mut open = true;
     egui::Window::new("Analysis wizard")
         .open(&mut open)
+        .order(egui::Order::Foreground)
         .default_size([780.0, 720.0])
         .min_width(520.0)
         .resizable(true)
@@ -62,6 +65,11 @@ fn contents(app: &mut StampApp, ui: &mut egui::Ui) {
     ui.separator();
     if app.wizard.glance {
         glance(app, ui, &facts);
+        ui.add_space(8.0);
+        ui.separator();
+        if ui.button("Close").clicked() {
+            app.show_wizard = false;
+        }
         return;
     }
     trail(app, ui);
@@ -110,6 +118,9 @@ fn contents(app: &mut StampApp, ui: &mut egui::Ui) {
             .clicked()
         {
             app.wizard.restart();
+        }
+        if ui.button("Close").clicked() {
+            app.show_wizard = false;
         }
     });
 }

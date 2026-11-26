@@ -101,8 +101,9 @@ test, the plot), and gives:
    Dunn's test.
 
 **Set up this analysis** chooses those settings in the Statistics panel,
-runs the analysis, shows the first of the plots and closes the wizard.
-*Show* beside a plot does the same and shows that plot. For a test of many
+runs the analysis and shows the first of the plots. The wizard stays open,
+in front of the other windows, so that *Show* beside another plot can show
+that plot; **Close** at its bottom closes it. For a test of many
 features the wizard always chooses the Benjamini-Hochberg FDR correction;
 everything it sets can be changed afterwards in the Statistics panel. The
 two samples, or the two groups, compared are those chosen there.
