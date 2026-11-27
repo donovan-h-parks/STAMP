@@ -8,6 +8,8 @@ use crate::axes::{
     AXES_COLOR, INCH, TITLE_SIZE,
 };
 use crate::axis::Ticks;
+pub use crate::composition::Labels;
+use crate::composition::{name_height, slanted, GROUP_LABEL_ANGLE};
 use crate::figure::{Color, Figure, Stroke};
 use crate::p_values::PValueKind;
 use crate::text;
@@ -22,8 +24,8 @@ pub enum Field {
 impl Field {
     pub fn label(self) -> &'static str {
         match self {
-            Field::Proportion => "Proportion of sequences (%)",
-            Field::SequenceCount => "Number of sequences",
+            Field::Proportion => "Proportions (%)",
+            Field::SequenceCount => "Raw values",
         }
     }
 }
@@ -172,6 +174,12 @@ pub struct BarOptions {
     /// Logarithmic (base 10) value axis; samples without the feature get no
     /// bar and the axis is labelled 0 below a break.
     pub log_scale: bool,
+    /// What the names beneath the bars name: each sample, each group (once,
+    /// beneath its bars) or nothing.
+    pub labels: Labels,
+    /// Width of each bar, as a percentage of the column given to its
+    /// sample; the rest is the space between bars.
+    pub bar_width_percent: f64,
 }
 
 impl Default for BarOptions {
@@ -185,6 +193,8 @@ impl Default for BarOptions {
             truncate_labels: Some(50),
             title_font_size: TITLE_SIZE,
             log_scale: false,
+            labels: Labels::Samples,
+            bar_width_percent: 45.0,
         }
     }
 }
@@ -239,13 +249,53 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         }
     });
     let padding = 0.25 * INCH;
-    let longest_label = sample_labels
-        .iter()
-        .map(|l| text::width(l, fonts().tick))
-        .fold(0.0, f64::max);
     let column = options.column_width * INCH;
-    let left =
+    // Each group's name, its width, and the middle of its bars from the
+    // left of the plot. A name is written across beneath its bars where
+    // every name fits there, otherwise slanted.
+    let group_names: Vec<(String, f64, f64)> = {
+        let mut first = 0usize;
+        data.groups
+            .iter()
+            .map(|g| {
+                let name = shorten(&g.name, options.truncate_labels);
+                let middle = column * (first as f64 + g.values.len() as f64 / 2.0);
+                first += g.values.len();
+                let width = text::width(&name, fonts().tick);
+                (name, width, middle)
+            })
+            .collect()
+    };
+    let group_angle = if data
+        .groups
+        .iter()
+        .zip(&group_names)
+        .all(|(g, (_, width, _))| width + 4.0 <= column * g.values.len() as f64)
+    {
+        0.0
+    } else {
+        GROUP_LABEL_ANGLE
+    };
+    let label_height = match options.labels {
+        Labels::Samples => sample_labels
+            .iter()
+            .map(|l| text::width(l, fonts().tick))
+            .fold(0.0, f64::max),
+        Labels::Groups => group_names
+            .iter()
+            .map(|(name, _, _)| name_height(name, group_angle, fonts().tick))
+            .fold(0.0, f64::max),
+        Labels::None => 0.0,
+    };
+    let mut left =
         padding + axes::TICK_PAD + axis.label_width() + 4.0 + axes::line_height(fonts().axis_label);
+    // A slanted first group name would reach past the left edge.
+    if let (Labels::Groups, Some((_, width, middle))) = (options.labels, group_names.first()) {
+        let reach = width * group_angle.to_radians().cos();
+        if group_angle > 0.0 {
+            left += (padding - (left + middle - reach)).max(0.0);
+        }
+    }
     // The p-value goes on a line of its own under the title: the plot is
     // often too narrow for both side by side.
     let p_value = match (options.show_p_value, &data.p_value) {
@@ -261,7 +311,7 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         left,
         top: padding + options.title_font_size + p_line,
         right: left + column * num_samples,
-        bottom: options.height * INCH - padding - longest_label - axes::TICK_PAD,
+        bottom: options.height * INCH - padding - label_height - axes::TICK_PAD,
     };
     if frame.height() < 0.5 * INCH {
         return Figure::message("The plot is too short for its labels; increase the figure height");
@@ -269,7 +319,7 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
     let mut figure = Figure::new(frame.right + padding, options.height * INCH);
 
     let y = frame.y_scale(axis.min, axis.max);
-    let bar_width = column * 0.9 / 2.0;
+    let bar_width = column * (options.bar_width_percent / 100.0).clamp(0.05, 1.0);
     let outline = Stroke::solid(Color::BLACK, 1.0);
     let mut x_ticks = Vec::new();
     let mut column_index = 0usize;
@@ -285,7 +335,7 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
             );
         }
         for (sample, &value) in group.samples.iter().zip(&group.values) {
-            let x = frame.left + column * (column_index as f64 + 0.25);
+            let x = frame.left + column * column_index as f64 + (column - bar_width) / 2.0;
             // On a logarithmic axis a sample without the feature has no bar.
             if !(axis.log && value <= 0.0) {
                 let top = y.map(axis.coord(value.max(0.0)));
@@ -298,8 +348,10 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
                     Some(outline),
                 );
             }
-            let centre = x + bar_width / 2.0;
-            x_ticks.push((centre, sample_labels[column_index].clone()));
+            if options.labels == Labels::Samples {
+                let centre = x + bar_width / 2.0;
+                x_ticks.push((centre, sample_labels[column_index].clone()));
+            }
             figure.region(
                 x,
                 frame.top,
@@ -334,6 +386,16 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         )),
         AXES_COLOR,
     );
+    if options.labels == Labels::Groups {
+        for (name, _, middle) in &group_names {
+            figure.text(
+                frame.left + middle,
+                frame.bottom + axes::TICK_PAD,
+                name.clone(),
+                slanted(group_angle),
+            );
+        }
+    }
     axis.draw_break(&mut figure, &frame, &y, false);
     let title_frame = Frame {
         top: frame.top - p_line,
@@ -611,7 +673,7 @@ mod tests {
         for expected in [
             "Bacteroides",
             "p = 0.012",
-            "Proportion of sequences (%)",
+            "Proportions (%)",
             "L1",
             "O2",
             "35",
@@ -688,6 +750,116 @@ mod tests {
             bar_plot(&data(), &BarOptions::default()).shapes.len(),
             figure.shapes.len() + 3
         );
+    }
+
+    #[test]
+    fn bar_plot_names_the_samples_the_groups_or_nothing() {
+        let with = |labels: Labels| {
+            let figure = bar_plot(
+                &data(),
+                &BarOptions {
+                    labels,
+                    ..BarOptions::default()
+                },
+            );
+            let names = |names: &[&str]| {
+                names
+                    .iter()
+                    .filter(|n| texts(&figure).iter().any(|t| t == *n))
+                    .count()
+            };
+            (
+                names(&["L1", "L2", "L3", "O1", "O2"]),
+                names(&["Lean", "Obese"]),
+            )
+        };
+        assert_eq!(with(Labels::Samples), (5, 0));
+        assert_eq!(with(Labels::Groups), (0, 2));
+        assert_eq!(with(Labels::None), (0, 0));
+
+        // A group's name is beneath the middle of its bars, across when it
+        // fits there.
+        let figure = bar_plot(
+            &data(),
+            &BarOptions {
+                labels: Labels::Groups,
+                ..BarOptions::default()
+            },
+        );
+        let bars: Vec<(f64, f64)> = figure
+            .shapes
+            .iter()
+            .filter_map(|s| match s {
+                Shape::Rect {
+                    x,
+                    width,
+                    fill: Some(c),
+                    ..
+                } if *c == group_color(0) => Some((*x, *width)),
+                _ => None,
+            })
+            .collect();
+        let middle = (bars[0].0 + bars[2].0 + bars[2].1) / 2.0;
+        let (x, rotation) = figure
+            .shapes
+            .iter()
+            .find_map(|s| match s {
+                Shape::Text { x, text, style, .. } if text == "Lean" => Some((*x, style.rotation)),
+                _ => None,
+            })
+            .unwrap();
+        assert!((x - middle).abs() < 1e-9, "{x} {middle}");
+        assert_eq!(rotation, 0.0);
+        // Narrow columns slant the names.
+        let narrow = bar_plot(
+            &data(),
+            &BarOptions {
+                labels: Labels::Groups,
+                column_width: 0.05,
+                ..BarOptions::default()
+            },
+        );
+        assert!(narrow.shapes.iter().any(|s| matches!(s,
+            Shape::Text { text, style, .. } if text == "Lean" && style.rotation == GROUP_LABEL_ANGLE)));
+    }
+
+    #[test]
+    fn the_bars_can_be_made_wider() {
+        let widths = |percent: f64| {
+            let figure = bar_plot(
+                &data(),
+                &BarOptions {
+                    bar_width_percent: percent,
+                    ..BarOptions::default()
+                },
+            );
+            let bars: Vec<(f64, f64)> = figure
+                .shapes
+                .iter()
+                .filter_map(|s| match s {
+                    Shape::Rect {
+                        x,
+                        width,
+                        fill: Some(c),
+                        ..
+                    } if *c == group_color(0) => Some((*x, *width)),
+                    _ => None,
+                })
+                .collect();
+            (bars[0].1, bars[1].0 - (bars[0].0 + bars[0].1), figure.width)
+        };
+        let column = BarOptions::default().column_width * INCH;
+        let (width, space, figure_width) = widths(45.0);
+        assert!((width - 0.45 * column).abs() < 1e-9);
+        assert!((space - 0.55 * column).abs() < 1e-9);
+        // Wider bars leave less space between them, in a figure of the
+        // same width.
+        let (width, space, wider_figure) = widths(90.0);
+        assert!((width - 0.9 * column).abs() < 1e-9);
+        assert!((space - 0.1 * column).abs() < 1e-9);
+        assert_eq!(wider_figure, figure_width);
+        let (_, space, _) = widths(100.0);
+        assert!(space.abs() < 1e-9);
     }
 
     #[test]

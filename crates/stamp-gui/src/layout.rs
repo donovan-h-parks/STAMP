@@ -85,8 +85,8 @@ impl Frame {
     }
 }
 
-/// The layout STAMP starts with: Profile and groups and Statistics as tabs
-/// on the left (with Configure plot as a third tab when it is opened); the
+/// The layout STAMP starts with: Profile and groups, Statistics and
+/// Configure plot as tabs on the left; the
 /// plot, then the Feature table, then the assistant (hidden until an
 /// assistant is opened) to its right; the Metadata table, the Results table
 /// and the Profile table as tabs along the bottom.

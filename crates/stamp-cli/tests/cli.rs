@@ -1164,8 +1164,8 @@ fn every_plot_type_can_be_drawn() {
         "benjamini-hochberg",
     ];
     for (kind, label) in [
-        ("bar", "Proportion of sequences (%)"),
-        ("profile-bar", "Proportion of sequences (%)"),
+        ("bar", "Proportions (%)"),
+        ("profile-bar", "Proportions (%)"),
         ("scatter", "Black (%)"),
         ("sequence-histogram", "Sequences"),
         // Benjamini-Hochberg: q-values.
@@ -1192,7 +1192,7 @@ fn every_plot_type_can_be_drawn() {
     ];
     let groups: Vec<&str> = ENTEROTYPES.iter().chain(&two).copied().collect();
     for (kind, label) in [
-        ("bar", "Proportion of sequences (%)"),
+        ("bar", "Proportions (%)"),
         ("box", "Enterotype 3"),
         ("scatter", "Enterotype 1 (%)"),
         ("heatmap", "Enterotype 3"),
@@ -1206,6 +1206,31 @@ fn every_plot_type_can_be_drawn() {
         );
         assert!(has(&svg, label), "two-groups {kind}: no {label:?}");
     }
+    // The bar plot names the samples, or with --bar-labels the groups.
+    let bar = |extra: &[&str], name: &str| {
+        let options: Vec<&str> = ["--plot-type", "bar"]
+            .iter()
+            .chain(extra)
+            .copied()
+            .collect();
+        svg_plot("two-groups", &groups, &options, &directory, name)
+    };
+    assert!(!has(&bar(&[], "g-bar-samples"), "Enterotype 1"));
+    assert!(has(
+        &bar(
+            &["--bar-labels", "groups", "--bar-width", "90"],
+            "g-bar-groups"
+        ),
+        "Enterotype 1"
+    ));
+    let heatmap = svg_plot(
+        "two-groups",
+        &groups,
+        &["--plot-type", "heatmap", "--heatmap-labels", "groups"],
+        &directory,
+        "g-heatmap-groups",
+    );
+    assert!(has(&heatmap, "Enterotype 1"));
     // A PCoA of Euclidean distances, which is what the PCA plot showed.
     let euclidean = svg_plot(
         "two-groups",
@@ -1281,7 +1306,7 @@ fn every_plot_type_can_be_drawn() {
         &directory,
         "m-composition",
     );
-    assert!(has(&composition, "Proportion of sequences (%)") && has(&composition, "Other"));
+    assert!(has(&composition, "Proportions (%)") && has(&composition, "Other"));
 
     // Rarefaction curves need counts of sequences; the coal-seam profile
     // has them and the enterotype profile does not.
@@ -2135,12 +2160,12 @@ fn plot_font_sizes_can_be_chosen() {
     ];
     let plain = svg_plot("multi-groups", base, &extra, &directory, "plain");
     assert_eq!(font(&plain, "Enterotype 1"), "8");
-    assert_eq!(font(&plain, "Proportion of sequences (%)"), "9");
+    assert_eq!(font(&plain, "Proportions (%)"), "9");
     let mut sized = extra.to_vec();
     sized.extend_from_slice(&["--tick-font-size", "12", "--axis-label-font-size", "14"]);
     let svg = svg_plot("multi-groups", base, &sized, &directory, "sized");
     assert_eq!(font(&svg, "Enterotype 1"), "12");
-    assert_eq!(font(&svg, "Proportion of sequences (%)"), "14");
+    assert_eq!(font(&svg, "Proportions (%)"), "14");
     assert!(plain.contains("font-family=\"Arial, Helvetica, Liberation Sans, sans-serif\""));
     let mut times = extra.to_vec();
     times.extend_from_slice(&["--font", "times-new-roman"]);

@@ -1701,10 +1701,7 @@ fn composition_options(settings: &PlotSettings) -> composition::Options {
 fn proportion_plot(kind: PlotKind, data: &composition::Data, settings: &PlotSettings) -> Figure {
     match kind {
         PlotKind::SharedFeatures => {
-            let shared = shared_features::Data::from_composition(
-                data,
-                settings.shared.min_prevalence / 100.0,
-            );
+            let shared = shared_features::Data::from_composition(data, settings.shared.rule());
             shared_features::plot(&shared, &settings.shared)
         }
         _ => rank_abundance::plot(data, &settings.rank_abundance),

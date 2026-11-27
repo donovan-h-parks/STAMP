@@ -7,6 +7,7 @@ use crate::axes::{
     axis_label_style, fonts, group_color, legend, tick_style, Frame, LegendPosition, INCH,
     NOTE_SIZE,
 };
+pub use crate::composition::Labels;
 use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::text;
 
@@ -337,9 +338,9 @@ impl Data {
             sample_groups,
             groups,
             value_label: if sequence_counts {
-                "Number of sequences"
+                "Raw values"
             } else {
-                "Proportion of sequences (%)"
+                "Proportions (%)"
             }
             .to_string(),
             group_colors: Vec::new(),
@@ -429,6 +430,9 @@ pub struct Options {
     pub truncate_labels: Option<usize>,
     /// Size of the names of the features and samples, in points.
     pub label_font_size: f64,
+    /// What the names beneath the columns name: each sample, each group
+    /// (once beneath each run of its columns) or nothing.
+    pub labels: Labels,
 }
 
 impl Default for Options {
@@ -449,6 +453,7 @@ impl Default for Options {
             row_cluster_threshold: 0.75,
             truncate_labels: Some(50),
             label_font_size: NOTE_SIZE,
+            labels: Labels::Samples,
         }
     }
 }
@@ -617,10 +622,34 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         .iter()
         .map(|&r| shorten(&data.features[r]))
         .collect();
-    let column_labels: Vec<String> = column_order
-        .iter()
-        .map(|&c| shorten(&data.samples[c]))
-        .collect();
+    // The names beneath the columns, each with the number of columns it
+    // names from the left and how many columns it spans: a sample's name,
+    // or a group's beneath each run of its samples.
+    let group_of = |c: usize| data.sample_groups.get(c).copied().unwrap_or(0);
+    let column_names: Vec<(usize, usize, String)> = match options.labels {
+        Labels::Samples => column_order
+            .iter()
+            .enumerate()
+            .map(|(position, &c)| (position, 1, shorten(&data.samples[c])))
+            .collect(),
+        Labels::Groups => {
+            let mut runs: Vec<(usize, usize, usize)> = Vec::new();
+            for (position, &c) in column_order.iter().enumerate() {
+                match runs.last_mut() {
+                    Some((group, _, count)) if *group == group_of(c) => *count += 1,
+                    _ => runs.push((group_of(c), position, 1)),
+                }
+            }
+            runs.into_iter()
+                .map(|(group, first, count)| {
+                    let name = data.groups.get(group).map_or("", String::as_str);
+                    (first, count, shorten(name))
+                })
+                .collect()
+        }
+        Labels::None => Vec::new(),
+    };
+    let column_labels: Vec<String> = column_names.iter().map(|(_, _, n)| n.clone()).collect();
     let widest = |labels: &[String]| {
         labels
             .iter()
@@ -729,10 +758,10 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
             );
         }
     }
-    if cell_w >= options.label_font_size * 0.8 {
-        for (c, label) in column_labels.iter().enumerate() {
+    for (first, count, label) in &column_names {
+        if cell_w * *count as f64 >= options.label_font_size * 0.8 {
             figure.text(
-                left + cell_w * (c as f64 + 0.5),
+                left + cell_w * (*first as f64 + *count as f64 / 2.0),
                 bottom + 4.0,
                 label.clone(),
                 style.align(HAlign::Right, VAlign::Middle).rotated(90.0),
@@ -742,7 +771,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
 
     // Group of each sample.
     for (c, &column) in column_order.iter().enumerate() {
-        let group = data.sample_groups.get(column).copied().unwrap_or(0);
+        let group = group_of(column);
         figure.rect(
             left + cell_w * c as f64,
             top - strip - 2.0,
@@ -870,7 +899,7 @@ mod tests {
             ],
             sample_groups: vec![0, 1, 0, 1],
             groups: vec!["Lean".into(), "Obese".into()],
-            value_label: "Proportion of sequences (%)".to_string(),
+            value_label: "Proportions (%)".to_string(),
             group_colors: Vec::new(),
         }
     }
@@ -888,6 +917,40 @@ mod tests {
 
     fn row_order(figure: &Figure) -> Vec<String> {
         figure.regions.iter().map(|r| r.item.clone()).collect()
+    }
+
+    #[test]
+    fn the_columns_can_be_named_by_group() {
+        let names = |labels: Labels, column_order: Order| {
+            let figure = plot(
+                &data(),
+                &Options {
+                    labels,
+                    column_order,
+                    legend: LegendPosition::None,
+                    ..Options::default()
+                },
+            );
+            texts(&figure)
+                .into_iter()
+                .filter(|t| t.starts_with('s') || t == "Lean" || t == "Obese")
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(Labels::Samples, Order::Original),
+            ["s1", "s2", "s3", "s4"]
+        );
+        assert!(names(Labels::None, Order::Original).is_empty());
+        // In the given order the groups alternate, so every column is named;
+        // clustered, the samples of each group are together and the group is
+        // named once beneath them.
+        assert_eq!(
+            names(Labels::Groups, Order::Original),
+            ["Lean", "Obese", "Lean", "Obese"]
+        );
+        let mut clustered = names(Labels::Groups, Order::Cluster(Linkage::Average));
+        clustered.sort();
+        assert_eq!(clustered, ["Lean", "Obese"]);
     }
 
     #[test]
@@ -929,7 +992,7 @@ mod tests {
             "Obese",
             "1.00",
             "9.50",
-            "Proportion of sequences (%)",
+            "Proportions (%)",
         ] {
             assert!(texts.iter().any(|t| t == expected), "missing {expected}");
         }

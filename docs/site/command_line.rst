@@ -387,6 +387,14 @@ features left after the filters.
    The diversity measure, and the distance of the community plots:
    ``bray-curtis`` (default), ``jaccard``, ``aitchison`` or ``euclidean``
    (a PCoA of Euclidean distances is a PCA of the proportions).
+``--shared-style``, ``--min-prevalence PERCENT``, ``--no-presence-filter``, ``--absent-below PERCENT``
+   The shared-features plot: ``upset`` (default) or ``venn``; a feature is
+   present in a group if found in at least ``--min-prevalence`` percent of
+   its samples (default 50), or in any of them with
+   ``--no-presence-filter``. With ``--absent-below``, a feature is absent
+   from a group only if found in less than that percentage of its samples,
+   and features in between in some group are left out; without it, a
+   feature is absent wherever it is not present.
 
 With more than twenty groups the group colours repeat, and the command
 prints a warning.
@@ -482,6 +490,12 @@ axis, with every sample as a point, the groups ordered by their median::
    ``--box-order-field Hemisphere``.
 ``--bar-log``
    A log10 axis for the bar plot of one feature in every sample.
+``--bar-labels {samples,groups,none}``
+   The names beneath the bars of the bar plot: each sample (default), each
+   group (once, beneath its bars) or none.
+``--bar-width PERCENT``
+   The width of each bar of the bar plot, as a percentage of its sample's
+   column (default 45; 100 leaves no space between bars).
 
 .. _cli-prevalence-abundance:
 
@@ -619,6 +633,9 @@ mountain range::
    ``--heatmap-order-field``, the default when that is given),
    ``alphabetical`` or ``original``. The colour map, order, linkage and
    dendrograms apply to the heatmap of samples too.
+``--heatmap-labels {samples,groups,none}``
+   The names beneath the columns of the heatmap of samples: each sample
+   (default), each group (once beneath each run of its samples) or none.
 ``--heatmap-order-field FIELD``
    A metadata field shown as a coloured strip above the groups, each group
    taking the value most common among its samples (host order for groups of

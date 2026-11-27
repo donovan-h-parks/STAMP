@@ -24,6 +24,7 @@ pub const DOWNLOAD: &str = "\u{E20C}";
 pub const SIGN_OUT: &str = "\u{E42A}";
 pub const SIDEBAR: &str = "\u{EC24}";
 pub const SLIDERS: &str = "\u{E434}";
+pub const PAINT_BRUSH: &str = "\u{E6F0}";
 pub const LIST: &str = "\u{E2F2}";
 pub const ROWS: &str = "\u{E5A2}";
 pub const TABLE: &str = "\u{E476}";
@@ -40,7 +41,7 @@ pub const PULSE: &str = "\u{E000}";
 pub const ARROW_COUNTER_CLOCKWISE: &str = "\u{E038}";
 
 /// Every icon, for checking that the font has them all.
-pub const ALL: [&str; 26] = [
+pub const ALL: [&str; 27] = [
     FOLDER_OPEN,
     FILE,
     TAG,
@@ -53,6 +54,7 @@ pub const ALL: [&str; 26] = [
     SIGN_OUT,
     SIDEBAR,
     SLIDERS,
+    PAINT_BRUSH,
     LIST,
     ROWS,
     TABLE,

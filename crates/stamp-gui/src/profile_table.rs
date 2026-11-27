@@ -25,8 +25,8 @@ impl CellValues {
 
     pub fn name(self) -> &'static str {
         match self {
-            CellValues::Percent => "Proportion (%)",
-            CellValues::Loaded => "Values in the file",
+            CellValues::Percent => "Proportions (%)",
+            CellValues::Loaded => "Raw values",
         }
     }
 }

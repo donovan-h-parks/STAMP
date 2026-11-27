@@ -426,7 +426,9 @@ Add an entry here whenever a feature is added that v2 did not have.
 - **Feature table beside every plot**, with each feature's effect size and
   p-values, not only beside the single-feature plots [30, 33].
 - **Hover tooltips on plots**, where v2 showed a message box on a click.
-- **Zoom** of the plot on screen, independent of the size it is saved at.
+- **Zoom** of the plot on screen, independent of the size it is saved at,
+  shown as a percentage beside the slider that can be clicked to type a
+  zoom.
 - **Live plot settings.** Changes in "Configure plot" show at once, and each
   plot's settings can be returned to their defaults [32].
 - **Menu icons** (Phosphor Icons) [49].
@@ -701,6 +703,18 @@ Add an entry here whenever a feature is added that v2 did not have.
   - The idea follows the rarefaction plot of the GenomicaMicrob fork of
     STAMP; the implementation is independent of it.
 
+- **Presence and absence filters in the shared features plot.** A feature
+  is present in a group if found in at least a share of its samples (the
+  presence filter, on, 50%) and, with the absence filter (off, 50%),
+  absent only below another share; features in between are left out, so
+  the plot can pick out features common to some groups and rare in the
+  others. Command line: `--no-presence-filter`, `--absent-below`.
+- **Group names beneath the bar plot and the heatmap.** "Labels for:" in
+  Configure plot names each sample (as in v2), each group (once beneath its
+  bars, or beneath each run of its columns in the heatmap), or nothing, as
+  the composition bar plot does. The bar plot's bars can also be widened up
+  to filling their column ("Bar width (%)", 45% by default, which v2 fixed).
+  Command line: `--bar-labels`, `--bar-width`, `--heatmap-labels`.
 - **"Best" legend position for the ordination plots and the heatmap**, and legends
   on the left and right sides as well as in the corners [36, 43].
 - **Any confidence level** for the post-hoc plot [47].

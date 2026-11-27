@@ -754,6 +754,8 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                 &feature_plots::BarOptions {
                     height: size(6.0),
                     log_scale: args.boxes.bar_log,
+                    labels: args.boxes.bar_labels.into(),
+                    bar_width_percent: args.boxes.bar_width,
                     ..Default::default()
                 },
             ),
@@ -1158,6 +1160,8 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                 &feature_plots::BarOptions {
                     height: size(6.0),
                     log_scale: args.boxes.bar_log,
+                    labels: args.boxes.bar_labels.into(),
+                    bar_width_percent: args.boxes.bar_width,
                     ..Default::default()
                 },
             ),
@@ -1873,6 +1877,7 @@ fn heatmap_options(
         show_row_dendrogram: !args.heatmap_no_dendrograms,
         show_column_dendrogram: !args.heatmap_no_dendrograms,
         color_map: args.heatmap_color_map.map_or(ColorMap::Blues, Into::into),
+        labels: args.heatmap_labels.into(),
         ..Default::default()
     })
 }
@@ -2449,20 +2454,32 @@ fn proportion_figure(
     if !(0.0..=100.0).contains(&plot.min_prevalence) {
         return Err("--min-prevalence must be a percentage, from 0 to 100".to_string());
     }
+    if plot
+        .absent_below
+        .is_some_and(|a| !(0.0..=100.0).contains(&a))
+    {
+        return Err("--absent-below must be a percentage, from 0 to 100".to_string());
+    }
     Ok(match kind {
-        PlotTypeArg::SharedFeatures => shared_features::plot(
-            &shared_features::Data::from_composition(data, plot.min_prevalence / 100.0),
-            &shared_features::Options {
+        PlotTypeArg::SharedFeatures => {
+            let options = shared_features::Options {
                 width: plot.plot_width,
                 height: plot.plot_height.unwrap_or(5.0),
                 style: match plot.shared_style {
                     SharedStyleArg::Upset => shared_features::Style::UpSet,
                     SharedStyleArg::Venn => shared_features::Style::Venn,
                 },
+                presence_filter: !plot.no_presence_filter,
                 min_prevalence: plot.min_prevalence,
+                absence_filter: plot.absent_below.is_some(),
+                absence_threshold: plot.absent_below.unwrap_or(50.0),
                 ..Default::default()
-            },
-        ),
+            };
+            shared_features::plot(
+                &shared_features::Data::from_composition(data, options.rule()),
+                &options,
+            )
+        }
         _ => rank_abundance::plot(
             data,
             &rank_abundance::Options {

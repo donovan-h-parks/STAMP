@@ -238,11 +238,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         &mut figure,
         &frame,
         &scaled_ticks(&y_ticks, &y),
-        Some(
-            data.value_label
-                .as_deref()
-                .unwrap_or("Proportion of sequences (%)"),
-        ),
+        Some(data.value_label.as_deref().unwrap_or("Proportions (%)")),
         AXES_COLOR,
     );
     // The title above the line of the correlation, so that the two never
@@ -379,7 +375,7 @@ mod tests {
         for expected in [
             "Bacteroides",
             "Depth (m)",
-            "Proportion of sequences (%)",
+            "Proportions (%)",
             "rho = 0.900, p = 0.037",
             "Shallow",
             "Deep",

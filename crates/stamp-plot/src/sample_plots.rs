@@ -227,9 +227,9 @@ pub fn profile_bar<'a>(
         }
     }
     let y_label = if options.sequence_counts {
-        "Number of sequences"
+        "Raw values"
     } else {
-        "Proportion of sequences (%)"
+        "Proportions (%)"
     };
     y_axis(
         &mut figure,
@@ -353,9 +353,9 @@ pub fn stat_bar<'a>(
         }
     };
     let x_label = match options.field {
-        BarField::Sequences => "Number of sequences".to_string(),
+        BarField::Sequences => "Raw values".to_string(),
         BarField::ParentSequences => "Number of parental sequences".to_string(),
-        BarField::Proportions => "Proportion of sequences (%)".to_string(),
+        BarField::Proportions => "Proportions (%)".to_string(),
         BarField::PValues => PValueKind::Uncorrected.plural().to_string(),
         BarField::CorrectedPValues => PValueKind::of(results.correction.method)
             .plural()
@@ -772,7 +772,7 @@ mod tests {
         assert_eq!(rects(&figure, group_color(1)), 12);
         // Most abundant in the first sample comes first.
         assert_eq!(figure.regions[0].item, "feature 12");
-        assert!(has_text(&figure, "*") && has_text(&figure, "Proportion of sequences (%)"));
+        assert!(has_text(&figure, "*") && has_text(&figure, "Proportions (%)"));
         // The corrected values are named as the caller says.
         assert!(figure.regions[0].tooltip.contains("\nCorrected p-value: "));
 
@@ -799,7 +799,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert!(has_text(&counts, "Number of sequences") && !has_text(&counts, "*"));
+        assert!(has_text(&counts, "Raw values") && !has_text(&counts, "*"));
         assert_eq!(
             profile_bar(
                 &profile,

@@ -6,6 +6,42 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-27, the colour-scheme session):
+- **"Labels for:" on the Bar plot and the Heatmap** (`labels:
+  composition::Labels`; Each sample by default, as before) and **"Bar width
+  (%)"** on the bar plot (`bar_width_percent`, 45 = v2's width; bars are
+  now centred in their columns, CHANGES #76). CLI `--bar-labels`,
+  `--bar-width`, `--heatmap-labels`. Composition already had Labels for;
+  no other group plot writes sample names along an axis (rarefaction names
+  its curves and can draw them per group).
+- **Configure plot**: the button beside the plot selector is gone; the
+  frame is shown at start (a tab behind Profile and groups;
+  `Saved.show_plot_config`, true when missing) and is in View, under
+  Statistics (Phosphor paint-brush icon, subset regenerated).
+- **Zoom** shows its percentage beside the slider; click to type one
+  (`parse_zoom`).
+- **Shared features tooltip** says "Common only to X" with the prevalence
+  rule ("found in at least 50% of its samples, and in less than 50% of
+  those of every other group"); docs example reworded.
+- Docs: plots.rst, main_window.rst (gui_main_window.png, gui_frames.png
+  regenerated), command_line.rst, NEW_FEATURES, CHANGES #76.
+- Follow-up (same session): tooltip shortened ("Common to X: in >=50% of
+  its samples and <50% of samples from other groups"); **presence and
+  absence filters** in the shared features plot (`shared_features::Rule`,
+  `Options::{presence_filter, absence_filter, absence_threshold}`,
+  `Data::left_out`; CLI `--no-presence-filter`, `--absent-below`);
+  "Proportion of sequences (%)" -> "Proportions (%)" and "Number of
+  sequences" -> "Raw values" (CHANGES #77; rarefaction x axis kept);
+  Profile table Show: "Raw values".
+- Doc figures regenerated for the new axis titles and shared-features
+  note: tg_bar, tg_box, mg_box_features, mg_heatmap (Enterotypes 1-3,
+  `--unclassified retain --significance 0.05`), mg_composition,
+  mg_rank_abundance (`--rank-curves groups`), mg_shared_upset,
+  tg_shared_venn (Core vs Produced water; its counts now agree with the
+  UpSet plot), ts_extended_error_bar (`--effect-size-filter
+  diff-between-prop=0.5 --plot-legend lower-center`, dpi 100), ts_bar,
+  ts_profile_bar (`--significance 0.05`), glacier_reach_pairs, glacier_ph.
+
 Finished and committed (2026-11-27, the glacier/example-data session):
 **Alpha diversity plot: level on the axis, box/violin/swarm; R2 with
 PERMANOVA.**

@@ -667,6 +667,38 @@ fn the_metadata_table_is_in_front_at_start() {
     assert!(layout::is_in_front(next.app.layout(), Frame::Results));
 }
 
+#[test]
+fn configure_plot_is_shown_at_start() {
+    use stamp_gui::layout::{self, Frame};
+    let mut harness = Harness::enterotypes();
+    harness.settle();
+    assert!(harness.app.frame_shown(Frame::ConfigurePlot));
+    // Beside Profile and groups, which stays in front.
+    assert!(layout::is_in_front(harness.app.layout(), Frame::Profile));
+    // Settings saved before it was remembered show it.
+    let mut stored = serde_json::to_value(harness.app.saved()).unwrap();
+    stored.as_object_mut().unwrap().remove("show_plot_config");
+    let old: stamp_gui::app::Saved = serde_json::from_value(stored).unwrap();
+    assert!(old.show_plot_config);
+    // The View menu brings it to the front, behind Profile and groups.
+    harness.app.toggle_frame(Frame::ConfigurePlot);
+    harness.settle();
+    assert!(layout::is_in_front(
+        harness.app.layout(),
+        Frame::ConfigurePlot
+    ));
+    // Closed, it stays closed in the next run.
+    harness.app.toggle_frame(Frame::ConfigurePlot);
+    harness.settle();
+    assert!(!harness.app.frame_shown(Frame::ConfigurePlot));
+    let saved = harness.app.saved();
+    let mut next = Harness::enterotypes();
+    let ctx = next.renderer.ctx.clone();
+    next.app.restore(&ctx, saved.up_to_date());
+    next.settle();
+    assert!(!next.app.frame_shown(Frame::ConfigurePlot));
+}
+
 /// The composition bar plot draws the unclassified sequences in the colour
 /// chosen in the preferences.
 #[test]
@@ -704,6 +736,43 @@ fn unclassified_is_drawn_in_the_colour_of_the_preferences() {
         &harness.app,
         stamp_plot::composition::UNCLASSIFIED_COLOR
     ));
+}
+
+#[test]
+fn bar_plot_and_heatmap_can_name_the_groups() {
+    let mut harness = Harness::enterotypes();
+    let texts = |app: &StampApp| -> Vec<String> {
+        app.figure()
+            .shapes
+            .iter()
+            .filter_map(|s| match s {
+                stamp_plot::Shape::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    // The group's name, beyond the legend's.
+    let group = "Enterotype 2";
+    let named = |app: &StampApp| texts(app).iter().filter(|t| *t == group).count();
+    harness.app.set_plot_kind(PlotKind::Bar);
+    harness.settle();
+    assert!(!harness.app.figure().regions.is_empty());
+    let with_samples = named(&harness.app);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.bar.labels = stamp_plot::composition::Labels::Groups;
+    settings.bar.bar_width_percent = 100.0;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert_eq!(named(&harness.app), with_samples + 1);
+
+    harness.app.set_plot_kind(PlotKind::Heatmap);
+    harness.settle();
+    let with_samples = named(&harness.app);
+    let mut settings = harness.app.plot_settings().clone();
+    settings.heatmap.labels = stamp_plot::composition::Labels::Groups;
+    harness.app.set_plot_settings(settings);
+    harness.settle();
+    assert!(named(&harness.app) > with_samples);
 }
 
 #[test]
@@ -812,6 +881,7 @@ fn side_panels_can_be_hidden() {
     let mut harness = Harness::enterotypes();
     // The plot has the room beside the panels to itself.
     harness.app.show_feature_table(false);
+    harness.app.show_plot_config(false);
     harness.settle();
     let (_, with_panels) = harness.app.plot_placement.unwrap();
 
@@ -1327,7 +1397,7 @@ fn new_plot_options_change_the_plots() {
     let active = harness.app.session.feature_counts(Mode::TwoGroups).1;
     assert!(active > 1 && active < 17);
     assert_eq!(harness.app.figure().regions.len(), active);
-    assert!(texts(harness.app.figure()).contains(&"Number of sequences".to_string()));
+    assert!(texts(harness.app.figure()).contains(&"Raw values".to_string()));
 
     // PCoA: the panels are chosen separately.
     harness.app.set_plot_kind(PlotKind::Pcoa);
@@ -1346,7 +1416,7 @@ fn new_plot_options_change_the_plots() {
     harness.app.set_mode(Mode::TwoSamples);
     harness.app.set_plot_kind(PlotKind::ExtendedErrorBar);
     harness.settle();
-    assert!(texts(harness.app.figure()).contains(&"Proportion (%)".to_string()));
+    assert!(texts(harness.app.figure()).contains(&"Proportions (%)".to_string()));
     let mut settings = harness.app.plot_settings().clone();
     settings.error_bar_sequence_counts = true;
     settings.p_value_histogram_corrected = false;
@@ -1354,7 +1424,7 @@ fn new_plot_options_change_the_plots() {
     settings.multiple_comparison.log_scale = true;
     harness.app.set_plot_settings(settings);
     harness.settle();
-    assert!(texts(harness.app.figure()).contains(&"Sequences".to_string()));
+    assert!(texts(harness.app.figure()).contains(&"Raw values".to_string()));
     harness.app.set_plot_kind(PlotKind::PValueHistogram);
     harness.settle();
     assert!(texts(harness.app.figure()).contains(&"Uncorrected p-value".to_string()));
@@ -3243,7 +3313,10 @@ fn tier_four_plots() {
                 .collect(),
             vec![profile.group_name1.clone(), profile.group_name2.clone()],
         );
-        let shared = stamp_plot::shared_features::Data::from_composition(&data, 0.5);
+        let shared = stamp_plot::shared_features::Data::from_composition(
+            &data,
+            stamp_plot::shared_features::Rule::default(),
+        );
         shared.presence.iter().filter(|p| p[0]).count()
     };
     assert!(figure_texts(&harness.app).contains(&format!("Core ({in_core})")));
@@ -3296,7 +3369,7 @@ fn font_sizes_are_set_in_the_preferences_and_per_plot() {
     let feature = harness.app.session.selected_feature.clone().unwrap();
     // Ticks 8 points, axis labels 9, the title 9 to start with.
     assert_eq!(size_of(&harness.app, "Enterotype 1"), 8.0);
-    assert_eq!(size_of(&harness.app, "Proportion of sequences (%)"), 9.0);
+    assert_eq!(size_of(&harness.app, "Proportions (%)"), 9.0);
     assert_eq!(size_of(&harness.app, &feature), 9.0);
 
     // The preferences change the text every plot shares...
@@ -3310,7 +3383,7 @@ fn font_sizes_are_set_in_the_preferences_and_per_plot() {
     harness.app.show_preferences(true);
     harness.settle();
     assert_eq!(size_of(&harness.app, "Enterotype 1"), 12.0);
-    assert_eq!(size_of(&harness.app, "Proportion of sequences (%)"), 14.0);
+    assert_eq!(size_of(&harness.app, "Proportions (%)"), 14.0);
     assert_eq!(size_of(&harness.app, &feature), 16.0);
     harness.screenshot("preferences_fonts");
     harness.app.show_preferences(false);
@@ -4587,8 +4660,12 @@ fn frames_are_hidden_and_shown_and_open_where_they_belong() {
     assert!(visible(&harness, Frame::Features));
     assert!((frame_rect(&harness, Frame::Plot).width() - plot.width()).abs() < 1.0);
 
-    // Configure plot opens left of the plot, in front of Profile and
-    // groups and Statistics.
+    // Configure plot, shown at start behind Profile and groups, opens
+    // again left of the plot, in front of Profile and groups and
+    // Statistics.
+    assert!(harness.app.frame_shown(Frame::ConfigurePlot));
+    harness.app.show_plot_config(false);
+    harness.settle();
     assert!(!visible(&harness, Frame::ConfigurePlot));
     harness.app.show_plot_config(true);
     harness.settle();
@@ -4773,7 +4850,7 @@ fn arrow_keys_move_through_the_feature_table() {
 /// The screenshots of the window in the documentation
 /// (`docs/site/images/gui_main_window.png` and `gui_frames.png`), in light
 /// mode: the window as STAMP starts, comparing two enterotypes, and with
-/// Configure plot and the results table open.
+/// Configure plot in front and the results table open.
 #[test]
 fn documentation_screenshots_of_the_window() {
     let mut harness = Harness::enterotypes();
@@ -4783,7 +4860,10 @@ fn documentation_screenshots_of_the_window() {
     harness.app.set_mode(Mode::TwoGroups);
     harness.settle();
     harness.screenshot("gui_main_window");
-    harness.app.show_plot_config(true);
+    // Configure plot, a tab behind Profile and groups at start, in front.
+    harness
+        .app
+        .toggle_frame(stamp_gui::layout::Frame::ConfigurePlot);
     harness.app.show_results_table(true);
     harness.settle();
     harness.screenshot("gui_frames");

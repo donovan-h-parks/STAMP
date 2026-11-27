@@ -398,11 +398,17 @@ fn reordered(data: &Data, bars: &[usize]) -> Data {
 
 /// The angle of the group names beneath bars of each sample, in degrees,
 /// unless another is chosen.
-const GROUP_LABEL_ANGLE: f64 = 30.0;
+pub(crate) const GROUP_LABEL_ANGLE: f64 = 30.0;
+
+/// The height a name of `size` points takes, written at `angle` degrees.
+pub(crate) fn name_height(name: &str, angle: f64, size: f64) -> f64 {
+    let (sin, cos) = angle.to_radians().sin_cos();
+    text::width(name, size) * sin + (size + 3.0) * cos + 2.0
+}
 
 /// The style of a name beneath a bar written at `angle` degrees: across
 /// and centred under the bar, or turned to end beneath its middle.
-fn slanted(angle: f64) -> crate::figure::TextStyle {
+pub(crate) fn slanted(angle: f64) -> crate::figure::TextStyle {
     if angle <= 0.0 {
         tick_style().align(HAlign::Center, VAlign::Top)
     } else if angle >= 90.0 {
@@ -600,11 +606,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         left += (padding - (centre - reach)).max(0.0);
     }
     let cell = (right - left - spaces) / bars as f64;
-    // The height a name takes, written at `angle`.
-    let slanted_height = |name: &str, angle: f64| {
-        let (sin, cos) = angle.to_radians().sin_cos();
-        text::width(name, sizes.tick) * sin + line * cos + 2.0
-    };
+    let slanted_height = |name: &str, angle: f64| name_height(name, angle, sizes.tick);
     // Names are written upright beneath the bars where the bars are wide
     // enough to tell them apart, and across when there is room for that.
     let widest_name = data
@@ -717,7 +719,7 @@ pub fn plot(data: &Data, options: &Options) -> Figure {
         &mut figure,
         &frame,
         &scaled_ticks(&y_ticks, &y),
-        Some("Proportion of sequences (%)"),
+        Some("Proportions (%)"),
         AXES_COLOR,
     );
 
@@ -992,14 +994,7 @@ mod tests {
         // Two features and "Other" in each of three bars.
         assert_eq!(figure.regions.len(), 9);
         let texts = texts(&figure);
-        for expected in [
-            "common",
-            "middling",
-            OTHER,
-            "a1",
-            "b1",
-            "Proportion of sequences (%)",
-        ] {
+        for expected in ["common", "middling", OTHER, "a1", "b1", "Proportions (%)"] {
             assert!(texts.iter().any(|t| t == expected), "missing {expected}");
         }
         assert!(!texts.contains(&"rare".to_string()));

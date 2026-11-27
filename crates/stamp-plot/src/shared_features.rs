@@ -10,6 +10,29 @@ use crate::composition;
 use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::text;
 
+/// When a feature counts as present in a group and when as absent from
+/// it, by the percentage of the group's samples it is found in (above
+/// zero).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rule {
+    /// Present if found in at least this percentage of the group's samples
+    /// (and in at least one); `None`: if found in any of them.
+    pub present: Option<f64>,
+    /// Absent if found in less than this percentage of the group's samples;
+    /// `None`: whenever not present. A feature neither present in nor
+    /// absent from some group is left out of the plot.
+    pub absent: Option<f64>,
+}
+
+impl Default for Rule {
+    fn default() -> Self {
+        Rule {
+            present: Some(50.0),
+            absent: None,
+        }
+    }
+}
+
 /// The features present in each group.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Data {
@@ -18,14 +41,18 @@ pub struct Data {
     pub features: Vec<String>,
     /// `presence[feature][group]`.
     pub presence: Vec<Vec<bool>>,
+    /// The rule the presence was decided by.
+    pub rule: Rule,
+    /// Features present in some group but neither present in nor absent
+    /// from another, so left out.
+    pub left_out: usize,
 }
 
 impl Data {
-    /// A feature counts as present in a group if it is found (above zero)
-    /// in at least `min_prevalence` (a share, from 0 to 1) of the group's
-    /// samples, and in at least one. Groups without samples are left out.
-    /// Unclassified features are those the data was made with.
-    pub fn from_composition(data: &composition::Data, min_prevalence: f64) -> Data {
+    /// Which groups each feature is present in, by `rule`. Groups without
+    /// samples are left out. Unclassified features are those the data was
+    /// made with.
+    pub fn from_composition(data: &composition::Data, rule: Rule) -> Data {
         let members: Vec<Vec<usize>> = (0..data.groups.len())
             .map(|g| {
                 (0..data.samples.len())
@@ -38,27 +65,43 @@ impl Data {
             .collect();
         let mut features = Vec::new();
         let mut presence = Vec::new();
+        let mut left_out = 0;
+        // At least `percent` of `n` samples.
+        let reaches = |found: usize, n: usize, percent: f64| {
+            found as f64 >= percent / 100.0 * n as f64 - 1e-9
+        };
         for (f, name) in data.features.iter().enumerate() {
-            let row: Vec<bool> = used
+            // Present, or else whether absent, in each group.
+            let row: Vec<(bool, bool)> = used
                 .iter()
                 .map(|&g| {
+                    let n = members[g].len();
                     let found = members[g]
                         .iter()
                         .filter(|&&s| data.values[f][s] > 0.0)
                         .count();
-                    found > 0 && found as f64 >= min_prevalence * members[g].len() as f64 - 1e-9
+                    let present = found > 0 && rule.present.is_none_or(|p| reaches(found, n, p));
+                    let absent = !present && rule.absent.is_none_or(|a| !reaches(found, n, a));
+                    (present, absent)
                 })
                 .collect();
-            if row.iter().any(|p| *p) {
-                features.push(name.clone());
-                presence.push(row);
+            if !row.iter().any(|(present, _)| *present) {
+                continue;
             }
+            if row.iter().any(|(present, absent)| !present && !absent) {
+                left_out += 1;
+                continue;
+            }
+            features.push(name.clone());
+            presence.push(row.iter().map(|(present, _)| *present).collect());
         }
         Data {
             groups: used.iter().map(|&g| data.groups[g].clone()).collect(),
             group_colors: used.iter().map(|&g| data.group_color(g)).collect(),
             features,
             presence,
+            rule,
+            left_out,
         }
     }
 
@@ -92,7 +135,9 @@ impl Data {
         found
     }
 
-    /// The groups of a combination, by name.
+    /// The groups of a combination, by name, and what being in it means,
+    /// for example "Common to Tien Shan: in >=50% of its samples and <50%
+    /// of samples from other groups".
     fn describe(&self, set: &[bool]) -> String {
         let names: Vec<&str> = self
             .groups
@@ -101,13 +146,52 @@ impl Data {
             .filter(|(_, in_set)| **in_set)
             .map(|(g, _)| g.as_str())
             .collect();
-        if names.len() == 1 {
-            format!("Only in {}", names[0])
-        } else if names.len() == self.groups.len() {
-            "In every group".to_string()
+        let every = names.len() == self.groups.len();
+        let verb = if self.rule.present.is_some() {
+            "Common to"
         } else {
-            format!("In {} only", names.join(" and "))
+            "Found in"
+        };
+        let which = if every {
+            "every group".to_string()
+        } else {
+            names.join(" and ")
+        };
+        let whose = if names.len() == 1 {
+            "its samples"
+        } else {
+            "the samples of each"
+        };
+        let found = match self.rule.present {
+            Some(p) => format!("in >={p}% of {whose}"),
+            None => format!("in any of {whose}"),
+        };
+        let others = match (every, self.rule.absent.or(self.rule.present)) {
+            (true, _) => String::new(),
+            (false, Some(a)) => format!(" and <{a}% of samples from other groups"),
+            (false, None) => " and in none from other groups".to_string(),
+        };
+        format!("{verb} {which}: {found}{others}")
+    }
+
+    /// The note above the plot: the rule, and how many features it left
+    /// out.
+    fn note(&self) -> String {
+        let mut note = match self.rule.present {
+            Some(p) => format!("Present: in >={p}% of a group's samples"),
+            None => "Present: in any of a group's samples".to_string(),
+        };
+        if let Some(a) = self.rule.absent {
+            note.push_str(&format!("; absent: in <{a}%"));
+            if self.left_out > 0 {
+                let s = if self.left_out == 1 { "" } else { "s" };
+                note.push_str(&format!(
+                    "; {} feature{s} in between left out",
+                    self.left_out
+                ));
+            }
         }
+        note
     }
 
     fn tooltip(&self, set: &[bool], names: &[String]) -> String {
@@ -142,9 +226,17 @@ pub struct Options {
     pub width: f64,
     pub height: f64,
     pub style: Style,
-    /// A feature is present in a group if found in at least this
-    /// percentage of the group's samples.
+    /// Count a feature as present in a group only if found in at least
+    /// `min_prevalence` percent of the group's samples (otherwise, if
+    /// found in any).
+    pub presence_filter: bool,
     pub min_prevalence: f64,
+    /// Count a feature as absent from a group only if found in less than
+    /// `absence_threshold` percent of the group's samples, and leave out
+    /// features between the two thresholds (otherwise, absent whenever not
+    /// present). Applies with the presence filter.
+    pub absence_filter: bool,
+    pub absence_threshold: f64,
     /// Most combinations of groups shown in an UpSet plot, largest first.
     pub max_intersections: usize,
     /// Size of the group names and of the counts above the bars, in points.
@@ -161,11 +253,25 @@ impl Default for Options {
             width: 7.0,
             height: 5.0,
             style: Style::UpSet,
+            presence_filter: true,
             min_prevalence: 50.0,
+            absence_filter: false,
+            absence_threshold: 50.0,
             max_intersections: 20,
             label_font_size: NOTE_SIZE,
             count_font_size: 11.0,
             note_font_size: NOTE_SIZE,
+        }
+    }
+}
+
+impl Options {
+    /// The rule the filters set.
+    pub fn rule(&self) -> Rule {
+        let present = self.presence_filter.then_some(self.min_prevalence);
+        Rule {
+            present,
+            absent: present.and(self.absence_filter.then_some(self.absence_threshold)),
         }
     }
 }
@@ -286,10 +392,7 @@ fn upset(data: &Data, options: &Options) -> Figure {
         Some("Features"),
         AXES_COLOR,
     );
-    let mut note = format!(
-        "Features present in at least {}% of a group's samples",
-        options.min_prevalence
-    );
+    let mut note = data.note();
     if all.len() > shown.len() {
         note.push_str(&format!(
             "; the {} largest of {} combinations",
@@ -394,10 +497,7 @@ fn venn(data: &Data, options: &Options) -> Figure {
     figure.text(
         padding,
         padding,
-        format!(
-            "Features present in at least {}% of a group's samples",
-            options.min_prevalence
-        ),
+        data.note(),
         TextStyle::new(options.note_font_size).align(HAlign::Left, VAlign::Top),
     );
     figure
@@ -443,11 +543,11 @@ mod tests {
 
     #[test]
     fn presence_follows_the_prevalence() {
-        let half = Data::from_composition(&composition(), 0.5);
+        let half = Data::from_composition(&composition(), at(50.0));
         assert_eq!(half.features, ["a", "b", "c", "d"]);
         assert_eq!(half.presence[1], [true, true, false]);
         assert_eq!(half.presence[3], [true, false, false]);
-        let all = Data::from_composition(&composition(), 1.0);
+        let all = Data::from_composition(&composition(), at(100.0));
         // b is in only half of B, d in half of A.
         assert_eq!(all.features, ["a", "b", "c"]);
         assert_eq!(all.presence[1], [true, false, false]);
@@ -461,22 +561,92 @@ mod tests {
         assert_eq!(only_a.1, ["d"]);
     }
 
+    /// Present in at least `percent` of a group's samples, absent otherwise.
+    fn at(percent: f64) -> Rule {
+        Rule {
+            present: Some(percent),
+            absent: None,
+        }
+    }
+
+    #[test]
+    fn features_between_the_thresholds_are_left_out() {
+        // Present in every sample of a group, absent below half of them: b
+        // (all of A, half of B) is neither present in nor absent from B.
+        let rule = Rule {
+            present: Some(100.0),
+            absent: Some(50.0),
+        };
+        let data = Data::from_composition(&composition(), rule);
+        assert_eq!(data.features, ["a", "c"]);
+        assert_eq!(data.left_out, 1);
+        let figure = plot(&data, &Options::default());
+        let note = "Present: in >=100% of a group's samples; absent: in <50%; \
+                    1 feature in between left out";
+        assert!(
+            texts(&figure).iter().any(|t| t == note),
+            "{:?}",
+            texts(&figure)
+        );
+        assert!(figure.regions.iter().any(|r| r.tooltip.starts_with(
+            "Common to C: in >=100% of its samples and <50% of samples from other groups\n"
+        )));
+        // The filters of the options make the rule; the absence filter
+        // works with the presence filter.
+        let mut options = Options::default();
+        assert_eq!(options.rule(), at(50.0));
+        options.absence_filter = true;
+        options.absence_threshold = 10.0;
+        assert_eq!(options.rule().absent, Some(10.0));
+        options.presence_filter = false;
+        assert_eq!(
+            options.rule(),
+            Rule {
+                present: None,
+                absent: None
+            }
+        );
+    }
+
     #[test]
     fn upset_and_venn() {
-        let data = Data::from_composition(&composition(), 0.5);
+        let data = Data::from_composition(&composition(), at(50.0));
         let upset = plot(&data, &Options::default());
         assert_eq!(upset.regions.len(), 4);
         let shown = texts(&upset);
         assert!(shown.contains(&"A (3)".to_string()), "{shown:?}");
         assert!(shown.contains(&"Features".to_string()));
-        assert!(upset
-            .regions
+        let tooltips = |figure: &Figure| -> Vec<String> {
+            figure
+                .regions
+                .iter()
+                .map(|r| r.tooltip.lines().next().unwrap().to_string())
+                .collect()
+        };
+        let lines = tooltips(&upset);
+        for expected in [
+            "Common to every group: in >=50% of the samples of each",
+            "Common to A and B: in >=50% of the samples of each and <50% of samples from \
+             other groups",
+            "Common to C: in >=50% of its samples and <50% of samples from other groups",
+        ] {
+            assert!(lines.iter().any(|l| l == expected), "{lines:?}");
+        }
+        assert!(shown.contains(&"Present: in >=50% of a group's samples".to_string()));
+        // Without the presence filter, found in any sample counts.
+        let anywhere = plot(
+            &Data::from_composition(
+                &composition(),
+                Rule {
+                    present: None,
+                    absent: None,
+                },
+            ),
+            &Options::default(),
+        );
+        assert!(tooltips(&anywhere)
             .iter()
-            .any(|r| r.tooltip.starts_with("In every group")));
-        assert!(upset
-            .regions
-            .iter()
-            .any(|r| r.tooltip.starts_with("In A and B only")));
+            .any(|l| l == "Found in C: in any of its samples and in none from other groups"));
         let fewer = plot(
             &data,
             &Options {
@@ -508,7 +678,7 @@ mod tests {
         // Two groups.
         let mut two = composition();
         two.sample_groups = vec![0, 0, 1, 1, 1, 1];
-        let two = Data::from_composition(&two, 0.5);
+        let two = Data::from_composition(&two, at(50.0));
         assert_eq!(two.groups.len(), 2);
         let venn = plot(
             &two,
@@ -524,13 +694,13 @@ mod tests {
     fn too_few_groups_or_too_many_for_venn() {
         let mut one = composition();
         one.sample_groups = vec![0; 6];
-        let data = Data::from_composition(&one, 0.5);
+        let data = Data::from_composition(&one, at(50.0));
         assert!(plot(&data, &Options::default()).regions.is_empty());
 
         let mut four = composition();
         four.groups.push("D".to_string());
         four.sample_groups = vec![0, 0, 1, 1, 2, 3];
-        let data = Data::from_composition(&four, 0.5);
+        let data = Data::from_composition(&four, at(50.0));
         assert_eq!(data.groups.len(), 4);
         assert!(!plot(&data, &Options::default()).regions.is_empty());
         let venn = plot(

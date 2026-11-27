@@ -37,6 +37,15 @@ const BOX_STYLES: [(BoxStyle, &str); 3] = [
     (BoxStyle::Swarm, "Swarm"),
 ];
 
+/// The choices of "Labels for:": what the names beneath bars or columns
+/// name.
+fn label_choices() -> Vec<(composition::Labels, &'static str)> {
+    composition::Labels::ALL
+        .iter()
+        .map(|&labels| (labels, labels.name()))
+        .collect()
+}
+
 /// The rows of a settings grid. Each method adds one labelled row and
 /// records whether its value changed.
 struct Rows<'a> {
@@ -308,8 +317,8 @@ impl Rows<'_> {
             "Field to plot:",
             value,
             &[
-                (Field::Proportion, "Proportion of sequences (%)"),
-                (Field::SequenceCount, "Number of sequences"),
+                (Field::Proportion, "Proportions (%)"),
+                (Field::SequenceCount, "Raw values"),
             ],
         );
     }
@@ -762,7 +771,7 @@ impl Dialog<'_> {
                 rows.choice(
                     "Bar subplot shows:",
                     counts,
-                    &[(false, "Proportion (%)"), (true, "Sequences")],
+                    &[(false, "Proportions (%)"), (true, "Raw values")],
                 );
             }
             if groups {
@@ -882,8 +891,8 @@ pub fn show(
                     "Field to plot:",
                     &mut o.field,
                     &[
-                        (BarField::Proportions, "Proportion of sequences (%)"),
-                        (BarField::Sequences, "Number of sequences"),
+                        (BarField::Proportions, "Proportions (%)"),
+                        (BarField::Sequences, "Raw values"),
                         (BarField::ParentSequences, "Number of parent sequences"),
                         (BarField::PValues, "p-values"),
                         (BarField::CorrectedPValues, "Corrected p-values"),
@@ -900,6 +909,7 @@ pub fn show(
             dialog.group("Figure size", |rows| {
                 rows.inches("Height:", &mut o.height, 2.0..=40.0);
                 rows.inches("Column width:", &mut o.column_width, 0.05..=2.0);
+                rows.number("Bar width (%):", &mut o.bar_width_percent, 1.0, 5.0..=100.0);
             });
             dialog.legend(&mut o.legend);
             dialog.group(FONT_SIZES, |rows| {
@@ -907,6 +917,7 @@ pub fn show(
             });
             dialog.group(OTHER_OPTIONS, |rows| {
                 rows.field(field);
+                rows.choice("Labels for:", &mut o.labels, &label_choices());
                 rows.check("Logarithmic axis (log10)", &mut o.log_scale);
                 rows.check("Show average of each group", &mut o.show_averages);
                 rows.check("Show p-value", &mut o.show_p_value);
@@ -1130,10 +1141,7 @@ pub fn show(
                 rows.choice(
                     "Field to plot:",
                     &mut o.sequence_counts,
-                    &[
-                        (false, "Proportion of sequences (%)"),
-                        (true, "Number of sequences"),
-                    ],
+                    &[(false, "Proportions (%)"), (true, "Raw values")],
                 );
                 rows.count(
                     "Maximum # features to show:",
@@ -1405,11 +1413,7 @@ pub fn show(
                     0.5,
                     0.0..=72.0,
                 );
-                let labels: Vec<(composition::Labels, &str)> = composition::Labels::ALL
-                    .iter()
-                    .map(|&labels| (labels, labels.name()))
-                    .collect();
-                rows.choice("Labels for:", &mut o.labels, &labels);
+                rows.choice("Labels for:", &mut o.labels, &label_choices());
                 rows.when(o.labels != composition::Labels::None, |rows| {
                     rows.optional(
                         "Label angle (°):",
@@ -1557,10 +1561,24 @@ pub fn show(
                     ],
                 );
                 // Two samples are groups of one sample each.
+                let groups = mode != Mode::TwoSamples;
+                rows.check_if(groups, "Presence filter", &mut o.presence_filter);
                 rows.number_if(
-                    mode != Mode::TwoSamples,
-                    "Present in at least (% of samples):",
+                    groups && o.presence_filter,
+                    "Present if in at least (% of samples):",
                     &mut o.min_prevalence,
+                    1.0,
+                    0.0..=100.0,
+                );
+                rows.check_if(
+                    groups && o.presence_filter,
+                    "Absence filter",
+                    &mut o.absence_filter,
+                );
+                rows.number_if(
+                    groups && o.presence_filter && o.absence_filter,
+                    "Absent if in less than (% of samples):",
+                    &mut o.absence_threshold,
                     1.0,
                     0.0..=100.0,
                 );
@@ -1976,16 +1994,14 @@ pub fn show(
                 rows.choice(
                     "Field to plot:",
                     counts,
-                    &[
-                        (false, "Proportion of sequences (%)"),
-                        (true, "Number of sequences"),
-                    ],
+                    &[(false, "Proportions (%)"), (true, "Raw values")],
                 );
                 rows.check("Plot only active features", only_active);
                 let maps: Vec<(ColorMap, &str)> =
                     ColorMap::ALL.iter().map(|&m| (m, m.name())).collect();
                 rows.choice("Colour map:", &mut o.color_map, &maps);
                 rows.check("Show colour scale", &mut o.show_color_scale);
+                rows.choice("Labels for:", &mut o.labels, &label_choices());
                 rows.truncate(&mut o.truncate_labels);
             });
         }

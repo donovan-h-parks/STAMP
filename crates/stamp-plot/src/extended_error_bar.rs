@@ -188,7 +188,7 @@ impl Data {
             name2: profile.profile.sample_names[1].clone(),
             color1: SAMPLE1_COLOR,
             color2: SAMPLE2_COLOR,
-            bar_label: "Proportion (%)".to_string(),
+            bar_label: "Proportions (%)".to_string(),
             bar_is_count: false,
             effect_label: ci.plot_label().to_string(),
             is_ratio: ci.is_ratio(),
@@ -207,7 +207,7 @@ impl Data {
         for (row, source) in self.rows.iter_mut().zip(rows) {
             (row.value1, row.value2) = (source.seq1, source.seq2);
         }
-        self.bar_label = "Sequences".to_string();
+        self.bar_label = "Raw values".to_string();
         self.bar_is_count = true;
         self
     }
@@ -732,7 +732,7 @@ mod tests {
             name2: "Black".to_string(),
             color1: SAMPLE1_COLOR,
             color2: SAMPLE2_COLOR,
-            bar_label: "Proportion (%)".to_string(),
+            bar_label: "Proportions (%)".to_string(),
             bar_is_count: false,
             effect_label: "Difference between proportions (%)".to_string(),
             is_ratio: false,
@@ -789,7 +789,7 @@ mod tests {
             "Beta",
             "Gamma",
             "95% confidence intervals",
-            "Proportion (%)",
+            "Proportions (%)",
             "Difference between proportions (%)",
             "Corrected p-value",
             "< 1e-15",

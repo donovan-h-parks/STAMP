@@ -182,7 +182,7 @@ pub fn plot(data: &composition::Data, options: &Options) -> Figure {
         &mut figure,
         &frame,
         &y_ticks_drawn,
-        Some("Proportion of sequences (%)"),
+        Some("Proportions (%)"),
         AXES_COLOR,
     );
     let mut used: Vec<usize> = curves.iter().map(|c| c.1).collect();
@@ -237,15 +237,7 @@ mod tests {
         assert!(figure.regions[1].tooltip.contains("Features present: 2"));
         assert!(figure.regions[0].tooltip.contains("Group: A"));
         let shown = texts(&figure);
-        for label in [
-            "Rank",
-            "Proportion of sequences (%)",
-            "1",
-            "10",
-            "100",
-            "A",
-            "B",
-        ] {
+        for label in ["Rank", "Proportions (%)", "1", "10", "100", "A", "B"] {
             assert!(shown.contains(&label.to_string()), "{label}: {shown:?}");
         }
         let groups = plot(

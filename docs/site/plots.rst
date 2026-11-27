@@ -203,6 +203,15 @@ Enterotype 1. This is why the difference is not significant (p = 0.17).
 log10 axis, as for the box plot below: a sample without the feature has no
 bar, and the axis is labelled 0 below a break.
 
+*Labels for* (``--bar-labels``) chooses the names beneath the bars:
+**Each sample** (the default), **Each group**, written once beneath the
+middle of its bars (across where every name fits beneath its bars, at 30°
+otherwise), or **None**. With many samples, naming the groups keeps the
+plot readable. *Bar width (%)* (``--bar-width``) is the share of each
+sample's column taken by its bar, 45% by default; 100% leaves no space
+between the bars. *Column width* sets the width of the columns themselves,
+and so of the whole plot.
+
 *Two samples:* a bar for each feature of a chosen statistic: sequences,
 parent sequences, proportions, p-values (corrected or not) or effect
 sizes.
@@ -418,6 +427,10 @@ branch), and blocks of
 colour marking features typical of a group. By default all features are
 shown; *Configure plot* can limit it to the active features, change the
 clustering method and the colours.
+*Labels for* (``--heatmap-labels``) names each sample beneath its column
+(the default), each group, or nothing. Group names are written once beneath
+each run of neighbouring samples of the group, so with clustered samples a
+group can be named several times.
 It draws at most 1000 samples and 1000 features; for more samples, the
 `Group heatmap`_ summarises each group in one column.
 
@@ -631,12 +644,30 @@ Shared features plot
 ^^^^^^^^^^^^^^^^^^^^
 
 *All except correlation.* Which features each group has, and which they have
-in common. A feature counts as present in a group if it is found in at least
-a chosen share of the group's samples (50% by default).
+in common. Two filters in *Configure plot* decide when a feature counts as
+present in a group and when as absent from it:
+
+* **Presence filter** (on by default): present if found in at least a
+  chosen share of the group's samples (50% by default). Without it, present
+  if found in any of them.
+* **Absence filter** (off by default, and only with the presence filter):
+  absent if found in less than a chosen share of the group's samples (50%
+  to begin with). A feature that is neither present in a group nor absent
+  from it is left out, and the note above the plot says how many were.
+  Without it, a feature is absent wherever it is not present.
+
+With the presence filter at 80% and the absence filter at 10%, for
+example, a feature counted for one group alone is in at least 80% of that
+group's samples and less than 10% of every other group's, which picks out
+features both common to some groups and rare in the rest.
 
 The **UpSet plot** works for any number of groups. Each column is one
 combination of groups, marked by the dots beneath it; its bar is the number
-of features found in exactly that combination.
+of features present in exactly that combination. Without the absence
+filter, a feature counted for one group alone is common in that group and
+below the presence share in the others, not necessarily missing from them;
+the tooltip of each bar says so ("Common to Tien Shan: in >=50% of its
+samples and <50% of samples from other groups") and lists the features.
 
 .. figure:: images/mg_shared_upset.png
    :width: 90%
@@ -644,9 +675,9 @@ of features found in exactly that combination.
    Genera of the four coal seam gas sample types. The number beside each
    group is how many genera it has.
 
-**Example.** 21 genera are found only in deep cuttings and 19 only in core;
-5 are shared by core and deep cuttings only; just one is found in all four
-sample types (the last column).
+**Example.** 21 genera are common (in at least half the samples) only in
+deep cuttings and 19 only in core; 5 are common to core and deep cuttings
+only; just one is common to all four sample types (the last column).
 
 For two or three groups, a **Venn diagram** can be drawn instead.
 

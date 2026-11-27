@@ -229,6 +229,16 @@ pub struct PlotArgs {
     /// in at least this percentage of the group's samples
     #[arg(long, default_value_t = 50.0, value_name = "PERCENT")]
     pub min_prevalence: f64,
+    /// For the shared-features plot: a feature is present in a group if found
+    /// in any of its samples (no --min-prevalence)
+    #[arg(long)]
+    pub no_presence_filter: bool,
+    /// For the shared-features plot: a feature is absent from a group only if
+    /// found in less than this percentage of its samples; features between
+    /// this and --min-prevalence in some group are left out [default: absent
+    /// whenever not present]
+    #[arg(long, value_name = "PERCENT")]
+    pub absent_below: Option<f64>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
@@ -789,6 +799,10 @@ pub struct HeatmapArgs {
     /// Leave out the dendrograms of clustered rows and columns
     #[arg(long)]
     pub heatmap_no_dendrograms: bool,
+    /// Heatmap of samples: what the names beneath the columns name (groups:
+    /// each group once beneath each run of its samples)
+    #[arg(long, value_enum, default_value_t = LabelsArg::Samples)]
+    pub heatmap_labels: LabelsArg,
     /// Colour scale of the cells
     #[arg(long, value_enum, value_name = "MAP")]
     pub heatmap_color_map: Option<ColorMapArg>,
@@ -1004,6 +1018,35 @@ pub struct BoxArgs {
     /// Bar plot of one feature in every sample: logarithmic (log10) value axis
     #[arg(long)]
     pub bar_log: bool,
+    /// Bar plot: what the names beneath the bars name
+    #[arg(long, value_enum, default_value_t = LabelsArg::Samples)]
+    pub bar_labels: LabelsArg,
+    /// Bar plot: width of each bar, as a percentage of the column given to
+    /// its sample (100: no space between bars)
+    #[arg(long, default_value_t = 45.0, value_name = "PERCENT")]
+    pub bar_width: f64,
+}
+
+/// What the names beneath the bars or columns of a plot name.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum LabelsArg {
+    /// Each sample
+    Samples,
+    /// Each group, once beneath its samples
+    Groups,
+    /// No names
+    None,
+}
+
+impl From<LabelsArg> for stamp_plot::composition::Labels {
+    fn from(labels: LabelsArg) -> Self {
+        use stamp_plot::composition::Labels;
+        match labels {
+            LabelsArg::Samples => Labels::Samples,
+            LabelsArg::Groups => Labels::Groups,
+            LabelsArg::None => Labels::None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]

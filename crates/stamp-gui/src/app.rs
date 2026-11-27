@@ -880,6 +880,7 @@ pub struct Saved {
     pub show_feature_table: bool,
     pub show_metadata_table: bool,
     pub show_profile_table: bool,
+    pub show_plot_config: bool,
     pub zoom: f32,
     pub seed: u64,
     pub replicates: usize,
@@ -958,6 +959,7 @@ impl Default for Saved {
             show_feature_table: true,
             show_metadata_table: false,
             show_profile_table: false,
+            show_plot_config: true,
             zoom: DEFAULT_ZOOM,
             seed: session.seed,
             replicates: session.stats.replicates,
@@ -1346,7 +1348,7 @@ impl StampApp {
             profile_table_sort: SortState::default(),
             profile_table_search: String::new(),
             profile_table: None,
-            show_plot_config: false,
+            show_plot_config: true,
             show_correction_info: false,
             results_only_active: false,
             png_dpi: None,
@@ -1653,9 +1655,13 @@ impl StampApp {
         }
     }
 
-    /// Open or close the "Configure plot" window.
+    /// Show the Configure plot frame in front of the tabs it shares its
+    /// place with (as View > Configure plot does), or hide it.
     pub fn show_plot_config(&mut self, show: bool) {
         self.show_plot_config = show;
+        if show {
+            layout::bring_to_front(&mut self.layout, Frame::ConfigurePlot);
+        }
     }
 
     /// Number of plots drawn so far, not counting those reused unchanged.
@@ -2073,6 +2079,7 @@ impl StampApp {
             show_feature_table: self.show_feature_table,
             show_metadata_table: self.show_metadata_table,
             show_profile_table: self.show_profile_table,
+            show_plot_config: self.show_plot_config,
             zoom: self.zoom,
             seed: self.session.seed,
             replicates: self.session.stats.replicates,
@@ -2116,6 +2123,7 @@ impl StampApp {
         self.show_feature_table = saved.show_feature_table;
         self.show_metadata_table = saved.show_metadata_table;
         self.show_profile_table = saved.show_profile_table;
+        self.show_plot_config = saved.show_plot_config;
         self.set_zoom(saved.zoom);
         self.session.seed = saved.seed;
         self.session.stats.replicates = saved.replicates.clamp(10, 1_000_000);
@@ -2358,7 +2366,7 @@ impl StampApp {
         &self.plot_settings
     }
 
-    /// Replace the settings of the plots, as the "Configure plot" window
+    /// Replace the settings of the plots, as the Configure plot frame
     /// does.
     pub fn set_plot_settings(&mut self, settings: PlotSettings) {
         self.plot_settings = settings;
@@ -3679,6 +3687,7 @@ impl StampApp {
                     icons::SLIDERS,
                     Some(&shortcut::STATISTICS),
                 );
+                toggle(ui, Frame::ConfigurePlot, icons::PAINT_BRUSH, None);
                 toggle(ui, Frame::Features, icons::LIST, None);
                 toggle(ui, Frame::Results, icons::TABLE, Some(&shortcut::RESULTS));
                 toggle(ui, Frame::Metadata, icons::ROWS, Some(&shortcut::METADATA));
@@ -4779,16 +4788,16 @@ impl StampApp {
                 self.session.shown_custom = shown;
                 self.set_plot_kind(kind);
             }
-            let configure = ui
-                .button("Configure plot")
-                .on_hover_text("Change the size and appearance of this plot");
-            if configure.clicked() {
-                self.show_plot_config = true;
-            }
-
             divide(ui, 240.0);
             ui.label("Zoom:");
-            ui.add(egui::Slider::new(&mut self.zoom, 0.5..=4.0).show_value(false));
+            // The zoom as a percentage beside the slider; clicking it lets
+            // a value be typed.
+            ui.add(
+                egui::Slider::new(&mut self.zoom, 0.5..=4.0)
+                    .custom_formatter(|zoom, _| format!("{:.0}%", zoom * 100.0))
+                    .custom_parser(parse_zoom),
+            )
+            .on_hover_text("Zoom of the plot; click the percentage to type one");
             let reset = ui.add_enabled(self.zoom != DEFAULT_ZOOM, egui::Button::new("Reset"));
             if reset.on_hover_text("Return to the default zoom").clicked() {
                 self.reset_zoom();
@@ -5595,7 +5604,7 @@ impl StampApp {
                         redraw |= row(ui, "Tick font size:", |ui| font(ui, &mut fonts.tick));
                         redraw |= row(ui, "Legend font size:", |ui| font(ui, &mut fonts.legend));
                     });
-                ui.label("Font sizes particular to a plot are set in its Configure plot window.");
+                ui.label("Font sizes particular to a plot are set in Configure plot.");
                 ui.separator();
                 ui.horizontal(|ui| {
                     if ui.button("Restore defaults").clicked() {
@@ -5991,8 +6000,27 @@ fn is_large(rows: usize, samples: usize) -> bool {
     rows * (3 * samples + 20) > 400_000
 }
 
+/// A zoom typed as a percentage, with or without the % sign.
+fn parse_zoom(text: &str) -> Option<f64> {
+    let number = text.trim().trim_end_matches('%').trim();
+    number
+        .parse::<f64>()
+        .ok()
+        .filter(|percent| percent.is_finite())
+        .map(|percent| percent / 100.0)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_zoom_is_typed_as_a_percentage() {
+        assert_eq!(super::parse_zoom("150"), Some(1.5));
+        assert_eq!(super::parse_zoom(" 80 % "), Some(0.8));
+        assert_eq!(super::parse_zoom("115%"), Some(1.15));
+        assert_eq!(super::parse_zoom("big"), None);
+        assert_eq!(super::parse_zoom("inf"), None);
+    }
+
     use super::*;
 
     #[test]

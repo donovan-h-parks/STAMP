@@ -48,16 +48,19 @@ Beneath the plot are:
 * the **plot selector**, listing the plots available for the current kind of
   analysis under six headings, by the question they answer (see
   :doc:`plots`);
-* **Configure plot**, which opens the options of the current plot in a frame
-  of their own (a third tab on the left to start with): its size, what it
-  shows, its legend and the font sizes of its own text. Changes apply at
-  once; **Restore defaults** returns this plot's options to STAMP's, and
-  **Close** (or the × of its tab) closes the frame;
 * **Zoom**, which enlarges the plot on screen without changing its size when
-  saved;
+  saved. The percentage beside the slider is the zoom; click it to type
+  one (50% to 400%);
 * **Highlight**, which draws chosen features in red, in the plots that can:
   choose a level and a name, and every feature under that name is
   highlighted.
+
+The options of the current plot are in the **Configure plot** frame, a
+third tab on the left beside *Profile and groups* and *Statistics* (**View >
+Configure plot** brings it to the front, or back after it has been closed): the
+plot's size, what it shows, its legend and the font sizes of its own text.
+Changes apply at once; **Restore defaults** returns this plot's options to
+STAMP's, and **Close** (or the × of its tab) closes the frame.
 
 Point at any part of a plot to see what it stands for: a sample, a feature,
 a group. Clicking a feature selects it.
@@ -155,9 +158,9 @@ Tables
   the *Profile level*, *Parent level* and *Unclassified* settings of
   *Profile and groups*, and so shows what the tests and plots are given.
 
-  * **Show** chooses what the cells hold: *Proportion (%)*, the feature as
+  * **Show** chooses what the cells hold: *Proportions (%)*, the feature as
     a percentage of its parent level in the sample (the values the tests of
-    groups compare), or *Values in the file*, the counts or coverage of the
+    groups compare), or *Raw values*, the counts or coverage of the
     profile file summed over the rows that belong to the feature.
   * *Show only active samples* leaves out the samples switched off in the
     metadata table or by the *Sample filter*.
@@ -196,8 +199,8 @@ Arranging the window
 Eight parts of the window are frames you can move: *Profile and groups*,
 *Statistics*, the *Feature table*, the *Metadata table*, the *Results
 table*, the *Profile table*, *Configure plot* and the *Assistant*.
-Each has a tab with its name. STAMP starts with *Profile and groups* and
-*Statistics* as tabs on the left, the *Feature table* on the right, and the
+Each has a tab with its name. STAMP starts with *Profile and groups*,
+*Statistics* and *Configure plot* as tabs on the left, the *Feature table* on the right, and the
 *Metadata table*, *Results table* and *Profile table* as tabs along the
 bottom (shown when you choose them in the View menu); the *Assistant* appears on the right
 when you open an assistant.
@@ -207,8 +210,8 @@ when you open an assistant.
   plot or of another frame to put it beside that one, or on another frame's
   tabs to share its place as a tab.
 * **Resize** frames by dragging the gap between them.
-* **Close a frame** with the × on its tab; the View menu (or the button that
-  opens it) brings it back in the same place. The room of a closed frame
+* **Close a frame** with the × on its tab; the View menu brings it back in the
+  same place. The room of a closed frame
   goes to the plot. Choosing a frame in the View menu while it is behind
   another tab brings it to the front.
 * **Settings > Preferences > Restore window position defaults** puts every
@@ -220,7 +223,7 @@ STAMP remembers the arrangement from one run to the next.
 .. figure:: images/gui_frames.png
    :width: 100%
 
-   Configure plot open as a tab on the left, and the results table along
+   Configure plot in front on the left, and the results table along
    the bottom.
 
 Saving plots
