@@ -15,7 +15,7 @@ use crate::axes::{
 };
 use crate::axis::{self, LinearScale, Ticks};
 use crate::feature_plots::{
-    box_stats, shorten, star, BoxLayout, BoxOptions, FeatureData, GroupOrder, NOTHING,
+    box_stats, shorten, star, BoxLayout, BoxOptions, BoxStyle, FeatureData, GroupOrder, NOTHING,
 };
 use crate::figure::{Color, Figure, HAlign, Stroke, TextStyle, VAlign};
 use crate::group_heatmap::format_significant;
@@ -563,16 +563,23 @@ fn panels(
         let size = options.title_font_size;
         let centre = (frame.left + frame.right) / 2.0;
         let style = TextStyle::new(size).align(HAlign::Center, VAlign::Baseline);
+        // Data without a name of its own (the alpha diversity of the
+        // samples, named on the value axis) has no title.
         if multi {
             match &p_value {
                 Some(p) => {
-                    figure.text(centre, frame.top - 6.0 - size * 1.25, title, style);
+                    if !title.is_empty() {
+                        figure.text(centre, frame.top - 6.0 - size * 1.25, title, style);
+                    }
                     figure.text(centre, frame.top - 6.0, p.clone(), style);
                 }
+                None if title.is_empty() => {}
                 None => figure.text(centre, frame.top - 6.0, title, style),
             }
         } else {
-            crate::axes::title(&mut figure, frame, &title, size);
+            if !title.is_empty() {
+                crate::axes::title(&mut figure, frame, &title, size);
+            }
             if let Some(p) = p_value {
                 crate::axes::corner_note(&mut figure, frame, &p, size);
             }
@@ -928,7 +935,134 @@ fn draw_pairs(
     }
 }
 
-/// One box, with whiskers, median, outliers or points, mean and tooltip.
+/// The samples of a box as small, semi-transparent points spread across a
+/// width of `spread` either side of its centre.
+fn draw_points(
+    figure: &mut Figure,
+    place: &BoxPlace,
+    values: &[f64],
+    spread: f64,
+    seed: u64,
+    options: &BoxOptions,
+) {
+    let n = values.iter().filter(|v| v.is_finite()).count();
+    let opacity = if n <= 30 {
+        0.75
+    } else {
+        (0.75 * (30.0 / n as f64).sqrt()).max(0.12)
+    };
+    let fill = Color {
+        a: (opacity * 255.0).round() as u8,
+        ..Color::rgb(40, 40, 40)
+    };
+    let radius = options.point_size.max(0.5) / 2.0;
+    for (k, &value) in values.iter().filter(|v| v.is_finite()).enumerate() {
+        let (x, y) = place.point(
+            place.centre + jitter(seed, k) * spread,
+            value,
+            options.horizontal,
+        );
+        figure.circle(x, y, radius, Some(fill), None);
+    }
+}
+
+/// The relative width (0 to 1, 1 at the widest) of a violin at evenly
+/// spaced positions from the lowest to the highest of `positions`: a
+/// Gaussian kernel density estimate with Silverman's bandwidth. The violin
+/// ends at the lowest and highest sample, so it never reaches values no
+/// sample has. `None` for fewer than two samples or samples all alike,
+/// which have no shape to show.
+pub(crate) fn violin_profile(positions: &[f64], steps: usize) -> Option<Vec<(f64, f64)>> {
+    let n = positions.len();
+    if n < 2 || steps < 2 {
+        return None;
+    }
+    let mut sorted = positions.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    let (low, high) = (sorted[0], sorted[n - 1]);
+    if high <= low {
+        return None;
+    }
+    let mean = sorted.iter().sum::<f64>() / n as f64;
+    let sd = (sorted.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - 1) as f64).sqrt();
+    let iqr = quantile(&sorted, 0.75) - quantile(&sorted, 0.25);
+    let spread = if iqr > 0.0 { sd.min(iqr / 1.34) } else { sd };
+    let bandwidth = 0.9 * spread * (n as f64).powf(-0.2);
+    let density: Vec<(f64, f64)> = (0..steps)
+        .map(|step| {
+            let at = low + (high - low) * step as f64 / (steps - 1) as f64;
+            let sum: f64 = sorted
+                .iter()
+                .map(|v| (-0.5 * ((at - v) / bandwidth).powi(2)).exp())
+                .sum();
+            (at, sum)
+        })
+        .collect();
+    let peak = density.iter().map(|(_, d)| *d).fold(0.0, f64::max);
+    (peak > 0.0).then(|| density.into_iter().map(|(at, d)| (at, d / peak)).collect())
+}
+
+/// Quantile of sorted values by linear interpolation.
+fn quantile(sorted: &[f64], q: f64) -> f64 {
+    let position = q * (sorted.len() - 1) as f64;
+    let (below, above) = (position.floor() as usize, position.ceil() as usize);
+    sorted[below] + (sorted[above] - sorted[below]) * (position - below as f64)
+}
+
+/// Offsets from the centre line for points of radius `radius` at the given
+/// positions along the value axis (in figure points), so that no two
+/// overlap: each point, taken in order of position, goes as near the centre
+/// as the points already placed allow (a beeswarm). If the swarm would be
+/// wider than `limit` either side, every offset is scaled down to fit, and
+/// points then overlap.
+pub(crate) fn swarm_offsets(positions: &[f64], radius: f64, limit: f64) -> Vec<f64> {
+    let mut order: Vec<usize> = (0..positions.len()).collect();
+    order.sort_by(|&a, &b| positions[a].total_cmp(&positions[b]));
+    let diameter = 2.0 * radius;
+    let mut offsets = vec![0.0; positions.len()];
+    let mut placed: Vec<usize> = Vec::new();
+    for &index in &order {
+        let at = positions[index];
+        // Points near enough along the value axis to touch this one.
+        let near: Vec<(f64, f64)> = placed
+            .iter()
+            .rev()
+            .take_while(|&&other| at - positions[other] < diameter)
+            .map(|&other| {
+                let gap = at - positions[other];
+                (offsets[other], (diameter * diameter - gap * gap).sqrt())
+            })
+            .collect();
+        let free = |offset: f64| {
+            near.iter()
+                .all(|(other, reach)| (offset - other).abs() >= reach - 1e-9)
+        };
+        // The centre, or just beside one of the points in the way.
+        let mut best = 0.0;
+        if !free(0.0) {
+            best = f64::INFINITY;
+            for (other, reach) in &near {
+                for candidate in [other - reach, other + reach] {
+                    if candidate.abs() < f64::abs(best) && free(candidate) {
+                        best = candidate;
+                    }
+                }
+            }
+        }
+        offsets[index] = best;
+        placed.push(index);
+    }
+    let widest = offsets.iter().fold(0.0f64, |w, o| w.max(o.abs()));
+    if widest > limit && widest > 0.0 {
+        for offset in &mut offsets {
+            *offset *= limit / widest;
+        }
+    }
+    offsets
+}
+
+/// One box (or violin, or swarm of points: `options.style`), with its
+/// median, mean and tooltip.
 fn draw_box(
     figure: &mut Figure,
     place: &BoxPlace,
@@ -951,47 +1085,96 @@ fn draw_box(
             (to.1 - from.1).abs(),
         )
     };
-    let (bx, by, bw, bh) = corners(point(c - half, s.q1), point(c + half, s.q3));
-
-    // Whiskers with caps.
-    for (from, to) in [(s.q1, s.whisker_low), (s.q3, s.whisker_high)] {
-        figure.line(&[point(c, from), point(c, to)], black);
-        figure.line(
-            &[point(c - half / 2.0, to), point(c + half / 2.0, to)],
-            black,
-        );
-    }
-    if options.show_points {
-        // The fill under the points, the outline over them.
-        figure.rect(bx, by, bw, bh, Some(color), None);
-        let n = values.iter().filter(|v| v.is_finite()).count();
-        let opacity = if n <= 30 {
-            0.75
+    // A position along the category axis and one along the value axis, the
+    // latter already in figure points.
+    let placed = |category: f64, along: f64| {
+        if horizontal {
+            (along, category)
         } else {
-            (0.75 * (30.0 / n as f64).sqrt()).max(0.12)
-        };
-        let fill = Color {
-            a: (opacity * 255.0).round() as u8,
-            ..Color::rgb(40, 40, 40)
-        };
-        let radius = options.point_size.max(0.5) / 2.0;
-        for (k, &value) in values.iter().filter(|v| v.is_finite()).enumerate() {
-            let (x, y) = point(c + jitter(seed, k) * half * 0.8, value);
-            figure.circle(x, y, radius, Some(fill), None);
+            (category, along)
         }
-        figure.rect(bx, by, bw, bh, None, Some(black));
-    } else {
-        figure.rect(bx, by, bw, bh, Some(color), Some(black));
-        for &outlier in &s.outliers {
-            let (px, py) = point(c, outlier);
-            let arm = 3.0;
-            figure.line(&[(px - arm, py), (px + arm, py)], black);
-            figure.line(&[(px, py - arm), (px, py + arm)], black);
+    };
+    let along = |value: f64| place.scale.map(place.axis.coord(value));
+    let shown: Vec<f64> = values.iter().copied().filter(|v| v.is_finite()).collect();
+    // Half the length of the line at the median.
+    let mut median_half = half;
+
+    match options.style {
+        BoxStyle::Box => {
+            let (bx, by, bw, bh) = corners(point(c - half, s.q1), point(c + half, s.q3));
+            // Whiskers with caps.
+            for (from, to) in [(s.q1, s.whisker_low), (s.q3, s.whisker_high)] {
+                figure.line(&[point(c, from), point(c, to)], black);
+                figure.line(
+                    &[point(c - half / 2.0, to), point(c + half / 2.0, to)],
+                    black,
+                );
+            }
+            if options.show_points {
+                // The fill under the points, the outline over them.
+                figure.rect(bx, by, bw, bh, Some(color), None);
+                draw_points(figure, place, values, half * 0.8, seed, options);
+                figure.rect(bx, by, bw, bh, None, Some(black));
+            } else {
+                figure.rect(bx, by, bw, bh, Some(color), Some(black));
+                for &outlier in &s.outliers {
+                    let (px, py) = point(c, outlier);
+                    let arm = 3.0;
+                    figure.line(&[(px - arm, py), (px + arm, py)], black);
+                    figure.line(&[(px, py - arm), (px, py + arm)], black);
+                }
+            }
+        }
+        BoxStyle::Violin => {
+            // The outline is of the samples where they are drawn, so that
+            // on a logarithmic axis it is the shape seen.
+            let positions: Vec<f64> = shown.iter().map(|&v| along(v)).collect();
+            if let Some(profile) = violin_profile(&positions, 80) {
+                let mut ring: Vec<(f64, f64)> = profile
+                    .iter()
+                    .map(|&(at, width)| placed(c - half * width, at))
+                    .collect();
+                ring.extend(
+                    profile
+                        .iter()
+                        .rev()
+                        .map(|&(at, width)| placed(c + half * width, at)),
+                );
+                figure.area(vec![ring.clone()], color);
+                ring.push(ring[0]);
+                figure.line(&ring, black);
+            }
+            if options.show_points {
+                draw_points(figure, place, values, half * 0.4, seed, options);
+            }
+            // A narrow box inside: whiskers without caps, the quartiles.
+            let inner = (half * 0.16).clamp(1.5, 5.0);
+            figure.line(&[point(c, s.whisker_low), point(c, s.whisker_high)], black);
+            let (bx, by, bw, bh) = corners(point(c - inner, s.q1), point(c + inner, s.q3));
+            figure.rect(bx, by, bw, bh, Some(Color::WHITE), Some(black));
+            median_half = inner;
+        }
+        BoxStyle::Swarm => {
+            let radius = options.point_size.max(0.5) / 2.0 + 0.5;
+            let positions: Vec<f64> = shown.iter().map(|&v| along(v)).collect();
+            let offsets = swarm_offsets(&positions, radius, (half - radius).max(radius));
+            let outline = Stroke::solid(Color::rgb(60, 60, 60), 0.4);
+            for (&at, offset) in positions.iter().zip(offsets) {
+                let (x, y) = placed(c + offset, at);
+                figure.circle(x, y, radius, Some(color), Some(outline));
+            }
         }
     }
     figure.line(
-        &[point(c - half, s.median), point(c + half, s.median)],
-        black,
+        &[
+            point(c - median_half, s.median),
+            point(c + median_half, s.median),
+        ],
+        if options.style == BoxStyle::Swarm {
+            Stroke::solid(Color::BLACK, 1.5)
+        } else {
+            black
+        },
     );
     let finite: Vec<f64> = values.iter().copied().filter(|v| v.is_finite()).collect();
     let mean = finite.iter().sum::<f64>() / finite.len() as f64;
@@ -1298,6 +1481,125 @@ mod tests {
 
     fn texts_of(figure: &Figure) -> Vec<String> {
         texts(figure)
+    }
+
+    #[test]
+    fn violins_show_the_distribution_and_swarms_every_sample() {
+        let data = [feature("Equivita", 1.0)];
+        let styled = |style: BoxStyle, show_points: bool| {
+            plot(
+                &data,
+                None,
+                &BoxOptions {
+                    style,
+                    show_points,
+                    ..BoxOptions::default()
+                },
+            )
+        };
+        let areas = |figure: &Figure| {
+            figure
+                .shapes
+                .iter()
+                .filter(|s| matches!(s, Shape::Area { .. }))
+                .count()
+        };
+        let outlined_points = |figure: &Figure| {
+            figure
+                .shapes
+                .iter()
+                .filter(|s| {
+                    matches!(
+                        s,
+                        Shape::Circle {
+                            stroke: Some(_),
+                            ..
+                        }
+                    )
+                })
+                .count()
+        };
+        let samples: usize = data[0].groups.iter().map(|g| g.values.len()).sum();
+
+        // Boxes: neither outlines of distributions nor a point per sample.
+        let boxes = styled(BoxStyle::Box, false);
+        assert_eq!((areas(&boxes), outlined_points(&boxes)), (0, 0));
+
+        // A violin for each group with samples that differ, and the
+        // samples as points on it only when asked.
+        let groups = data[0]
+            .groups
+            .iter()
+            .filter(|g| g.values.len() >= 2)
+            .count();
+        let violins = styled(BoxStyle::Violin, false);
+        assert_eq!(areas(&violins), groups);
+        assert_eq!(point_count(&violins), 0);
+        assert_eq!(point_count(&styled(BoxStyle::Violin, true)), samples);
+
+        // A swarm: a point for every sample, and no box or violin.
+        let swarm = styled(BoxStyle::Swarm, false);
+        assert_eq!(outlined_points(&swarm), samples);
+        assert_eq!(areas(&swarm), 0);
+        // The same groups, tooltips and axis whatever the style.
+        for figure in [&violins, &swarm] {
+            assert_eq!(figure.regions.len(), boxes.regions.len());
+            assert_eq!(figure.regions[0].tooltip, boxes.regions[0].tooltip);
+            assert_eq!(texts(figure), texts(&boxes));
+        }
+    }
+
+    #[test]
+    fn a_violin_is_widest_where_the_samples_are() {
+        // Samples crowded near 0 and a few near 10.
+        let positions = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 9.5, 10.0];
+        let profile = violin_profile(&positions, 101).unwrap();
+        // From the lowest to the highest sample, and no further.
+        assert_eq!(profile[0].0, 0.0);
+        assert_eq!(profile[100].0, 10.0);
+        assert!(profile.iter().all(|(_, w)| (0.0..=1.0).contains(w)));
+        let widest = profile.iter().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
+        assert_eq!(widest.1, 1.0);
+        assert!(widest.0 < 1.0, "{widest:?}");
+        // Narrow in the gap, wider again at the far samples.
+        let width_at = |at: usize| profile[at].1;
+        assert!(width_at(50) < 0.05);
+        assert!(width_at(98) > width_at(50));
+        // Nothing to show for one sample, or samples all alike.
+        assert!(violin_profile(&[1.0], 50).is_none());
+        assert!(violin_profile(&[2.0, 2.0, 2.0], 50).is_none());
+    }
+
+    #[test]
+    fn swarm_points_do_not_overlap_until_there_is_no_room() {
+        let radius = 1.0;
+        // Ten points at the same value and two apart from them.
+        let mut positions = vec![5.0; 10];
+        positions.extend([20.0, 40.0]);
+        let offsets = swarm_offsets(&positions, radius, 100.0);
+        // A point alone sits on the centre line.
+        assert_eq!(offsets[10], 0.0);
+        assert_eq!(offsets[11], 0.0);
+        // The ten are side by side, a diameter apart, about the centre.
+        let mut row: Vec<f64> = offsets[..10].to_vec();
+        row.sort_by(f64::total_cmp);
+        assert!(row.windows(2).all(|w| (w[1] - w[0] - 2.0).abs() < 1e-9));
+        assert!(row[0] < 0.0 && row[9] > 0.0);
+        // No two points anywhere overlap.
+        for i in 0..positions.len() {
+            for j in 0..i {
+                let apart = (positions[i] - positions[j]).hypot(offsets[i] - offsets[j]);
+                assert!(apart >= 2.0 * radius - 1e-9, "{i} and {j}");
+            }
+        }
+        // Points close in value, but not equal, are nudged apart too.
+        let near = swarm_offsets(&[0.0, 1.0], radius, 100.0);
+        assert_eq!(near[0], 0.0);
+        assert!((near[1].abs() - 3f64.sqrt()).abs() < 1e-9);
+        // Without room for the swarm, it is squeezed to fit.
+        let squeezed = swarm_offsets(&positions, radius, 4.0);
+        assert!(squeezed.iter().all(|o| o.abs() <= 4.0 + 1e-9));
+        assert!(squeezed.iter().any(|o| (o.abs() - 4.0).abs() < 1e-9));
     }
 
     #[test]

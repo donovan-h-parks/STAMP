@@ -339,12 +339,16 @@ pub fn bar_plot(data: &FeatureData, options: &BarOptions) -> Figure {
         top: frame.top - p_line,
         ..frame
     };
-    axes::title(
-        &mut figure,
-        &title_frame,
-        &shorten(&data.feature, options.truncate_labels),
-        options.title_font_size,
-    );
+    // Data without a name of its own (the alpha diversity of the samples,
+    // named on the value axis) has no title.
+    if !data.feature.is_empty() {
+        axes::title(
+            &mut figure,
+            &title_frame,
+            &shorten(&data.feature, options.truncate_labels),
+            options.title_font_size,
+        );
+    }
     if let Some(p) = &p_value {
         axes::title(&mut figure, &frame, p, options.title_font_size);
     }
@@ -381,12 +385,41 @@ pub enum GroupOrder {
     Category,
 }
 
+/// How the samples of a group are shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum BoxStyle {
+    /// A box from the first to the third quartile with a line at the
+    /// median, whiskers, and the samples beyond them.
+    #[default]
+    Box,
+    /// The distribution of the samples as a smoothed outline (a kernel
+    /// density estimate, mirrored), with a narrow box and median inside.
+    Violin,
+    /// Every sample as a point, moved aside just enough that points do not
+    /// overlap (a beeswarm), with a line at the median.
+    Swarm,
+}
+
+impl BoxStyle {
+    pub const ALL: [BoxStyle; 3] = [BoxStyle::Box, BoxStyle::Violin, BoxStyle::Swarm];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            BoxStyle::Box => "Box",
+            BoxStyle::Violin => "Violin",
+            BoxStyle::Swarm => "Swarm",
+        }
+    }
+}
+
 /// Appearance of the box plot. Lengths are in inches.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct BoxOptions {
     pub width: f64,
     pub height: f64,
+    /// Boxes, violins or swarms of points.
+    pub style: BoxStyle,
     /// Mark the mean of each group with a star.
     pub show_averages: bool,
     pub show_p_value: bool,
@@ -423,6 +456,7 @@ impl Default for BoxOptions {
         BoxOptions {
             width: 7.0,
             height: 7.0,
+            style: BoxStyle::Box,
             show_averages: true,
             show_p_value: true,
             truncate_labels: Some(50),

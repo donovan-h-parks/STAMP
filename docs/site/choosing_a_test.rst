@@ -144,7 +144,7 @@ Community-level questions
    * - Are the samples of one group more variable than another?
      - PERMDISP on the **PCoA plot**; **Distance box plot**
    * - Do the groups differ in diversity?
-     - **Alpha diversity box plot**
+     - **Alpha diversity plot**
    * - Does diversity change with a measured number?
      - **Alpha diversity scatter plot** (Correlation)
    * - Have the samples been sequenced deeply enough?

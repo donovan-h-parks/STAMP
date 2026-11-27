@@ -2803,7 +2803,39 @@ fn community_plots_for_groups() {
     harness.app.set_plot_kind(PlotKind::AlphaDiversity);
     harness.settle();
     let shown = texts(&harness.app);
-    assert!(shown.contains(&"Shannon index".to_string()), "{shown:?}");
+    // The level is named with the measure, and no title repeats it.
+    assert!(
+        shown.contains(&"Shannon index (Genus)".to_string()),
+        "{shown:?}"
+    );
+    assert_eq!(shown.iter().filter(|t| t.contains("Shannon")).count(), 1);
+    assert!(shown.iter().all(|t| !t.is_empty()), "{shown:?}");
+    assert_eq!(PlotKind::AlphaDiversity.name(), "Alpha diversity plot");
+    // Its samples as boxes (to start with), violins or swarms of points.
+    use stamp_plot::feature_plots::BoxStyle;
+    use stamp_plot::figure::Shape;
+    fn drawn(harness: &mut Harness, style: BoxStyle) -> (usize, usize) {
+        let mut settings = harness.app.plot_settings().clone();
+        settings.alpha_box.style = style;
+        harness.app.set_plot_settings(settings);
+        harness.settle();
+        let shapes = &harness.app.figure().shapes;
+        let violins = shapes
+            .iter()
+            .filter(|s| matches!(s, Shape::Area { .. }))
+            .count();
+        let points = shapes
+            .iter()
+            .filter(|s| matches!(s, Shape::Circle { .. }))
+            .count();
+        (violins, points)
+    }
+    assert_eq!(harness.app.plot_settings().alpha_box.style, BoxStyle::Box);
+    assert_eq!(drawn(&mut harness, BoxStyle::Box).0, 0);
+    assert_eq!(drawn(&mut harness, BoxStyle::Violin).0, 4);
+    assert_eq!(drawn(&mut harness, BoxStyle::Swarm), (0, samples));
+    harness.screenshot("alpha_diversity_swarm");
+    drawn(&mut harness, BoxStyle::Box);
     assert!(shown.contains(&"Core".to_string()));
     harness.screenshot("alpha_diversity");
     let mut settings = harness.app.plot_settings().clone();

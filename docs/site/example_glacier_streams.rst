@@ -94,7 +94,7 @@ A PCoA plot (see :ref:`ordination-colours`) of the families, with its community 
 
    Samples placed by the Bray-Curtis distances between their families.
 
-They do (PERMANOVA pseudo-F = 6.9, p = 0.001), and their dispersions do not
+They do (PERMANOVA pseudo-F = 6.9, R² = 0.27, p = 0.001), and their dispersions do not
 (PERMDISP p = 0.75), so the ranges differ in where their communities lie,
 not in how variable they are. The table lists the test of each family
 across the ranges; 806 of the 1,392 named families differ at q <= 0.05

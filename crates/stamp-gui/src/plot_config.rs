@@ -14,7 +14,7 @@ use stamp_plot::axes::LegendPosition;
 use stamp_plot::co_occurrence_plot::View;
 use stamp_plot::composition;
 use stamp_plot::extended_error_bar::{self, SortBy};
-use stamp_plot::feature_plots::{BoxLayout, Field, GroupOrder as BoxGroupOrder};
+use stamp_plot::feature_plots::{BoxLayout, BoxStyle, Field, GroupOrder as BoxGroupOrder};
 use stamp_plot::group_heatmap::{ColumnOrder as GroupOrder, NumberFormat, Scale};
 use stamp_plot::heatmap::{ColorMap, Order};
 use stamp_plot::histogram::Inset;
@@ -29,6 +29,13 @@ use stamp_plot::shared_features;
 use crate::app::choose;
 use crate::plots::{BoxFeatures, PlotKind, PlotSettings};
 use crate::session::Mode;
+
+/// The ways a box plot shows the samples of a group.
+const BOX_STYLES: [(BoxStyle, &str); 3] = [
+    (BoxStyle::Box, "Box"),
+    (BoxStyle::Violin, "Violin"),
+    (BoxStyle::Swarm, "Swarm"),
+];
 
 /// The rows of a settings grid. Each method adds one labelled row and
 /// records whether its value changed.
@@ -987,14 +994,20 @@ pub fn show(
                 rows.check("Show number of samples", &mut o.show_counts);
             });
             dialog.group("Samples", |rows| {
-                rows.check("Show every sample as a point", &mut o.show_points);
+                rows.choice("Plot style:", &mut o.style, &BOX_STYLES);
+                // A swarm is every sample as a point already.
+                rows.check_if(
+                    o.style != BoxStyle::Swarm,
+                    "Show every sample as a point",
+                    &mut o.show_points,
+                );
                 rows.check_if(
                     mode == Mode::TwoGroups,
                     "Join paired samples with lines (paired tests)",
                     &mut o.show_pairs,
                 );
                 rows.number_if(
-                    o.show_points || o.show_pairs,
+                    o.show_points || o.show_pairs || o.style == BoxStyle::Swarm,
                     "Point size:",
                     &mut o.point_size,
                     0.1,
@@ -1601,6 +1614,21 @@ pub fn show(
                     AlphaMetric::ALL.iter().map(|&m| (m, m.name())).collect();
                 rows.choice("Measure:", metric, &metrics);
                 rows.normalisation(normalisation);
+            });
+            dialog.group("Samples", |rows| {
+                rows.choice("Plot style:", &mut o.style, &BOX_STYLES);
+                rows.check_if(
+                    o.style != BoxStyle::Swarm,
+                    "Show every sample as a point",
+                    &mut o.show_points,
+                );
+                rows.number_if(
+                    o.show_points || o.style == BoxStyle::Swarm,
+                    "Point size:",
+                    &mut o.point_size,
+                    0.1,
+                    0.5..=10.0,
+                );
             });
             dialog.group(FONT_SIZES, |rows| {
                 rows.font("Title and p-value:", &mut o.title_font_size);

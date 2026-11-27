@@ -205,6 +205,10 @@ pub struct PlotArgs {
     /// Measure of the alpha diversity plot
     #[arg(long, value_enum, default_value_t = AlphaMetricArg::Shannon)]
     pub alpha_metric: AlphaMetricArg,
+    /// Box plot and alpha diversity plot: how the samples of each group are
+    /// shown
+    #[arg(long, value_enum, default_value_t = BoxStyleArg::Box)]
+    pub box_style: BoxStyleArg,
     /// Distance between samples for the PCoA and distance box plots
     #[arg(long, value_enum, default_value_t = DistanceArg::BrayCurtis)]
     pub distance: DistanceArg,
@@ -263,6 +267,28 @@ pub enum RankCurvesArg {
 pub enum SharedStyleArg {
     Upset,
     Venn,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum BoxStyleArg {
+    /// A box from the first to the third quartile, with median and whiskers
+    Box,
+    /// The distribution as a smoothed outline, with a narrow box inside
+    Violin,
+    /// Every sample as a point, spread so that points do not overlap, with
+    /// a line at the median
+    Swarm,
+}
+
+impl From<BoxStyleArg> for stamp_plot::feature_plots::BoxStyle {
+    fn from(value: BoxStyleArg) -> Self {
+        use stamp_plot::feature_plots::BoxStyle;
+        match value {
+            BoxStyleArg::Box => BoxStyle::Box,
+            BoxStyleArg::Violin => BoxStyle::Violin,
+            BoxStyleArg::Swarm => BoxStyle::Swarm,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]

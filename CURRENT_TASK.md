@@ -6,6 +6,32 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-27, the glacier/example-data session):
+**Alpha diversity plot: level on the axis, box/violin/swarm; R2 with
+PERMANOVA.**
+- The plot is named "Alpha diversity plot" (was "... box plot";
+  `PlotKind::name`, wizard). Its value axis reads "<measure> (<level>)",
+  from the new `Community::profile_level`; it has no title unless the
+  samples were rarefied (the title is then that note). `box_plot` and
+  `multi_box::panels` draw no title for an empty `FeatureData::feature`.
+- `feature_plots::BoxStyle` (Box, Violin, Swarm) in `BoxOptions::style`,
+  drawn by `multi_box::draw_box` (`violin_profile`: Gaussian KDE,
+  Silverman bandwidth, cut at the data's range; `swarm_offsets`: beeswarm,
+  squeezed if it does not fit). "Plot style:" in Configure plot for the
+  Box plot and the Alpha diversity plot (the latter also gained "Show
+  every sample as a point" and "Point size"); `--box-style` (PlotArgs) on
+  the command line for both.
+- `community_plots::permanova_r2`; the PERMANOVA line reads
+  "PERMANOVA: pseudo-F = 6.060, R² = 0.312, p = ...".
+- Tests: multi_box.rs (three new), community_plots.rs
+  (`alpha_diversity_by_group`, the PCoA test), cli.rs
+  `every_plot_type_can_be_drawn`, ui.rs `community_plots_for_groups`.
+- Docs: plots.rst (the section, with mg_alpha_diversity/violin/swarm.png),
+  statistics.rst (R2; the coal example's numbers, which had been left at
+  their values from before the Unclassified change), command_line.rst,
+  choosing_a_test.rst, wizard.rst, example_glacier_streams.rst,
+  NEW_FEATURES; mg_pcoa.png regenerated.
+
 Finished and committed (2026-11-27, the colour-scheme session):
 **Classic light is the default colour scheme, and the Results table is
 shown at start** (cb3825a). Follow-up: a stored

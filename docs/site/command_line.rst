@@ -460,6 +460,12 @@ axis, with every sample as a point, the groups ordered by their median::
 ``--box-log``
    A log10 value axis; zeros are drawn on a line labelled 0 below a break in
    the axis. The quartiles and whiskers are those of the values themselves.
+``--box-style box|violin|swarm``
+   How the samples of each group are shown, in the box plot and in the
+   alpha diversity plot: boxes (the default), violins (the distribution as
+   a smoothed outline with a narrow box inside) or swarms (every sample a
+   point, spread so that points do not overlap, with a line at the median).
+   See :doc:`plots`.
 ``--box-points``, ``--box-counts``, ``--box-horizontal``
    Every sample as a point; the number of samples after each group's name;
    horizontal boxes.

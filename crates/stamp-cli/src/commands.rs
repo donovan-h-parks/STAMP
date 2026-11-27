@@ -1754,6 +1754,7 @@ fn box_figure(
         height: plot
             .plot_height
             .unwrap_or(if data.len() > 1 { 5.0 } else { 7.0 }),
+        style: plot.box_style.into(),
         log_scale: args.box_log,
         show_points: args.box_points,
         show_counts: args.box_counts,
@@ -2198,6 +2199,7 @@ fn community_figure(
     let boxes = feature_plots::BoxOptions {
         width: plot.plot_width,
         height: plot.plot_height.unwrap_or(6.0),
+        style: plot.box_style.into(),
         ..Default::default()
     };
     Ok(match kind {

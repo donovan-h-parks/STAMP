@@ -1805,7 +1805,7 @@ pub const GLANCE: [Row; 18] = {
                 "Do the groups differ in how many features their samples hold, or how \
                  evenly?",
                 "Compares the diversity of the samples of the groups. Shown with the \
-                 alpha diversity box plot.",
+                 alpha diversity plot.",
                 "Samples sequenced to a similar depth, or rarefied: more sequences find \
                  more features.",
             ],
@@ -2050,7 +2050,7 @@ fn diversity(comparison: Comparison, facts: &Facts) -> Recommendation {
                 ));
             }
             let mut recommendation = plots_only(
-                "Alpha diversity box plot with a Kruskal-Wallis H-test",
+                "Alpha diversity plot with a Kruskal-Wallis H-test",
                 comparison.mode(),
                 "Each sample gets one number for its diversity, and the Kruskal-Wallis test \
                  asks whether the groups differ in it. Choose the measure in Configure plot: \

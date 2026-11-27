@@ -624,11 +624,23 @@ Add an entry here whenever a feature is added that v2 did not have.
   pair of samples against their difference in the numeric field, with
   the Mantel test above it. On the command line: `stamp-cli correlation
   --plot-type mantel`, which also prints the test.
-- **Alpha diversity box plot**, for two groups and multiple groups: a box
-  for each group of the chosen diversity measure of its samples, with the
-  Kruskal-Wallis p-value. On the command line:
+- **Alpha diversity plot**, for two groups and multiple groups: the chosen
+  diversity measure of the samples of each group, with the Kruskal-Wallis
+  p-value. The value axis names the measure and the profile level
+  ("Simpson index (Genus)"). On the command line:
   `--plot-type alpha-diversity`, with
   `--alpha-metric observed|shannon|simpson|chao1` and `--rarefy`.
+- **Box, violin or swarm** ("Plot style" in Configure plot, `--box-style`),
+  for the alpha diversity plot and the box plot of features: the samples of
+  each group as a box; as a violin (a kernel density outline that ends at
+  the lowest and highest sample, with a narrow box and median inside); or
+  as a swarm (every sample a point, moved aside so that points do not
+  overlap, with a line at the median). `stamp_plot::feature_plots::BoxStyle`,
+  drawn in `multi_box.rs` (`violin_profile`, `swarm_offsets`).
+- **R² with PERMANOVA.** The PERMANOVA line above the PCoA plot (and in the
+  command line's report) gives R², the share of the variation among the
+  samples that lies between the groups, beside the pseudo-F and p-value
+  (`community_plots::permanova_r2`).
 - **PCoA plot**, for two groups and multiple groups, and the first plot
   shown for multiple groups: the samples laid out by principal coordinates
   analysis of a chosen distance (Bray-Curtis, Jaccard, Aitchison, or

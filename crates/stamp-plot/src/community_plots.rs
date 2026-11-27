@@ -33,6 +33,9 @@ pub struct Community {
     /// What colours and shapes the samples of the ordination plots, if not
     /// only their groups. The community tests always compare the groups.
     pub styling: crate::ordination_style::Styling,
+    /// The hierarchical level of the features, which the alpha diversity
+    /// plot names on its axis (empty if not known).
+    pub profile_level: String,
     pub table: CommunityTable,
 }
 
@@ -61,6 +64,7 @@ impl Community {
             groups,
             group_colors: Vec::new(),
             styling: Default::default(),
+            profile_level: profile_level.to_string(),
             table: CommunityTable::new(&profile, normalisation, rng)?,
         })
     }
@@ -152,17 +156,22 @@ pub fn alpha_plot(community: &Community, metric: AlphaMetric, options: &BoxOptio
         // Named, since nothing else on the plot says which test it is.
         format!("{} (Kruskal-Wallis H-test)", format_p_value(p, -15))
     });
+    // The value axis names the measure and the level it is of ("Simpson
+    // index (Genus)"). A title would only repeat it, so there is one only
+    // to say that the samples were rarefied.
+    let label = if community.profile_level.is_empty() {
+        metric.name().to_string()
+    } else {
+        format!("{} ({})", metric.name(), community.profile_level)
+    };
     let data = FeatureData {
-        feature: match community.depth_note() {
-            Some(note) => format!("{} ({})", metric.name(), note.to_lowercase()),
-            None => metric.name().to_string(),
-        },
+        feature: community.depth_note().unwrap_or_default(),
         field: Field::Proportion,
         groups,
         p_value,
         // One test, of the groups' diversity: no correction applies.
         p_value_kind: None,
-        value_label: Some(metric.name().to_string()),
+        value_label: Some(label),
         paired: false,
     };
     feature_plots::box_plot(&data, options)
@@ -274,21 +283,42 @@ fn test_lines(
         .iter()
         .map(|test| {
             let result = test.run_with(matrix, &groups, permutations, rng, ordination);
-            test_line(*test, &result)
+            test_line(*test, &result, &groups)
         })
         .collect()
 }
 
-/// The outcome of a community test as a line of text.
-fn test_line(test: CommunityTest, result: &PermutationTest) -> String {
+/// The share of the variation among the samples that the groups account
+/// for (R squared), from the pseudo-F ratio of a PERMANOVA of `samples`
+/// samples in `groups` groups: the sum of squares between the groups over
+/// the total, which is F (k - 1) / (F (k - 1) + (n - k)).
+pub fn permanova_r2(pseudo_f: f64, samples: usize, groups: usize) -> f64 {
+    let between = pseudo_f * (groups as f64 - 1.0);
+    between / (between + (samples as f64 - groups as f64))
+}
+
+/// The outcome of a community test as a line of text. `groups` is the
+/// group of each sample, numbered from zero. PERMANOVA also gives R
+/// squared, the size of the difference its p-value is about.
+fn test_line(test: CommunityTest, result: &PermutationTest, groups: &[usize]) -> String {
     if result.statistic.is_nan() {
         format!(
             "{}: needs at least two groups, and more samples than groups",
             test.name()
         )
     } else {
+        let size = match test {
+            CommunityTest::Permanova => {
+                let count = groups.iter().copied().max().map_or(0, |g| g + 1);
+                format!(
+                    ", R\u{b2} = {:.3}",
+                    permanova_r2(result.statistic, groups.len(), count)
+                )
+            }
+            _ => String::new(),
+        };
         format!(
-            "{}: {} = {:.3}, p = {} ({} permutations)",
+            "{}: {} = {:.3}{size}, p = {} ({} permutations)",
             test.name(),
             test.statistic_name(),
             result.statistic,
@@ -980,7 +1010,7 @@ impl PcoaStage {
                     Step::Paused => return Step::Paused,
                     Step::Cancelled => return Step::Cancelled,
                 };
-            lines.push(test_line(test, &result));
+            lines.push(test_line(test, &result, &groups));
             *run = None;
         }
         // Which groups differ, when there are more than two. These draw
@@ -1135,12 +1165,22 @@ mod tests {
         assert!((first(Unclassified::Pool) - first(Unclassified::Remove)).abs() > 1e-6);
         let figure = alpha_plot(&community, AlphaMetric::Shannon, &BoxOptions::default());
         let texts = texts(&figure);
-        for expected in ["Shannon index", "A", "B"] {
+        // The value axis names the measure and the profile level.
+        for expected in ["Shannon index (Genus)", "A", "B"] {
             assert!(
                 texts.iter().any(|t| t == expected),
                 "missing {expected} in {texts:?}"
             );
         }
+        // No title repeats it: the measure is written once, and nothing
+        // is drawn empty.
+        assert_eq!(texts.iter().filter(|t| t.contains("Shannon")).count(), 1);
+        assert!(texts.iter().all(|t| !t.is_empty()));
+        // Without a level, the measure alone.
+        let mut unnamed = community.clone();
+        unnamed.profile_level.clear();
+        let figure = alpha_plot(&unnamed, AlphaMetric::Shannon, &BoxOptions::default());
+        assert!(self::texts(&figure).iter().any(|t| t == "Shannon index"));
         // Rarefied to the 95 sequences of A2, the plot says so, and no sample
         // has more than that.
         let rarefied = self::community(Normalisation::Rarefy);
@@ -1150,10 +1190,13 @@ mod tests {
             .abundances
             .iter()
             .all(|sample| sample.iter().sum::<f64>() <= 95.0));
+        // The title is only the note that the samples were rarefied.
         let figure = alpha_plot(&rarefied, AlphaMetric::Chao1, &BoxOptions::default());
-        assert!(self::texts(&figure)
+        let texts = self::texts(&figure);
+        assert!(texts
             .iter()
-            .any(|t| t.contains("rarefied to 95 sequences")));
+            .any(|t| t == "Samples rarefied to 95 sequences"));
+        assert_eq!(texts.iter().filter(|t| t.contains("Chao1")).count(), 1);
     }
 
     #[test]
@@ -1238,6 +1281,22 @@ mod tests {
                 "missing {test} in {texts:?}"
             );
         }
+        // PERMANOVA gives the size of the difference as well: the share of
+        // the variation between the groups, which the pseudo-F implies.
+        let line = texts.iter().find(|t| t.starts_with("PERMANOVA")).unwrap();
+        let number = |after: &str| -> f64 {
+            let rest = &line[line.find(after).unwrap() + after.len()..];
+            rest.split([',', ' ']).next().unwrap().parse().unwrap()
+        };
+        let (f, r2) = (number("pseudo-F = "), number("R\u{b2} = "));
+        assert!((r2 - permanova_r2(f, 6, 2)).abs() < 1e-3, "{line}");
+        assert!(r2 > 0.5 && r2 < 1.0, "{line}");
+        // Sums of squares 30 between 3 groups and 60 within, 12 samples:
+        // F = (30 / 2) / (60 / 9) and R squared = 30 / 90.
+        assert!((permanova_r2(2.25, 12, 3) - 1.0 / 3.0).abs() < 1e-12);
+        assert!(texts
+            .iter()
+            .all(|t| !t.starts_with("ANOSIM") || !t.contains("R\u{b2}")));
         // Without tests only the distance is named.
         let plain = pcoa_plot(
             &community,

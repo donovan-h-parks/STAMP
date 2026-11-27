@@ -223,7 +223,7 @@ Where each path leads
        PERMANOVA for multiple groups); NMDS and distance box plots
    * -
      - Does diversity differ?
-     - Alpha diversity box plot with a Kruskal-Wallis H-test
+     - Alpha diversity plot with a Kruskal-Wallis H-test
    * -
      - What are the samples made of?
      - Composition bar plot, heatmaps, prevalence-abundance, shared

@@ -1344,7 +1344,28 @@ fn every_plot_type_can_be_drawn() {
         &directory,
         "alpha",
     );
-    assert!(has(&alpha, "Observed features"));
+    // The value axis names the measure and the level; the title only says
+    // that the samples were rarefied.
+    assert!(has(&alpha, "Observed features (Species)"));
+    assert!(alpha.contains(">Samples rarefied to "));
+    // The samples of each group as violins or swarms of points instead of
+    // boxes: for the alpha diversity plot and the box plot of features.
+    for plot_type in ["alpha-diversity", "box"] {
+        let draw = |style: &str| {
+            let args = ["--plot-type", plot_type, "--box-style", style];
+            svg_plot("multi-groups", &coal, &args, &directory, style)
+        };
+        let (boxes, violins, swarm) = (draw("box"), draw("violin"), draw("swarm"));
+        assert!(!boxes.contains("<circle"), "{plot_type}");
+        assert!(swarm.matches("<circle").count() >= 30, "{plot_type}");
+        assert!(violins.contains("<path") && violins != boxes, "{plot_type}");
+    }
+    assert!(failure(&with(
+        "multi-groups",
+        &coal,
+        &["--plot-type", "alpha-diversity", "--box-style", "strip"]
+    ))
+    .contains("invalid value"));
     let pcoa = svg_plot(
         "multi-groups",
         &coal,

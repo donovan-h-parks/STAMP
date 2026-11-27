@@ -721,21 +721,57 @@ features; a **flat**, long curve is an even community with many features.
 Here produced water has the longest, flattest tail: more phyla, more
 evenly represented.
 
-Alpha diversity box plot
-^^^^^^^^^^^^^^^^^^^^^^^^
+Alpha diversity plot
+^^^^^^^^^^^^^^^^^^^^
 
-*Two groups, multiple groups.* The diversity of each sample, by group, as
-box plots, with a Kruskal-Wallis test of whether the groups differ. The
-measure (observed features, Shannon, Simpson, Chao1) is chosen in
-*Configure plot*; see :doc:`statistics` for what each means.
+*Two groups, multiple groups.* The diversity of each sample, by group, with
+a Kruskal-Wallis test of whether the groups differ. The measure (observed
+features, Shannon, Simpson, Chao1) is chosen in *Configure plot*; see
+:doc:`statistics` for what each means. The value axis names the measure and
+the profile level it is of, for example *Shannon index (Genus)*.
 
 .. figure:: images/mg_alpha_diversity.png
    :width: 80%
 
-   Shannon diversity of the coal seam gas samples.
+   Shannon diversity of the genera of the coal seam gas samples.
 
-**Example.** The medians differ a little, but the boxes overlap broadly and
-the Kruskal-Wallis p-value is 0.45: no evidence that the sample types differ
+**Plot style** in *Configure plot* (``--box-style`` on the command line)
+chooses how the samples of each group are shown; the
+:ref:`box plot of features <plot-box-features>` has the same choice.
+
+* **Box**: a box from the first to the third quartile with a line at the
+  median, whiskers to the most extreme samples within 1.5 interquartile
+  ranges of the box, and crosses for the samples beyond them.
+* **Violin**: the distribution of the samples as a smoothed outline, wide
+  where samples are many (a kernel density estimate with a Gaussian kernel
+  and Silverman's bandwidth, mirrored about the centre). The outline ends
+  at the lowest and highest sample, so it never reaches values that no
+  sample has. Inside it are a narrow box for the quartiles, a line at the
+  median and whiskers as for the box. It shows shapes a box hides, two
+  clusters of samples for example, but needs enough samples to mean much:
+  with fewer than about ten in a group, prefer the swarm.
+* **Swarm**: every sample as a point at its value, moved sideways just far
+  enough that points do not overlap (a beeswarm), with a line at the
+  median. Nothing is summarised, which suits small groups. If a group has
+  more samples than there is room for, its points are squeezed together
+  and overlap.
+
+*Show every sample as a point* adds the samples to a box or a violin (a
+swarm is nothing but the samples); *Show average of each group* marks the
+mean with a star in any style.
+
+.. figure:: images/mg_alpha_violin.png
+   :width: 80%
+
+   The same as violins.
+
+.. figure:: images/mg_alpha_swarm.png
+   :width: 80%
+
+   The same as swarms of points.
+
+**Example.** The medians differ a little, but the groups overlap broadly and
+the Kruskal-Wallis p-value is 0.27: no evidence that the sample types differ
 in diversity. They may still differ in *which* organisms they contain (see
 the PCoA plot of the same samples in :doc:`statistics`).
 

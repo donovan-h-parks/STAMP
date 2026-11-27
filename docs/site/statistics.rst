@@ -685,7 +685,7 @@ Simpson index
    features (0 to 1). Mostly reflects the dominant features: a community
    dominated by one feature has a value near 0.
 
-The **alpha diversity box plot** compares the groups with a Kruskal-Wallis
+The **alpha diversity plot** compares the groups with a Kruskal-Wallis
 test.
 
 Distances between samples (beta diversity)
@@ -730,7 +730,12 @@ PERMANOVA
    Permutational analysis of variance (Anderson 2001): are samples more
    similar to the samples of their own group than to those of other groups?
    Its statistic, *pseudo-F*, is larger the more the groups are separated
-   relative to their spread.
+   relative to their spread. With it STAMP gives **R²**, the share of the
+   variation among the samples (the sum of squared distances) that lies
+   between the groups: the size of the difference, where the p-value says
+   only whether there is one. An R² of 0.27 means that the grouping
+   accounts for 27% of the variation and the other 73% is among samples of
+   the same group. With many samples a small R² can be highly significant.
 
 ANOSIM
    Analysis of similarities: compares the ranks of distances between and
@@ -758,9 +763,10 @@ Pairwise PERMANOVA
    it.
 
 **Example.** For the coal seam gas samples above, PERMANOVA (pseudo-F =
-6.3, p = 0.001) and ANOSIM (R = 0.44, p = 0.001) both say that the four
-sample types differ in composition. But PERMDISP is also significant
-(p = 0.005): the groups differ in how variable they are. The distance box
+6.1, R² = 0.31, p = 0.001) and ANOSIM (R = 0.45, p = 0.001) both say that
+the four sample types differ in composition, the sample type accounting for
+31% of the variation among the samples. But PERMDISP is also significant
+(p = 0.004): the groups differ in how variable they are. The distance box
 plot (see :ref:`plot-distance-box`) shows why: the shallow cuttings are
 much more alike than the samples of the other groups. PERMANOVA can be
 significant because of differences in spread alone, so here part of its

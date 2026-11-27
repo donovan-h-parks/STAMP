@@ -324,7 +324,7 @@ impl PlotKind {
             PlotKind::Rarefaction => "Rarefaction curves",
             PlotKind::Volcano => "Volcano plot",
             PlotKind::Composition => "Composition bar plot",
-            PlotKind::AlphaDiversity => "Alpha diversity box plot",
+            PlotKind::AlphaDiversity => "Alpha diversity plot",
             PlotKind::Pcoa => "PCoA plot",
             PlotKind::DistanceBox => "Distance box plot",
             PlotKind::CorrelationScatter => "Correlation scatter plot",
@@ -1538,6 +1538,7 @@ fn community_plot(
             groups,
             group_colors: colors,
             styling,
+            profile_level: session.profile_level.clone(),
             table: stamp_core::stats::diversity::CommunityTable::of_features(Vec::new()),
         };
         return match (kind, cached) {
@@ -1834,6 +1835,7 @@ fn mantel_figure(
                 groups: vec![String::new()],
                 group_colors: Vec::new(),
                 styling: Default::default(),
+                profile_level: session.profile_level.clone(),
                 table: stamp_core::stats::diversity::CommunityTable {
                     abundances: Vec::new(),
                     set_aside: Vec::new(),
