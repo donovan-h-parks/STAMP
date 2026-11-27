@@ -915,6 +915,7 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                 let samples = &profile.profile.sample_names;
                 community_figure(
                     kind,
+                    stamp_plot::community_plots::AlphaTest::TwoGroups(test),
                     &tree,
                     samples,
                     profile_level,
@@ -1280,6 +1281,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
             | PlotTypeArg::Nmds
             | PlotTypeArg::DistanceBox) => community_figure(
                 kind,
+                stamp_plot::community_plots::AlphaTest::MultipleGroups(test),
                 &tree,
                 &profile.profile.sample_names,
                 levels(&tree, &args.profile).1,
@@ -2168,6 +2170,7 @@ fn unavailable(kind: PlotTypeArg, context: &str) -> String {
 #[allow(clippy::too_many_arguments)]
 fn community_figure(
     kind: PlotTypeArg,
+    alpha_test: stamp_plot::community_plots::AlphaTest,
     tree: &ProfileTree,
     samples: &[String],
     profile_level: &str,
@@ -2216,6 +2219,7 @@ fn community_figure(
                 AlphaMetricArg::Simpson => AlphaMetric::Simpson,
                 AlphaMetricArg::Chao1 => AlphaMetric::Chao1,
             },
+            alpha_test,
             &boxes,
         ),
         kind => {

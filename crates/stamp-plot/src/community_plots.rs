@@ -13,6 +13,7 @@ use stamp_core::stats::diversity::{
 use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::results::format_p_value;
 use stamp_core::stats::results::{Control, Step};
+use stamp_core::stats::two_group::GroupTest;
 use stamp_core::stats::StampRng;
 use stamp_core::{ProfileTree, Unclassified};
 
@@ -123,9 +124,81 @@ pub fn alpha_values(community: &Community, metric: AlphaMetric) -> Vec<f64> {
         .collect()
 }
 
+/// The test of the analysis, which the alpha diversity plot runs on the
+/// diversity of the samples.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlphaTest {
+    TwoGroups(GroupTest),
+    MultipleGroups(MultiGroupTest),
+}
+
+impl AlphaTest {
+    /// The p-value of a difference in `values` between the groups, and the
+    /// test's name as the plot gives it: the analysis's test where it can
+    /// take a measure such as diversity, otherwise the rank test for as
+    /// many groups, saying which test it stands in for. The values of
+    /// paired (matched) groups are in pair order.
+    pub fn p_value(self, values: &[&[f64]]) -> (f64, String) {
+        let matched = values.windows(2).all(|w| w[0].len() == w[1].len());
+        let (used, instead) = match self {
+            AlphaTest::TwoGroups(test) if values.len() == 2 => {
+                let (used, instead) = match test {
+                    GroupTest::FisherPresence => {
+                        (GroupTest::MannWhitney, Some("Fisher's exact test"))
+                    }
+                    GroupTest::McNemar => (GroupTest::MannWhitney, Some("McNemar's test")),
+                    GroupTest::White => (GroupTest::MannWhitney, Some("White's test")),
+                    GroupTest::PairedT if !matched => (GroupTest::Welch, Some("the paired t-test")),
+                    GroupTest::WilcoxonSignedRank if !matched => (
+                        GroupTest::MannWhitney,
+                        Some("the Wilcoxon signed-rank test"),
+                    ),
+                    test => (test, None),
+                };
+                let p = used
+                    .p_values(values[0], values[1])
+                    .map_or(1.0, |(_, two_sided)| two_sided);
+                return (p, label(two_group_name(used), instead));
+            }
+            AlphaTest::TwoGroups(_) => (MultiGroupTest::KruskalWallis, None),
+            AlphaTest::MultipleGroups(MultiGroupTest::ChiSquarePresence) => {
+                (MultiGroupTest::KruskalWallis, Some("the chi-square test"))
+            }
+            AlphaTest::MultipleGroups(MultiGroupTest::Friedman) if !matched => {
+                (MultiGroupTest::KruskalWallis, Some("the Friedman test"))
+            }
+            AlphaTest::MultipleGroups(test) => (test, None),
+        };
+        let (p, _) = used.run(values);
+        (p, label(used.name(), instead))
+    }
+}
+
+/// The name of a two-group test as the alpha diversity plot gives it.
+fn two_group_name(test: GroupTest) -> &'static str {
+    match test {
+        GroupTest::TTest => "t-test",
+        GroupTest::PairedT => "paired t-test",
+        test => test.name(),
+    }
+}
+
+fn label(name: &str, instead: Option<&str>) -> String {
+    match instead {
+        Some(other) => format!("{name}, in place of {other}"),
+        None => name.to_string(),
+    }
+}
+
 /// Box plot of an alpha diversity measure in each group, with the p-value
-/// of a Kruskal-Wallis test of a difference between the groups.
-pub fn alpha_plot(community: &Community, metric: AlphaMetric, options: &BoxOptions) -> Figure {
+/// of the analysis's test of a difference between the groups (see
+/// [`AlphaTest::p_value`]).
+pub fn alpha_plot(
+    community: &Community,
+    metric: AlphaMetric,
+    test: AlphaTest,
+    options: &BoxOptions,
+) -> Figure {
     let values = alpha_values(community, metric);
     if values.iter().any(|v| v.is_nan()) {
         return Figure::message(
@@ -152,9 +225,9 @@ pub fn alpha_plot(community: &Community, metric: AlphaMetric, options: &BoxOptio
     }
     let p_value = (groups.len() >= 2).then(|| {
         let slices: Vec<&[f64]> = groups.iter().map(|g| g.values.as_slice()).collect();
-        let (p, _) = MultiGroupTest::KruskalWallis.run(&slices);
+        let (p, name) = test.p_value(&slices);
         // Named, since nothing else on the plot says which test it is.
-        format!("{} (Kruskal-Wallis H-test)", format_p_value(p, -15))
+        format!("{} ({name})", format_p_value(p, -15))
     });
     // The value axis names the measure and the level it is of ("Simpson
     // index (Genus)"). A title would only repeat it, so there is one only
@@ -1087,6 +1160,96 @@ mod tests {
     use crate::figure::Shape;
     use stamp_core::stats::rng_from_seed;
 
+    const KRUSKAL: AlphaTest = AlphaTest::MultipleGroups(MultiGroupTest::KruskalWallis);
+
+    #[test]
+    fn the_alpha_diversity_plot_runs_the_analysis_test() {
+        let (a, b, c) = (
+            [1.0, 2.0, 3.0, 4.0],
+            [2.5, 3.5, 4.5, 6.0],
+            [5.0, 6.0, 7.0, 9.0],
+        );
+        let two: [&[f64]; 2] = [&a, &b];
+        let two_sided = |test: GroupTest| test.p_values(&a, &b).unwrap().1;
+        for (test, name) in [
+            (GroupTest::TTest, "t-test"),
+            (GroupTest::Welch, "Welch's t-test"),
+            (GroupTest::MannWhitney, "Mann-Whitney U test"),
+            // The samples of the two groups, in pair order.
+            (GroupTest::PairedT, "paired t-test"),
+            (GroupTest::WilcoxonSignedRank, "Wilcoxon signed-rank test"),
+        ] {
+            assert_eq!(
+                AlphaTest::TwoGroups(test).p_value(&two),
+                (two_sided(test), name.to_string())
+            );
+        }
+        // Tests of presence, and White's test (of counts), cannot take a
+        // diversity: the rank test stands in, and says so.
+        for (test, name) in [
+            (GroupTest::FisherPresence, "Fisher's exact test"),
+            (GroupTest::McNemar, "McNemar's test"),
+            (GroupTest::White, "White's test"),
+        ] {
+            assert_eq!(
+                AlphaTest::TwoGroups(test).p_value(&two),
+                (
+                    two_sided(GroupTest::MannWhitney),
+                    format!("Mann-Whitney U test, in place of {name}")
+                )
+            );
+        }
+        // Groups that are not in pairs cannot be compared pair by pair.
+        let short = [1.0, 2.0, 3.0];
+        let uneven: [&[f64]; 2] = [&a, &short];
+        assert_eq!(
+            AlphaTest::TwoGroups(GroupTest::PairedT).p_value(&uneven).1,
+            "Welch's t-test, in place of the paired t-test"
+        );
+
+        let three: [&[f64]; 3] = [&a, &b, &c];
+        for test in [
+            MultiGroupTest::Anova,
+            MultiGroupTest::WelchAnova,
+            MultiGroupTest::KruskalWallis,
+            MultiGroupTest::Friedman,
+        ] {
+            assert_eq!(
+                AlphaTest::MultipleGroups(test).p_value(&three),
+                (test.run(&three).0, test.name().to_string())
+            );
+        }
+        assert_eq!(
+            AlphaTest::MultipleGroups(MultiGroupTest::ChiSquarePresence).p_value(&three),
+            (
+                MultiGroupTest::KruskalWallis.run(&three).0,
+                "Kruskal-Wallis H-test, in place of the chi-square test".to_string()
+            )
+        );
+        let ragged: [&[f64]; 3] = [&a, &b, &short];
+        assert_eq!(
+            AlphaTest::MultipleGroups(MultiGroupTest::Friedman)
+                .p_value(&ragged)
+                .1,
+            "Kruskal-Wallis H-test, in place of the Friedman test"
+        );
+
+        // The plot names the test it ran.
+        let figure = alpha_plot(
+            &community(Normalisation::Proportions),
+            AlphaMetric::Shannon,
+            AlphaTest::TwoGroups(GroupTest::Welch),
+            &BoxOptions::default(),
+        );
+        assert!(
+            texts(&figure)
+                .iter()
+                .any(|t| t.ends_with("(Welch's t-test)")),
+            "{:?}",
+            texts(&figure)
+        );
+    }
+
     /// Two groups of three samples that differ, at genus level, with the
     /// unclassified genus used only for calculating proportions (what
     /// STAMP starts with).
@@ -1163,7 +1326,12 @@ mod tests {
         assert!(all.iter().all(|d| (0.0..1.0).contains(d)));
         assert!((first(Unclassified::Remove) - first(Unclassified::ProportionsOnly)).abs() > 1e-6);
         assert!((first(Unclassified::Pool) - first(Unclassified::Remove)).abs() > 1e-6);
-        let figure = alpha_plot(&community, AlphaMetric::Shannon, &BoxOptions::default());
+        let figure = alpha_plot(
+            &community,
+            AlphaMetric::Shannon,
+            KRUSKAL,
+            &BoxOptions::default(),
+        );
         let texts = texts(&figure);
         // The value axis names the measure and the profile level.
         for expected in ["Shannon index (Genus)", "A", "B"] {
@@ -1179,7 +1347,12 @@ mod tests {
         // Without a level, the measure alone.
         let mut unnamed = community.clone();
         unnamed.profile_level.clear();
-        let figure = alpha_plot(&unnamed, AlphaMetric::Shannon, &BoxOptions::default());
+        let figure = alpha_plot(
+            &unnamed,
+            AlphaMetric::Shannon,
+            KRUSKAL,
+            &BoxOptions::default(),
+        );
         assert!(self::texts(&figure).iter().any(|t| t == "Shannon index"));
         // Rarefied to the 95 sequences of A2, the plot says so, and no sample
         // has more than that.
@@ -1191,7 +1364,12 @@ mod tests {
             .iter()
             .all(|sample| sample.iter().sum::<f64>() <= 95.0));
         // The title is only the note that the samples were rarefied.
-        let figure = alpha_plot(&rarefied, AlphaMetric::Chao1, &BoxOptions::default());
+        let figure = alpha_plot(
+            &rarefied,
+            AlphaMetric::Chao1,
+            KRUSKAL,
+            &BoxOptions::default(),
+        );
         let texts = self::texts(&figure);
         assert!(texts
             .iter()

@@ -1798,14 +1798,15 @@ pub const GLANCE: [Row; 18] = {
         ),
         other(
             Goal::Communities,
-            "Kruskal-Wallis H-test of alpha diversity",
+            "Mann-Whitney or Kruskal-Wallis test of alpha diversity",
             &[MultipleGroups, TwoGroups],
             Question::Diversity,
             [
                 "Do the groups differ in how many features their samples hold, or how \
                  evenly?",
-                "Compares the diversity of the samples of the groups. Shown with the \
-                 alpha diversity plot.",
+                "Compares the diversity of the samples of the groups (Mann-Whitney for two, \
+                 Kruskal-Wallis for more). Shown with the alpha diversity plot, which runs \
+                 the test of the Statistics panel.",
                 "Samples sequenced to a similar depth, or rarefied: more sequences find \
                  more features.",
             ],
@@ -2049,13 +2050,34 @@ fn diversity(comparison: Comparison, facts: &Facts) -> Recommendation {
                     "whether the samples were sequenced deeply enough",
                 ));
             }
+            // The plot runs the analysis's test on the diversity of the
+            // samples: a rank test, which does not assume diversity is
+            // normally distributed.
+            let two = comparison.mode() == Mode::TwoGroups;
+            let (test, heading, why) = if two {
+                (
+                    GroupTest::MannWhitney.name(),
+                    "Alpha diversity plot with a Mann-Whitney U test",
+                    "Each sample gets one number for its diversity, and the Mann-Whitney test \
+                     asks whether the two groups differ in it.",
+                )
+            } else {
+                (
+                    MultiGroupTest::KruskalWallis.name(),
+                    "Alpha diversity plot with a Kruskal-Wallis H-test",
+                    "Each sample gets one number for its diversity, and the Kruskal-Wallis \
+                     test asks whether the groups differ in it.",
+                )
+            };
             let mut recommendation = plots_only(
-                "Alpha diversity plot with a Kruskal-Wallis H-test",
+                heading,
                 comparison.mode(),
-                "Each sample gets one number for its diversity, and the Kruskal-Wallis test \
-                 asks whether the groups differ in it. Choose the measure in Configure plot: \
-                 observed features counts them, Shannon and Simpson also weigh how evenly \
-                 the sequences are shared, and Chao1 estimates the features not yet seen.",
+                &format!(
+                    "{why} The plot runs the test chosen in the Statistics panel, which this \
+                     sets. Choose the measure in Configure plot: observed features counts \
+                     them, Shannon and Simpson also weigh how evenly the sequences are \
+                     shared, and Chao1 estimates the features not yet seen."
+                ),
                 plots,
                 Some(
                     "The number of features found rises with the number of sequences read: \
@@ -2063,10 +2085,19 @@ fn diversity(comparison: Comparison, facts: &Facts) -> Recommendation {
                      similar depths.",
                 ),
             );
-            recommendation.report = Some(
+            recommendation.settings = vec![("Statistical test", test.to_string())];
+            recommendation.change = Change {
+                group_test: two.then_some(GroupTest::MannWhitney),
+                multi_test: (!two).then_some((MultiGroupTest::KruskalWallis, PostHocTest::Dunn)),
+                ..Change::default()
+            };
+            recommendation.report = Some(if two {
                 "You report: the diversity measure, whether the samples were rarefied and to \
-                 what depth, the median of each group, and the Kruskal-Wallis p-value.",
-            );
+                 what depth, the median of each group, and the Mann-Whitney p-value."
+            } else {
+                "You report: the diversity measure, whether the samples were rarefied and to \
+                 what depth, the median of each group, and the Kruskal-Wallis p-value."
+            });
             recommendation
         }
     }

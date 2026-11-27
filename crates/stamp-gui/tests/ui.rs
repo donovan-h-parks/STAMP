@@ -2916,6 +2916,28 @@ fn community_plots_for_groups() {
     let shown = texts(&harness.app);
     assert!(shown.iter().any(|t| t.contains("rarefied to")), "{shown:?}");
 
+    // The diversity is tested with the analysis's test, named after the
+    // p-value; one that cannot take a diversity gives way to the rank test.
+    let named = |app: &StampApp, name: &str| texts(app).iter().any(|t| t.ends_with(name));
+    use stamp_core::stats::multi_group::MultiGroupTest;
+    for (test, name) in [
+        (MultiGroupTest::Anova, "(ANOVA)"),
+        (MultiGroupTest::KruskalWallis, "(Kruskal-Wallis H-test)"),
+        (
+            MultiGroupTest::ChiSquarePresence,
+            "(Kruskal-Wallis H-test, in place of the chi-square test)",
+        ),
+    ] {
+        harness.app.session.multi.analysis.test = test;
+        harness.app.session.invalidate(Mode::MultipleGroups);
+        harness.settle();
+        assert!(
+            named(&harness.app, name),
+            "{name}: {:?}",
+            texts(&harness.app)
+        );
+    }
+
     // PCoA: a point per sample and the three community tests.
     settings.community_normalisation = Normalisation::Proportions;
     settings.community_distance = Distance::BrayCurtis;

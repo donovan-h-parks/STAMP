@@ -6,6 +6,19 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-28, the colour-scheme session): **the
+alpha diversity plot uses the analysis's test** (Statistics panel /
+`--test`) instead of always Kruskal-Wallis: `community_plots::AlphaTest`
+(`TwoGroups(GroupTest)`, `MultipleGroups(MultiGroupTest)`) with
+`p_value`, falling back to Mann-Whitney / Kruskal-Wallis for presence
+tests, White's, and paired/Friedman with unequal groups, and naming the
+test it replaces. GUI `community_plot` and CLI `community_figure` pass it.
+The wizard's diversity recommendation now sets Mann-Whitney (two groups)
+or Kruskal-Wallis + Dunn (more). Docs: plots.rst, statistics.rst,
+wizard.rst; CHANGES #78. Tests: community_plots
+`the_alpha_diversity_plot_runs_the_analysis_test`, ui
+`community_plots_for_groups`.
+
 Finished and committed (2026-11-27, the colour-scheme session):
 - **"Labels for:" on the Bar plot and the Heatmap** (`labels:
   composition::Labels`; Each sample by default, as before) and **"Bar width

@@ -1468,6 +1468,7 @@ fn ordination_styling(
 fn community_plot(
     session: &Session,
     kind: PlotKind,
+    alpha_test: community_plots::AlphaTest,
     samples: &[String],
     sample_groups: Vec<usize>,
     groups: Vec<String>,
@@ -1579,7 +1580,12 @@ fn community_plot(
         Err(message) => return Figure::message(&message),
     };
     community.group_colors = colors;
-    community_plots::alpha_plot(&community, settings.alpha_metric, &settings.alpha_box)
+    community_plots::alpha_plot(
+        &community,
+        settings.alpha_metric,
+        alpha_test,
+        &settings.alpha_box,
+    )
 }
 
 /// The work of computing `job` for some samples of the session's profiles,
@@ -2280,6 +2286,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                     community_plot(
                         session,
                         kind,
+                        community_plots::AlphaTest::TwoGroups(results.analysis.test),
                         samples,
                         (0..samples.len())
                             .map(|i| usize::from(i >= first))
@@ -2622,6 +2629,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                 | PlotKind::DistanceBox => community_plot(
                     session,
                     kind,
+                    community_plots::AlphaTest::MultipleGroups(results.analysis.test),
                     &profile.profile.sample_names,
                     profile
                         .samples_in_groups()

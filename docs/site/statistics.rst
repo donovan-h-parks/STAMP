@@ -685,8 +685,9 @@ Simpson index
    features (0 to 1). Mostly reflects the dominant features: a community
    dominated by one feature has a value near 0.
 
-The **alpha diversity plot** compares the groups with a Kruskal-Wallis
-test.
+The **alpha diversity plot** compares the groups with the test chosen in
+the *Statistics* panel, or a rank test where that test cannot take a
+diversity (see :doc:`plots`).
 
 Distances between samples (beta diversity)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

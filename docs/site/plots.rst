@@ -31,8 +31,8 @@ Save plot as**. Point at any part of a plot to see what it stands for.
 
    The p-values of a post-hoc plot allow for the number of pairs of groups
    (they are *Corrected p-values*), except those of *Welch's
-   (uncorrected)*. A plot of a single test, such as the Kruskal-Wallis test
-   of the alpha diversity plot or the community tests, writes its p-value as
+   (uncorrected)*. A plot of a single test, such as the test of the alpha
+   diversity plot or the community tests, writes its p-value as
    *p*.
 
 Groups are coloured in order from a palette of twenty colours: the ten of
@@ -756,7 +756,16 @@ Alpha diversity plot
 ^^^^^^^^^^^^^^^^^^^^
 
 *Two groups, multiple groups.* The diversity of each sample, by group, with
-a Kruskal-Wallis test of whether the groups differ. The measure (observed
+a test of whether the groups differ: the test chosen in the *Statistics*
+panel (``--test`` on the command line), run on the diversity of the
+samples, and named after the p-value. A test that cannot take a number
+such as diversity is replaced by the rank test for as many groups
+(Mann-Whitney U for two, Kruskal-Wallis for more), and the plot says which
+it stands in for: the tests of presence and absence (Fisher's exact,
+McNemar's, chi-square) and White's test, which works on counts. So are the
+paired tests and the Friedman test when the groups are not of the same size
+and so cannot be in pairs. Diversity is often skewed, Chao1 and observed
+features especially, so a rank test is a safe choice. The measure (observed
 features, Shannon, Simpson, Chao1) is chosen in *Configure plot*; see
 :doc:`statistics` for what each means. The value axis names the measure and
 the profile level it is of, for example *Shannon index (Genus)*.
@@ -802,7 +811,8 @@ mean with a star in any style.
    The same as swarms of points.
 
 **Example.** The medians differ a little, but the groups overlap broadly and
-the Kruskal-Wallis p-value is 0.27: no evidence that the sample types differ
+the Kruskal-Wallis p-value (the test chosen for these figures) is 0.27: no
+evidence that the sample types differ
 in diversity. They may still differ in *which* organisms they contain (see
 the PCoA plot of the same samples in :doc:`statistics`).
 
