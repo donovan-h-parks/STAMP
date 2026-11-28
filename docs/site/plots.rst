@@ -321,8 +321,14 @@ with its confidence interval in the middle, the p-value on the right. See
 :ref:`post-hoc-tests` for an example.
 
 As in STAMP 2, the plot starts by showing only the pairs of groups that
-differ significantly; untick *Filter rows above nominal level* in
-*Configure plot* to see every pair.
+differ: *Show only pairs of groups that differ (p ≤ 0.05)* in *Configure
+plot*. The level is one minus the *Post-hoc coverage* of the Statistics
+panel (0.05 for the default 95% intervals), and the p-values are those of
+the post-hoc test, which allow for the number of pairs (except Welch's).
+This filter is separate from the filters of the Statistics panel, which
+choose features by their test across all groups: here the rows are pairs of
+groups for the one feature shown. Untick it to see every pair; the command
+line always shows every pair.
 
 Correlation scatter plot
 ^^^^^^^^^^^^^^^^^^^^^^^^

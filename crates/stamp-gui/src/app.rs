@@ -3107,6 +3107,7 @@ impl StampApp {
                 .unwrap_or_default(),
             groups,
             group_field: self.session.group_field.clone(),
+            post_hoc_coverage: Some(self.session.multi.post_hoc_coverage),
             lat_field: metadata.and_then(|m| stamp_plot::map_plot::coordinate_fields(m).0),
             lon_field: metadata.and_then(|m| stamp_plot::map_plot::coordinate_fields(m).1),
         }

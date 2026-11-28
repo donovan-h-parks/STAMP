@@ -10,11 +10,27 @@ use crate::extended_error_bar::{self, Data, Options, Row};
 use crate::figure::{Color, Figure};
 use crate::p_values::PValueKind;
 
+/// The significance level of the post-hoc plot, from the coverage of its
+/// confidence intervals: with `only_significant`, pairs whose p-value is
+/// above it are left out (as STAMP v2 left them out).
+pub fn significance_level(coverage: f64) -> f64 {
+    1.0 - coverage
+}
+
+/// The significance level as labels write it: 0.05, 0.1, 0.01 (and in
+/// scientific notation below 0.001).
+pub fn level_text(coverage: f64) -> String {
+    let level = significance_level(coverage);
+    if level >= 0.001 {
+        format!("{}", (level * 1000.0).round() / 1000.0)
+    } else {
+        format!("{level:.1e}")
+    }
+}
+
 /// Build the post-hoc plot for a feature. `result` must come from a post-hoc
-/// test on the same profile and feature.
-///
-/// With `only_significant`, pairs whose p-value is not below `1 - coverage`
-/// are left out.
+/// test on the same profile and feature; see [`significance_level`] for
+/// `only_significant`.
 pub fn plot(
     profile: &MultiGroupProfile,
     feature: &str,
@@ -61,7 +77,7 @@ pub fn plot_with_colors(
         (values.iter().map(|v| (v - m) * (v - m)).sum::<f64>() / values.len().max(1) as f64).sqrt()
     };
 
-    let alpha = 1.0 - coverage;
+    let alpha = significance_level(coverage);
     let mut rows = Vec::new();
     let mut comparisons = result.comparisons.iter();
     for i in 0..profile.group_names.len() {
@@ -76,7 +92,7 @@ pub fn plot_with_colors(
             } else {
                 (
                     format_p_value(p, options.min_p_value_exponent),
-                    p < alpha,
+                    p <= alpha,
                     p,
                 )
             };
@@ -100,7 +116,10 @@ pub fn plot_with_colors(
         }
     }
     if rows.is_empty() {
-        return Figure::message("No pair of groups differs significantly");
+        return Figure::message(&format!(
+            "No pair of groups differs (p \u{2264} {})",
+            level_text(coverage)
+        ));
     }
 
     let data = Data {
@@ -225,7 +244,13 @@ mod tests {
             true,
             &Options::default(),
         );
-        assert_eq!(texts(&none), ["No pair of groups differs significantly"]);
+        assert_eq!(
+            texts(&none),
+            ["No pair of groups differs (p \u{2264} 1.0e-12)"]
+        );
+        assert_eq!(level_text(0.95), "0.05");
+        assert_eq!(level_text(0.9), "0.1");
+        assert_eq!(level_text(0.99), "0.01");
         let missing = plot(&profile, "nope", &result, 0.95, false, &Options::default());
         assert_eq!(texts(&missing), ["No feature is selected"]);
     }

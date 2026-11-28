@@ -793,14 +793,15 @@ impl Dialog<'_> {
         });
     }
 
-    /// The extended error bar plot and, with `post_hoc`, the post-hoc plot,
-    /// which lays its pairs of groups out the same way.
+    /// The extended error bar plot and, with `only_significant` (its
+    /// setting, and the coverage of the post-hoc intervals if known), the
+    /// post-hoc plot, which lays its pairs of groups out the same way.
     fn error_bar(
         &mut self,
         options: &mut extended_error_bar::Options,
         mode: Mode,
         sequence_counts: Option<&mut bool>,
-        only_significant: Option<&mut bool>,
+        only_significant: Option<(&mut bool, Option<f64>)>,
     ) {
         let groups = mode != Mode::TwoSamples;
         let post_hoc = only_significant.is_some();
@@ -861,9 +862,15 @@ impl Dialog<'_> {
             rows.check("Show p-value labels", &mut options.show_p_values);
             rows.number("Marker size:", &mut options.marker_size, 1.0, 1.0..=500.0);
         });
-        if let Some(only_significant) = only_significant {
+        if let Some((only_significant, coverage)) = only_significant {
             self.group("Filter", |rows| {
-                rows.check("Filter rows above nominal level", only_significant);
+                let level = coverage.map_or("1 - post-hoc coverage".to_string(), |coverage| {
+                    stamp_plot::post_hoc::level_text(coverage)
+                });
+                rows.check(
+                    &format!("Show only pairs of groups that differ (p \u{2264} {level})"),
+                    only_significant,
+                );
             });
         } else {
             self.group("Legend position", |rows| {
@@ -917,6 +924,9 @@ pub struct Context {
     pub numeric_fields: Vec<String>,
     /// The field that defines the groups of the analysis, if any.
     pub group_field: Option<String>,
+    /// The coverage of the post-hoc confidence intervals, whose complement
+    /// is the significance level of the post-hoc plot.
+    pub post_hoc_coverage: Option<f64>,
     /// The fields that look like a latitude and a longitude.
     pub lat_field: Option<String>,
     pub lon_field: Option<String>,
@@ -953,7 +963,10 @@ pub fn show(
             &mut settings.post_hoc,
             mode,
             None,
-            Some(&mut settings.post_hoc_only_significant),
+            Some((
+                &mut settings.post_hoc_only_significant,
+                context.post_hoc_coverage,
+            )),
         ),
         PlotKind::Bar if mode == Mode::TwoSamples => {
             let o = &mut settings.stat_bar;

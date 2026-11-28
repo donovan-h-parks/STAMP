@@ -4610,6 +4610,7 @@ fn map_settings_dialog() {
         groups: vec!["Horse".into(), "Tapir".into()],
         numeric_fields: vec!["Latitude".into(), "Longitude".into(), "Depth".into()],
         group_field: Some("Host_group".into()),
+        post_hoc_coverage: Some(0.95),
         lat_field: Some("Latitude".into()),
         lon_field: Some("Longitude".into()),
     };
