@@ -724,8 +724,8 @@ Community tests
 
 These tests ask whether groups of samples differ as a whole. They work on
 the distances between samples, get their p-values by shuffling the samples
-between groups (999 times by default), and are reported above the **PCoA
-plot**.
+between groups (999 times by default), and are reported above the
+**ordination plot** when its method is PCoA.
 
 PERMANOVA
    Permutational analysis of variance (Anderson 2001): are samples more
@@ -760,8 +760,7 @@ Pairwise PERMANOVA
 .. figure:: images/mg_pcoa.png
    :width: 90%
 
-   PCoA plot of the coal seam gas samples, with the community tests above
-   it.
+   PCoA of the coal seam gas samples, with the community tests above it.
 
 **Example.** For the coal seam gas samples above, PERMANOVA (pseudo-F =
 6.1, R² = 0.31, p = 0.001) and ANOSIM (R = 0.45, p = 0.001) both say that
@@ -771,7 +770,7 @@ the four sample types differ in composition, the sample type accounting for
 plot (see :ref:`plot-distance-box`) shows why: the shallow cuttings are
 much more alike than the samples of the other groups. PERMANOVA can be
 significant because of differences in spread alone, so here part of its
-result may reflect spread rather than a shift in composition. The PCoA plot
+result may reflect spread rather than a shift in composition. The PCoA
 confirms that the groups also sit in different places.
 
 .. tip::
@@ -781,6 +780,73 @@ confirms that the groups also sit in different places.
    * If both are significant, look at the ordination plots to judge whether
      the groups also differ in position.
    * ANOSIM is more affected by differences in spread than PERMANOVA.
+
+.. _constrained-tests:
+
+Constrained ordination: db-RDA and CCA
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The community tests compare the groups of one field. A **constrained
+ordination** relates the samples to several metadata fields at once,
+numbers and categories alike, and says how much of the variation among the
+samples each accounts for given the others: whether pH matters once
+temperature is allowed for, for example. It is chosen as the method of the
+ordination plot (see :ref:`plot-constrained`).
+
+Both methods regress a description of the samples on the explanatory
+variables: a number enters as itself, a field of categories as one column
+for each category but the first.
+
+db-RDA
+   Distance-based redundancy analysis (Legendre and Anderson 1999; McArdle
+   and Anderson 2001) regresses the principal coordinates of the distances
+   (as the PCoA finds them) on the variables. As in the PCoA, the axes with
+   negative eigenvalues, which a distance such as Bray-Curtis can give, are
+   left out, and shares of the variation are of what is left (vegan's
+   ``capscale`` does the same; its ``dbrda`` keeps them). With a single
+   field of categories, the test of the model is PERMANOVA on the positive
+   part of the distances, and with the Euclidean or the Aitchison distance
+   exactly PERMANOVA. With Bray-Curtis its R² can therefore differ a little
+   from PERMANOVA's (for the mountain ranges of the glacier example, 25%
+   against 27%).
+
+CCA
+   Canonical correspondence analysis (ter Braak 1986) regresses the
+   chi-square residuals of the abundances, weighting each sample by its
+   total, as vegan's ``cca`` does. It suits features that rise and fall
+   along a gradient; rare features have a large influence.
+
+R²
+   The share of the total variation (for CCA, the *inertia*) that the
+   variables account for together. It always grows with more variables,
+   even meaningless ones, so db-RDA also gives the **adjusted R²**
+   (Ezekiel's formula, :math:`1 - (1 - R^2)(n - 1)/(n - k - 1)` for *n*
+   samples and *k* columns), which does not. CCA has no simple adjusted
+   R² (vegan estimates one by permutation), and STAMP gives none.
+
+Tests
+   The statistic is a pseudo-F: the variation explained per column over the
+   variation left per residual degree of freedom. Its p-value comes from
+   shuffling the samples (999 times by default). The **model** test shuffles
+   the samples against all the variables. With more than one variable,
+   each is also tested **given the others** (the *marginal* test of vegan's
+   ``anova(..., by = "margin")``): the share it explains beyond what the
+   others explain, with the residuals of the model without it shuffled,
+   each sample taking its values of the other variables (and, in CCA, its
+   weight) with it. The statistics of given permutations are those of
+   vegan 2.7, and the tests use the same seed as the other permutation
+   tests. A variable that adds nothing to the others (one that is a
+   combination of them) is said to.
+
+.. tip::
+
+   * Correlated variables share the variation they explain: each may then
+     be "not significant given the others" although together they explain a
+     great deal. Look at the test of the model and at the arrows: arrows
+     pointing the same way belong to correlated variables.
+   * Each category of a field uses up a degree of freedom. A field with
+     nearly as many categories as samples cannot be tested (and the plot
+     says so).
 
 Mantel test
 ^^^^^^^^^^^
@@ -839,8 +905,8 @@ NMDS stress
 
 Non-metric multidimensional scaling (NMDS) places samples in two dimensions
 so that their order of distances is kept as well as possible. **Stress**
-measures how badly the picture fits the real distances, and is shown on the
-NMDS plot:
+measures how badly the picture fits the real distances, and is shown above
+the ordination plot when its method is NMDS:
 
 =============  =========
 Stress         Fit

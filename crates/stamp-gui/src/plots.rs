@@ -289,10 +289,9 @@ pub enum PlotKind {
     Volcano,
     Composition,
     AlphaDiversity,
-    Pcoa,
+    Ordination,
     DistanceBox,
     CorrelationScatter,
-    Nmds,
     SharedFeatures,
     RankAbundance,
     Ancom,
@@ -325,10 +324,9 @@ impl PlotKind {
             PlotKind::Volcano => "Volcano plot",
             PlotKind::Composition => "Composition bar plot",
             PlotKind::AlphaDiversity => "Alpha diversity plot",
-            PlotKind::Pcoa => "PCoA plot",
+            PlotKind::Ordination => "Ordination plot",
             PlotKind::DistanceBox => "Distance box plot",
             PlotKind::CorrelationScatter => "Correlation scatter plot",
-            PlotKind::Nmds => "NMDS plot",
             PlotKind::SharedFeatures => "Shared features plot",
             PlotKind::RankAbundance => "Rank-abundance curves",
             PlotKind::Ancom => "ANCOM plot",
@@ -355,7 +353,7 @@ impl PlotKind {
                 PlotGroup::Composition
             }
             Rarefaction | RankAbundance | AlphaDiversity | AlphaScatter => PlotGroup::Diversity,
-            Pcoa | Nmds | DistanceBox | Mantel => PlotGroup::Similarity,
+            Ordination | DistanceBox | Mantel => PlotGroup::Similarity,
             Map => PlotGroup::Samples,
             Custom => PlotGroup::Custom,
         }
@@ -420,8 +418,7 @@ impl PlotKind {
                 PlotKind::PValueHistogram,
                 PlotKind::Composition,
                 PlotKind::AlphaDiversity,
-                PlotKind::Pcoa,
-                PlotKind::Nmds,
+                PlotKind::Ordination,
                 PlotKind::DistanceBox,
                 PlotKind::Ancom,
                 PlotKind::SharedFeatures,
@@ -438,7 +435,7 @@ impl PlotKind {
                 PlotKind::Map,
             ],
             Mode::MultipleGroups => &[
-                PlotKind::Pcoa,
+                PlotKind::Ordination,
                 PlotKind::Heatmap,
                 PlotKind::GroupHeatmap,
                 PlotKind::CoOccurrence,
@@ -451,7 +448,6 @@ impl PlotKind {
                 PlotKind::PValueHistogram,
                 PlotKind::Composition,
                 PlotKind::AlphaDiversity,
-                PlotKind::Nmds,
                 PlotKind::DistanceBox,
                 PlotKind::Ancom,
                 PlotKind::SharedFeatures,
@@ -592,12 +588,16 @@ pub struct PlotSettings {
     pub community_permutations: usize,
     pub alpha_metric: AlphaMetric,
     pub alpha_box: feature_plots::BoxOptions,
-    pub pcoa: ordination_plot::Options,
-    /// Write the outcome of PERMANOVA, ANOSIM and PERMDISP above the PCoA
-    /// plot.
-    pub pcoa_show_tests: bool,
+    /// The ordination plot: its method, how it looks, whether its tests
+    /// are written above it (PERMANOVA, ANOSIM and PERMDISP for PCoA; the
+    /// permutation tests of db-RDA and CCA), and the explanatory variables
+    /// of db-RDA and CCA (metadata fields; none: the field that defines the
+    /// groups).
+    pub ordination_method: community_plots::OrdinationMethod,
+    pub ordination: ordination_plot::Options,
+    pub ordination_show_tests: bool,
+    pub ordination_variables: Vec<String>,
     pub distance_box: feature_plots::BoxOptions,
-    pub nmds: ordination_plot::Options,
     pub mantel: correlation_plot::Options,
     pub shared: shared_features::Options,
     pub rank_abundance: rank_abundance::Options,
@@ -664,8 +664,7 @@ impl PlotSettings {
     pub fn colors_by_selected_feature(&self, kind: PlotKind) -> bool {
         use stamp_plot::ordination_style::ColorSource;
         let options = match kind {
-            PlotKind::Pcoa => &self.pcoa,
-            PlotKind::Nmds => &self.nmds,
+            PlotKind::Ordination => &self.ordination,
             PlotKind::Map => {
                 return self.map.color_by == ColorSource::SelectedFeature
                     || self.map.size_by == map_plot::SizeSource::SelectedFeature
@@ -744,19 +743,15 @@ impl Default for PlotSettings {
                 height: 6.0,
                 ..Default::default()
             },
-            pcoa: ordination_plot::Options {
+            ordination_method: community_plots::OrdinationMethod::Pcoa,
+            ordination: ordination_plot::Options {
                 legend,
                 ..Default::default()
             },
-            pcoa_show_tests: true,
+            ordination_show_tests: true,
+            ordination_variables: Vec::new(),
             distance_box: feature_plots::BoxOptions {
                 height: 6.0,
-                ..Default::default()
-            },
-            nmds: ordination_plot::Options {
-                legend,
-                show_pc3_vs_pc2: false,
-                show_pc1_vs_pc3: false,
                 ..Default::default()
             },
             mantel: correlation_plot::Options {
@@ -855,20 +850,20 @@ impl PlotSettings {
                 self.ancom_alpha = defaults.ancom_alpha;
             }
             PlotKind::AlphaDiversity
-            | PlotKind::Pcoa
-            | PlotKind::Nmds
+            | PlotKind::Ordination
             | PlotKind::DistanceBox
             | PlotKind::Mantel => {
                 match kind {
-                    PlotKind::Nmds => self.nmds = defaults.nmds,
                     PlotKind::Mantel => self.mantel = defaults.mantel,
                     PlotKind::AlphaDiversity => {
                         self.alpha_metric = defaults.alpha_metric;
                         self.alpha_box = defaults.alpha_box;
                     }
-                    PlotKind::Pcoa => {
-                        self.pcoa = defaults.pcoa;
-                        self.pcoa_show_tests = defaults.pcoa_show_tests;
+                    PlotKind::Ordination => {
+                        self.ordination_method = defaults.ordination_method;
+                        self.ordination = defaults.ordination;
+                        self.ordination_show_tests = defaults.ordination_show_tests;
+                        self.ordination_variables = defaults.ordination_variables;
                     }
                     _ => self.distance_box = defaults.distance_box,
                 }
@@ -1463,6 +1458,16 @@ fn ordination_styling(
     )
 }
 
+/// The explanatory variables of the constrained ordinations: those chosen,
+/// or else the field that defines the groups.
+pub fn ordination_fields(session: &Session, settings: &PlotSettings) -> Vec<String> {
+    if settings.ordination_variables.is_empty() {
+        session.group_field.iter().cloned().collect()
+    } else {
+        settings.ordination_variables.clone()
+    }
+}
+
 /// One of the plots of whole communities, for some samples and their groups.
 #[allow(clippy::too_many_arguments)]
 fn community_plot(
@@ -1481,35 +1486,66 @@ fn community_plot(
     };
     // What colours and shapes the samples of the ordinations, found first
     // so that a mistake (a feature name being typed) is reported at once.
-    let ordination = match kind {
-        PlotKind::Pcoa => Some(&settings.pcoa),
-        PlotKind::Nmds => Some(&settings.nmds),
-        _ => None,
-    };
-    let styling = match ordination.map(|options| ordination_styling(session, options, profile)) {
-        Some(Ok(styling)) => styling,
-        Some(Err(message)) => return Figure::message(&message),
-        None => Default::default(),
+    let styling = if kind == PlotKind::Ordination {
+        match ordination_styling(session, &settings.ordination, profile) {
+            Ok(styling) => styling,
+            Err(message) => return Figure::message(&message),
+        }
+    } else {
+        Default::default()
     };
     let distance = settings.community_distance;
+    let method = settings.ordination_method;
     // The slow plots (ordinations, distances) are kept by what they are
     // computed from, so that a change of colours, shapes or sizes does not
     // compute them again, and computed in a job.
-    if matches!(
-        kind,
-        PlotKind::Pcoa | PlotKind::Nmds | PlotKind::DistanceBox
-    ) {
-        let tests = (kind == PlotKind::Pcoa && settings.pcoa_show_tests)
+    if matches!(kind, PlotKind::Ordination | PlotKind::DistanceBox) {
+        let tests = settings
+            .ordination_show_tests
             .then_some(settings.community_permutations);
-        let job = match kind {
-            PlotKind::Pcoa => community_plots::CommunityJob::Pcoa { tests },
-            PlotKind::Nmds => community_plots::CommunityJob::Nmds,
+        // A constrained ordination keeps the samples with a value for every
+        // explanatory variable.
+        let (mut samples, mut sample_groups) = (samples.to_vec(), sample_groups);
+        let job = match (kind, method.constrained()) {
+            (PlotKind::Ordination, Some(constrained)) => {
+                let Some(metadata) = &session.metadata else {
+                    return Figure::message(NO_METADATA);
+                };
+                let fields = ordination_fields(session, settings);
+                let explanatory =
+                    match community_plots::explanatory_variables(metadata, &fields, &samples) {
+                        Ok(explanatory) => explanatory,
+                        Err(message) => return Figure::message(&message),
+                    };
+                samples = explanatory
+                    .kept
+                    .iter()
+                    .map(|&i| samples[i].clone())
+                    .collect();
+                sample_groups = explanatory.kept.iter().map(|&i| sample_groups[i]).collect();
+                community_plots::CommunityJob::Constrained {
+                    method: constrained,
+                    variables: explanatory.variables,
+                    tests,
+                    notes: explanatory.note.into_iter().collect(),
+                }
+            }
+            (PlotKind::Ordination, None) => match method {
+                community_plots::OrdinationMethod::Nmds => community_plots::CommunityJob::Nmds,
+                _ => community_plots::CommunityJob::Pcoa { tests },
+            },
             _ => community_plots::CommunityJob::Distances,
+        };
+        // CCA does not use the distance.
+        let distance_key = if kind == PlotKind::Ordination && !method.uses_distance() {
+            None
+        } else {
+            Some(distance)
         };
         let key = OrdinationKey {
             tree: Some(tree.clone()),
             inputs: format!(
-                "{kind:?}|{}|{:?}|{:?}|{}|{distance:?}|{tests:?}|{samples:?}|{sample_groups:?}",
+                "{kind:?}|{}|{:?}|{:?}|{}|{distance_key:?}|{samples:?}|{sample_groups:?}|{job:?}",
                 session.profile_level,
                 session.unclassified,
                 settings.community_normalisation,
@@ -1520,7 +1556,7 @@ fn community_plot(
             community_work(
                 session,
                 tree,
-                samples,
+                &samples,
                 sample_groups.clone(),
                 groups.clone(),
                 settings,
@@ -1534,7 +1570,7 @@ fn community_plot(
         // What drawing needs of the community: its samples, groups and how
         // they look, not their abundances.
         let mut community = Community {
-            samples: samples.to_vec(),
+            samples,
             sample_groups,
             groups,
             group_colors: colors,
@@ -1542,13 +1578,17 @@ fn community_plot(
             profile_level: session.profile_level.clone(),
             table: stamp_core::stats::diversity::CommunityTable::of_features(Vec::new()),
         };
+        let options = &settings.ordination;
         return match (kind, cached) {
-            (PlotKind::Pcoa, Cached::Community(Ok(layout))) => {
-                community_plots::draw_pcoa(&community, &layout, &settings.pcoa)
-            }
-            (PlotKind::Nmds, Cached::Community(Ok(layout))) => {
-                community_plots::draw_nmds(&community, &layout, &settings.nmds)
-            }
+            (PlotKind::Ordination, Cached::Community(Ok(layout))) => match method {
+                community_plots::OrdinationMethod::Pcoa => {
+                    community_plots::draw_pcoa(&community, &layout, options)
+                }
+                community_plots::OrdinationMethod::Nmds => {
+                    community_plots::draw_nmds(&community, &layout, options)
+                }
+                _ => community_plots::draw_constrained(&community, &layout, options),
+            },
             (_, Cached::Distances(matrix, depth)) => {
                 community.table.depth = depth;
                 community_plots::draw_distance_box(
@@ -2277,10 +2317,7 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         settings,
                     )
                 }
-                PlotKind::AlphaDiversity
-                | PlotKind::Pcoa
-                | PlotKind::Nmds
-                | PlotKind::DistanceBox => {
+                PlotKind::AlphaDiversity | PlotKind::Ordination | PlotKind::DistanceBox => {
                     let first = profile.samples_in_group1().len();
                     let samples = &profile.profile.sample_names;
                     community_plot(
@@ -2623,25 +2660,24 @@ fn build_plain(session: &Session, mode: Mode, kind: PlotKind, settings: &PlotSet
                         settings,
                     )
                 }
-                PlotKind::AlphaDiversity
-                | PlotKind::Pcoa
-                | PlotKind::Nmds
-                | PlotKind::DistanceBox => community_plot(
-                    session,
-                    kind,
-                    community_plots::AlphaTest::MultipleGroups(results.analysis.test),
-                    &profile.profile.sample_names,
-                    profile
-                        .samples_in_groups()
-                        .iter()
-                        .enumerate()
-                        .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
-                        .collect(),
-                    profile.group_names.clone(),
-                    colors.clone(),
-                    &profile.profile,
-                    settings,
-                ),
+                PlotKind::AlphaDiversity | PlotKind::Ordination | PlotKind::DistanceBox => {
+                    community_plot(
+                        session,
+                        kind,
+                        community_plots::AlphaTest::MultipleGroups(results.analysis.test),
+                        &profile.profile.sample_names,
+                        profile
+                            .samples_in_groups()
+                            .iter()
+                            .enumerate()
+                            .flat_map(|(group, members)| std::iter::repeat_n(group, members.len()))
+                            .collect(),
+                        profile.group_names.clone(),
+                        colors.clone(),
+                        &profile.profile,
+                        settings,
+                    )
+                }
                 _ => Figure::message("This plot is not available for multiple groups"),
             }
         }
@@ -2677,15 +2713,21 @@ mod tests {
     fn slow_plots_are_computed_in_a_job() {
         let session = session();
         session.ordinations.set_synchronous(false);
-        let settings = PlotSettings::default();
-        for kind in [
-            PlotKind::Pcoa,
-            PlotKind::Nmds,
-            PlotKind::DistanceBox,
-            PlotKind::Ancom,
+        use community_plots::OrdinationMethod;
+        for (kind, method) in [
+            (PlotKind::Ordination, OrdinationMethod::Pcoa),
+            (PlotKind::Ordination, OrdinationMethod::Nmds),
+            (PlotKind::Ordination, OrdinationMethod::DbRda),
+            (PlotKind::Ordination, OrdinationMethod::Cca),
+            (PlotKind::DistanceBox, OrdinationMethod::Pcoa),
+            (PlotKind::Ancom, OrdinationMethod::Pcoa),
         ] {
+            let settings = PlotSettings {
+                ordination_method: method,
+                ..PlotSettings::default()
+            };
             let figure = build(&session, Mode::MultipleGroups, kind, &settings);
-            assert_eq!(figure.shapes.len(), 1, "{kind:?}");
+            assert_eq!(figure.shapes.len(), 1, "{kind:?} {method:?}");
             let request = session.ordinations.take_request().expect("a request");
             assert!(session.ordinations.take_request().is_none());
             let running = request.start();
@@ -2698,13 +2740,23 @@ mod tests {
                 match running.poll(&session.ordinations) {
                     PlotPoll::Finished => break,
                     PlotPoll::Running => std::thread::sleep(std::time::Duration::from_millis(1)),
-                    _ => panic!("{kind:?}: the calculation failed"),
+                    _ => panic!("{kind:?} {method:?}: the calculation failed"),
                 }
             }
-            assert!(stages.iter().any(|s| !s.is_empty()), "{kind:?}: {stages:?}");
+            assert!(
+                stages.iter().any(|s| !s.is_empty()),
+                "{kind:?} {method:?}: {stages:?}"
+            );
             let figure = build(&session, Mode::MultipleGroups, kind, &settings);
-            assert!(!figure.regions.is_empty(), "{kind:?}");
-            assert!(session.ordinations.take_request().is_none(), "{kind:?}");
+            assert!(
+                !figure.regions.is_empty(),
+                "{kind:?} {method:?}: {:?}",
+                figure.shapes.first()
+            );
+            assert!(
+                session.ordinations.take_request().is_none(),
+                "{kind:?} {method:?}"
+            );
         }
     }
 
@@ -2758,7 +2810,7 @@ mod tests {
             message(build(
                 &no_metadata,
                 Mode::TwoGroups,
-                PlotKind::Pcoa,
+                PlotKind::Ordination,
                 &PlotSettings::default()
             )),
             NO_METADATA
@@ -2797,9 +2849,9 @@ mod tests {
             (Mode::TwoGroups, PlotKind::Bar),
             (Mode::TwoGroups, PlotKind::Box),
             (Mode::TwoGroups, PlotKind::Scatter),
-            (Mode::TwoGroups, PlotKind::Pcoa),
+            (Mode::TwoGroups, PlotKind::Ordination),
             (Mode::TwoGroups, PlotKind::Heatmap),
-            (Mode::MultipleGroups, PlotKind::Pcoa),
+            (Mode::MultipleGroups, PlotKind::Ordination),
             (Mode::MultipleGroups, PlotKind::Heatmap),
             (Mode::MultipleGroups, PlotKind::Bar),
             (Mode::MultipleGroups, PlotKind::Box),

@@ -1791,7 +1791,7 @@ pub const GLANCE: [Row; 18] = {
                 "Do the groups differ in overall composition, and not only feature by \
                  feature?",
                 "Asks whether samples are more alike within the groups than between \
-                 them. Shown above the PCoA plot, with PERMDISP and ANOSIM.",
+                 them. Shown above the ordination plot (PCoA), with PERMDISP and ANOSIM.",
                 "Groups that are similarly spread out, which PERMDISP checks. The p-value \
                  is found by shuffling the samples.",
             ],
@@ -1946,14 +1946,10 @@ fn communities(comparison: Comparison) -> Recommendation {
             None,
         ),
         _ => {
-            let mut plots = vec![
+            let plots = vec![
                 (
-                    PlotKind::Pcoa,
-                    "a map of the samples, with the tests above it",
-                ),
-                (
-                    PlotKind::Nmds,
-                    "another map of the same distances, as a check",
+                    PlotKind::Ordination,
+                    "a map of the samples (PCoA), with the tests above it",
                 ),
                 (
                     PlotKind::DistanceBox,
@@ -1961,15 +1957,14 @@ fn communities(comparison: Comparison) -> Recommendation {
                 ),
             ];
             let why = if comparison == Comparison::MultipleGroups {
-                "The PCoA plot places the samples so that those with similar composition lie \
-                 close together. Above it, PERMANOVA tests whether the groups sit in \
+                "The ordination plot (PCoA) places the samples so that those with similar \
+                 composition lie close together. Above it, PERMANOVA tests whether the groups sit in \
                  different places, PERMDISP whether they differ in how spread out they are \
                  (which alone can make PERMANOVA significant), and ANOSIM is an older \
                  alternative. Pairwise PERMANOVA then says which groups differ from which."
             } else {
-                plots.truncate(3);
-                "The PCoA plot places the samples so that those with similar composition lie \
-                 close together. Above it, PERMANOVA tests whether the two groups sit in \
+                "The ordination plot (PCoA) places the samples so that those with similar \
+                 composition lie close together. Above it, PERMANOVA tests whether the two groups sit in \
                  different places, PERMDISP whether they differ in how spread out they are \
                  (which alone can make PERMANOVA significant), and ANOSIM is an older \
                  alternative."
@@ -1984,6 +1979,10 @@ fn communities(comparison: Comparison) -> Recommendation {
             recommendation.alternatives = vec![
                 "Another distance (Configure plot): Jaccard looks only at which features are \
                  present, Aitchison allows for a few features dominating.",
+                "NMDS (Method, in Configure plot): another map of the same distances, as a \
+                 check that does not assume they are Euclidean.",
+                "db-RDA or CCA (Method, in Configure plot): how much several metadata fields \
+                 together account for, with a test of each.",
             ];
             recommendation.report = Some(
                 "You report: the distance, the PERMANOVA pseudo-F and p-value with the \

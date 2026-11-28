@@ -907,10 +907,7 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     )?
                 }
             }
-            PlotTypeArg::AlphaDiversity
-            | PlotTypeArg::Pcoa
-            | PlotTypeArg::Nmds
-            | PlotTypeArg::DistanceBox => {
+            PlotTypeArg::AlphaDiversity | PlotTypeArg::Ordination | PlotTypeArg::DistanceBox => {
                 let first = profile.samples_in_group1().len();
                 let samples = &profile.profile.sample_names;
                 community_figure(
@@ -927,6 +924,7 @@ fn two_groups(args: TwoGroupsArgs) -> CliResult {
                     plot,
                     args.resampling.seed,
                     &args.ordination,
+                    (&metadata, &args.metadata.field),
                     ordination_styling(
                         &args.ordination,
                         &metadata,
@@ -1277,8 +1275,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                 }
             }
             kind @ (PlotTypeArg::AlphaDiversity
-            | PlotTypeArg::Pcoa
-            | PlotTypeArg::Nmds
+            | PlotTypeArg::Ordination
             | PlotTypeArg::DistanceBox) => community_figure(
                 kind,
                 stamp_plot::community_plots::AlphaTest::MultipleGroups(test),
@@ -1296,6 +1293,7 @@ fn multi_groups(args: MultiGroupsArgs) -> CliResult {
                 plot,
                 args.seed,
                 &args.ordination,
+                (&metadata, &args.metadata.field),
                 ordination_styling(
                     &args.ordination,
                     &metadata,
@@ -2166,7 +2164,9 @@ fn unavailable(kind: PlotTypeArg, context: &str) -> String {
 }
 
 /// One of the plots of whole communities. The outcome of the community
-/// tests is also reported for the PCoA plot.
+/// tests (PCoA), or of the permutation tests of db-RDA and CCA, is also
+/// reported. `explain` gives the metadata and the field of the analysis,
+/// the default explanatory variable of db-RDA and CCA.
 #[allow(clippy::too_many_arguments)]
 fn community_figure(
     kind: PlotTypeArg,
@@ -2180,16 +2180,33 @@ fn community_figure(
     plot: &PlotArgs,
     seed: u64,
     ordination: &OrdinationArgs,
+    explain: (&Metadata, &str),
     styling: stamp_plot::ordination_style::Styling,
 ) -> CliResult<stamp_plot::Figure> {
     use stamp_core::stats::diversity::{AlphaMetric, Normalisation};
-    use stamp_plot::community_plots::{self, Community};
+    use stamp_plot::community_plots::{self, Community, OrdinationMethod};
     use stamp_plot::feature_plots;
 
+    let method = OrdinationMethod::from(ordination.ordination);
+    // db-RDA and CCA keep the samples with a value for every explanatory
+    // variable.
+    let (mut samples, mut sample_groups) = (samples.to_vec(), sample_groups);
+    let mut explanatory = None;
+    if kind == PlotTypeArg::Ordination && method.constrained().is_some() {
+        let fields = if ordination.constrain.is_empty() {
+            vec![explain.1.to_string()]
+        } else {
+            ordination.constrain.clone()
+        };
+        let found = community_plots::explanatory_variables(explain.0, &fields, &samples)?;
+        samples = found.kept.iter().map(|&i| samples[i].clone()).collect();
+        sample_groups = found.kept.iter().map(|&i| sample_groups[i]).collect();
+        explanatory = Some(found);
+    }
     let mut rng = rng_from_seed(seed);
     let mut community = Community::from_tree(
         tree,
-        samples,
+        &samples,
         profile_level,
         unclassified,
         sample_groups,
@@ -2224,9 +2241,19 @@ fn community_figure(
         ),
         kind => {
             use community_plots::{CommunityJob, CommunityOutput, CommunityRun};
-            let job = match kind {
-                PlotTypeArg::Pcoa => CommunityJob::Pcoa { tests: Some(999) },
-                PlotTypeArg::Nmds => CommunityJob::Nmds,
+            let job = match (kind, method.constrained(), explanatory) {
+                (PlotTypeArg::Ordination, Some(constrained), Some(found)) => {
+                    CommunityJob::Constrained {
+                        method: constrained,
+                        variables: found.variables,
+                        tests: Some(999),
+                        notes: found.note.into_iter().collect(),
+                    }
+                }
+                (PlotTypeArg::Ordination, _, _) if method == OrdinationMethod::Nmds => {
+                    CommunityJob::Nmds
+                }
+                (PlotTypeArg::Ordination, _, _) => CommunityJob::Pcoa { tests: Some(999) },
                 _ => CommunityJob::Distances,
             };
             // The tests are run once, for the report and the plot.
@@ -2235,6 +2262,12 @@ fn community_figure(
             let community = run.community();
             match output {
                 CommunityOutput::Layout(Ok(layout)) => {
+                    // What db-RDA and CCA explain, and any samples left out.
+                    if method.constrained().is_some() {
+                        for line in &layout.notes {
+                            eprintln!("{line}");
+                        }
+                    }
                     for line in layout.tests.iter().flatten() {
                         eprintln!("{line}");
                     }
@@ -2245,10 +2278,20 @@ fn community_figure(
                             eprintln!("  {}", pair.line());
                         }
                     }
-                    if kind == PlotTypeArg::Pcoa {
-                        community_plots::draw_pcoa(community, &layout, &ordination_options)
-                    } else {
-                        community_plots::draw_nmds(community, &layout, &ordination_options)
+                    match method {
+                        OrdinationMethod::Pcoa => {
+                            community_plots::draw_pcoa(community, &layout, &ordination_options)
+                        }
+                        OrdinationMethod::Nmds => {
+                            community_plots::draw_nmds(community, &layout, &ordination_options)
+                        }
+                        OrdinationMethod::DbRda | OrdinationMethod::Cca => {
+                            community_plots::draw_constrained(
+                                community,
+                                &layout,
+                                &ordination_options,
+                            )
+                        }
                     }
                 }
                 CommunityOutput::Distances(matrix) => {
@@ -2372,7 +2415,7 @@ fn map_figure(
     Ok(map_plot::plot(&data, &options))
 }
 
-/// The appearance of the PCoA and NMDS plots.
+/// The appearance of the ordination plot.
 fn ordination_options(
     plot: &PlotArgs,
     args: &OrdinationArgs,
@@ -2409,7 +2452,7 @@ fn ordination_options(
     })
 }
 
-/// What colours and shapes the samples of the PCoA and NMDS plots, from
+/// What colours and shapes the samples of the ordination plot, from
 /// the metadata and `profile` (for a feature's relative abundance).
 fn ordination_styling(
     args: &OrdinationArgs,

@@ -1,6 +1,8 @@
-//! Ordination plots (PCoA and NMDS): samples placed on the first axes of
-//! an ordination, in up to three panels, coloured and shaped by group or
-//! by metadata. The ordination itself is computed elsewhere
+//! Ordination plots (PCoA, NMDS, db-RDA and CCA): samples placed on the
+//! first axes of an ordination, in up to three panels, coloured and shaped
+//! by group or by metadata, with the explanatory variables of a
+//! constrained ordination drawn over them (arrows for numbers, centroids
+//! for categories). The ordination itself is computed elsewhere
 //! (`community_plots`).
 
 use crate::axes::{
@@ -15,6 +17,46 @@ use crate::ordination_style::{
     category_counts, draw_legend, legend_size, short_number, ColorScale, ColorSource, DrawOrder,
     LegendItem, SampleColors, ShapePlan, Styling, ValueScale, NO_VALUE_COLOR,
 };
+
+/// The explanatory variables of a constrained ordination, drawn over its
+/// samples.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Biplot {
+    /// Numeric variables, drawn as arrows from the origin.
+    pub arrows: Vec<BiplotItem>,
+    /// Categories, drawn as crosses at the centroids of their samples.
+    pub centroids: Vec<BiplotItem>,
+}
+
+/// A variable or category of a [`Biplot`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct BiplotItem {
+    pub name: String,
+    /// The end of the arrow or the centroid, on each axis. Arrows are
+    /// stretched together to fit each panel; centroids are in the units of
+    /// the samples.
+    pub position: Vec<f64>,
+    pub tooltip: String,
+}
+
+/// The colour of the arrows and centroids of the explanatory variables.
+pub const BIPLOT_COLOR: Color = Color::rgb(31, 78, 145);
+
+/// The gap between the tip of an arrow and its name, in points.
+const LABEL_GAP: f64 = 3.0;
+
+/// The shortest an axis is drawn at a fixed scale, as a share of the
+/// longest.
+const SHORTEST_AXIS: f64 = 0.25;
+
+/// The share of the way to the edge of a panel that the longest arrow
+/// reaches.
+const ARROW_REACH: f64 = 0.8;
+
+/// The names of `count` axes: `prefix` and a number.
+pub fn numbered_axes(prefix: &str, count: usize) -> Vec<String> {
+    (1..=count).map(|i| format!("{prefix}{i}")).collect()
+}
 
 /// A sample with its group.
 #[derive(Debug, Clone, PartialEq)]
@@ -84,6 +126,10 @@ pub struct Options {
     pub draw_order: DrawOrder,
     /// Opacity of the markers, from 0 (invisible) to 1.
     pub opacity: f64,
+    /// Draw the explanatory variables of a constrained ordination.
+    pub show_variables: bool,
+    /// Size of the names of the explanatory variables, in points.
+    pub variable_font_size: f64,
 }
 
 impl Default for Options {
@@ -105,6 +151,8 @@ impl Default for Options {
             color_scale: ColorScale::Linear,
             draw_order: DrawOrder::HighOnTop,
             opacity: 1.0,
+            show_variables: true,
+            variable_font_size: 9.0,
         }
     }
 }
@@ -315,20 +363,21 @@ fn looks(data: &Data, options: &Options) -> (Vec<Look>, Vec<usize>, Vec<LegendIt
 /// Draw samples at positions found by any ordination: `positions[sample]`
 /// holds the coordinates of the sample of `data` with the same index, and
 /// `variance_fractions` the share of the variation each axis accounts for.
-/// Axes are named `axis` followed by their number, and `notes` are written
-/// above the plot, one to a line.
+/// `axes` names the axes, `notes` are written above the plot, one to a
+/// line, and `biplot` is drawn over the samples.
 pub fn plot_ordination(
     data: &Data,
     positions: &[Vec<f64>],
     variance_fractions: &[f64],
-    axis: &str,
+    axes: &[String],
     notes: &[String],
+    biplot: &Biplot,
     options: &Options,
 ) -> Figure {
     if positions.len() != data.samples.len() {
         return Figure::message("Degenerate plot: the ordination does not match the samples");
     }
-    let components = variance_fractions.len();
+    let components = variance_fractions.len().min(axes.len());
     if components < 2 {
         return Figure::message("Degenerate plot: the samples vary along a single direction.");
     }
@@ -344,10 +393,15 @@ pub fn plot_ordination(
     let label = |component: usize| {
         let fraction = variance_fractions[component];
         if fraction.is_nan() {
-            format!("{axis}{}", component + 1)
+            axes[component].clone()
         } else {
-            format!("{axis}{} ({:.1}%)", component + 1, fraction * 100.0)
+            format!("{} ({:.1}%)", axes[component], fraction * 100.0)
         }
+    };
+    let biplot = if options.show_variables {
+        biplot
+    } else {
+        &Biplot::default()
     };
     let ticks_for = |component: usize| {
         let values = (0..data.samples.len()).map(|s| coordinate(s, component));
@@ -355,9 +409,22 @@ pub fn plot_ordination(
         let pad = (high - low) * 0.05;
         Ticks::inside(low - pad, high + pad)
     };
-    let ticks: Vec<Ticks> = (0..if beside || beneath { 3 } else { 2 })
+    let mut ticks: Vec<Ticks> = (0..if beside || beneath { 3 } else { 2 })
         .map(ticks_for)
         .collect();
+    if options.fixed_scale {
+        // At one length per unit, an axis along which the samples hardly
+        // spread (a second constrained axis, say) would make a panel too
+        // thin to see: it is given empty room on both sides instead.
+        let widest = ticks.iter().map(|t| t.max - t.min).fold(0.0, f64::max);
+        let least = widest * SHORTEST_AXIS;
+        for t in ticks.iter_mut() {
+            if t.max - t.min < least {
+                let centre = (t.max + t.min) / 2.0;
+                *t = Ticks::inside(centre - least / 2.0, centre + least / 2.0);
+            }
+        }
+    }
     let span = |component: usize| ticks[component].max - ticks[component].min;
 
     let width = options.width * INCH;
@@ -467,6 +534,7 @@ pub fn plot_ordination(
             let (px, py) = (x.map(coordinate(index, cx)), y.map(coordinate(index, cy)));
             marker_styled(figure, look.shape, px, py, look.area, look.fill, look.edge);
         }
+        draw_biplot(figure, biplot, &frame, (&x, &y), (cx, cy), options);
         // Tooltips in the order of the samples.
         for (index, sample) in data.samples.iter().enumerate() {
             let (px, py) = (x.map(coordinate(index, cx)), y.map(coordinate(index, cy)));
@@ -616,6 +684,153 @@ pub fn plot_ordination(
     figure
 }
 
+/// Draw the explanatory variables in a panel showing axes `cx` and `cy`:
+/// arrows stretched together so that the longest reaches most of the way
+/// to the edge, and crosses at the centroids of categories.
+fn draw_biplot(
+    figure: &mut Figure,
+    biplot: &Biplot,
+    frame: &Frame,
+    (x, y): (&crate::axis::LinearScale, &crate::axis::LinearScale),
+    (cx, cy): (usize, usize),
+    options: &Options,
+) {
+    use crate::figure::{HAlign, TextStyle, VAlign};
+    let on = |item: &BiplotItem, axis: usize| item.position.get(axis).copied().unwrap_or(0.0);
+    let style = |dx: f64, dy: f64| {
+        let h = if dx.abs() < 1e-9 {
+            HAlign::Center
+        } else if dx > 0.0 {
+            HAlign::Left
+        } else {
+            HAlign::Right
+        };
+        let v = if dy.abs() < 1e-9 || dx.abs() > dy.abs() {
+            VAlign::Middle
+        } else if dy > 0.0 {
+            VAlign::Bottom
+        } else {
+            VAlign::Top
+        };
+        TextStyle::new(options.variable_font_size)
+            .color(BIPLOT_COLOR)
+            .align(h, v)
+    };
+    let (x0, y0) = (x.map(0.0), y.map(0.0));
+    // How far the arrows may stretch: from the origin to each edge.
+    let room = |toward: f64, low: f64, high: f64, origin: f64| -> f64 {
+        if toward > 0.0 {
+            (high - origin) / toward
+        } else if toward < 0.0 {
+            (low - origin) / toward
+        } else {
+            f64::INFINITY
+        }
+    };
+    // The box of an arrow's name around its tip, in page points (y
+    // downwards), as `style` aligns it: (left, right, top, bottom).
+    let size = options.variable_font_size;
+    let label_box = |name: &str, ux: f64, uy: f64| -> (f64, f64, f64, f64) {
+        let (w, h) = (crate::text::width(name, size), size);
+        let (ax, ay) = (ux * LABEL_GAP, uy * LABEL_GAP);
+        let (left, right) = if ux.abs() < 1e-9 {
+            (ax - w / 2.0, ax + w / 2.0)
+        } else if ux > 0.0 {
+            (ax, ax + w)
+        } else {
+            (ax - w, ax)
+        };
+        let (top, bottom) = if uy.abs() < 1e-9 || ux.abs() > uy.abs() {
+            (ay - h / 2.0, ay + h / 2.0)
+        } else if uy < 0.0 {
+            // Pointing up: the name above the tip.
+            (ay - h, ay)
+        } else {
+            (ay, ay + h)
+        };
+        (left, right, top, bottom)
+    };
+    // How far the arrows may stretch: the longest most of the way to the
+    // edge.
+    let stretch = biplot
+        .arrows
+        .iter()
+        .map(|a| {
+            // In points on the page, y downwards.
+            let dx = x.map(on(a, cx)) - x0;
+            let dy = y.map(on(a, cy)) - y0;
+            room(dx, frame.left, frame.right, x0).min(room(dy, frame.top, frame.bottom, y0))
+                * ARROW_REACH
+        })
+        .fold(f64::INFINITY, f64::min);
+    let stroke = Stroke::solid(BIPLOT_COLOR, 1.25);
+    if stretch.is_finite() && stretch > 0.0 {
+        for arrow in &biplot.arrows {
+            let dx = (x.map(on(arrow, cx)) - x0) * stretch;
+            let dy = (y.map(on(arrow, cy)) - y0) * stretch;
+            let length = (dx * dx + dy * dy).sqrt();
+            if length < 1.0 {
+                continue;
+            }
+            let (tx, ty) = (x0 + dx, y0 + dy);
+            figure.line(&[(x0, y0), (tx, ty)], stroke);
+            // The head: a filled triangle at the tip.
+            let (ux, uy) = (dx / length, dy / length);
+            let (head, half) = (7.0, 3.0);
+            let (bx, by) = (tx - ux * head, ty - uy * head);
+            figure.area(
+                vec![vec![
+                    (tx, ty),
+                    (bx - uy * half, by + ux * half),
+                    (bx + uy * half, by - ux * half),
+                ]],
+                BIPLOT_COLOR,
+            );
+            // A name that would cross the edge of the panel is moved back
+            // inside it.
+            let (left, right, top, bottom) = label_box(&arrow.name, ux, uy);
+            let inside = |at: f64, low: f64, high: f64, first: f64, last: f64| {
+                if at + low < first {
+                    first - low
+                } else if at + high > last {
+                    last - high
+                } else {
+                    at
+                }
+            };
+            figure.text(
+                inside(tx, left, right, frame.left, frame.right) + ux * LABEL_GAP,
+                inside(ty, top, bottom, frame.top, frame.bottom) + uy * LABEL_GAP,
+                arrow.name.clone(),
+                style(ux, -uy),
+            );
+            figure.region(
+                tx - 5.0,
+                ty - 5.0,
+                10.0,
+                10.0,
+                &arrow.name,
+                arrow.tooltip.clone(),
+            );
+        }
+    }
+    for centroid in &biplot.centroids {
+        let (px, py) = (x.map(on(centroid, cx)), y.map(on(centroid, cy)));
+        let r = 4.0;
+        figure.line(&[(px - r, py - r), (px + r, py + r)], stroke);
+        figure.line(&[(px - r, py + r), (px + r, py - r)], stroke);
+        figure.text(px + r + 2.0, py, centroid.name.clone(), style(1.0, 0.0));
+        figure.region(
+            px - r,
+            py - r,
+            2.0 * r,
+            2.0 * r,
+            &centroid.name,
+            centroid.tooltip.clone(),
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -660,7 +875,15 @@ mod tests {
     const FRACTIONS: [f64; 3] = [0.6, 0.3, 0.1];
 
     fn plot(data: &Data, options: &Options) -> Figure {
-        plot_ordination(data, &positions(data), &FRACTIONS, "PC", &[], options)
+        plot_ordination(
+            data,
+            &positions(data),
+            &FRACTIONS,
+            &numbered_axes("PC", 3),
+            &[],
+            &Biplot::default(),
+            options,
+        )
     }
 
     fn texts(figure: &Figure) -> Vec<String> {
@@ -1142,15 +1365,26 @@ mod tests {
     fn degenerate_data() {
         // One axis only: a single direction of variation.
         let line: Vec<Vec<f64>> = (0..5).map(|i| vec![i as f64]).collect();
-        let single = plot_ordination(&data(), &line, &[1.0], "PC", &[], &Options::default());
+        let axes = numbered_axes("PC", 3);
+        let none = Biplot::default();
+        let single = plot_ordination(
+            &data(),
+            &line,
+            &[1.0],
+            &axes,
+            &[],
+            &none,
+            &Options::default(),
+        );
         assert!(texts(&single)[0].contains("single direction"));
         // Positions for some other samples.
         let wrong = plot_ordination(
             &data(),
             &line[..3],
             &FRACTIONS,
-            "PC",
+            &axes,
             &[],
+            &none,
             &Options::default(),
         );
         assert!(texts(&wrong)[0].contains("does not match"));
@@ -1162,5 +1396,68 @@ mod tests {
             }
         ))[0]
             .contains("too small"));
+    }
+
+    #[test]
+    fn explanatory_variables_are_drawn_as_arrows_and_centroids() {
+        let biplot = Biplot {
+            arrows: vec![BiplotItem {
+                name: "pH".to_string(),
+                position: vec![0.9, -0.2, 0.0],
+                tooltip: "pH".to_string(),
+            }],
+            centroids: vec![BiplotItem {
+                name: "Site A".to_string(),
+                position: vec![0.1, 0.05, 0.0],
+                tooltip: "Site = A".to_string(),
+            }],
+        };
+        let draw = |show_variables: bool| {
+            plot_ordination(
+                &data(),
+                &positions(&data()),
+                &FRACTIONS,
+                &numbered_axes("dbRDA", 3),
+                &[],
+                &biplot,
+                &Options {
+                    show_variables,
+                    // Circles only, to find the samples.
+                    unique_shapes: false,
+                    ..Options::default()
+                },
+            )
+        };
+        let figure = draw(true);
+        let names = texts(&figure);
+        // Once in each of the three panels.
+        assert_eq!(names.iter().filter(|t| *t == "pH").count(), 3);
+        assert_eq!(names.iter().filter(|t| *t == "Site A").count(), 3);
+        assert!(names.iter().any(|t| t.starts_with("dbRDA1 (")));
+        assert!(figure.regions.iter().any(|r| r.tooltip == "Site = A"));
+        // The longest arrow reaches most of the way to the right of the
+        // main panel: its name is right of every sample drawn there but the
+        // rightmost.
+        let ph_x = figure
+            .shapes
+            .iter()
+            .find_map(|s| match s {
+                Shape::Text { x, text, .. } if text == "pH" => Some(*x),
+                _ => None,
+            })
+            .unwrap();
+        let mut main: Vec<f64> = figure
+            .shapes
+            .iter()
+            .filter_map(|s| match s {
+                Shape::Circle { cx, .. } => Some(*cx),
+                _ => None,
+            })
+            .take(5)
+            .collect();
+        main.sort_by(f64::total_cmp);
+        assert!(ph_x > main[3], "{ph_x} vs {main:?}");
+        let hidden = texts(&draw(false));
+        assert!(!hidden.iter().any(|t| t == "pH" || t == "Site A"));
     }
 }

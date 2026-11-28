@@ -162,3 +162,39 @@ wb <- other(rbind(c(130, 142, 118, 125, 150, 137, 121, 133,  101,  95, 112,  88,
                   c(  5,   0,   3,   9,   0,   2,   7,   1,    0,   4,   0,   0,   6,   1,   0,   0,   2)),
             c(1000, 1100, 950, 1050, 1200, 1020, 980, 1080,  1000, 990, 1010, 970, 1060, 1030, 1040, 960, 1100))
 white_case("white 8v9", wb, 8)
+# --- Constrained ordination (constrained.rs): db-RDA as vegan's capscale (axes with negative
+# eigenvalues left out; shares of the positive part) on Bray-Curtis distances between proportions,
+# and CCA as vegan's cca on the counts. Permutation p-values (999) can only be compared roughly.
+cY <- matrix(c(10,0,3,5,8,1, 4,2,9,0,3,7, 0,5,6,2,1,9, 7,7,1,3,0,2, 3,1,0,8,6,4,
+               12,3,2,1,9,0, 1,9,4,4,2,6, 5,0,8,6,1,3, 2,6,3,9,4,1, 8,4,5,0,7,5), nrow=10, byrow=TRUE)
+cenv <- data.frame(pH=c(5.1,6.2,7.0,5.5,6.8,4.9,7.3,6.0,6.5,5.2), Temp=c(12,15,9,20,11,14,8,17,10,19),
+                   Site=factor(c("A","B","C","A","B","C","A","B","C","A")))
+constrained_case <- function(label, m, real) {
+  set.seed(1)
+  P(label, "R2", unlist(RsquareAdj(m)))
+  P(label, "fractions", eigenvals(m) / real)
+  a <- anova(m, permutations=how(nperm=999)); P(label, "F", a$F[1], "p", a$`Pr(>F)`[1])
+  if (length(attr(terms(m), "term.labels")) > 1) {
+    a <- anova(m, by="margin", permutations=how(nperm=999)); P(label, "margin F", a$F[-nrow(a)], "p", a$`Pr(>F)`[-nrow(a)])
+  }
+  P(label, "wa1", m$CCA$wa[,1]); if (ncol(m$CCA$wa) > 1) P(label, "wa2", m$CCA$wa[,2])
+  if (!is.null(m$CA$u)) P(label, "u1", m$CA$u[,1])
+  if (!is.null(m$CCA$biplot)) for (v in rownames(m$CCA$biplot)) P(label, "biplot", v, m$CCA$biplot[v, 1:min(2, ncol(m$CCA$biplot))])
+}
+prop <- decostand(cY, "total")
+for (f in list(prop ~ pH + Temp + Site, prop ~ pH)) {
+  m <- capscale(f, cenv, distance="bray")
+  constrained_case(paste("capscale", deparse(f[[3]])), m, m$tot.chi - m$CA$imaginary.chi)
+}
+for (f in list(cY ~ pH + Temp + Site, cY ~ pH)) {
+  m <- cca(f, cenv)
+  constrained_case(paste("cca", deparse(f[[3]])), m, m$tot.chi)
+}
+# The statistics of three given permutations (rows: the sample each position takes), which the
+# permutation scheme must reproduce exactly: the residuals of the model without the tested variable
+# are permuted, each sample taking its values of the other variables (and its weight) with it.
+cperm <- rbind(c(2,3,4,5,6,7,8,9,10,1), 10:1, c(3,1,2,6,4,5,9,7,8,10))
+P("cca Site|pH+Temp perm F", permutest(cca(cY ~ Site + Condition(pH + Temp), cenv), permutations=cperm)$F.perm)
+P("cca pH|Temp+Site perm F", permutest(cca(cY ~ pH + Condition(Temp + Site), cenv), permutations=cperm)$F.perm)
+P("cca all perm F", permutest(cca(cY ~ pH + Temp + Site, cenv), permutations=cperm)$F.perm)
+P("capscale Site|pH+Temp perm F", permutest(capscale(prop ~ Site + Condition(pH + Temp), cenv, distance="bray"), permutations=cperm)$F.perm)

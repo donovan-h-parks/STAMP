@@ -533,7 +533,7 @@ fn every_analysis_follows_the_treatment_of_unclassified_features() {
         let mut extra = groups.to_vec();
         extra.extend(["--unclassified", treatment]);
         let table = Table::parse(&stdout(&with("two-groups", &ENTEROTYPES, &extra)));
-        extra.extend(["--plot-type", "pcoa"]);
+        extra.extend(["--plot-type", "ordination"]);
         let svg = svg_plot("two-groups", &ENTEROTYPES, &extra, &directory, treatment);
         let start = svg
             .find("PERMANOVA: pseudo-F = ")
@@ -719,7 +719,7 @@ fn the_multi_group_seed_reaches_the_community_tests() {
         let svg = svg_plot(
             "multi-groups",
             &ENTEROTYPES,
-            &["--plot-type", "pcoa", "--seed", seed],
+            &["--plot-type", "ordination", "--seed", seed],
             &directory,
             &format!("pcoa{seed}"),
         );
@@ -1235,7 +1235,7 @@ fn every_plot_type_can_be_drawn() {
     let euclidean = svg_plot(
         "two-groups",
         &groups,
-        &["--plot-type", "pcoa", "--distance", "euclidean"],
+        &["--plot-type", "ordination", "--distance", "euclidean"],
         &directory,
         "g-euclidean",
     );
@@ -1267,7 +1267,7 @@ fn every_plot_type_can_be_drawn() {
     ];
     let heatmap = svg_plot("multi-groups", &multi, &filtered, &directory, "m-heatmap");
     assert!(has(&heatmap, "Bacteroides") && has(&heatmap, "Enterotype 2"));
-    for kind in ["pcoa", "bar", "box"] {
+    for kind in ["ordination", "bar", "box"] {
         let svg = svg_plot(
             "multi-groups",
             &multi,
@@ -1394,7 +1394,7 @@ fn every_plot_type_can_be_drawn() {
     let pcoa = svg_plot(
         "multi-groups",
         &coal,
-        &["--plot-type", "pcoa", "--distance", "jaccard"],
+        &["--plot-type", "ordination", "--distance", "jaccard"],
         &directory,
         "pcoa",
     );
@@ -1411,7 +1411,7 @@ fn every_plot_type_can_be_drawn() {
             "--field",
             "Simplified Environment",
         ],
-        &["--plot-type", "pcoa"],
+        &["--plot-type", "ordination"],
         &directory,
         "pairwise",
     );
@@ -1467,10 +1467,15 @@ fn every_plot_type_can_be_drawn() {
     let message = failure(&with(
         "two-samples",
         &iron,
-        &["--plot-type", "pcoa", "--plot", refused.to_str().unwrap()],
+        &[
+            "--plot-type",
+            "ordination",
+            "--plot",
+            refused.to_str().unwrap(),
+        ],
     ));
     assert!(
-        message.contains("the pcoa plot is not available for two samples"),
+        message.contains("the ordination plot is not available for two samples"),
         "{message}"
     );
     assert!(!refused.exists());
@@ -2040,7 +2045,7 @@ fn ancom_matches_scikit_bio_and_new_plots_are_drawn() {
     let nmds = svg_plot(
         "multi-groups",
         &base,
-        &["--plot-type", "nmds"],
+        &["--plot-type", "ordination", "--ordination", "nmds"],
         &directory,
         "nmds",
     );
@@ -2698,7 +2703,7 @@ fn prevalence_against_mean_abundance() {
     assert!(failure(&args).contains("not a group of the analysis"));
 }
 
-/// The PCA, PCoA and NMDS plots coloured by a number, a category or a
+/// The ordination plot coloured by a number, a category or a
 /// feature's abundance, and shaped by another field.
 #[test]
 fn ordinations_are_coloured_and_shaped_by_other_fields() {
@@ -2735,7 +2740,7 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
         &coal,
         &[
             "--plot-type",
-            "pcoa",
+            "ordination",
             "--color-by",
             "field:Depth",
             "--shape-by",
@@ -2753,7 +2758,7 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
         &coal,
         &[
             "--plot-type",
-            "pcoa",
+            "ordination",
             "--color-by",
             "feature:p__Proteobacteria",
             "--color-scale",
@@ -2786,7 +2791,14 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
             "--group1",
             "Core",
         ],
-        &["--plot-type", "nmds", "--color-by", "category:Company"],
+        &[
+            "--plot-type",
+            "ordination",
+            "--ordination",
+            "nmds",
+            "--color-by",
+            "category:Company",
+        ],
         &directory,
         "nmds-company",
     );
@@ -2810,13 +2822,111 @@ fn ordinations_are_coloured_and_shaped_by_other_fields() {
         ),
         (["--opacity", "2"], "--opacity"),
     ] {
-        let mut args = with("multi-groups", &coal, &["--plot-type", "pcoa"]);
+        let mut args = with("multi-groups", &coal, &["--plot-type", "ordination"]);
         args.extend_from_slice(&extra);
         args.extend_from_slice(&["--plot", refused.to_str().unwrap()]);
         let text = failure(&args);
         assert!(text.contains(message), "{text}");
         assert!(!refused.exists());
     }
+    fs::remove_dir_all(&directory).ok();
+}
+
+/// db-RDA and CCA: the samples related to several metadata fields, with
+/// the tests reported on standard error and written above the plot.
+#[test]
+fn constrained_ordinations_explain_samples_by_metadata() {
+    let directory =
+        std::env::temp_dir().join(format!("stamp-cli-constrained-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let has = |svg: &str, label: &str| svg.contains(&format!(">{label}</text>"));
+    // The coal metadata with a number for every sample but the first.
+    let text = fs::read_to_string(repo().join("examples/CoalSeamGas/coal.metadata.tsv")).unwrap();
+    let mut metadata = String::new();
+    for (i, line) in text.lines().filter(|l| !l.trim().is_empty()).enumerate() {
+        let depth = match i {
+            0 => "Depth".to_string(),
+            1 => "NA".to_string(),
+            _ => format!("{}", 100 + 13 * ((i * 7) % 44)),
+        };
+        metadata.push_str(&format!("{line}\t{depth}\n"));
+    }
+    let metadata_path = directory.join("coal.metadata.tsv");
+    fs::write(&metadata_path, metadata).unwrap();
+    let coal = [
+        "--profile",
+        "examples/CoalSeamGas/coal.spf",
+        "--metadata",
+        metadata_path.to_str().unwrap(),
+        "--field",
+        "Environment",
+        "--profile-level",
+        "Phylum",
+    ];
+    for (method, axis) in [("db-rda", "dbRDA1"), ("cca", "CCA1")] {
+        let plot = directory.join(format!("{method}.svg"));
+        let table = directory.join(format!("{method}.tsv"));
+        let args = with(
+            "multi-groups",
+            &coal,
+            &[
+                "--plot-type",
+                "ordination",
+                "--ordination",
+                method,
+                "--constrain",
+                "Depth,Company",
+                "--plot",
+                plot.to_str().unwrap(),
+                "--output",
+                table.to_str().unwrap(),
+            ],
+        );
+        let output = stamp(&args);
+        assert!(output.status.success());
+        let report = String::from_utf8(output.stderr).unwrap();
+        for line in [
+            "1 sample without a value for every variable left out",
+            "Depth + Company explain ",
+            "Model: pseudo-F = ",
+            "Depth given the others: ",
+            "Company given the others: ",
+        ] {
+            assert!(
+                report.contains(line),
+                "{method}: missing {line} in {report}"
+            );
+        }
+        let svg = fs::read_to_string(&plot).unwrap();
+        assert!(svg.contains(&format!(">{axis} (")), "{method}");
+        assert!(has(&svg, "Depth"), "{method}");
+    }
+    // Without --constrain, the field of the analysis.
+    let svg = svg_plot(
+        "multi-groups",
+        &coal,
+        &["--plot-type", "ordination", "--ordination", "db-rda"],
+        &directory,
+        "db-rda-default",
+    );
+    assert!(svg.contains(">Environment explain "));
+    // A field that is not there is refused.
+    let refused = directory.join("refused.svg");
+    let message = failure(&with(
+        "multi-groups",
+        &coal,
+        &[
+            "--plot-type",
+            "ordination",
+            "--ordination",
+            "cca",
+            "--constrain",
+            "Nothing",
+            "--plot",
+            refused.to_str().unwrap(),
+        ],
+    ));
+    assert!(message.contains("no field \"Nothing\""), "{message}");
     fs::remove_dir_all(&directory).ok();
 }
 
@@ -2842,7 +2952,7 @@ fn progress_is_shown_only_on_a_terminal() {
         "--plot",
         plot.to_str().unwrap(),
         "--plot-type",
-        "pcoa",
+        "ordination",
         "-o",
         table.to_str().unwrap(),
     ];

@@ -219,8 +219,9 @@ Where each path leads
      - Co-occurrence heatmap
    * -
      - Do the communities differ?
-     - PCoA plot with PERMANOVA, ANOSIM and PERMDISP (and pairwise
-       PERMANOVA for multiple groups); NMDS and distance box plots
+     - Ordination plot (PCoA) with PERMANOVA, ANOSIM and PERMDISP (and
+       pairwise PERMANOVA for multiple groups); distance box plot. NMDS, db-RDA
+       and CCA are given as alternatives
    * -
      - Does diversity differ?
      - Alpha diversity plot with a Mann-Whitney (two groups) or Kruskal-Wallis

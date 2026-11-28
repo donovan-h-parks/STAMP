@@ -607,9 +607,9 @@ Add an entry here whenever a feature is added that v2 did not have.
   test and significance level are options. On the command line:
   `stamp-cli ancom --plot FILE`, or `--plot-type ancom` with
   `two-groups` and `multi-groups`.
-- **NMDS plot**, for two groups and multiple groups, beside the PCoA
-  plot, with the stress written above it. On the command line:
-  `--plot-type nmds`.
+- **NMDS**, for two groups and multiple groups, as a method of the
+  ordination plot, with the stress written above it. On the command line:
+  `--plot-type ordination --ordination nmds`.
 - **Shared features plot**, in all three analysis types: which features
   each group (or sample) has, and which combinations of groups share
   them, as an UpSet plot (the largest combinations, with a matrix of dots
@@ -709,6 +709,17 @@ Add an entry here whenever a feature is added that v2 did not have.
   absent only below another share; features in between are left out, so
   the plot can pick out features common to some groups and rare in the
   others. Command line: `--no-presence-filter`, `--absent-below`.
+- **Constrained ordination: db-RDA and CCA.** The PCoA and NMDS plots are
+  now one *Ordination plot* whose Method also offers distance-based
+  redundancy analysis (db-RDA, on the plot's distance) and canonical
+  correspondence analysis (CCA, on the abundances). They relate the samples
+  to several metadata fields at once (numbers and categories, ticked under
+  *Explanatory variables*): the samples are placed along the directions the
+  fields explain, numeric fields drawn as arrows and categories as the
+  centroids of their samples, with R² (adjusted for db-RDA) and permutation
+  tests of the model and of each field given the others, which match
+  vegan's `capscale`/`cca` and `anova(..., by = "margin")`. Command line:
+  `--plot-type ordination --ordination db-rda|cca --constrain FIELDS`.
 - **Group names beneath the bar plot and the heatmap.** "Labels for:" in
   Configure plot names each sample (as in v2), each group (once beneath its
   bars, or beneath each run of its columns in the heatmap), or nothing, as

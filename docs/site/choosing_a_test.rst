@@ -138,11 +138,13 @@ Community-level questions
    * - Question
      - Where to look
    * - Do the groups differ in composition overall?
-     - **PCoA plot** (PERMANOVA, ANOSIM and PERMDISP), **NMDS plot**
+     - **Ordination plot**: PCoA (PERMANOVA, ANOSIM and PERMDISP), NMDS
    * - Which of three or more groups differ in composition?
-     - Pairwise PERMANOVA on the **PCoA plot**
+     - Pairwise PERMANOVA on the **ordination plot** (PCoA)
    * - Are the samples of one group more variable than another?
-     - PERMDISP on the **PCoA plot**; **Distance box plot**
+     - PERMDISP on the **ordination plot** (PCoA); **Distance box plot**
+   * - How much of the composition do several metadata fields explain?
+     - **Ordination plot**: db-RDA or CCA, with a test of each field
    * - Do the groups differ in diversity?
      - **Alpha diversity plot**
    * - Does diversity change with a measured number?

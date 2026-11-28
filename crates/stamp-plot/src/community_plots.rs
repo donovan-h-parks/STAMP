@@ -5,6 +5,10 @@
 use stamp_core::stats::community::{
     mantel, CommunityTest, MantelRun, PairwiseRun, PermutationRun, PermutationTest,
 };
+use stamp_core::stats::constrained::{
+    self, ConstrainedMethod, ConstrainedModel, ConstrainedOrdination, ConstrainedTest,
+    ConstrainedTestRun, ConstrainedTests, Variable,
+};
 use stamp_core::stats::correlation::CorrelationMethod;
 use stamp_core::stats::diversity::{
     nmds, pcoa, pcoa_leading, AlphaMetric, CommunityTable, Distance, DistanceMatrix, DistanceRun,
@@ -21,6 +25,155 @@ use crate::axes::group_color;
 use crate::feature_plots::{self, BoxOptions, FeatureData, Field, Group};
 use crate::figure::{Color, Figure};
 use crate::{correlation_plot, ordination_plot};
+
+/// The methods of the ordination plot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum OrdinationMethod {
+    /// Principal coordinates analysis of a distance.
+    Pcoa,
+    /// Non-metric multidimensional scaling of a distance.
+    Nmds,
+    /// Distance-based redundancy analysis: the part of a distance that
+    /// explanatory variables account for.
+    DbRda,
+    /// Canonical correspondence analysis of the abundances on explanatory
+    /// variables.
+    Cca,
+}
+
+impl OrdinationMethod {
+    pub const ALL: [OrdinationMethod; 4] = [
+        OrdinationMethod::Pcoa,
+        OrdinationMethod::Nmds,
+        OrdinationMethod::DbRda,
+        OrdinationMethod::Cca,
+    ];
+
+    /// The short name, as on the plot.
+    pub fn name(self) -> &'static str {
+        match self {
+            OrdinationMethod::Pcoa => "PCoA",
+            OrdinationMethod::Nmds => "NMDS",
+            OrdinationMethod::DbRda => "db-RDA",
+            OrdinationMethod::Cca => "CCA",
+        }
+    }
+
+    /// The name in full, for a list to choose from.
+    pub fn long_name(self) -> &'static str {
+        match self {
+            OrdinationMethod::Pcoa => "PCoA: principal coordinates",
+            OrdinationMethod::Nmds => "NMDS: non-metric multidimensional scaling",
+            OrdinationMethod::DbRda => "db-RDA: distance-based redundancy analysis",
+            OrdinationMethod::Cca => "CCA: canonical correspondence analysis",
+        }
+    }
+
+    /// The constrained method, for those that relate the samples to
+    /// explanatory variables.
+    pub fn constrained(self) -> Option<ConstrainedMethod> {
+        match self {
+            OrdinationMethod::DbRda => Some(ConstrainedMethod::DbRda),
+            OrdinationMethod::Cca => Some(ConstrainedMethod::Cca),
+            OrdinationMethod::Pcoa | OrdinationMethod::Nmds => None,
+        }
+    }
+
+    /// Whether the method works on the distances between samples (CCA
+    /// works on the abundances).
+    pub fn uses_distance(self) -> bool {
+        self != OrdinationMethod::Cca
+    }
+}
+
+/// The explanatory variables of a constrained ordination for some samples:
+/// which samples have a value for every variable, and the variables for
+/// those samples.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Explanatory {
+    /// Indices of the samples kept, in order.
+    pub kept: Vec<usize>,
+    pub variables: Vec<Variable>,
+    /// A note on the samples left out, if any were.
+    pub note: Option<String>,
+}
+
+/// The metadata fields `fields` as explanatory variables of `samples`. A
+/// field of numbers (as the colours of the ordination plots take it: an
+/// occasional other value, such as "unknown", is then missing) is numeric;
+/// any other is categorical. Samples without a value for every field are
+/// left out.
+pub fn explanatory_variables(
+    metadata: &stamp_core::Metadata,
+    fields: &[String],
+    samples: &[String],
+) -> Result<Explanatory, String> {
+    use crate::ordination_style::{is_missing, is_numeric_field, number};
+    if fields.is_empty() {
+        return Err("Choose at least one explanatory variable".to_string());
+    }
+    let known = metadata.fields();
+    // Each field's value for each sample: a number, a category, or none.
+    let mut columns: Vec<Vec<Option<constrained::Values>>> = Vec::new();
+    for field in fields {
+        if !known.contains(field) {
+            return Err(format!("The metadata has no field \"{field}\""));
+        }
+        let numeric = is_numeric_field(metadata, field);
+        columns.push(
+            samples
+                .iter()
+                .map(|s| {
+                    let value = metadata.value(s, field).filter(|v| !is_missing(v))?;
+                    if numeric {
+                        number(value).map(|x| constrained::Values::Numbers(vec![x]))
+                    } else {
+                        Some(constrained::Values::Categories(vec![value
+                            .trim()
+                            .to_string()]))
+                    }
+                })
+                .collect(),
+        );
+    }
+    let kept: Vec<usize> = (0..samples.len())
+        .filter(|&i| columns.iter().all(|column| column[i].is_some()))
+        .collect();
+    let left_out = samples.len() - kept.len();
+    let variables = fields
+        .iter()
+        .zip(&columns)
+        .map(|(field, column)| {
+            let (mut numbers, mut categories) = (Vec::new(), Vec::new());
+            for &i in &kept {
+                match &column[i] {
+                    Some(constrained::Values::Numbers(x)) => numbers.extend(x),
+                    Some(constrained::Values::Categories(c)) => categories.extend(c.clone()),
+                    None => {}
+                }
+            }
+            Variable {
+                name: field.clone(),
+                values: if categories.is_empty() {
+                    constrained::Values::Numbers(numbers)
+                } else {
+                    constrained::Values::Categories(categories)
+                },
+            }
+        })
+        .collect();
+    let note = (left_out > 0).then(|| {
+        format!(
+            "{left_out} sample{} without a value for every variable left out",
+            if left_out == 1 { "" } else { "s" }
+        )
+    });
+    Ok(Explanatory {
+        kept,
+        variables,
+        note,
+    })
+}
 
 /// The samples of a community with their groups.
 #[derive(Debug, Clone, PartialEq)]
@@ -413,9 +566,15 @@ pub struct Layout {
     pub positions: Vec<Vec<f64>>,
     /// Share of the variation of every axis (`NaN` for NMDS, two axes).
     pub variance_fractions: Vec<f64>,
-    /// Notes above the plot: the distance, rarefying, and the NMDS stress.
+    /// The names of the plotted axes.
+    pub axis_names: Vec<String>,
+    /// The explanatory variables of a constrained ordination.
+    pub biplot: ordination_plot::Biplot,
+    /// Notes above the plot: the distance, rarefying, the NMDS stress, and
+    /// what the variables of a constrained ordination explain.
     pub notes: Vec<String>,
-    /// The outcome of each community test, if they were run (PCoA).
+    /// The outcome of each test, if they were run: the community tests
+    /// (PCoA), or the permutation tests of a constrained ordination.
     pub tests: Option<Vec<String>>,
     /// PERMANOVA between every pair of groups, if the tests were run and
     /// there are three or more groups.
@@ -549,8 +708,9 @@ pub fn draw_pcoa(
         &data,
         &layout.positions,
         &layout.variance_fractions,
-        "PCo",
+        &layout.axis_names,
         &notes,
+        &layout.biplot,
         options,
     )
 }
@@ -582,6 +742,8 @@ fn nmds_result(
     Ok(Layout {
         positions: layout.positions,
         variance_fractions: vec![f64::NAN, f64::NAN],
+        axis_names: ordination_plot::numbered_axes("NMDS", 2),
+        biplot: Default::default(),
         notes: vec![
             distance_note(community, distance),
             format!("Stress = {:.3} ({quality})", layout.stress),
@@ -620,9 +782,185 @@ pub fn draw_nmds(
         &data,
         &layout.positions,
         &layout.variance_fractions,
-        "NMDS",
+        &layout.axis_names,
         &layout.notes,
+        &layout.biplot,
         &options,
+    )
+}
+
+/// A constrained ordination of a community on some explanatory variables
+/// (db-RDA of the distances, or CCA of the abundances), with its
+/// permutation tests if `tests` gives their number and the random numbers
+/// for them. `Err` holds a message for the plot.
+pub fn constrained_layout(
+    community: &Community,
+    distance: Distance,
+    method: ConstrainedMethod,
+    variables: &[Variable],
+    tests: Option<(usize, &mut StampRng)>,
+) -> Result<Layout, String> {
+    let model = match method {
+        ConstrainedMethod::DbRda => constrained::db_rda(
+            &community.table.distances(distance),
+            variables,
+            PLOTTED_AXES,
+        ),
+        ConstrainedMethod::Cca => {
+            constrained::cca(&community.table.abundances, variables, PLOTTED_AXES)
+        }
+    }?;
+    let tests = tests.map(|(permutations, rng)| model.tests(permutations, rng));
+    Ok(constrained_result(
+        community,
+        distance,
+        &model.ordination,
+        tests.as_ref(),
+        &[],
+    ))
+}
+
+/// The variables of a model joined for a note: "pH + Temp + Site".
+fn joined_names(variables: &[String]) -> String {
+    variables.join(" + ")
+}
+
+/// The line of a permutation test of a constrained ordination.
+fn constrained_test_line(test: &ConstrainedTest, explained_of: &str) -> String {
+    // The share the whole model explains is said on the line before.
+    let (name, share) = if test.name.is_empty() {
+        ("Model".to_string(), String::new())
+    } else {
+        (
+            format!("{} given the others", test.name),
+            format!("{:.1}% of the {explained_of}, ", test.explained * 100.0),
+        )
+    };
+    if test.statistic.is_nan() {
+        return format!("{name}: adds nothing to the other variables");
+    }
+    format!(
+        "{name}: {share}pseudo-F = {:.3}, p = {} ({} permutations)",
+        test.statistic,
+        format_p_value(test.p_value, -15),
+        test.permutations
+    )
+}
+
+/// The layout of a constrained ordination: its axes, the variables drawn
+/// over the samples, and the notes and tests above it.
+fn constrained_result(
+    community: &Community,
+    distance: Distance,
+    ordination: &ConstrainedOrdination,
+    tests: Option<&ConstrainedTests>,
+    notes: &[String],
+) -> Layout {
+    let explained_of = match ordination.method {
+        ConstrainedMethod::DbRda => "variation",
+        ConstrainedMethod::Cca => "inertia",
+    };
+    let mut lines: Vec<String> = notes.to_vec();
+    lines.push(match ordination.method {
+        ConstrainedMethod::DbRda => {
+            let base = format!("db-RDA of {} distances", distance.name());
+            match community.depth_note() {
+                Some(note) => format!("{base}. {note}."),
+                None => base,
+            }
+        }
+        ConstrainedMethod::Cca => {
+            let base = "CCA of the abundances (samples weighted by their totals)".to_string();
+            match community.depth_note() {
+                Some(note) => format!("{base}. {note}."),
+                None => base,
+            }
+        }
+    });
+    let adjusted = ordination
+        .adjusted
+        .map(|r| format!(" (adjusted R\u{b2} = {r:.3})"))
+        .unwrap_or_default();
+    lines.push(format!(
+        "{} explain {:.1}% of the {explained_of}{adjusted}",
+        joined_names(&ordination.variables),
+        ordination.explained * 100.0
+    ));
+    let test_lines = tests.map(|tests| {
+        std::iter::once(&tests.overall)
+            .chain(&tests.variables)
+            .map(|t| constrained_test_line(t, explained_of))
+            .collect()
+    });
+    let axis_names = &ordination.axis_names;
+    let correlations = |values: &[f64]| -> String {
+        values
+            .iter()
+            .zip(axis_names)
+            .take(ordination.constrained_axes)
+            .map(|(r, axis)| format!("{r:.2} with {axis}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let categorical: Vec<&String> = {
+        let mut v: Vec<&String> = ordination.centroids.iter().map(|c| &c.variable).collect();
+        v.dedup();
+        v
+    };
+    let biplot = ordination_plot::Biplot {
+        arrows: ordination
+            .arrows
+            .iter()
+            .map(|a| ordination_plot::BiplotItem {
+                name: a.name.clone(),
+                position: a.position.clone(),
+                tooltip: format!("{}\nCorrelation {}", a.name, correlations(&a.correlations)),
+            })
+            .collect(),
+        centroids: ordination
+            .centroids
+            .iter()
+            .map(|c| ordination_plot::BiplotItem {
+                name: if categorical.len() > 1 {
+                    format!("{}: {}", c.variable, c.category)
+                } else {
+                    c.category.clone()
+                },
+                position: c.position.clone(),
+                tooltip: format!("{} = {}\nCentroid of its samples", c.variable, c.category),
+            })
+            .collect(),
+    };
+    Layout {
+        positions: ordination.positions.clone(),
+        variance_fractions: ordination.axis_fractions.clone(),
+        axis_names: ordination.axis_names.clone(),
+        biplot,
+        notes: lines,
+        tests: test_lines,
+        pairwise: Vec::new(),
+    }
+}
+
+/// The plot of a constrained ordination from its [`constrained_layout`].
+pub fn draw_constrained(
+    community: &Community,
+    layout: &Layout,
+    options: &ordination_plot::Options,
+) -> Figure {
+    let data = ordination_data(community);
+    let mut notes = layout.notes.clone();
+    if let Some(tests) = &layout.tests {
+        notes.extend(tests.iter().cloned());
+    }
+    ordination_plot::plot_ordination(
+        &data,
+        &layout.positions,
+        &layout.variance_fractions,
+        &layout.axis_names,
+        &notes,
+        &layout.biplot,
+        options,
     )
 }
 
@@ -830,6 +1168,16 @@ pub enum CommunityJob {
     Pcoa { tests: Option<usize> },
     /// The NMDS layout.
     Nmds,
+    /// A constrained ordination on some explanatory variables (a value for
+    /// each sample of the community), with its permutation tests if this
+    /// gives their number. `notes` are written above the plot first (for
+    /// example, the samples left out for want of a value).
+    Constrained {
+        method: ConstrainedMethod,
+        variables: Vec<Variable>,
+        tests: Option<usize>,
+        notes: Vec<String>,
+    },
     /// The distances alone (the distance box plot).
     Distances,
     /// The Mantel test against the differences of a number known for each
@@ -871,6 +1219,12 @@ pub struct CommunityRun {
 
 enum Stage {
     Pcoa(PcoaStage),
+    /// The distances of a db-RDA, waiting to be fitted.
+    DbRda(DistanceMatrix),
+    Constrained {
+        model: Box<ConstrainedModel>,
+        run: Option<ConstrainedTestRun>,
+    },
     Nmds(DistanceMatrix, NmdsRun),
     Mantel {
         matrix: DistanceMatrix,
@@ -931,6 +1285,31 @@ impl CommunityRun {
     pub fn advance(&mut self, pace: StagePace<'_>) -> Step<CommunityOutput> {
         let (community, distance) = (&self.community, self.distance);
         if self.stage.is_none() {
+            if let CommunityJob::Constrained {
+                method: ConstrainedMethod::Cca,
+                variables,
+                tests,
+                ..
+            } = &self.job
+            {
+                // CCA works on the abundances, not on distances.
+                match pace("Fitting the CCA", 0, 0) {
+                    Control::Continue => {}
+                    Control::Pause => return Step::Paused,
+                    Control::Cancel => return Step::Cancelled,
+                }
+                match constrained::cca(&community.table.abundances, variables, PLOTTED_AXES) {
+                    Ok(model) => {
+                        self.stage = Some(Stage::Constrained {
+                            run: tests.map(|n| model.test_run(n)),
+                            model: Box::new(model),
+                        })
+                    }
+                    Err(message) => return Step::Done(CommunityOutput::Layout(Err(message))),
+                }
+            }
+        }
+        if self.stage.is_none() {
             if let CommunityJob::Mantel { values, .. } = &self.job {
                 if values.len() != community.samples.len() || values.len() < 3 {
                     return Step::Done(CommunityOutput::Unavailable(
@@ -953,6 +1332,7 @@ impl CommunityRun {
                     permutations: *tests,
                 }),
                 CommunityJob::Nmds => Stage::Nmds(matrix, NmdsRun::new(2)),
+                CommunityJob::Constrained { .. } => Stage::DbRda(matrix),
                 CommunityJob::Distances => return Step::Done(CommunityOutput::Distances(matrix)),
                 CommunityJob::Mantel {
                     values,
@@ -969,11 +1349,54 @@ impl CommunityRun {
                 }
             });
         }
+        if let Some(Stage::DbRda(matrix)) = &self.stage {
+            match pace("Fitting the db-RDA", 0, 0) {
+                Control::Continue => {}
+                Control::Pause => return Step::Paused,
+                Control::Cancel => return Step::Cancelled,
+            }
+            let CommunityJob::Constrained {
+                variables, tests, ..
+            } = &self.job
+            else {
+                unreachable!("a db-RDA stage comes from a constrained job");
+            };
+            match constrained::db_rda(matrix, variables, PLOTTED_AXES) {
+                Ok(model) => {
+                    self.stage = Some(Stage::Constrained {
+                        run: tests.map(|n| model.test_run(n)),
+                        model: Box::new(model),
+                    })
+                }
+                Err(message) => return Step::Done(CommunityOutput::Layout(Err(message))),
+            }
+        }
         let Some(stage) = self.stage.as_mut() else {
             unreachable!("the stage was set above");
         };
         match stage {
             Stage::Pcoa(stage) => stage.advance(community, distance, &mut self.rng, pace),
+            Stage::DbRda(_) => unreachable!("fitted above"),
+            Stage::Constrained { model, run } => {
+                let tests = match run {
+                    Some(run) => match run.advance(&mut self.rng, pace) {
+                        Step::Done(tests) => Some(tests),
+                        Step::Paused => return Step::Paused,
+                        Step::Cancelled => return Step::Cancelled,
+                    },
+                    None => None,
+                };
+                let CommunityJob::Constrained { notes, .. } = &self.job else {
+                    unreachable!("a constrained stage comes from a constrained job");
+                };
+                Step::Done(CommunityOutput::Layout(Ok(constrained_result(
+                    community,
+                    distance,
+                    &model.ordination,
+                    tests.as_ref(),
+                    notes,
+                ))))
+            }
             Stage::Nmds(matrix, run) => {
                 match run.advance(matrix, &mut |done, total| {
                     if done == 0 {
@@ -1147,7 +1570,12 @@ fn pcoa_result(
                 row
             })
             .collect(),
+        axis_names: ordination_plot::numbered_axes(
+            "PCo",
+            ordination.variance_fractions.len().min(PLOTTED_AXES),
+        ),
         variance_fractions: ordination.variance_fractions,
+        biplot: Default::default(),
         notes: vec![distance_note(community, distance)],
         tests,
         pairwise,
@@ -1375,6 +1803,89 @@ mod tests {
             .iter()
             .any(|t| t == "Samples rarefied to 95 sequences"));
         assert_eq!(texts.iter().filter(|t| t.contains("Chao1")).count(), 1);
+    }
+
+    #[test]
+    fn constrained_ordination_draws_the_variables_and_tests() {
+        let community = community(Normalisation::Proportions);
+        let variables = vec![
+            Variable {
+                name: "pH".to_string(),
+                values: constrained::Values::Numbers(vec![5.0, 5.4, 4.8, 7.1, 6.8, 7.4]),
+            },
+            Variable {
+                name: "Site".to_string(),
+                values: constrained::Values::Categories(
+                    ["x", "y", "x", "y", "x", "y"].map(String::from).to_vec(),
+                ),
+            },
+        ];
+        for method in [ConstrainedMethod::DbRda, ConstrainedMethod::Cca] {
+            let mut rng = rng_from_seed(1);
+            let layout = constrained_layout(
+                &community,
+                Distance::BrayCurtis,
+                method,
+                &variables,
+                Some((99, &mut rng)),
+            )
+            .unwrap();
+            let prefix = method.constrained_axis();
+            assert_eq!(
+                layout.axis_names[..2],
+                [format!("{prefix}1"), format!("{prefix}2")]
+            );
+            // The third axis is the first unconstrained one.
+            assert_eq!(
+                layout.axis_names[2],
+                format!("{}1", method.unconstrained_axis())
+            );
+            // The overall test and one per variable.
+            assert_eq!(layout.tests.as_ref().unwrap().len(), 3);
+            let figure = draw_constrained(&community, &layout, &Default::default());
+            let texts = texts(&figure);
+            assert!(
+                texts.iter().any(|t| t.starts_with("pH + Site explain ")),
+                "{texts:?}"
+            );
+            assert!(texts.iter().any(|t| t.starts_with("Model: ")));
+            assert!(texts.iter().any(|t| t.starts_with("pH given the others: ")));
+            for name in ["pH", "x", "y"] {
+                assert!(texts.iter().any(|t| t == name), "missing {name}");
+            }
+            // The run gives the same layout, a piece at a time.
+            let mut run = CommunityRun::new(
+                community.clone(),
+                Distance::BrayCurtis,
+                CommunityJob::Constrained {
+                    method,
+                    variables: variables.clone(),
+                    tests: Some(99),
+                    notes: Vec::new(),
+                },
+                rng_from_seed(1),
+            );
+            let output = loop {
+                if let Step::Done(output) = run.advance(&mut |_, _, _| Control::Continue) {
+                    break output;
+                }
+            };
+            assert_eq!(output, CommunityOutput::Layout(Ok(layout)));
+        }
+        // Too many variables for the samples is said on the plot.
+        let names = Variable {
+            name: "Sample".to_string(),
+            values: constrained::Values::Categories(community.samples.clone()),
+        };
+        let error = constrained_layout(
+            &community,
+            Distance::BrayCurtis,
+            ConstrainedMethod::DbRda,
+            &[names],
+            None,
+        )
+        .unwrap_err();
+        assert!(error.contains("Too many"), "{error}");
     }
 
     #[test]

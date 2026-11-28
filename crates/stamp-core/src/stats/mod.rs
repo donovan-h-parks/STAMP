@@ -6,6 +6,7 @@ pub mod ci;
 pub mod cluster;
 pub mod co_occurrence;
 pub mod community;
+pub mod constrained;
 pub mod correction;
 pub mod correlation;
 pub mod dist;

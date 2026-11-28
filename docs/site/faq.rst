@@ -62,7 +62,7 @@ How do I make plots for a paper?
    plot's own size and options in *Configure plot*.
 
 How long do the ordination plots take with many samples?
-   The PCoA and NMDS plots compare every pair of samples, so their
+   PCoA, NMDS and db-RDA compare every pair of samples, so their
    time grows with the square of the number of samples. As a guide, for a
    profile of about 6,000 genera on a desktop computer: with 619 samples
    the PCoA with its three community tests (999 permutations) takes about

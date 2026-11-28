@@ -428,7 +428,7 @@ pub fn plot_id(kind: PlotKind) -> String {
 }
 
 /// The plot kinds, for looking one up by id or name.
-pub const ALL_PLOT_KINDS: [PlotKind; 27] = [
+pub const ALL_PLOT_KINDS: [PlotKind; 26] = [
     PlotKind::ExtendedErrorBar,
     PlotKind::Bar,
     PlotKind::Box,
@@ -443,10 +443,9 @@ pub const ALL_PLOT_KINDS: [PlotKind; 27] = [
     PlotKind::Volcano,
     PlotKind::Composition,
     PlotKind::AlphaDiversity,
-    PlotKind::Pcoa,
+    PlotKind::Ordination,
     PlotKind::DistanceBox,
     PlotKind::CorrelationScatter,
-    PlotKind::Nmds,
     PlotKind::SharedFeatures,
     PlotKind::RankAbundance,
     PlotKind::Ancom,
@@ -501,7 +500,6 @@ pub fn option_fields(mode: Mode, kind: PlotKind) -> &'static [&'static str] {
         PlotKind::SharedFeatures => &["shared"],
         PlotKind::RankAbundance => &["rank_abundance"],
         PlotKind::Ancom => &["ancom", "ancom_test", "ancom_alpha"],
-        PlotKind::Nmds => &["nmds", COMMUNITY[0], COMMUNITY[1], COMMUNITY[2]],
         PlotKind::Mantel => &["mantel", COMMUNITY[0], COMMUNITY[1], COMMUNITY[2]],
         PlotKind::AlphaDiversity => &[
             "alpha_metric",
@@ -510,9 +508,11 @@ pub fn option_fields(mode: Mode, kind: PlotKind) -> &'static [&'static str] {
             COMMUNITY[1],
             COMMUNITY[2],
         ],
-        PlotKind::Pcoa => &[
-            "pcoa",
-            "pcoa_show_tests",
+        PlotKind::Ordination => &[
+            "ordination_method",
+            "ordination",
+            "ordination_show_tests",
+            "ordination_variables",
             COMMUNITY[0],
             COMMUNITY[1],
             COMMUNITY[2],

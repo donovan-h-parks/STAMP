@@ -12,6 +12,7 @@ use stamp_core::stats::multi_group::MultiGroupTest;
 use stamp_core::stats::prevalence::MeanOver;
 use stamp_plot::axes::LegendPosition;
 use stamp_plot::co_occurrence_plot::View;
+use stamp_plot::community_plots::OrdinationMethod;
 use stamp_plot::composition;
 use stamp_plot::extended_error_bar::{self, SortBy};
 use stamp_plot::feature_plots::{BoxLayout, BoxStyle, Field, GroupOrder as BoxGroupOrder};
@@ -394,17 +395,25 @@ impl Dialog<'_> {
         self.group("Legend position", |rows| rows.legend(value));
     }
 
-    /// The settings of a plot of samples on the axes of an ordination,
-    /// whose axes are named `axis` and a number. `extra` adds the groups
-    /// that only one kind of ordination has, after the plots to show.
+    /// The settings of a plot of samples on the axes of an ordination by
+    /// `method`. `extra` adds the groups of the data and tests, after the
+    /// plots to show.
     fn ordination(
         &mut self,
         o: &mut ordination_plot::Options,
-        axis: &str,
-        notes: bool,
+        method: OrdinationMethod,
         context: &Context,
         extra: impl FnOnce(&mut Dialog),
     ) {
+        // NMDS has two axes; the axes of db-RDA and CCA are named by what
+        // they are (constrained or not), so only by number here.
+        let axis = match method {
+            OrdinationMethod::Pcoa => "PCo",
+            OrdinationMethod::Nmds => "NMDS",
+            OrdinationMethod::DbRda | OrdinationMethod::Cca => "Axis ",
+        };
+        let panels = method != OrdinationMethod::Nmds;
+        let constrained = method.constrained().is_some();
         self.group("Figure size", |rows| {
             rows.check(
                 "Fixed pixels per unit distance (recommended)",
@@ -417,26 +426,91 @@ impl Dialog<'_> {
         self.group("Plots to show", |rows| {
             // The main panel is always drawn.
             rows.check_if(false, &format!("{axis}1 vs. {axis}2"), &mut true);
-            rows.check(&format!("{axis}3 vs. {axis}2"), &mut o.show_pc3_vs_pc2);
-            rows.check(&format!("{axis}1 vs. {axis}3"), &mut o.show_pc1_vs_pc3);
+            rows.check_if(
+                panels,
+                &format!("{axis}3 vs. {axis}2"),
+                &mut o.show_pc3_vs_pc2,
+            );
+            rows.check_if(
+                panels,
+                &format!("{axis}1 vs. {axis}3"),
+                &mut o.show_pc1_vs_pc3,
+            );
+            rows.check_if(
+                constrained,
+                "Explanatory variables (arrows and centroids)",
+                &mut o.show_variables,
+            );
         });
         extra(self);
         self.colours_and_shapes(o, context);
         self.legend(&mut o.legend);
-        if notes {
-            self.group(FONT_SIZES, |rows| {
-                rows.font("Notes above the plot:", &mut o.note_font_size);
-            });
-        }
+        self.group(FONT_SIZES, |rows| {
+            rows.font("Notes above the plot:", &mut o.note_font_size);
+            rows.font_if(
+                constrained && o.show_variables,
+                "Explanatory variables:",
+                &mut o.variable_font_size,
+            );
+        });
         self.group(OTHER_OPTIONS, |rows| {
             rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
             rows.number("Opacity:", &mut o.opacity, 0.01, 0.05..=1.0);
             rows.check("Assign unique shapes", &mut o.unique_shapes);
             rows.check_if(
-                o.show_pc3_vs_pc2,
+                panels && o.show_pc3_vs_pc2,
                 &format!("Rotate {axis}3 labels"),
                 &mut o.rotate_pc3_labels,
             );
+        });
+    }
+
+    /// The explanatory variables of db-RDA and CCA: a tick box for each
+    /// metadata field. None ticked stands for the field that defines the
+    /// groups.
+    fn explanatory_variables(&mut self, chosen: &mut Vec<String>, context: &Context) {
+        let changed = &mut self.changed;
+        egui::Frame::group(self.ui.style()).show(self.ui, |ui| {
+            ui.set_width(GROUP_WIDTH);
+            ui.strong("Explanatory variables");
+            if context.fields.is_empty() {
+                ui.weak("Load metadata to choose its fields.");
+                return;
+            }
+            let default = context.group_field.as_deref();
+            for field in &context.fields {
+                let mut on = if chosen.is_empty() {
+                    Some(field.as_str()) == default
+                } else {
+                    chosen.contains(field)
+                };
+                let numeric = context.numeric_fields.contains(field);
+                let label = if numeric {
+                    format!("{field} (number)")
+                } else {
+                    field.clone()
+                };
+                if ui.checkbox(&mut on, label).changed() {
+                    // Ticking or clearing one field starts from what is
+                    // shown, the group field included.
+                    if chosen.is_empty() {
+                        chosen.extend(default.map(str::to_string));
+                    }
+                    if on {
+                        if !chosen.contains(field) {
+                            chosen.push(field.clone());
+                        }
+                    } else {
+                        chosen.retain(|f| f != field);
+                    }
+                    // Kept in the order of the metadata.
+                    chosen.sort_by_key(|f| context.fields.iter().position(|g| g == f));
+                    *changed = true;
+                }
+            }
+            if chosen.is_empty() {
+                ui.weak("None ticked: the field that defines the groups.");
+            }
         });
     }
 
@@ -841,6 +915,8 @@ pub struct Context {
     pub fields: Vec<String>,
     pub groups: Vec<String>,
     pub numeric_fields: Vec<String>,
+    /// The field that defines the groups of the analysis, if any.
+    pub group_field: Option<String>,
     /// The fields that look like a latitude and a longitude.
     pub lat_field: Option<String>,
     pub lon_field: Option<String>,
@@ -1465,47 +1541,45 @@ pub fn show(
                  below apply to it as to every plot.",
             );
         }
-        PlotKind::Pcoa => {
+        PlotKind::Ordination => {
+            let method = settings.ordination_method;
+            let methods: Vec<(OrdinationMethod, &str)> = OrdinationMethod::ALL
+                .iter()
+                .map(|&m| (m, m.long_name()))
+                .collect();
+            let variables = &mut settings.ordination_variables;
+            dialog.group("Method", |rows| {
+                rows.choice("Method:", &mut settings.ordination_method, &methods);
+            });
+            if method.constrained().is_some() {
+                dialog.explanatory_variables(variables, context);
+            }
             let (distance, normalisation, permutations, show_tests) = (
                 &mut settings.community_distance,
                 &mut settings.community_normalisation,
                 &mut settings.community_permutations,
-                &mut settings.pcoa_show_tests,
+                &mut settings.ordination_show_tests,
             );
-            dialog.ordination(&mut settings.pcoa, "PCo", true, context, |dialog| {
+            dialog.ordination(&mut settings.ordination, method, context, |dialog| {
                 dialog.group("Distances between samples", |rows| {
-                    rows.community(distance, normalisation);
-                    rows.check("Show community tests", show_tests);
-                    rows.count_if(*show_tests, "Permutations:", permutations, 99..=99_999);
+                    rows.when(method.uses_distance(), |rows| {
+                        let distances: Vec<(Distance, &str)> =
+                            Distance::ALL.iter().map(|&d| (d, d.name())).collect();
+                        rows.choice("Distance:", distance, &distances);
+                    });
+                    rows.normalisation(normalisation);
+                    let tests = match method {
+                        OrdinationMethod::Pcoa | OrdinationMethod::Nmds => "Show community tests",
+                        _ => "Show permutation tests",
+                    };
+                    rows.check_if(method != OrdinationMethod::Nmds, tests, show_tests);
+                    rows.count_if(
+                        *show_tests && method != OrdinationMethod::Nmds,
+                        "Permutations:",
+                        permutations,
+                        99..=99_999,
+                    );
                 });
-            });
-        }
-        PlotKind::Nmds => {
-            let o = &mut settings.nmds;
-            let (distance, normalisation) = (
-                &mut settings.community_distance,
-                &mut settings.community_normalisation,
-            );
-            dialog.group("Figure size", |rows| {
-                rows.check(
-                    "Fixed pixels per unit distance (recommended)",
-                    &mut o.fixed_scale,
-                );
-                rows.inches("Width:", &mut o.width, 2.0..=40.0);
-                rows.inches_if(!o.fixed_scale, "Height:", &mut o.height, 2.0..=40.0);
-            });
-            dialog.group("Distances between samples", |rows| {
-                rows.community(distance, normalisation);
-            });
-            dialog.colours_and_shapes(o, context);
-            dialog.legend(&mut o.legend);
-            dialog.group(FONT_SIZES, |rows| {
-                rows.font("Notes above the plot:", &mut o.note_font_size);
-            });
-            dialog.group(OTHER_OPTIONS, |rows| {
-                rows.number("Marker size:", &mut o.marker_size, 1.0, 1.0..=500.0);
-                rows.number("Opacity:", &mut o.opacity, 0.01, 0.05..=1.0);
-                rows.check("Assign unique shapes", &mut o.unique_shapes);
             });
         }
         PlotKind::Mantel => {

@@ -166,7 +166,7 @@ pub fn is_missing(value: &str) -> bool {
 }
 
 /// The number a metadata value holds, if any.
-fn number(value: &str) -> Option<f64> {
+pub fn number(value: &str) -> Option<f64> {
     if is_missing(value) {
         return None;
     }

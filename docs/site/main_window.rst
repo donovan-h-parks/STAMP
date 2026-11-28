@@ -111,8 +111,9 @@ bar at the bottom of the window, with a **Cancel** button:
   *Running test...* with a progress bar. **Cancel** stops it and clears
   the earlier results, which were made with other settings; change a
   setting to run the test again.
-* **Slow plots.** The PCoA (with its community tests), NMDS, distance
-  box, Mantel and ANCOM plots compute distances, ordinations and
+* **Slow plots.** The ordination plot (PCoA with its community tests,
+  NMDS, db-RDA and CCA with their tests), the distance box, Mantel and
+  ANCOM plots compute distances, ordinations and
   permutation tests that take several seconds for hundreds of samples (NMDS
   of 1,300 samples takes about ten seconds on the desktop). If the plot is
   still being computed after a moment, the plot shown before is greyed out

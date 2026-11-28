@@ -6,6 +6,28 @@ meaningful step, and when it finishes.
 
 ## Status
 
+Finished and committed (2026-11-29, the colour-scheme session): **constrained
+ordination**. The PCoA and NMDS plots are now one "Ordination plot"
+(`PlotKind::Ordination`, settings `ordination_method`, `ordination`,
+`ordination_show_tests`, `ordination_variables`) with Method PCoA, NMDS,
+db-RDA, CCA. CLI: `--plot-type ordination --ordination ... --constrain
+A,B` (old plot types removed; user: no CLI backward compatibility).
+Decisions: negative eigenvalues left out (= vegan capscale); samples at
+weighted-average scores, scaling 1; arrows = correlation x sqrt(eigenvalue);
+tests: model + each variable given the others (vegan by="margin", permuted
+statistics reproduced exactly); no per-axis tests. Fixed-scale plots pad an
+axis shorter than 25% of the longest.
+Done: core `stamp-core/src/stats/constrained.rs` + vegan reference values
+(end of tests/reference/reference_values.R); stamp-plot (biplot arrows and
+centroids in ordination_plot.rs; OrdinationMethod, explanatory_variables,
+CommunityJob::Constrained in community_plots.rs); GUI merge (plots.rs,
+plot_config.rs, wizard, assistant); CLI; tests; docs (plots.rst,
+statistics.rst, command_line.rst, glacier example, others), NEW_FEATURES,
+CHANGES #79; doc images glacier_db_rda.png (stamp-cli, dpi 100) and
+gui_plot_selector.png. Arrow names that would cross a panel edge are moved
+inside it. fmt, clippy and all tests pass. The Sphinx build was not run
+(Sphinx is not installed here).
+
 Finished and committed (2026-11-28, the colour-scheme session): **the
 alpha diversity plot uses the analysis's test** (Statistics panel /
 `--test`) instead of always Kruskal-Wallis: `community_plots::AlphaTest`

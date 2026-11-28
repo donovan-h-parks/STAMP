@@ -360,14 +360,13 @@ pub enum PlotTypeArg {
     /// Diversity within the samples of each group; in the correlation
     /// command, the diversity of each sample against the numeric field
     AlphaDiversity,
-    /// Samples placed by the distances between them, with community tests
-    Pcoa,
+    /// Samples placed by an ordination (--ordination): PCoA with community
+    /// tests, NMDS, or db-RDA or CCA on explanatory variables (--constrain)
+    Ordination,
     /// Distances between samples within and between groups
     DistanceBox,
     /// A feature against the numeric field, with a fitted line (correlation)
     CorrelationScatter,
-    /// Samples placed by non-metric multidimensional scaling of a distance
-    Nmds,
     /// Features present in each group, and in which groups together
     SharedFeatures,
     /// Each sample's features from most to least abundant
@@ -385,6 +384,26 @@ pub enum PlotTypeArg {
     /// Where the samples were taken, from latitude and longitude fields of
     /// the metadata, on a map; see the --map-* options and --color-by
     Map,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
+pub enum OrdinationArg {
+    Pcoa,
+    Nmds,
+    DbRda,
+    Cca,
+}
+
+impl From<OrdinationArg> for stamp_plot::community_plots::OrdinationMethod {
+    fn from(arg: OrdinationArg) -> Self {
+        use stamp_plot::community_plots::OrdinationMethod;
+        match arg {
+            OrdinationArg::Pcoa => OrdinationMethod::Pcoa,
+            OrdinationArg::Nmds => OrdinationMethod::Nmds,
+            OrdinationArg::DbRda => OrdinationMethod::DbRda,
+            OrdinationArg::Cca => OrdinationMethod::Cca,
+        }
+    }
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -823,18 +842,30 @@ pub struct HeatmapArgs {
     pub heatmap_table: Option<PathBuf>,
 }
 
-/// Options of the ordination plots (`--plot-type pcoa`, `nmds`):
-/// what colours and shapes the samples.
+/// Options of the ordination plot (`--plot-type ordination`): the method,
+/// its explanatory variables, and what colours and shapes the samples.
 #[derive(Args)]
 pub struct OrdinationArgs {
-    /// PCoA and NMDS plots: what colours the samples: group (the groups
+    /// Ordination plot: the method: pcoa (principal coordinates, with
+    /// PERMANOVA, ANOSIM and PERMDISP), nmds (non-metric multidimensional
+    /// scaling), db-rda (distance-based redundancy analysis) or cca
+    /// (canonical correspondence analysis of the abundances)
+    #[arg(long, value_enum, default_value_t = OrdinationArg::Pcoa)]
+    pub ordination: OrdinationArg,
+    /// db-RDA and CCA: the metadata fields that explain the samples, separated
+    /// by commas; numeric fields are drawn as arrows, others as the centroids
+    /// of their categories. Samples without a value for every field are left
+    /// out [default: --field]
+    #[arg(long, value_name = "FIELDS", value_delimiter = ',')]
+    pub constrain: Vec<String>,
+    /// Ordination plot: what colours the samples: group (the groups
     /// of the analysis), field:NAME (a metadata field; a colour scale if its
     /// values are numbers, else a colour per value), category:NAME (a colour
     /// per value even for numbers) or feature:NAME (the relative abundance,
     /// %, of a feature at the profile level)
     #[arg(long, default_value = "group", value_name = "SOURCE")]
     pub color_by: String,
-    /// PCoA and NMDS plots: categorical metadata field that gives the
+    /// Ordination plot: categorical metadata field that gives the
     /// samples their marker shapes [default: the groups]
     #[arg(long, value_name = "FIELD")]
     pub shape_by: Option<String>,
@@ -848,10 +879,10 @@ pub struct OrdinationArgs {
     /// Colouring by a number: which samples are drawn on top
     #[arg(long, value_enum, default_value_t = DrawOrderArg::HighOnTop)]
     pub draw_order: DrawOrderArg,
-    /// PCoA and NMDS plots: area of the markers, in square points
+    /// Ordination plot: area of the markers, in square points
     #[arg(long, default_value_t = 30.0, value_name = "POINTS")]
     pub marker_size: f64,
-    /// PCoA and NMDS plots: opacity of the markers, from 0 to 1
+    /// Ordination plot: opacity of the markers, from 0 to 1
     #[arg(long, default_value_t = 1.0, value_name = "OPACITY")]
     pub opacity: f64,
 }

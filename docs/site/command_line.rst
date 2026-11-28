@@ -264,7 +264,7 @@ and need ``--pair-field FIELD``, the metadata field that names the subject
 of each sample; subjects without exactly one sample in every group are left
 out, and the number matched is reported.
 
-With ``--plot-type pcoa`` and three or more groups, PERMANOVA between
+With ``--plot-type ordination`` (a PCoA) and three or more groups, PERMANOVA between
 every pair of groups is reported after the community tests, with
 Holm-corrected p-values.
 
@@ -360,8 +360,8 @@ features left after the filters.
    ``box``, ``profile-bar``, ``scatter``, ``sequence-histogram``,
    ``p-value-histogram``, ``multiple-comparison``, ``heatmap``,
    ``post-hoc``, ``rarefaction``, ``volcano``, ``composition``,
-   ``alpha-diversity``, ``pcoa``, ``distance-box``, ``correlation-scatter``,
-   ``nmds``, ``shared-features``, ``rank-abundance``, ``ancom``,
+   ``alpha-diversity``, ``ordination``, ``distance-box``,
+   ``correlation-scatter``, ``shared-features``, ``rank-abundance``, ``ancom``,
    ``mantel``, ``group-heatmap``, ``prevalence-abundance``, ``map``. The
    default is
    the extended error bar plot for two samples or groups and the heatmap
@@ -401,11 +401,43 @@ prints a warning.
 
 .. _cli-ordination-colours:
 
-Colouring and shaping PCoA and NMDS plots
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The ordination plot
+^^^^^^^^^^^^^^^^^^^
 
-``--plot-type pcoa`` and ``nmds`` (``two-groups`` and
-``multi-groups``) colour the samples by group unless asked otherwise; see
+``--plot-type ordination`` (``two-groups`` and ``multi-groups``) places the
+samples by the method of ``--ordination``; see :ref:`plot-ordination`.
+
+``--ordination METHOD``
+   ``pcoa`` (default; with PERMANOVA, ANOSIM and PERMDISP), ``nmds``,
+   ``db-rda`` (distance-based redundancy analysis of ``--distance``) or
+   ``cca`` (canonical correspondence analysis of the abundances).
+``--constrain FIELD,FIELD...``
+   db-RDA and CCA: the metadata fields that explain the samples, separated
+   by commas (default: ``--field``). Numeric fields are drawn as arrows,
+   others as the centroids of their values; samples without a value for
+   every field are left out.
+
+db-RDA and CCA report on standard error (after the notes on the feature
+tests), as on the plot, the samples left
+out, what the fields explain together and the permutation tests (999
+permutations, with ``--seed``) of the model and of each field given the
+others; see :ref:`constrained-tests`. For example, the families of the
+glacier-fed streams on the water chemistry and glacier coverage::
+
+   stamp-cli multi-groups --profile glacier_streams.spf --metadata glacier_streams.metadata.tsv \
+       --field Mountain_range --profile-level Family \
+       --plot db_rda.png --plot-type ordination --ordination db-rda \
+       --constrain Water_temp_C,pH,Conductivity_uS_cm,Glacier_coverage > ranges.tsv
+   7 samples without a value for every variable left out
+   db-RDA of Bray-Curtis distances
+   Water_temp_C + pH + Conductivity_uS_cm + Glacier_coverage explain 13.9% of the variation (adjusted R² = 0.116)
+   Model: pseudo-F = 5.912, p = 1.00e-3 (999 permutations)
+   Water_temp_C given the others: 1.9% of the variation, pseudo-F = 3.303, p = 1.00e-3 (999 permutations)
+   pH given the others: 4.7% of the variation, pseudo-F = 7.906, p = 1.00e-3 (999 permutations)
+   Conductivity_uS_cm given the others: 1.8% of the variation, pseudo-F = 3.134, p = 1.00e-3 (999 permutations)
+   Glacier_coverage given the others: 2.7% of the variation, pseudo-F = 4.662, p = 1.00e-3 (999 permutations)
+
+The samples are coloured by group unless asked otherwise; see
 :ref:`ordination-colours`. For example, the mountain ranges (but the
 single stream of the Rwenzori) by Bray-Curtis distance, coloured by the
 abundance of Acidobacteriaceae on a log scale and shaped by reach::
@@ -413,7 +445,7 @@ abundance of Acidobacteriaceae on a log scale and shaped by reach::
    stamp-cli multi-groups --profile glacier_streams.spf --metadata glacier_streams.metadata.tsv \
        --field Mountain_range --where-not Mountain_range=Rwenzori \
        --profile-level Family --unclassified remove \
-       --plot pcoa.png --plot-type pcoa \
+       --plot pcoa.png --plot-type ordination \
        --color-by feature:Acidobacteriaceae --color-scale log10 --shape-by Reach
 
 ``--color-by SOURCE``
@@ -421,7 +453,7 @@ abundance of Acidobacteriaceae on a log scale and shaped by reach::
    its values are numbers (``field:Latitude``), otherwise a colour per
    value (``field:Country``); ``category:NAME``, a colour per value even
    for numbers; ``feature:NAME``, the abundance (% of the sample) of a
-   feature at the profile level. The PCoA plot's community tests still
+   feature at the profile level. The community tests of a PCoA still
    compare the groups of ``--field``.
 ``--shape-by FIELD``
    A categorical metadata field for the marker shapes (ten shapes; the

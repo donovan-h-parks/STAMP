@@ -80,14 +80,14 @@ coloured by the group::
 Do the mountain ranges differ?
 ------------------------------
 
-A PCoA plot (see :ref:`ordination-colours`) of the families, with its community tests::
+The :ref:`ordination plot <plot-ordination>`, a PCoA of the families, with its community tests::
 
    stamp-cli multi-groups \
        --profile examples/GlacierFedStreams/glacier_streams.spf \
        --metadata examples/GlacierFedStreams/glacier_streams.metadata.tsv \
        --field Mountain_range --profile-level Family \
        --test kruskal-wallis --correction benjamini-hochberg \
-       --output ranges.tsv --plot ranges.png --plot-type pcoa
+       --output ranges.tsv --plot ranges.png --plot-type ordination
 
 .. figure:: images/glacier_pcoa.png
    :width: 90%
@@ -221,6 +221,41 @@ the mountain ranges, and pH differs between ranges with their bedrock
 (volcanic rock lowers it in Ecuador), so they may describe the ranges as
 much as the streams; ``--where "Mountain_range=European Alps"`` looks
 within one.
+
+How much does the environment explain?
+--------------------------------------
+
+The correlations take one variable and one family at a time. A
+:ref:`db-RDA <plot-constrained>` takes the whole community and several
+variables together, and asks how much of the differences between the
+streams the water and the glacier account for, each given the others::
+
+   stamp-cli multi-groups \
+       --profile examples/GlacierFedStreams/glacier_streams.spf \
+       --metadata examples/GlacierFedStreams/glacier_streams.metadata.tsv \
+       --field Mountain_range --profile-level Family \
+       --output ranges.tsv --plot db_rda.png --plot-type ordination \
+       --ordination db-rda --constrain Water_temp_C,pH,Conductivity_uS_cm,Glacier_coverage
+
+.. figure:: images/glacier_db_rda.png
+   :width: 100%
+
+   The streams placed along the directions that water temperature, pH,
+   conductivity and glacier coverage explain, coloured by mountain range.
+
+Seven samples lack a measurement and are left out. Together the four
+variables explain 13.9% of the Bray-Curtis variation (adjusted R² = 0.12,
+p = 0.001), and each explains some of it beyond the others, pH the most
+(4.7%). The arrows show the directions: pH and conductivity rise to the left,
+glacier coverage to the right, where the Ecuadorian Andes, Greenland and
+Scandinavian streams lie. The rest, 86%, is not explained by these
+variables, which is usual for communities in the field. The mountain range
+itself (``--constrain Mountain_range``) explains more, 25% (adjusted R² =
+0.21), as it carries the geography and bedrock as well; with the range and
+the four variables together (``--constrain
+Mountain_range,Water_temp_C,pH,Conductivity_uS_cm,Glacier_coverage``) each
+variable still explains a little beyond the range (1.4 to 2.4%, p <= 0.002),
+so the water chemistry and the glacier matter within ranges too.
 
 Which families are found together
 ---------------------------------

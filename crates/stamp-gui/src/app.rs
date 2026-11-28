@@ -1528,7 +1528,11 @@ impl StampApp {
             self.plot_settings.box_plot.show_pairs = true;
         }
         match plot {
-            PlotKind::Pcoa => self.plot_settings.pcoa_show_tests = true,
+            PlotKind::Ordination => {
+                self.plot_settings.ordination_method =
+                    stamp_plot::community_plots::OrdinationMethod::Pcoa;
+                self.plot_settings.ordination_show_tests = true;
+            }
             PlotKind::CoOccurrence => {
                 self.plot_settings.co_occurrence.view =
                     stamp_plot::co_occurrence_plot::View::Matrix;
@@ -3102,6 +3106,7 @@ impl StampApp {
                 })
                 .unwrap_or_default(),
             groups,
+            group_field: self.session.group_field.clone(),
             lat_field: metadata.and_then(|m| stamp_plot::map_plot::coordinate_fields(m).0),
             lon_field: metadata.and_then(|m| stamp_plot::map_plot::coordinate_fields(m).1),
         }

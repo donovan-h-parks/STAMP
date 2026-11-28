@@ -73,7 +73,7 @@ feature with *unclassified* in its name, in any case: a category named
 
 The choice applies to **every analysis and plot**, so the same profiles
 are compared everywhere: the tests of features, the correlations, and the
-analyses of whole communities (PCoA, NMDS, PERMANOVA, ANOSIM, PERMDISP,
+analyses of whole communities (PCoA, NMDS, db-RDA, CCA, PERMANOVA, ANOSIM, PERMDISP,
 the Mantel test, the distances between samples, alpha diversity,
 rarefaction, shared features and rank abundance). Two consequences of
 *Use only for calculating feature proportions* for whole communities:

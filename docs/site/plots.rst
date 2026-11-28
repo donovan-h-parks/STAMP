@@ -814,7 +814,7 @@ mean with a star in any style.
 the Kruskal-Wallis p-value (the test chosen for these figures) is 0.27: no
 evidence that the sample types differ
 in diversity. They may still differ in *which* organisms they contain (see
-the PCoA plot of the same samples in :doc:`statistics`).
+the PCoA of the same samples in :doc:`statistics`).
 
 Alpha diversity scatter plot
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -839,10 +839,31 @@ These plots place samples so that similar samples are close together.
 per feature) squeezed into two that keep as much of the picture as
 possible.
 
-PCoA plot
-^^^^^^^^^
+.. _plot-ordination:
+
+Ordination plot
+^^^^^^^^^^^^^^^
 
 *Two groups, multiple groups; the first plot shown for multiple groups.*
+**Method**, at the top of Configure plot (``--ordination`` on the command
+line), chooses how the samples are placed:
+
+* **PCoA** (the default): principal coordinates of a distance, with the
+  community tests above the plot;
+* **NMDS**: non-metric multidimensional scaling of a distance;
+* **db-RDA** (distance-based redundancy analysis) and **CCA** (canonical
+  correspondence analysis): *constrained* ordinations, which relate the
+  samples to several metadata fields at once (see :ref:`plot-constrained`).
+
+PCoA and NMDS draw the differences between the samples, whatever causes
+them; db-RDA and CCA draw the part of them that the chosen fields account
+for, and test how much each field explains. Colours, shapes, the legend and
+the figure size are set the same way for every method (see
+:ref:`ordination-colours`).
+
+PCoA
+""""
+
 Principal coordinates analysis places the samples so that the distances
 between them on the plot match, as well as two or three axes can, a chosen
 distance between their communities. PCo1 is the direction in which the
@@ -901,10 +922,10 @@ small part of the picture.
    with Jaccard differ in the abundance of common features rather than in
    which features they have.
 
-NMDS plot
-^^^^^^^^^
+NMDS
+""""
 
-*Two groups, multiple groups.* Non-metric multidimensional scaling: places
+Non-metric multidimensional scaling: places
 the samples in two dimensions so that the *order* of the distances between
 them is kept as well as possible. It makes no assumption about the shape of
 the data, and often separates groups more clearly than PCoA. The axes have
@@ -920,12 +941,73 @@ fair): see :ref:`nmds-stress`. Then the groups: here the shallow
 cuttings form a tight cluster, core samples sit beside them, and deep
 cuttings and produced water spread widely.
 
+.. _plot-constrained:
+
+db-RDA and CCA
+""""""""""""""
+
+A constrained ordination asks how much of the differences between the
+samples some **explanatory variables** account for: water temperature, pH
+and glacier coverage, say, or a treatment and a site. It fits the
+variables to the samples (a multivariate regression) and places the
+samples along the directions the variables explain best, the
+**constrained axes**; with fewer such directions than three, the remaining
+axes are the main directions of what the variables leave unexplained
+(*unconstrained*). Tick the variables under **Explanatory variables** in
+Configure plot (``--constrain`` on the command line, separated by commas);
+with none ticked, the field that defines the groups is used.
+
+* **db-RDA** (Legendre and Anderson 1999) works on the distance chosen for
+  the plot, as PCoA does: with Bray-Curtis it answers "how much of the
+  Bray-Curtis variation do these fields explain?". With the Euclidean
+  distance it is an ordinary redundancy analysis (RDA) of the proportions,
+  and with the Aitchison distance an RDA of the centred log ratios. Axes
+  are named dbRDA1, dbRDA2 and so on, and the unconstrained ones MDS1, MDS2.
+* **CCA** (ter Braak 1986) works on the abundances themselves, compared by
+  their chi-square distances, and weighs each sample by its total; the
+  distance setting does not apply. Rare features weigh heavily in it. Axes
+  are named CCA1, CCA2, and the unconstrained ones CA1, CA2.
+
+A field holding numbers (as for the colours: at least three numbers, making
+up 90% of its values) is drawn as an **arrow** from the centre: it points
+the way the variable increases, and its length along an axis shows how
+strongly it is correlated with that axis (the arrows are stretched together
+to fit each panel, so only their lengths relative to each other count).
+Pointing at an arrow shows its correlation with each constrained axis. Any
+other field is drawn as a cross, labelled, at the **centroid** of the
+samples of each of its values. *Explanatory variables* under Plots to show
+switches them off. Samples without a value for every chosen field are left
+out, and the plot says how many.
+
+Above the plot are what the variables explain together (R², with the
+adjusted R² for db-RDA, which allows for the number of variables) and,
+unless *Show permutation tests* is unticked, permutation tests (see
+:ref:`constrained-tests`): of the whole model, and, with more than one
+variable, of each variable given the others.
+
+.. figure:: images/glacier_db_rda.png
+   :width: 100%
+
+   db-RDA (Bray-Curtis) of the families of the glacier-fed streams on water
+   temperature, pH, conductivity and glacier coverage, coloured by mountain
+   range. Made with ``--plot-type ordination --ordination db-rda --constrain
+   Water_temp_C,pH,Conductivity_uS_cm,Glacier_coverage``.
+
+**What to look for.** First how much the variables explain: in the figure,
+the four together account for 13.9% of the variation (adjusted R² 0.12),
+which is typical of field data, where much of the variation is unexplained.
+Then which variables matter given the others (here pH explains most on its
+own, 4.7%), and which way their arrows point: samples lying in the
+direction of an arrow have high values of that variable. Variables whose
+arrows point the same way are correlated, and their effects cannot be told
+apart.
+
 .. _ordination-colours:
 
 Colouring and shaping the samples
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The PCoA and NMDS plots colour samples by group unless asked
+The ordination plot colours samples by group unless asked
 otherwise. **Colours and shapes** in Configure plot (``--color-by`` and
 ``--shape-by`` on the command line) offers instead:
 
@@ -978,15 +1060,16 @@ value are not hidden under hundreds with a low one. *Marker size* and
 
 .. important::
 
-   PERMANOVA, ANOSIM and PERMDISP above the PCoA plot always compare the
+   PERMANOVA, ANOSIM and PERMDISP above the PCoA always compare the
    **groups of the analysis** (the group field), never the colours or
    shapes; the plot says so when it is coloured by something else. To test
-   another field, make it the group field.
+   another field, make it the group field, or choose db-RDA with it as an
+   explanatory variable.
 
 **What to look for.** Whether the colour changes smoothly across the cloud
 (the number follows the main axes of variation in composition) or is
 scattered (it does not). Here *Methanobacterium* is abundant in the samples
-at the top of the PCoA plot and absent from the cluster on the right.
+at the top of the PCoA and absent from the cluster on the right.
 
 .. _plot-distance-box:
 
